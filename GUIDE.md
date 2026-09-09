@@ -11,22 +11,17 @@ a control. That material is here instead. Nothing was deleted, only moved.
 
 ## Mixer
 
-Level and metering per input, plus bus balance and master strips.
+Level and metering per input, plus bus meters and master strips.
 
-The three aligned bus knobs identify what the Host can publish. **Mix A** is
+The three aligned bus meters identify what the Host can publish. **Mix A** is
 USB capture 3–4 and appears as the passive PipeWire source **io24 Host Mix A**.
 **Mix B** is USB capture 5–6 and appears as **io24 Host Mix B**. The sources
 route nowhere by default; another application must select one explicitly.
 They are computer-side, disappear when the Host closes, and do not change the
 device's Main or headphone routing. **Main is not exposed by USB capture**
-because the device provides no complete Main capture pair, so its centered knob
-remains unavailable.
-
-Mix A/B balance is center-unity: moving toward one side attenuates only the
-opposite channel and never crosses channels. Values persist only in
-`host_features.pan` version 2 Host snapshot data. Legacy per-input positions
-are not semantically reused; a load centers both balances and discloses the
-migration. Live source publication and visual acceptance have not yet run.
+because the device provides no complete Main capture pair. There are no bus-pan
+controls. Mix A/B remain fixed-unity stereo sources with no channel crossing.
+Older `host_features.pan` snapshot data is ignored and is never re-saved.
 
 The command-line `pan` operation remains a different, older device-send
 **stereo-pair balance**. The device has only one level per source/bus, so that
@@ -89,6 +84,10 @@ inside PipeWire's own
 realtime graph — not in this app — so it adds no load to the mixer and cannot
 touch the device's latency.
 
+The switch reports **On** only after the public **io24 Multiband** node appears.
+Starting a child process is not treated as success; an early exit or missing
+node turns the switch back off and reports the failure.
+
 ---
 
 ## Effects
@@ -101,6 +100,11 @@ channel control is not an isolated reverb send: zero bypasses that channel's EQ,
 compression, limiting and effects, while 100% is fully processed. Both channels
 can feed the shared engine, but their exact positive mix values are write-only;
 device readback reports only bypass versus nonzero.
+
+Turning the shared reverb switch on applies the Channel 1 mix and Main-return
+level currently displayed beside it and assigns that return to Main. Moving
+reverb-character controls updates only the engine. Turning the switch off
+disables only the shared engine, preserving the displayed path for the next use.
 
 **Character** presets position the one algorithm the device has. They are not
 separate reverb engines, and saying so would be a lie about the hardware:
@@ -317,6 +321,11 @@ It is one global delay plus a bus selector, not an independent delay per bus.
 Two blocks per channel — the channel's own pair of the device's four global
 slots, the ones its hardware Preset button reaches.
 
+The active block is a solid blue dot with a pronounced size-and-brightness
+breath; Block 1 completes a cycle in 1.8 seconds and Block 2 in 0.9 seconds.
+Bypass is an outlined dot. With reduced motion enabled, both dots stay steady
+and use slightly different sizes to preserve block identity.
+
 **Preset blocks on the unit** sets how many preset blocks the hardware screen
 shows and its Preset button cycles: **One**, **Two**, or **None**. Two is what
 the manual describes and what the unit ships with. It is device-wide and
@@ -336,6 +345,13 @@ means only “greater than zero,” not an exact percentage.
 The four device slots are global, two per channel (channel 1 owns the first
 pair, channel 2 the second); the app shows each channel its own two blocks.
 The hardware button lands on the pair's first slot.
+
+### Host presets
+
+The **Host presets** list shows the complete device-slot bodies this Host has
+actually sent, in global slot order. Their names also appear in the matching
+device-slot row. These are identity-bound sent-write receipts, not a readback:
+the io24 reports the selected block but cannot return its stored body.
 
 The device-slot write is a complete-record operation, not a normal readable
 parameter. `MemP/Stat` saves one scene-shaped channel record to a global slot;
@@ -358,13 +374,11 @@ controls cannot move or disable either channel's device slot. The lower-level
 API has an explicit opt-in for workflows that intentionally include those
 selectors.
 
-GTK Host snapshots also save the complete multiband panel and Mix A/B balance
-under versioned `host_features.multiband` and `host_features.pan` objects. Pan
-version 2 holds only the two bus balances. Loading restores those visible
-values; the passive source lifecycle is reconciled separately. Invalid
-Host-only data is rejected before any device setting is applied. Valid legacy
-per-input pan data is not reinterpreted: both bus balances center and the
-completed load reports the migration. These objects are deliberately absent
+GTK Host snapshots also save the complete multiband panel under the versioned
+`host_features.multiband` object. The passive source lifecycle is reconciled
+separately. Obsolete `host_features.pan` data is discarded with a completed-load
+notice, regardless of its old contents, and is never re-saved. Other invalid
+Host-only data is rejected before any device setting is applied. These objects are deliberately absent
 from device-slot records, temporary-preview captures, cached-device reapply,
 and standalone-device claims. Older snapshots without these objects continue
 to load and do not change the current Host-only state.

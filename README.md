@@ -237,8 +237,8 @@ Control's window. Live meters for both inputs and all three buses, gain reductio
 for the gate, compressor and limiter, channel strips, monitoring, a four-band EQ
 with a 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
-the Presets page separates device slots, temporary Host-only A/B previews, and
-the searchable factory-sound library.
+the Presets page separates device slots, Host-known user presets, temporary
+Host-only A/B previews, and the searchable factory-sound library.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is
@@ -344,15 +344,12 @@ does is a **balance across a stereo pair** — `line/ch1`+`line/ch2` or
 matches UC's own two-mode law. Panning a source with no partner raises rather than
 silently attenuating it.
 
-The GTK Mixer places balance controls directly below Main, Mix A, and Mix B.
-Main stays centered and unavailable for the capture reason above. Mix A/B use
-a center-unity stereo balance: moving left attenuates only the right leg, and
-moving right attenuates only the left, with no crossfeed. Their settings are
-Host-only `host_features.pan` version 2 data, not device DSP and not the CLI
-pair-balance state. Legacy per-input pan positions are validated but not
-semantically reused; loading them centers both bus balances and reports that
-migration. Live io24 source publication and visual acceptance remain pending,
-so this offline implementation is not presented as hardware-verified.
+The GTK Mixer shows only meters for Main, Mix A, and Mix B; it has no bus-pan
+controls. Mix A/B are published as fixed-unity stereo sources with their left
+and right capture channels kept on their original sides. Host snapshots no
+longer save bus pan. An obsolete `host_features.pan` object in an older file is
+ignored and reported after a completed load. This is separate from the CLI
+pair-balance command above.
 
 The device's own channel-name table reads back with:
 
@@ -707,11 +704,9 @@ cannot move or disable a selected device slot. Run `io24.py shadow clear` when
 that cached state should instead be discarded.
 Forgetting changes Host bookkeeping only; it emits no device command.
 
-GTK Host snapshot files may additionally contain `host_features.multiband` and
-`host_features.pan`. The latter is a strict version 2 object holding only Mix A
-and Mix B balance. Loading restores visible values without changing device DSP;
-source lifecycle is reconciled separately. Legacy per-input pan data migrates
-to centered balances with an explicit load notice. Host-only objects are never
+GTK Host snapshot files may additionally contain `host_features.multiband`.
+Obsolete `host_features.pan` data from an older Host is ignored and is never
+re-saved. Host-only objects are never
 encoded into a device slot, included in a temporary A/B preview, or replayed
 because USB reconnected. If a required computer-side chain fails, the Host
 reports the failure instead of claiming success.

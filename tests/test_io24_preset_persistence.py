@@ -732,6 +732,38 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertNotIn("selected", messages[-1].lower())
         self.assertNotIn("enabled", messages[-1].lower())
 
+    def test_registry_lists_host_known_user_presets_in_slot_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
+            identity = {
+                "serial": "TEST-IO24-001", "vendor_id": "194f",
+                "product_id": "0422", "bcd_device": "0128",
+            }
+            for slot, name in ((1, "B A S E"), (0, "MAIN")):
+                record = self._complete_slot_record()
+                record["preset_name"] = name
+                prepared = registry.prepare_write(
+                    slot, record, "restored-user:%s" % name,
+                    device_identity=identity)
+                registry.commit_sent(prepared, {
+                    "slot": slot, "fragments_sent": 1,
+                    "replies_received": 0,
+                })
+
+            entries = registry.entries(device_identity=identity)
+
+        self.assertEqual(
+            [(entry["slot"], entry["record"]["preset_name"])
+             for entry in entries],
+            [(0, "MAIN"), (1, "B A S E")])
+
+    def test_presets_page_exposes_host_registry_presets_separately(self):
+        source = (Path(__file__).parents[1] / "io24gtk.py").read_text()
+
+        self.assertIn('title="Host presets"', source)
+        self.assertIn("self._host_preset_group()", source)
+        self.assertIn("self.device_slot_registry.entries", source)
+
     def test_capture_baseline_records_parameters_not_an_unknown_gate(self):
         tree = ast.parse((Path(__file__).with_name("usbtap_py.py")).read_text())
         main = next(node for node in ast.walk(tree)

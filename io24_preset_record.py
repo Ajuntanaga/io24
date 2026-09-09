@@ -199,6 +199,21 @@ class DeviceSlotRegistry:
             return None
         return deepcopy(entry)
 
+    def entries(self, *, device_identity=None):
+        """Return Host-known sent-write receipts in global slot order.
+
+        This is a local Host list, not device readback.  Supplying an identity
+        limits the result to that exact unit; omitting it is useful while the
+        Host is opening offline and still preserves each entry's identity.
+        """
+        identity = None if device_identity is None else \
+            _validated_device_identity(device_identity)
+        entries = []
+        for key, entry in self._read()["slots"].items():
+            if identity is None or entry.get("device_identity") == identity:
+                entries.append(deepcopy(entry))
+        return sorted(entries, key=lambda entry: entry["slot"])
+
     def prepare_write(self, slot_index, record, source, written_at=None, *,
                       device_identity):
         """Validate local state and one complete body before any device write."""

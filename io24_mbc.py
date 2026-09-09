@@ -85,7 +85,6 @@ TYPES = {
 TUBE_LIMIT = {"ratio": 20.0, "attack": 8.0}
 
 SNAPSHOT_VERSION = 1
-PAN_SNAPSHOT_VERSION = 2
 BUS_SOURCE_KEYS = ("mixa", "mixb")
 _BAND_RANGES = {
     "threshold": (-40.0, 0.0),
@@ -188,65 +187,6 @@ def validate_snapshot(state):
         "xovers": xovers,
         "bands": bands,
     }
-
-
-def default_pan_snapshot():
-    """Return neutral Host-only Mix A/B balance state."""
-    return {
-        "version": PAN_SNAPSHOT_VERSION,
-        "balances": {bus: 0.5 for bus in BUS_SOURCE_KEYS},
-    }
-
-
-def validate_pan_snapshot(state):
-    """Strictly validate current Host-only Mix A/B balance state."""
-    if not isinstance(state, dict) or set(state) != {"version", "balances"}:
-        raise ValueError("pan state fields must be balances, version")
-    if state["version"] != PAN_SNAPSHOT_VERSION:
-        raise ValueError("pan snapshot version must be 2")
-    raw = state["balances"]
-    if not isinstance(raw, dict) or set(raw) != set(BUS_SOURCE_KEYS):
-        raise ValueError("pan balances must contain mixa and mixb")
-    return {
-        "version": PAN_SNAPSHOT_VERSION,
-        "balances": {
-            bus: _finite_number(raw[bus], "%s balance" % bus, 0.0, 1.0)
-            for bus in BUS_SOURCE_KEYS
-        },
-    }
-
-
-def normalise_pan_snapshot(state):
-    """Return current bus balance state plus explicit migration notices."""
-    if isinstance(state, dict) and state.get("version") == 1:
-        if set(state) != {"version", "enabled", "positions"}:
-            raise ValueError(
-                "legacy pan fields must be enabled, positions, version")
-        if not isinstance(state["enabled"], bool):
-            raise ValueError("legacy pan enabled must be Boolean")
-        positions = state["positions"]
-        if not isinstance(positions, list) or len(positions) != 2:
-            raise ValueError("legacy pan positions must contain two values")
-        for value in positions:
-            _finite_number(value, "legacy pan position", 0.0, 1.0)
-        return default_pan_snapshot(), [
-            "legacy input pan was not applied; Mix A/B balances centered",
-        ]
-    return validate_pan_snapshot(state), []
-
-
-def balance_coefficients(position):
-    """Stereo balance gains: center is unity and no channel crosses sides."""
-    position = _finite_number(position, "balance position", 0.0, 1.0)
-    if position <= 0.5:
-        return 1.0, math.sin(math.pi * position)
-    return math.sin(math.pi * (1.0 - position)), 1.0
-
-
-def balance_controls(position):
-    """Live controls for one stereo bus-source balance stage."""
-    left, right = balance_coefficients(position)
-    return {"balance_l:Mult": left, "balance_r:Mult": right}
 
 
 def auto_makeup(threshold, ratio):
@@ -424,31 +364,30 @@ def _validate_bus(bus):
     return bus
 
 
-def build_bus_source_graph(bus, balance):
-    """Select one exact capture pair and expose it through stereo balance."""
+def build_bus_source_graph(bus):
+    """Select one exact capture pair and expose it at fixed unity gain."""
     bus = _validate_bus(bus)
-    left, right = balance_coefficients(balance)
     nodes = [
         {"type": "builtin", "name": "src%d" % index, "label": "copy"}
         for index in range(len(CAPTURE_POSITIONS))
     ]
-    nodes.extend((_lin("balance_l", left), _lin("balance_r", right)))
+    nodes.extend((_lin("source_l", 1.0), _lin("source_r", 1.0)))
     left_index, right_index = BUS_CAPTURE_PAIRS[bus]
     return {
         "nodes": nodes,
         "links": [
             {"output": "src%d:Out" % left_index,
-             "input": "balance_l:In"},
+             "input": "source_l:In"},
             {"output": "src%d:Out" % right_index,
-             "input": "balance_r:In"},
+             "input": "source_r:In"},
         ],
         "inputs": ["src%d:In" % index
                    for index in range(len(CAPTURE_POSITIONS))],
-        "outputs": ["balance_l:Out", "balance_r:Out"],
+        "outputs": ["source_l:Out", "source_r:Out"],
     }
 
 
-def build_bus_source_conf(bus, capture_target, balance):
+def build_bus_source_conf(bus, capture_target):
     """PipeWire config for one passive Mix A or Mix B virtual source."""
     bus = _validate_bus(bus)
     if not capture_target:
@@ -458,7 +397,7 @@ def build_bus_source_conf(bus, capture_target, balance):
     args = {
         "node.description": description,
         "media.name": description,
-        "filter.graph": build_bus_source_graph(bus, balance),
+        "filter.graph": build_bus_source_graph(bus),
         "capture.props": {
             "node.name": name + "-capture",
             "media.class": "Stream/Input/Audio",
@@ -525,10 +464,12 @@ class Chain:
     NODE_NAME = SINK_NAME
     CONF_PREFIX = "io24-mbc-"
     FRAGMENT = "io24-mbc.conf"
+    START_TIMEOUT_S = 2.0
 
     def __init__(self):
         self.proc = None
         self.conf_path = None
+        self.last_error = None
 
     @property
     def running(self):
@@ -540,7 +481,22 @@ class Chain:
         # Invalid saved settings must fail closed without leaving a directory.
         configuration = build_conf(
             target=target, with_comp=with_comp, state=state)
-        return self._launch(configuration, configured)
+        self.last_error = None
+        if not self._launch(configuration, configured):
+            self.last_error = "PipeWire process could not start"
+            return False
+        deadline = time.monotonic() + self.START_TIMEOUT_S
+        while self.running:
+            if self.node_id() is not None:
+                return True
+            if time.monotonic() >= deadline:
+                self.last_error = "io24 Multiband output node did not appear"
+                break
+            time.sleep(0.05)
+        if self.last_error is None:
+            self.last_error = "PipeWire process exited before its output node appeared"
+        self.stop()
+        return False
 
     def _launch(self, configuration, configured=True):
         if self.running and not configured:
@@ -649,9 +605,8 @@ class BusSourceChain(Chain):
         self.FRAGMENT = self.NODE_NAME + ".conf"
         self._configuration = None
 
-    def start(self, capture_target=None, balance=0.5):
-        configuration = build_bus_source_conf(
-            self.bus, capture_target, balance)
+    def start(self, capture_target=None):
+        configuration = build_bus_source_conf(self.bus, capture_target)
         if self.running and configuration == self._configuration:
             return True
         started = self._launch(configuration, configured=True)
@@ -692,12 +647,8 @@ class BusSourceManager:
         self.statuses = {bus: "unavailable" for bus in BUS_SOURCE_KEYS}
         self._started_at = {bus: None for bus in BUS_SOURCE_KEYS}
 
-    def reconcile(self, capture_target, balances, now=None):
+    def reconcile(self, capture_target, now=None):
         """Start, observe, and independently classify both virtual sources."""
-        state = validate_pan_snapshot({
-            "version": PAN_SNAPSHOT_VERSION,
-            "balances": balances,
-        })
         now = time.monotonic() if now is None else float(now)
         if not capture_target:
             self.stop()
@@ -706,7 +657,7 @@ class BusSourceManager:
         for bus in BUS_SOURCE_KEYS:
             chain = self.chains[bus]
             if not chain.running:
-                if not chain.start(capture_target, state["balances"][bus]):
+                if not chain.start(capture_target):
                     self.statuses[bus] = "failed"
                     self._started_at[bus] = None
                     continue
@@ -728,18 +679,6 @@ class BusSourceManager:
             else:
                 self.statuses[bus] = "starting"
         return dict(self.statuses)
-
-    def set_balance(self, bus, position):
-        bus = _validate_bus(bus)
-        if self.statuses[bus] != "ready":
-            return False
-        chain = self.chains[bus]
-        if chain.set_controls(balance_controls(position)):
-            return True
-        chain.stop()
-        self.statuses[bus] = "failed"
-        self._started_at[bus] = None
-        return False
 
     def stop(self):
         for bus in BUS_SOURCE_KEYS:

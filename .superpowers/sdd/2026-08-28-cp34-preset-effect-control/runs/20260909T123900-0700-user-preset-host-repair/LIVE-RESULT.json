@@ -1,0 +1,52 @@
+{
+  "schema": "cp34-user-preset-restoration-v1",
+  "status": "USER_PRESETS_RESTORED_WRITE_SENT",
+  "battery_percent": 98,
+  "device": {
+    "serial": "AB7C22200355",
+    "vendor_id": "194f",
+    "product_id": "0422",
+    "bcd_device": "0128"
+  },
+  "before": {
+    "input1_gain_db": 45.0,
+    "input2_gain_db": 24.287769317626953,
+    "input1_slot": 0,
+    "input2_slot": 2,
+    "input1_enabled": true,
+    "input2_enabled": true,
+    "channel_linked": false,
+    "processing_pair": [0, 1]
+  },
+  "after": {
+    "input1_gain_db": 45.0,
+    "input2_gain_db": 24.287769317626953,
+    "input1_slot": 0,
+    "input2_slot": 2,
+    "input1_enabled": true,
+    "input2_enabled": true,
+    "channel_linked": false,
+    "processing_pair": [0, 1]
+  },
+  "slots": [
+    {
+      "slot": 0,
+      "name": "MAIN",
+      "record_sha256": "fdd1c3def78bd774f49eccb34ae85c1f1e60906337723b06e847aee6e63b2404",
+      "fragments_sent": 1,
+      "replies_received": 0,
+      "registry_status": "WRITE_SENT_UNVERIFIED"
+    },
+    {
+      "slot": 1,
+      "name": "B A S E",
+      "record_sha256": "4612be65076274636687c943c516af96e0c3fd01ebc6a6b3ad508693821b6585",
+      "source_scene_sha256": "9372757986afe56c933ba2fb76851326e4d27d4b600e7967d76de2c646e9de79",
+      "fragments_sent": 1,
+      "replies_received": 0,
+      "registry_status": "WRITE_SENT_UNVERIFIED"
+    }
+  ],
+  "selected_and_enabled": "MAIN",
+  "stored_body_readback": "UNAVAILABLE"
+}

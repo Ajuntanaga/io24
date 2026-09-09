@@ -1,6 +1,60 @@
 # CP34 device preset and Voice FX continuation
 
-## 2026-09-09 controlling checkpoint: passive Mix A/B Host sources
+## 2026-09-09 controlling checkpoint: MAIN/B A S E restored and Host paths repaired
+
+The user identified `MAIN` and `B A S E` as their two Channel-1 device presets
+that an earlier Codex run accidentally removed, explicitly authorized restoring
+both physical blocks, and required both names in the Host preset list.
+
+At 98 percent battery, exact io24 serial `AB7C22200355`, USB ID `194f:0422`,
+firmware `0128`, stereo link off, and with no running io24 Host or active
+PipeWire server, the bounded restoration sent the pinned complete `MAIN` record
+to global slot 0 and the retained `B A S E.scene` Channel-1 record to global
+slot 1. `MAIN` was left selected and enabled. Both gains, Channel 2's slot and
+enable state, stereo link, and the processing-channel pair matched before and
+after. The identity-bound registry contains slot 0 `MAIN` and slot 1
+`B A S E`, both honestly marked `WRITE_SENT_UNVERIFIED`; stored-body readback
+is unavailable on this device.
+
+The Host now lists those registry-backed user presets separately from factory
+sounds and includes their names in Channel 1's slot row. Multiband startup no
+longer treats `Popen` as success: the public `io24 Multiband` node must appear
+within the readiness deadline or the process is stopped and the switch remains
+off. Shared reverb enable now serializes the visible Channel-1 processing mix,
+engine parameters, Main return level, and Main return assignment as one worker
+action; disabling preserves the path and turns off only the engine.
+
+At the user's direction, the Main/Mix A/Mix B bus-pan controls were then
+removed completely. The bus strip is meters only. The passive Mix A/B sources
+retain exact left/right capture selection at fixed unity, and Host snapshots no
+longer persist or restore bus pan. Old `host_features.pan` data is accepted only
+to discard it with a completed-load notice, so it cannot recreate a control or
+alter a source.
+
+The Channel preset-block dots now breathe through both opacity and size, from
+0.25 to 1.0 opacity, on faster 1.8-second and 0.9-second cycles. All embedded
+`Adw.PreferencesGroup` descriptions were removed from the Host; explanatory
+material remains in README.md and GUIDE.md while operational row state remains
+beside its control.
+
+The existing source launcher points directly at this worktree, so no install
+was needed. The stale orphaned filter-chain process was terminated and the
+repaired Host was restarted in the desktop session after the final UI edits.
+The focused Host suite passes 63/63; the affected source, persistence,
+inventory, and hot-key suite passes 140/140 with `ResourceWarning` elevated to
+error; release-package verification passes 1/1 without installation. Two
+independent 748-row matrix generations were byte-identical; the checked-in
+matrix SHA-256 is
+`e6ae8dee16fdfae9d88da060087dcd0353fd2133c020bf9372bd16bf6f0d1b56`.
+
+Claude received only a tool-less textual plan, not the old 53-file snapshot or
+the user's personal scene. Its one useful finding—require the write window to
+be free of Host/audio activity—was applied. Its suggestion to back up stored
+slot bodies was inapplicable because the firmware exposes no body readback. A
+final behavior-only sanity request produced no response and was stopped rather
+than delaying the agreed implementation; no repeat snapshot review was made.
+
+## 2026-09-09 superseded checkpoint: passive Mix A/B Host sources
 
 The previous per-input pan monitor is retired. The GTK bus strip now keeps Main
 centered and disabled because the io24 exposes no complete Main USB capture

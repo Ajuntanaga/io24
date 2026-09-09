@@ -49,6 +49,58 @@ class CallDevice:
         raise AttributeError(name)
 
 
+class ReverbAudiblePathTests(unittest.TestCase):
+    class Value:
+        def __init__(self, value):
+            self.value = value
+
+        def get_value(self):
+            return self.value
+
+        def get_active(self):
+            return bool(self.value)
+
+    def test_enabling_reverb_establishes_visible_channel1_and_main_path(self):
+        device = CallDevice()
+        host = SimpleNamespace(
+            _adopt_mute=False,
+            rev_on=self.Value(True),
+            s_rsize=self.Value(0.72), s_rmix=self.Value(0.38),
+            s_rhp=self.Value(180.0), s_rpre=self.Value(0.027),
+            processing_mix_controls={1: self.Value(0.65)},
+            rev_return_controls={"main": self.Value(-3.0)},
+            ctl=SimpleNamespace(submit=lambda work: work(device)),
+        )
+
+        io24gtk.Win._push_reverb(host, establish_path=True)
+
+        self.assertEqual(device.calls, [
+            ("set_reverb", (), {
+                "on": True, "size": 0.72, "mix": 0.38,
+                "hp_freq": 180.0, "predelay": 0.027,
+            }),
+            ("set_fx_mix", (1, 0.65), {}),
+            ("set_send_db", ("fxreturn/ch1", "main", -3.0), {}),
+            ("set_send_assigned", ("fxreturn/ch1", "main", True), {}),
+        ])
+
+    def test_disabling_reverb_does_not_rewrite_send_or_return_path(self):
+        device = CallDevice()
+        host = SimpleNamespace(
+            _adopt_mute=False,
+            rev_on=self.Value(False),
+            s_rsize=self.Value(0.5), s_rmix=self.Value(0.35),
+            s_rhp=self.Value(200.0), s_rpre=self.Value(0.02),
+            processing_mix_controls={1: self.Value(1.0)},
+            rev_return_controls={"main": self.Value(0.0)},
+            ctl=SimpleNamespace(submit=lambda work: work(device)),
+        )
+
+        io24gtk.Win._push_reverb(host)
+
+        self.assertEqual(device.calls, [("reverb_off", (), {})])
+
+
 class PhonesSourceTests(unittest.TestCase):
     def test_public_setter_emits_exact_pari_11_and_is_shadowed(self):
         dev = ProtocolDevice()
@@ -429,67 +481,21 @@ class HostRefinementTests(unittest.TestCase):
                 self.applied.append((channel, db))
 
         state = self._multiband_state()
-        pan = {"version": 2,
-               "balances": {"mixa": 0.25, "mixb": 0.75}}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "host.json"
             source = SnapshotIo24()
             saved = source.save_preset(
-                path, host_features={"multiband": state, "pan": pan})
+                path, host_features={"multiband": state})
             self.assertEqual(saved["host_features"]["multiband"], state)
-            self.assertEqual(saved["host_features"]["pan"], pan)
             self.assertNotIn("host_features", source.snapshot())
 
             restored = SnapshotIo24()
             restored.load_preset(path)
             self.assertEqual(
                 restored._last_preset_load_report["host_features"],
-                {"multiband": state, "pan": pan})
+                {"multiband": state})
 
-    def test_bus_balance_state_is_strict_and_defaults_centered(self):
-        expected = {
-            "version": 2,
-            "balances": {"mixa": 0.5, "mixb": 0.5},
-        }
-
-        self.assertEqual(io24_mbc.default_pan_snapshot(), expected)
-        self.assertEqual(io24_mbc.validate_pan_snapshot(expected), expected)
-        invalid_states = (
-            {"version": 2, "balances": {"mixa": 0.5}},
-            {"version": 2,
-             "balances": {"mixa": True, "mixb": 0.5}},
-            {"version": 2,
-             "balances": {"mixa": 0.5, "mixb": 1.1}},
-            {"version": 2,
-             "balances": {"mixa": 0.5, "mixb": float("nan")}},
-        )
-        for state in invalid_states:
-            with self.subTest(state=state), self.assertRaises(ValueError):
-                io24_mbc.validate_pan_snapshot(state)
-
-    def test_legacy_input_pan_migrates_to_neutral_bus_balance(self):
-        legacy = {
-            "version": 1,
-            "enabled": True,
-            "positions": [0.2, 0.85],
-        }
-
-        state, notices = io24_mbc.normalise_pan_snapshot(legacy)
-
-        self.assertEqual(state, io24_mbc.default_pan_snapshot())
-        self.assertEqual(notices, [
-            "legacy input pan was not applied; Mix A/B balances centered",
-        ])
-
-    def test_legacy_input_pan_is_validated_before_migration(self):
-        with self.assertRaisesRegex(ValueError, "legacy pan position"):
-            io24_mbc.normalise_pan_snapshot({
-                "version": 1,
-                "enabled": True,
-                "positions": [0.5, 1.2],
-            })
-
-    def test_host_file_migrates_legacy_pan_and_reports_the_discard(self):
+    def test_host_file_ignores_removed_bus_pan_and_reports_the_discard(self):
         class SnapshotIo24(io24.Io24):
             def __init__(self):
                 self._shadow = {}
@@ -501,15 +507,13 @@ class HostRefinementTests(unittest.TestCase):
             def set_gain(self, channel, db):
                 self.applied.append((channel, db))
 
-        legacy = {"version": 1, "enabled": True,
-                  "positions": [0.2, 0.85]}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "legacy-host.json"
             path.write_text(json.dumps({
                 "version": 1,
                 "live": {"input1Gain": 31.0},
                 "calls": {},
-                "host_features": {"pan": legacy},
+                "host_features": {"pan": {"arbitrary": "old data"}},
             }))
             device = SnapshotIo24()
 
@@ -517,14 +521,12 @@ class HostRefinementTests(unittest.TestCase):
 
         report = device._last_preset_load_report
         self.assertEqual(device.applied, [(1, 31.0)])
-        self.assertEqual(
-            report["host_features"]["pan"],
-            io24_mbc.default_pan_snapshot())
+        self.assertEqual(report["host_features"], {})
         self.assertEqual(report["host_feature_migrations"], [
-            "legacy input pan was not applied; Mix A/B balances centered",
+            "legacy Host bus pan was ignored; bus pan controls were removed",
         ])
 
-    def test_malformed_legacy_pan_fails_before_device_state_is_applied(self):
+    def test_removed_bus_pan_data_cannot_block_device_state_load(self):
         class SnapshotIo24(io24.Io24):
             def __init__(self):
                 self._shadow = {}
@@ -550,12 +552,13 @@ class HostRefinementTests(unittest.TestCase):
             }))
             device = SnapshotIo24()
 
-            with self.assertRaisesRegex(ValueError, "legacy pan position"):
-                device.load_preset(path)
+            device.load_preset(path)
 
-        self.assertEqual(device.applied, [])
+        self.assertEqual(device.applied, [(1, 31.0)])
+        self.assertNotIn(
+            "pan", device._last_preset_load_report["host_features"])
 
-    def test_saving_legacy_pan_emits_only_version_two_bus_balance(self):
+    def test_saving_removed_bus_pan_drops_it(self):
         class SnapshotIo24(io24.Io24):
             def __init__(self):
                 self._shadow = {}
@@ -576,24 +579,11 @@ class HostRefinementTests(unittest.TestCase):
                 "positions": [0.1, 0.9],
             }})
 
-        self.assertEqual(
-            saved["host_features"]["pan"],
-            io24_mbc.default_pan_snapshot())
-
-    def test_bus_balance_is_center_unity_without_crossfeed(self):
-        self.assertEqual(io24_mbc.balance_coefficients(0.0), (1.0, 0.0))
-        self.assertEqual(io24_mbc.balance_coefficients(0.5), (1.0, 1.0))
-        self.assertEqual(io24_mbc.balance_coefficients(1.0), (0.0, 1.0))
-        quarter = io24_mbc.balance_coefficients(0.25)
-        three_quarter = io24_mbc.balance_coefficients(0.75)
-        self.assertEqual(quarter[0], 1.0)
-        self.assertEqual(three_quarter[1], 1.0)
-        self.assertAlmostEqual(quarter[1], math.sqrt(0.5))
-        self.assertAlmostEqual(quarter[1], three_quarter[0])
+        self.assertNotIn("host_features", saved)
 
     def test_bus_graph_selects_only_its_exact_capture_pair(self):
-        mixa = io24_mbc.build_bus_source_graph("mixa", 0.5)
-        mixb = io24_mbc.build_bus_source_graph("mixb", 0.5)
+        mixa = io24_mbc.build_bus_source_graph("mixa")
+        mixb = io24_mbc.build_bus_source_graph("mixb")
 
         self.assertEqual(mixa["inputs"], [
             "src0:In", "src1:In", "src2:In",
@@ -601,25 +591,30 @@ class HostRefinementTests(unittest.TestCase):
         ])
         self.assertEqual(mixb["inputs"], mixa["inputs"])
         self.assertEqual(mixa["outputs"],
-                         ["balance_l:Out", "balance_r:Out"])
+                         ["source_l:Out", "source_r:Out"])
         self.assertEqual(mixb["outputs"], mixa["outputs"])
         mixa_routes = {(link["output"], link["input"])
                        for link in mixa["links"]}
         mixb_routes = {(link["output"], link["input"])
                        for link in mixb["links"]}
-        self.assertIn(("src2:Out", "balance_l:In"), mixa_routes)
-        self.assertIn(("src3:Out", "balance_r:In"), mixa_routes)
-        self.assertIn(("src4:Out", "balance_l:In"), mixb_routes)
-        self.assertIn(("src5:Out", "balance_r:In"), mixb_routes)
+        self.assertIn(("src2:Out", "source_l:In"), mixa_routes)
+        self.assertIn(("src3:Out", "source_r:In"), mixa_routes)
+        self.assertIn(("src4:Out", "source_l:In"), mixb_routes)
+        self.assertIn(("src5:Out", "source_r:In"), mixb_routes)
         self.assertFalse(any(route[0] in {"src0:Out", "src1:Out"}
                              for route in mixa_routes | mixb_routes))
+        for graph in (mixa, mixb):
+            gains = {node["name"]: node["control"]["Mult"]
+                     for node in graph["nodes"]
+                     if node["name"] in {"source_l", "source_r"}}
+            self.assertEqual(gains, {"source_l": 1.0, "source_r": 1.0})
 
     def test_bus_source_conf_is_passive_source_without_playback_target(self):
         for bus, label in (("mixa", "io24 Host Mix A"),
                            ("mixb", "io24 Host Mix B")):
             with self.subTest(bus=bus):
                 conf = io24_mbc.build_bus_source_conf(
-                    bus, "alsa_input.usb-PreSonus_io24", 0.5)
+                    bus, "alsa_input.usb-PreSonus_io24")
                 self.assertIn(
                     '"target.object": "alsa_input.usb-PreSonus_io24"', conf)
                 self.assertIn('"media.class": "Stream/Input/Audio"', conf)
@@ -765,15 +760,17 @@ class HostRefinementTests(unittest.TestCase):
             io24gtk, "preset_indicator_visual",
             lambda *_args: {"glyph": None, "opacity": None, "radius": None})
         slow_a = visual(True, 0, 0.0, True)
-        slow_b = visual(True, 0, 0.8, True)
-        fast_b = visual(True, 1, 0.8, True)
+        slow_b = visual(True, 0, 0.9, True)
+        fast_b = visual(True, 1, 0.45, True)
 
         self.assertEqual(slow_a["glyph"], "●")
         self.assertEqual(fast_b["glyph"], "●")
-        self.assertNotEqual(slow_a["opacity"], slow_b["opacity"])
+        self.assertEqual(slow_a["opacity"], 0.25)
+        self.assertEqual(slow_b["opacity"], 1.0)
+        self.assertEqual(fast_b["opacity"], 1.0)
+        self.assertGreater(slow_b["radius"] - slow_a["radius"], 1.5)
         # Internal slot index 0 is user-facing Slot 1 (slow); index 1 is
         # user-facing Slot 2 (twice the breathing rate).
-        self.assertGreater(fast_b["opacity"], slow_b["opacity"])
         reduced_slow = visual(True, 0, 0.8, False)
         reduced_fast = visual(True, 1, 0.8, False)
         self.assertEqual(reduced_slow["opacity"], 1.0)
@@ -783,6 +780,10 @@ class HostRefinementTests(unittest.TestCase):
         self.assertEqual(bypassed["glyph"], "○")
         self.assertEqual(bypassed["opacity"], 0.28)
 
+    def test_sections_have_no_embedded_descriptions(self):
+        source = inspect.getsource(io24gtk.Win)
+        self.assertNotIn("description=", source)
+
     def test_bus_meter_columns_have_exact_compact_labels(self):
         columns = getattr(io24gtk, "bus_meter_columns", lambda: ())
         self.assertEqual(columns(), (
@@ -791,93 +792,26 @@ class HostRefinementTests(unittest.TestCase):
             ("mixb", "Mix B", "USB capture channels 5–6"),
         ))
 
-    def test_mixer_removes_input_pan_and_builds_aligned_bus_knobs(self):
+    def test_mixer_removes_input_and_bus_pan_controls(self):
         input_source = inspect.getsource(io24gtk.Win._input_strip)
         bus_source = inspect.getsource(io24gtk.Win._bus_strip)
 
         self.assertNotIn("Knob(", input_source)
-        self.assertNotIn("Host input pan", input_source + bus_source)
+        self.assertNotIn("Knob(", bus_source)
+        self.assertNotIn("balance", bus_source.casefold())
         self.assertNotIn("Gtk.ToggleButton", bus_source)
-        self.assertIn("self.bus_balance_knobs", bus_source)
-        self.assertIn("Main is not exposed by USB capture", bus_source)
-        self.assertIn("knob.set_sensitive(False)", bus_source)
-
-    def test_bus_balance_move_updates_only_selected_bus_without_routine_toast(self):
-        class Label:
-            def set_text(self, value):
-                self.value = value
-
-        class Sources:
-            def __init__(self):
-                self.calls = []
-
-            def set_balance(self, bus, value):
-                self.calls.append((bus, value))
-                return True
-
-        sources = Sources()
-        host = SimpleNamespace(
-            _pan_mute=False,
-            pan_state=io24_mbc.default_pan_snapshot(),
-            bus_balance_labels={"mixa": Label(), "mixb": Label()},
-            bus_sources=sources,
-        )
-
-        io24gtk.Win._bus_balance_moved(host, "mixa", 0.8)
-
-        self.assertEqual(host.pan_state["balances"],
-                         {"mixa": 0.8, "mixb": 0.5})
-        self.assertEqual(sources.calls, [("mixa", 0.8)])
-        self.assertNotIn("self.say", inspect.getsource(
-            io24gtk.Win._bus_balance_moved))
-
-    def test_failed_bus_balance_move_disables_only_that_source_and_toasts_once(self):
-        class Widget:
-            def set_text(self, value):
-                self.value = value
-
-            def set_sensitive(self, value):
-                self.sensitive = value
-
-        messages = []
-        host = SimpleNamespace(
-            _pan_mute=False,
-            pan_state=io24_mbc.default_pan_snapshot(),
-            bus_balance_labels={"mixa": Widget(), "mixb": Widget()},
-            bus_balance_knobs={"mixa": Widget(), "mixb": Widget()},
-            bus_sources=SimpleNamespace(
-                set_balance=lambda _bus, _value: False),
-            _bus_source_status={"mixa": "ready", "mixb": "ready"},
-            say=messages.append,
-        )
-        host._set_bus_source_status = lambda bus, status, notify=False: (
-            io24gtk.Win._set_bus_source_status(
-                host, bus, status, notify=notify))
-
-        io24gtk.Win._bus_balance_moved(host, "mixa", 0.7)
-        io24gtk.Win._bus_balance_moved(host, "mixa", 0.8)
-
-        self.assertFalse(host.bus_balance_knobs["mixa"].sensitive)
-        self.assertNotEqual(
-            getattr(host.bus_balance_knobs["mixb"], "sensitive", None), False)
-        self.assertEqual(messages, ["io24 Host Mix A source failed to start"])
+        self.assertNotIn("bus_balance_knobs", inspect.getsource(io24gtk.Win))
 
     def test_bus_source_watchdog_silently_disables_absent_sources(self):
-        class Knob:
-            def set_sensitive(self, value):
-                self.sensitive = value
-
         class Sources:
-            def reconcile(self, capture, balances):
-                self.call = (capture, balances)
+            def reconcile(self, capture):
+                self.call = capture
                 return {"mixa": "unavailable", "mixb": "unavailable"}
 
         messages = []
         sources = Sources()
         host = SimpleNamespace(
-            pan_state=io24_mbc.default_pan_snapshot(),
             bus_sources=sources,
-            bus_balance_knobs={"mixa": Knob(), "mixb": Knob()},
             _bus_source_status={"mixa": "ready", "mixb": "ready"},
             say=messages.append,
         )
@@ -890,14 +824,9 @@ class HostRefinementTests(unittest.TestCase):
 
         self.assertTrue(keep)
         self.assertEqual(messages, [])
-        self.assertFalse(host.bus_balance_knobs["mixa"].sensitive)
-        self.assertFalse(host.bus_balance_knobs["mixb"].sensitive)
+        self.assertIsNone(sources.call)
 
     def test_bus_source_failure_toasts_once_and_recovers_independently(self):
-        class Knob:
-            def set_sensitive(self, value):
-                self.sensitive = value
-
         class Sources:
             def __init__(self):
                 self.results = [
@@ -906,14 +835,12 @@ class HostRefinementTests(unittest.TestCase):
                     {"mixa": "ready", "mixb": "unavailable"},
                 ]
 
-            def reconcile(self, _capture, _balances):
+            def reconcile(self, _capture):
                 return self.results.pop(0)
 
         messages = []
         host = SimpleNamespace(
-            pan_state=io24_mbc.default_pan_snapshot(),
             bus_sources=Sources(),
-            bus_balance_knobs={"mixa": Knob(), "mixb": Knob()},
             _bus_source_status={"mixa": "starting", "mixb": "starting"},
             say=messages.append,
         )
@@ -927,36 +854,10 @@ class HostRefinementTests(unittest.TestCase):
             io24gtk.Win._bus_source_watchdog(host)
 
         self.assertEqual(messages, ["io24 Host Mix A source failed to start"])
-        self.assertTrue(host.bus_balance_knobs["mixa"].sensitive)
-        self.assertFalse(host.bus_balance_knobs["mixb"].sensitive)
-
-    def test_bus_snapshot_adoption_does_not_touch_source_lifecycle(self):
-        class Knob:
-            def set_value(self, value, notify=True):
-                self.value = value
-                self.notify = notify
-
-        class Label:
-            def set_text(self, value):
-                self.value = value
-
-        host = SimpleNamespace(
-            _pan_mute=False,
-            pan_state=io24_mbc.default_pan_snapshot(),
-            bus_balance_knobs={"mixa": Knob(), "mixb": Knob()},
-            bus_balance_labels={"mixa": Label(), "mixb": Label()},
-        )
-        state = {"version": 2, "balances": {"mixa": 0.2, "mixb": 0.9}}
-
-        message = io24gtk.Win._adopt_pan_state(host, state)
-
-        self.assertEqual(host.pan_state, state)
-        self.assertFalse(host.bus_balance_knobs["mixa"].notify)
-        self.assertFalse(host.bus_balance_knobs["mixb"].notify)
-        self.assertEqual(message, "Mix A/B balances restored (Host only)")
 
     def test_legacy_notice_is_appended_only_to_completed_load_message(self):
-        notice = "legacy input pan was not applied; Mix A/B balances centered"
+        notice = \
+            "legacy Host bus pan was ignored; bus pan controls were removed"
         append = getattr(io24gtk, "append_host_migration_notices", None)
 
         self.assertIsNotNone(append)
@@ -983,7 +884,8 @@ class HostRefinementTests(unittest.TestCase):
                 self.assertIn("USB capture 5–6", content)
                 self.assertIn("Main is not exposed by USB capture", content)
                 self.assertIn("route nowhere by default", content)
-                self.assertIn("version 2", content)
+                self.assertIn("host_features.pan", content)
+                self.assertIn("ignored", content)
                 self.assertNotIn("Host input pan", content)
                 self.assertNotIn("capture→playback", content)
 
@@ -1482,6 +1384,66 @@ class HostRefinementTests(unittest.TestCase):
             self.assertIsNone(chain.proc)
             self.assertIsNone(chain.conf_path)
 
+    def test_multiband_start_requires_public_node_not_only_live_child(self):
+        class Process:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                pass
+
+            def wait(self, timeout):
+                return 0
+
+        with tempfile.TemporaryDirectory() as parent:
+            config = Path(parent) / "chain"
+            config.mkdir()
+            chain = io24_mbc.Chain()
+            with mock.patch.object(io24_mbc.os.path, "exists", return_value=True), \
+                    mock.patch.object(io24_mbc.tempfile, "mkdtemp",
+                                      return_value=str(config)), \
+                    mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc.subprocess, "Popen",
+                                      return_value=Process()), \
+                    mock.patch.object(chain, "node_id", return_value=None), \
+                    mock.patch.object(io24_mbc.time, "sleep"), \
+                    mock.patch.object(io24_mbc.time, "monotonic",
+                                      side_effect=[0.0, 3.0]):
+                started = chain.start(
+                    target="alsa_output.io24",
+                    state=self._multiband_state())
+
+            self.assertFalse(started)
+            self.assertFalse(config.exists())
+            self.assertIn("node", chain.last_error.lower())
+
+    def test_multiband_start_succeeds_after_public_node_appears(self):
+        class Process:
+            def poll(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as parent:
+            config = Path(parent) / "chain"
+            config.mkdir()
+            chain = io24_mbc.Chain()
+            with mock.patch.object(io24_mbc.os.path, "exists", return_value=True), \
+                    mock.patch.object(io24_mbc.tempfile, "mkdtemp",
+                                      return_value=str(config)), \
+                    mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc.subprocess, "Popen",
+                                      return_value=Process()), \
+                    mock.patch.object(chain, "node_id",
+                                      side_effect=[None, "42"]), \
+                    mock.patch.object(io24_mbc.time, "sleep"), \
+                    mock.patch.object(io24_mbc.time, "monotonic",
+                                      side_effect=[0.0, 0.1]):
+                started = chain.start(
+                    target="alsa_output.io24",
+                    state=self._multiband_state())
+
+            self.assertTrue(started)
+            self.assertIsNone(chain.last_error)
+
     def test_multiband_stop_cleans_config_when_kill_loses_exit_race(self):
         class Process:
             def poll(self):
@@ -1541,7 +1503,8 @@ class HostRefinementTests(unittest.TestCase):
                                       return_value=str(new_config)), \
                     mock.patch.object(io24_mbc.shutil, "copy"), \
                     mock.patch.object(io24_mbc.subprocess, "Popen",
-                                      return_value=NewProcess()) as spawn:
+                                      return_value=NewProcess()) as spawn, \
+                    mock.patch.object(chain, "node_id", return_value="42"):
                 started = chain.start(
                     target="alsa_output.io24",
                     state=self._multiband_state())
@@ -1566,8 +1529,8 @@ class HostRefinementTests(unittest.TestCase):
             return True
 
         with mock.patch.object(chain, "_launch", side_effect=launch):
-            self.assertTrue(chain.start("capture-node", 0.5))
-            self.assertTrue(chain.start("capture-node", 0.5))
+            self.assertTrue(chain.start("capture-node"))
+            self.assertTrue(chain.start("capture-node"))
 
         self.assertEqual(len(launches), 1)
 
@@ -1578,19 +1541,14 @@ class HostRefinementTests(unittest.TestCase):
                 self.running = False
                 self.starts = []
                 self.stops = 0
-                self.controls = []
 
-            def start(self, capture_target, balance):
-                self.starts.append((capture_target, balance))
+            def start(self, capture_target):
+                self.starts.append(capture_target)
                 self.running = bool(started)
                 return bool(started)
 
             def node_id(self):
                 return node_id if self.running else None
-
-            def set_controls(self, controls):
-                self.controls.append(controls)
-                return True
 
             def stop(self):
                 self.stops += 1
@@ -1604,42 +1562,24 @@ class HostRefinementTests(unittest.TestCase):
         manager = io24_mbc.BusSourceManager(
             chains={"mixa": mixa, "mixb": mixb})
 
-        statuses = manager.reconcile(
-            "capture-node", {"mixa": 0.25, "mixb": 0.75}, now=10.0)
+        statuses = manager.reconcile("capture-node", now=10.0)
 
         self.assertEqual(statuses, {"mixa": "failed", "mixb": "ready"})
-        self.assertEqual(mixa.starts, [("capture-node", 0.25)])
-        self.assertEqual(mixb.starts, [("capture-node", 0.75)])
+        self.assertEqual(mixa.starts, ["capture-node"])
+        self.assertEqual(mixb.starts, ["capture-node"])
 
     def test_bus_source_manager_times_out_missing_public_node(self):
         mixa = self._fake_bus_chain(started=True, node_id=None)
         mixb = self._fake_bus_chain(started=True, node_id="84")
         manager = io24_mbc.BusSourceManager(
             chains={"mixa": mixa, "mixb": mixb})
-        balances = {"mixa": 0.5, "mixb": 0.5}
-
-        first = manager.reconcile("capture-node", balances, now=10.0)
-        expired = manager.reconcile("capture-node", balances, now=15.1)
+        first = manager.reconcile("capture-node", now=10.0)
+        expired = manager.reconcile("capture-node", now=15.1)
 
         self.assertEqual(first["mixa"], "starting")
         self.assertEqual(expired["mixa"], "failed")
         self.assertEqual(expired["mixb"], "ready")
         self.assertEqual(mixa.stops, 1)
-
-    def test_bus_source_manager_updates_only_selected_ready_source(self):
-        mixa = self._fake_bus_chain(started=True, node_id="42")
-        mixb = self._fake_bus_chain(started=True, node_id="84")
-        manager = io24_mbc.BusSourceManager(
-            chains={"mixa": mixa, "mixb": mixb})
-        manager.reconcile(
-            "capture-node", {"mixa": 0.5, "mixb": 0.5}, now=10.0)
-
-        self.assertTrue(manager.set_balance("mixa", 0.8))
-
-        self.assertEqual(len(mixa.controls), 1)
-        self.assertEqual(mixb.controls, [])
-        self.assertEqual(
-            set(mixa.controls[0]), {"balance_l:Mult", "balance_r:Mult"})
 
     def test_bus_source_manager_stops_both_sources(self):
         mixa = self._fake_bus_chain()

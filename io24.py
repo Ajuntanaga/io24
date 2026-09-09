@@ -2709,10 +2709,8 @@ def _normalise_host_features(features):
         normalized["multiband"] = io24_mbc.validate_snapshot(
             features["multiband"])
     if "pan" in features:
-        import io24_mbc
-        normalized["pan"], pan_migrations = \
-            io24_mbc.normalise_pan_snapshot(features["pan"])
-        migrations.extend(pan_migrations)
+        migrations.append(
+            "legacy Host bus pan was ignored; bus pan controls were removed")
     return normalized, migrations
 
 

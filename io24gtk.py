@@ -89,9 +89,9 @@ def preset_indicator_opacity(active, slot_index, now, animations=True):
         return 0.0
     if not animations:
         return 1.0
-    period = 3.2 if slot_index == 0 else 1.6
+    period = 1.8 if slot_index == 0 else 0.9
     phase = (float(now) % period) / period * 2.0 * math.pi
-    return 0.72 + 0.28 * (0.5 + 0.5 * math.sin(phase - math.pi / 2.0))
+    return 0.25 + 0.75 * (0.5 + 0.5 * math.sin(phase - math.pi / 2.0))
 
 
 def preset_indicator_visual(active, slot_index, now, animations=True):
@@ -101,11 +101,13 @@ def preset_indicator_visual(active, slot_index, now, animations=True):
     # With animation enabled, cadence alone distinguishes the slots as the user
     # requested. Reduced motion deliberately removes cadence, so a small radius
     # difference preserves slot identity without bringing S1/S2 text back.
-    radius = 5.0 if animations else (4.25 if slot_index == 0 else 5.75)
+    opacity = preset_indicator_opacity(
+        True, slot_index, now, animations)
+    radius = (4.4 + 1.8 * ((opacity - 0.25) / 0.75)
+              if animations else (4.25 if slot_index == 0 else 5.75))
     return {
         "glyph": "●",
-        "opacity": preset_indicator_opacity(
-            True, slot_index, now, animations),
+        "opacity": opacity,
         "radius": radius,
     }
 
@@ -117,15 +119,6 @@ def bus_meter_columns():
         ("mixa", "Mix A", "USB capture channels 3–4"),
         ("mixb", "Mix B", "USB capture channels 5–6"),
     )
-
-
-def bus_balance_text(value):
-    """Compact left/center/right display for a normalized stereo balance."""
-    value = max(0.0, min(1.0, float(value)))
-    if abs(value - 0.5) < 0.005:
-        return "C"
-    return ("L%d" if value < 0.5 else "R%d") % round(
-        abs(value - 0.5) * 200)
 
 
 def append_host_migration_notices(completion_message, migrations):
@@ -2528,9 +2521,7 @@ class Win(Adw.ApplicationWindow):
         self._curve = None
         self._curve_key = None
         self.hpf_by_ch = {1: 24.0, 2: 24.0}
-        self.pan_state = io24_mbc.default_pan_snapshot()
         self.bus_sources = io24_mbc.BusSourceManager()
-        self._pan_mute = False
         self._bus_source_status = {
             bus: "unavailable" for bus in io24_mbc.BUS_SOURCE_KEYS
         }
@@ -2835,7 +2826,7 @@ class Win(Adw.ApplicationWindow):
 
 
     # ---------------------------------------------------------- mixer page
-    def _strip(self, title=None, subtitle=None, title_suffix=None):
+    def _strip(self, title=None, title_suffix=None):
         b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         b.add_css_class("card")
         b.set_margin_top(10); b.set_margin_bottom(10)
@@ -2852,10 +2843,6 @@ class Win(Adw.ApplicationWindow):
             b.append(head)
             self._strip_titles = getattr(self, "_strip_titles", {})
             self._strip_titles[title] = lab
-        if subtitle:
-            s = Gtk.Label(label=subtitle)
-            s.add_css_class("dim-label"); s.add_css_class("caption")
-            b.append(s)
         return b
 
     def _input_strip(self, ch):
@@ -2928,8 +2915,6 @@ class Win(Adw.ApplicationWindow):
                         column_homogeneous=True,
                         halign=Gtk.Align.CENTER)
         grid.set_size_request(228, 260)
-        self.bus_balance_knobs = {}
-        self.bus_balance_labels = {}
         for column, (key, visible_name, detail) in enumerate(
                 bus_meter_columns()):
             header = Gtk.Label(label=visible_name, halign=Gtk.Align.CENTER)
@@ -2945,49 +2930,13 @@ class Win(Adw.ApplicationWindow):
                 self.meters["%s%d" % (key, side)] = m
                 pair.append(m)
             grid.attach(pair, column, 1, 1, 1)
-            value = (0.5 if key == "main" else
-                     self.pan_state["balances"][key])
-            moved = (None if key == "main" else
-                     lambda position, bus=key:
-                     self._bus_balance_moved(bus, position))
-            knob = Knob(value, 52, moved, label="balance")
-            knob.set_sensitive(False)
-            label_text = ("Main is not exposed by USB capture"
-                          if key == "main" else bus_balance_text(value))
-            label = Gtk.Label(label=label_text, halign=Gtk.Align.CENTER)
-            label.add_css_class("numeric")
-            label.add_css_class("dim-label")
-            if key == "main":
-                knob.set_tooltip_text(label_text)
-                label.set_wrap(True)
-            else:
-                knob.set_tooltip_text(
-                    "%s stereo balance for the passive Host source" %
-                    visible_name)
-            self.bus_balance_knobs[key] = knob
-            self.bus_balance_labels[key] = label
-            grid.attach(knob, column, 2, 1, 1)
-            grid.attach(label, column, 3, 1, 1)
         box.append(grid)
         box.append(Gtk.Box(vexpand=True))
         return box
 
-    def _bus_balance_moved(self, bus, value):
-        """Update one saved bus balance and its ready source, if available."""
-        if getattr(self, "_pan_mute", False):
-            return
-        if bus not in io24_mbc.BUS_SOURCE_KEYS:
-            raise ValueError("bus balance must be mixa or mixb")
-        value = max(0.0, min(1.0, float(value)))
-        self.pan_state["balances"][bus] = value
-        self.bus_balance_labels[bus].set_text(bus_balance_text(value))
-        if not self.bus_sources.set_balance(bus, value):
-            self._set_bus_source_status(bus, "failed", notify=True)
-
     def _set_bus_source_status(self, bus, status, notify=False):
         previous = self._bus_source_status.get(bus, "unavailable")
         self._bus_source_status[bus] = status
-        self.bus_balance_knobs[bus].set_sensitive(status == "ready")
         if notify and status == "failed" and previous != "failed":
             self.say("%s source failed to start" %
                      io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
@@ -2995,36 +2944,11 @@ class Win(Adw.ApplicationWindow):
     def _bus_source_watchdog(self):
         """Slowly reconcile source visibility; ordinary transitions are quiet."""
         capture = io24_mbc.find_io24_capture_source()
-        statuses = self.bus_sources.reconcile(
-            capture, self.pan_state["balances"])
+        statuses = self.bus_sources.reconcile(capture)
         for bus in io24_mbc.BUS_SOURCE_KEYS:
             self._set_bus_source_status(
                 bus, statuses[bus], notify=statuses[bus] == "failed")
         return True
-
-    def _pan_snapshot_state(self):
-        return io24_mbc.validate_pan_snapshot({
-            "version": io24_mbc.PAN_SNAPSHOT_VERSION,
-            "balances": {
-                bus: self.bus_balance_knobs[bus].value
-                for bus in io24_mbc.BUS_SOURCE_KEYS
-            },
-        })
-
-    def _adopt_pan_state(self, state):
-        if state is None:
-            return None
-        state = io24_mbc.validate_pan_snapshot(state)
-        self._pan_mute = True
-        try:
-            self.pan_state = state
-            for bus, value in state["balances"].items():
-                self.bus_balance_knobs[bus].set_value(value, notify=False)
-                self.bus_balance_labels[bus].set_text(
-                    bus_balance_text(value))
-        finally:
-            self._pan_mute = False
-        return "Mix A/B balances restored (Host only)"
 
     def _master_strip(self):
         box = self._strip("Monitoring")
@@ -3741,10 +3665,7 @@ class Win(Adw.ApplicationWindow):
         page = Adw.PreferencesPage()
 
         pg = Adw.PreferencesGroup(
-            title="Channel processing / effects mix",
-            description="0% bypasses EQ, compression, limiting and effects; "
-                        "100% is fully processed. Exact nonzero values are "
-                        "Host-written and cannot be read back from the device.")
+            title="Channel processing / effects mix")
         self.processing_mix_controls = {}
         self.processing_mix_rows = {}
         for ch in (1, 2):
@@ -3768,8 +3689,10 @@ class Win(Adw.ApplicationWindow):
             title="Shared reverb engine",
             subtitle="Needs a nonzero channel processing/effects mix and an "
                      "FX return; device readback unavailable")
-        self.rev_on.connect("notify::active",
-                            lambda *_a: (self._push_reverb(), self._repaint_reverb()))
+        self.rev_on.connect(
+            "notify::active",
+            lambda *_a: (self._push_reverb(establish_path=True),
+                         self._repaint_reverb()))
         g.add(self.rev_on)
 
         # Character presets. The device exposes one algorithm with size, input
@@ -4145,15 +4068,33 @@ class Win(Adw.ApplicationWindow):
         if getattr(self, "rev_type", None) is not None and self.rev_type.get_selected() != 0:
             self.rev_type.set_selected(0)
 
-    def _push_reverb(self):
+    def _push_reverb(self, establish_path=False):
         if self._adopt_mute:
             return
         on = self.rev_on.get_active()
         size, mix = self.s_rsize.get_value(), self.s_rmix.get_value()
         hp, pre = self.s_rhp.get_value(), self.s_rpre.get_value()
-        self.ctl.submit(lambda dev: dev.set_reverb(
-            on=on, size=size, mix=mix, hp_freq=hp, predelay=max(0.0001, pre))
-            if on else dev.reverb_off())
+        processing_mix = self.processing_mix_controls[1].get_value()
+        main_return = self.rev_return_controls["main"].get_value()
+
+        def work(dev, enable=on, establish=establish_path,
+                 channel_mix=processing_mix, return_db=main_return):
+            if not enable:
+                return dev.reverb_off()
+            result = dev.set_reverb(
+                on=True, size=size, mix=mix, hp_freq=hp,
+                predelay=max(0.0001, pre))
+            if establish:
+                # The switch now applies the path displayed beside it. Engine
+                # parameters alone are silent on this unit: Channel 1 needs a
+                # nonzero processing scalar and the shared return needs both a
+                # level and an assignment to Main.
+                dev.set_fx_mix(1, channel_mix)
+                dev.set_send_db("fxreturn/ch1", "main", return_db)
+                dev.set_send_assigned("fxreturn/ch1", "main", True)
+            return result
+
+        self.ctl.submit(work)
 
     def _mark_processing_mix_known(self, channel):
         self.processing_mix_rows[channel].set_subtitle(
@@ -4209,10 +4150,7 @@ class Win(Adw.ApplicationWindow):
         # line, and the page stops repeating itself. The widget contract
         # (mix_widgets[(src, bus)] = (scale, mute)) is unchanged, so
         # _sync_mix_widgets and preset loads keep working untouched.
-        g = Adw.PreferencesGroup(
-            title="Routing matrix",
-            description="Mix A feeds USB capture 3-4, Mix B feeds 5-6 — they "
-                        "are what recording apps hear")
+        g = Adw.PreferencesGroup(title="Routing matrix")
         grid = Gtk.Grid(column_spacing=16, row_spacing=8)
         grid.set_margin_top(6); grid.set_margin_bottom(4)
 
@@ -4375,11 +4313,18 @@ class Win(Adw.ApplicationWindow):
             or written through the decoded direct-control resolver. This app's
             custom settings therefore live in host-side preset files.
         """
-        g = Adw.PreferencesGroup(
-            title="Device slots",
-            description="Two device-resident slots per channel; selection is "
-                        "separate from Host files and temporary previews")
+        g = Adw.PreferencesGroup(title="Device slots")
         self.preset_rows = {}
+        try:
+            entries = self.device_slot_registry.entries()
+        except Exception:
+            entries = []
+        self._host_slot_entries = entries
+        self._slot_names_by_channel = {
+            channel: [entry["record"]["preset_name"] for entry in entries
+                      if entry["physical_channel"] == channel]
+            for channel in (1, 2)
+        }
         # These rows are also driven FROM the device by _sync (slot 42 bits 5/6
         # and slots 40/41), and set_active/set_selected fire the same signals a
         # user click does. Without this guard the app would echo the device's own
@@ -4419,12 +4364,30 @@ class Win(Adw.ApplicationWindow):
             self.preset_rows[ch] = (srow, sl)
         return g
 
+    def _host_preset_group(self):
+        """List complete slot bodies the Host has actually sent."""
+        group = Adw.PreferencesGroup(title="Host presets")
+        entries = getattr(self, "_host_slot_entries", [])
+        if not entries:
+            group.add(Adw.ActionRow(
+                title="No Host-known user presets",
+                subtitle="A device slot may still contain unreadable content"))
+            return group
+        for entry in entries:
+            slot = entry["slot"]
+            channel = entry["physical_channel"]
+            relative = slot - self.PRESET_BASE[channel] + 1
+            group.add(Adw.ActionRow(
+                title=entry["record"]["preset_name"],
+                subtitle="Channel %d block %d · sent-write receipt · %s" %
+                         (channel, relative,
+                          entry["device_identity"]["serial"])))
+        return group
+
     def _host_hotkey_group(self):
         """Momentary per-channel Host snapshots; never device preset slots."""
         g = Adw.PreferencesGroup(
-            title="Temporary A/B previews (Host only)",
-            description="Capture a known channel sound, then hold to audition "
-                        "it. Release returns to the sound active when the hold began.")
+            title="Temporary A/B previews (Host only)")
         self.hotkey_rows = {}
         for ch in (1, 2):
             row = Adw.ActionRow(
@@ -4619,8 +4582,7 @@ class Win(Adw.ApplicationWindow):
         self.delay_scale.set_sensitive(False)
         page.add(od)
 
-        lv = Adw.PreferencesGroup(title="Live stream",
-                                  description="What the hardware is actually doing")
+        lv = Adw.PreferencesGroup(title="Live stream")
         self.live_rows = {}
         for k, t in (("rate", "Rate"), ("period", "Period size"),
                      ("buffer", "Buffer size"), ("format", "Format"),
@@ -4657,9 +4619,7 @@ class Win(Adw.ApplicationWindow):
         # synchronous USB read on the GTK main thread would block the UI. The
         # group is created hidden and revealed only if the device answers, so a
         # device that returns nothing simply shows no section.
-        self._names_group = Adw.PreferencesGroup(
-            title="Channel names",
-            description="Reported by the device ('CHNP' on block 0)")
+        self._names_group = Adw.PreferencesGroup(title="Channel names")
         self._names_group.set_visible(False)
         page.add(self._names_group)
         self.ctl.submit(
@@ -4813,6 +4773,7 @@ class Win(Adw.ApplicationWindow):
         # the try is what left this group orphaned — every early return skipped
         # it, and the group was built but never attached to any page at all.
         page.add(self._device_preset_group())
+        page.add(self._host_preset_group())
         page.add(self._host_hotkey_group())
         # One pointer to the written guide, in place of the paragraphs that used
         # to sit above every group on every page.
@@ -4840,10 +4801,7 @@ class Win(Adw.ApplicationWindow):
             page.add(g)
             return page
 
-        g = Adw.PreferencesGroup(
-            title="Factory sounds",
-            description="Search, audition on the selected channel, or explicitly "
-                        "store a complete sound in an inactive device slot")
+        g = Adw.PreferencesGroup(title="Factory sounds")
         search_row = Adw.ActionRow(
             title="Find a factory sound",
             subtitle="Filters names and sound descriptions")
@@ -5668,7 +5626,7 @@ class Win(Adw.ApplicationWindow):
             host_features = None
             if saving:
                 try:
-                    host_features = {"pan": self._pan_snapshot_state()}
+                    host_features = {}
                     multiband = self._mbc_snapshot_state()
                     if multiband is not None:
                         host_features["multiband"] = multiband
@@ -5894,11 +5852,10 @@ class Win(Adw.ApplicationWindow):
             rack.queue_draw()
         host_messages = []
         if host_features:
-            pan_message = self._adopt_pan_state(host_features.get("pan"))
             multiband_message = self._adopt_mbc_state(
                 host_features.get("multiband"))
             host_messages = [message for message in
-                             (pan_message, multiband_message) if message]
+                             (multiband_message,) if message]
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)
@@ -5978,12 +5935,16 @@ class Win(Adw.ApplicationWindow):
             self._preset_sync = True          # suppress the write-back handlers
             try:
                 for ch, (status_row, sl) in rows.items():
+                    names = getattr(self, "_slot_names_by_channel", {}).get(ch, [])
+                    prefix = " · ".join(names)
                     if poff[ch - 1]:
                         status_row.set_subtitle(
+                            (prefix + " — " if prefix else "") +
                             "Device reports bypass (exact 0%); set mix on "
                             "the Effects page")
                     else:
                         status_row.set_subtitle(
+                            (prefix + " — " if prefix else "") +
                             "Device reports processing active (>0); exact "
                             "mix is Host-write-only")
                     local = pslot[ch - 1] - self.PRESET_BASE[ch]

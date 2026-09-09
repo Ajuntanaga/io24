@@ -3302,13 +3302,15 @@ class Win(Adw.ApplicationWindow):
             target = io24_mbc.find_io24_sink()
             ok = self.mbc.start(
                 target=target, state=self._mbc_snapshot_state())
-            if ok:
+            if ok and io24_mbc.set_default_output(io24_mbc.SINK_NAME):
                 row.set_subtitle(
-                    "On · route playback to the \u201cio24 Multiband\u201d output")
+                    "On · system playback is routed through multiband")
             else:
-                self.say("Multiband failed to start — is PipeWire running?")
+                self.mbc.stop()
+                self.say("Multiband failed to start or route through PipeWire")
                 row.set_active(False)
         else:
+            io24_mbc.set_default_output(io24_mbc.find_io24_sink())
             self.mbc.stop()
             row.set_subtitle(
                 "Off · adds the \u201cio24 Multiband\u201d output device")
@@ -3397,8 +3399,9 @@ class Win(Adw.ApplicationWindow):
             return "multiband settings restored, but swh-plugins is unavailable"
         ok = self.mbc.start(
             target=io24_mbc.find_io24_sink(), state=state)
-        if ok:
+        if ok and io24_mbc.set_default_output(io24_mbc.SINK_NAME):
             return "multiband restored on (Host only)"
+        self.mbc.stop()
         self._mbc_mute = True
         try:
             self.mbc_row.set_active(False)
@@ -4080,18 +4083,15 @@ class Win(Adw.ApplicationWindow):
                  channel_mix=processing_mix, return_db=main_return):
             if not enable:
                 return dev.reverb_off()
-            result = dev.set_reverb(
-                on=True, size=size, mix=mix, hp_freq=hp,
-                predelay=max(0.0001, pre))
             if establish:
-                # The switch now applies the path displayed beside it. Engine
-                # parameters alone are silent on this unit: Channel 1 needs a
-                # nonzero processing scalar and the shared return needs both a
-                # level and an assignment to Main.
+                # Establish the feed and return before arming the engine. This
+                # is the device order that produces an audible shared reverb.
                 dev.set_fx_mix(1, channel_mix)
                 dev.set_send_db("fxreturn/ch1", "main", return_db)
                 dev.set_send_assigned("fxreturn/ch1", "main", True)
-            return result
+            return dev.set_reverb(
+                on=True, size=size, mix=mix, hp_freq=hp,
+                predelay=max(0.0001, pre))
 
         self.ctl.submit(work)
 
@@ -6153,6 +6153,7 @@ class App(Adw.Application):
     def do_shutdown(self):
         w = self.win
         if w is not None and getattr(w, "mbc", None) is not None:
+            io24_mbc.set_default_output(io24_mbc.find_io24_sink())
             w.mbc.stop()                  # never leave an orphan sink behind
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()

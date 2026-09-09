@@ -75,13 +75,13 @@ class ReverbAudiblePathTests(unittest.TestCase):
         io24gtk.Win._push_reverb(host, establish_path=True)
 
         self.assertEqual(device.calls, [
+            ("set_fx_mix", (1, 0.65), {}),
+            ("set_send_db", ("fxreturn/ch1", "main", -3.0), {}),
+            ("set_send_assigned", ("fxreturn/ch1", "main", True), {}),
             ("set_reverb", (), {
                 "on": True, "size": 0.72, "mix": 0.38,
                 "hp_freq": 180.0, "predelay": 0.027,
             }),
-            ("set_fx_mix", (1, 0.65), {}),
-            ("set_send_db", ("fxreturn/ch1", "main", -3.0), {}),
-            ("set_send_assigned", ("fxreturn/ch1", "main", True), {}),
         ])
 
     def test_disabling_reverb_does_not_rewrite_send_or_return_path(self):
@@ -642,6 +642,55 @@ class HostRefinementTests(unittest.TestCase):
             self.assertEqual(
                 io24_mbc.find_io24_sink(),
                 "alsa_output.usb-PreSonus_Revelator_io24-00.pro-output-0")
+
+    def test_multiband_switch_routes_playback_and_restores_io24(self):
+        class Row:
+            def __init__(self):
+                self.active = True
+                self.subtitle = ""
+
+            def get_active(self):
+                return self.active
+
+            def set_active(self, active):
+                self.active = active
+
+            def set_subtitle(self, subtitle):
+                self.subtitle = subtitle
+
+        class Chain:
+            def __init__(self):
+                self.starts = []
+                self.stops = 0
+
+            def start(self, **kwargs):
+                self.starts.append(kwargs)
+                return True
+
+            def stop(self):
+                self.stops += 1
+
+        row, chain, routed = Row(), Chain(), []
+        host = SimpleNamespace(
+            _mbc_mute=False, mbc=chain,
+            _mbc_snapshot_state=lambda: {"enabled": True},
+            say=lambda _message: None,
+        )
+        with mock.patch.object(io24_mbc, "sc4_available",
+                               return_value="/usr/lib/ladspa/sc3_1427.so"), \
+                mock.patch.object(io24_mbc, "find_io24_sink",
+                                  return_value="alsa_output.io24"), \
+                mock.patch.object(io24_mbc, "set_default_output",
+                                  side_effect=lambda name: routed.append(name) or True):
+            io24gtk.Win._mbc_toggled(host, row, None)
+            row.active = False
+            io24gtk.Win._mbc_toggled(host, row, None)
+
+        self.assertEqual(chain.starts, [{
+            "target": "alsa_output.io24", "state": {"enabled": True},
+        }])
+        self.assertEqual(routed, [io24_mbc.SINK_NAME, "alsa_output.io24"])
+        self.assertEqual(chain.stops, 1)
 
     def test_invalid_multiband_file_fails_before_device_state_is_applied(self):
         class SnapshotIo24(io24.Io24):
@@ -1282,7 +1331,9 @@ class HostRefinementTests(unittest.TestCase):
         with mock.patch.object(io24_mbc, "sc4_available",
                                return_value="/usr/lib/ladspa/sc3_1427.so"), \
                 mock.patch.object(io24_mbc, "find_io24_sink",
-                                  return_value="alsa_output.io24"):
+                                  return_value="alsa_output.io24"), \
+                mock.patch.object(io24_mbc, "set_default_output",
+                                  return_value=True):
             status = io24gtk.Win._adopt_mbc_state(host, state)
 
         self.assertEqual(status, "multiband restored on (Host only)")

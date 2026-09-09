@@ -1,6 +1,22 @@
 # MAIN/B A S E restoration and Host repair progress
 
-Status: `LIVE_WRITES_SENT_HOST_REPAIR_GREEN`
+Status: `LIVE_EFFECTS_REPAIR_GREEN`
+
+The shared-reverb transaction now establishes its feed and Main return before
+arming the engine. Plate was written live to Channel 1 at 35 percent processing
+mix with a 0 dB Main return, then the control connection closed. Fresh audible
+confirmation is not inferred.
+
+Multiband now selects its ready PipeWire sink as the system output and restores
+the physical io24 output when disabled or on Host shutdown. A bounded live
+start/select/restore/stop round trip passed. The physical output was unmuted at
+its existing 40 percent volume; no playback streams were active.
+
+The patched Host is open. The affected suite passes 142/142, and the 748-row
+matrix SHA-256 is
+`aa9e26fd432110d6ea3d96aafe3a353a8fa43d2070efc60d80881a2d5a675643`.
+No review was requested or performed. Block-201 Voice FX activation remains a
+separate unresolved device gate.
 
 The two user-requested complete records were sent to the exact Channel-1 device
 blocks and recorded in the identity-bound Host registry. MAIN is active. The

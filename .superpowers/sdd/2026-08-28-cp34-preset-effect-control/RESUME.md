@@ -1,6 +1,28 @@
 # CP34 device preset and Voice FX continuation
 
-## 2026-09-09 controlling checkpoint: MAIN/B A S E restored and Host paths repaired
+## 2026-09-09 controlling checkpoint: live Host effects repair
+
+The shared-reverb switch now establishes the Channel-1 processing mix and Main
+return before arming block 202, matching the sequence with prior positive
+listening evidence. A bounded live write armed Plate at 35 percent Channel-1
+mix and a 0 dB Main return on serial `AB7C22200355`; the control connection was
+then closed. This is a completed device write, not fresh listening confirmation.
+
+The multiband switch now makes its public PipeWire sink the system default when
+the chain becomes ready, restores the physical io24 output when switched off or
+when the Host exits, and fails closed if routing cannot be established. A live
+round trip started node 138, selected it, restored the physical io24 output,
+and stopped cleanly. The physical io24 output was found muted at 40 percent and
+was unmuted without changing its volume. There were no active playback streams.
+
+The source launcher was restarted on the patched worktree. The affected suite
+passes 142/142 with `ResourceWarning` elevated to error, including release
+packaging, and the regenerated 748-row matrix is deterministic at SHA-256
+`aa9e26fd432110d6ea3d96aafe3a353a8fa43d2070efc60d80881a2d5a675643`.
+No peer review was requested. Direct block-201 Voice FX activation remains
+unestablished and was not falsely presented as repaired.
+
+## 2026-09-09 predecessor checkpoint: MAIN/B A S E restored and Host paths repaired
 
 The user identified `MAIN` and `B A S E` as their two Channel-1 device presets
 that an earlier Codex run accidentally removed, explicitly authorized restoring

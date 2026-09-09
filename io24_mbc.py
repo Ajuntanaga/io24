@@ -458,6 +458,38 @@ def find_io24_capture_source():
     return _find_io24_node("input")
 
 
+def node_id(node_name):
+    """PipeWire global id for an exact node name, or None."""
+    if not node_name:
+        return None
+    try:
+        out = subprocess.run(["pw-cli", "ls", "Node"], capture_output=True,
+                             text=True, timeout=5).stdout
+    except Exception:
+        return None
+    current = None
+    for line in out.splitlines():
+        value = line.strip()
+        if value.startswith("id ") and "," in value:
+            current = value.split()[1].rstrip(",")
+        elif value == 'node.name = "%s"' % node_name:
+            return current
+    return None
+
+
+def set_default_output(node_name):
+    """Make an existing PipeWire sink the default for new playback."""
+    nid = node_id(node_name)
+    if nid is None or shutil.which("wpctl") is None:
+        return False
+    try:
+        result = subprocess.run(["wpctl", "set-default", str(nid)],
+                                capture_output=True, text=True, timeout=5)
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
 class Chain:
     """Owns the child pipewire process hosting the sink."""
 
@@ -556,19 +588,7 @@ class Chain:
 
     def node_id(self):
         """The chain sink's node id, for set-param. None until it appears."""
-        try:
-            out = subprocess.run(["pw-cli", "ls", "Node"], capture_output=True,
-                                 text=True, timeout=5).stdout
-        except Exception:
-            return None
-        nid = None
-        for line in out.splitlines():
-            ls = line.strip()
-            if ls.startswith("id ") and "," in ls:
-                nid = ls.split()[1].rstrip(",")
-            if self.NODE_NAME in ls and nid is not None:
-                return nid
-        return None
+        return node_id(self.NODE_NAME)
 
     def set_controls(self, controls):
         """Live parameter changes: {'c_low:Ratio (1:n)': 4.0, ...}.

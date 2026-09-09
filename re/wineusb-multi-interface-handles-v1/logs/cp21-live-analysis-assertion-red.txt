@@ -1,0 +1,43 @@
+2026-08-22T10:35:54-07:00
+[wineusb-structured-counts]
+handle_validated=2
+handle_populated=2
+handle_rejected=0
+pipe_handle_total=4
+pipe_handle_0x202=2
+pipe_handle_0x282=2
+transfer_map=8
+transfer_map_null=8
+transfer_reject_null=8
+transfer_allocated=0
+transfer_submit=0
+clear_halt_observe_only=4
+[usbmon-events-by-stage-and-route]
+C Ci 146
+S Ci 146
+[usbmon-submit-policy]
+submit_total=146
+control_in=146
+[libusb-operation-counts]
+libusb_submit_transfer=148
+libusb_bulk_transfer=0
+libusb_interrupt_transfer=0
+libusb_control_transfer=0
+libusb_claim_interface=0
+libusb_release_interface=0
+libusb_detach_kernel_driver=0
+libusb_set_auto_detach_kernel_driver=0
+libusb_set_interface_alt_setting=0
+libusb_set_configuration=0
+libusb_clear_halt=6
+[service-and-synchronization]
+3:        STATE              : 4  RUNNING
+ucnet probe: no UCNET DA announcement within 8.0 seconds
+synchronize_json=absent
+[remaining-kernel-boundary-markers]
+KeInitializeDpc stub=0
+KeInsertQueueDpc stub=8
+MmGetSystemAddressForMdlSafe=0
+MmMapLockedPagesSpecifyCache=8
+unimplemented function ntoskrnl.exe=0
+[assertions]

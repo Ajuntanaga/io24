@@ -1,0 +1,14 @@
+Task 07 R99 allocator-interposition relocation evidence
+Frozen unixlib sha256: a8dda27c3a06b08ad89608997d7ac78f54e2656fd3cbac20ab57ab76ca9ff17e
+Command:
+readelf -rW /tmp/io24-r99-positive.kuZLJB/wineusb-contract.so | rg 'JUMP_SLOT.*(calloc|free|malloc)'
+
+000000000000c008  0000000300000007 R_X86_64_JUMP_SLOT     0000000000000000 calloc + 0
+000000000000c018  0000000500000007 R_X86_64_JUMP_SLOT     0000000000000000 free + 0
+000000000000c058  0000000d00000007 R_X86_64_JUMP_SLOT     0000000000000000 libusb_free_config_descriptor + 0
+000000000000c090  0000001500000007 R_X86_64_JUMP_SLOT     0000000000000000 libusb_free_interface_association_descriptors + 0
+000000000000c0a8  0000001800000007 R_X86_64_JUMP_SLOT     0000000000000000 malloc@GLIBC_2.2.5 + 0
+000000000000c100  0000002300000007 R_X86_64_JUMP_SLOT     0000000000000000 libusb_free_transfer + 0
+
+Result: calloc/free remain PLT JUMP_SLOT relocations in the actual unixlib shared object,
+so the macro fake supplied through LD_PRELOAD interposes the tested allocation/free calls.

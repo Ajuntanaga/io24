@@ -1,0 +1,29 @@
+timestamp=2026-08-22T14:38:45-07:00
+battery=76% status=Discharging
+start_status=0
+query_status=0
+captured_service_state=RUNNING
+registry_probe_required_markers=5/5 pass
+driver_trace=KeInitializeDpc semi-stub
+driver_trace=RtlIsNtDdiVersionAvailable 0x6010000
+driver_trace=ExIsProcessorFeaturePresent 10
+mdl_trace_markers=none; expected because USB was hidden
+forbidden_old_markers=none
+2f39ade8f2ffc0fa2cd643983daf971d4b63be1aed129d955f819356073f9925  clone/out/driver-load.log
+4e1d29b318ad1d6b62ba6517daf5967f5a5d628cb7ede515951d6f6535c4d611  clone/out/driver-query.log
+53c7a0aaddf1136110594fdde8007e5c9b1068658ae955abf37f832f89b26617  clone/out/driver-load-status.txt
+89fd48ff31e0f01b337821853eadbcffcd5a79985ef0921f8fbe7469d22fdac1  clone/out/registry-probe.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  clone/out/registry-probe-wineserver-stop.log
+ca7cfcc265a0d6618aea38bd22fde5d3660938edb9360775003ad3b8a1647400  clone/prefix/system.reg
+0fb10148dd74c10b2d8b1b3f1837a41f3cbb37af74d4a0c217e4912b1117ce26  clone/prefix/user.reg
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  source/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  source/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  source/out/live-service-usb.txt
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  clone/out/live-service-usb.txt inherited
+active_io24_wine_units=none
+candidate_processes=none
+device sysfs=3-1 node=/dev/bus/usb/003/002 serial=AB7C22200355 config=1 speed=480
+interfaces_0_through_4=snd-usb-audio alt0
+interfaces_5_through_6=unclaimed alt0
+protected_prefix inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+DRIVER_POSTFLIGHT=PASS

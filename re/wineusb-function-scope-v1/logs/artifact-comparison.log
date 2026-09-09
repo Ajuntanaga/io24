@@ -1,0 +1,13 @@
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/wineusb-function-scope-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  .io24-build/wineusb-function-scope-v1/build-a/dlls/wineusb.sys/wineusb.sys.so
+88ab927a25c818e308589414c94c06bb41e9b3cba8aa364535e94f958b5b89c0  .io24-build/wineusb-function-scope-v1/build-a/dlls/wineusb.sys/wineusb.so
+8fd30296cb82329a0321997484a5ebee864f68259621e40be76232c45981f89d  .io24-build/wineusb-function-scope-v1/build-a/Makefile
+05c20c62104f2dbb01467d1580d60528a1897261ed164401416101afb8feb213  .io24-build/wineusb-function-scope-v1/build-a/compile_commands.json
+55d4a0bad65eba0635fcb7d3fcea2ab1979ce3320a430f7d6b6e7fe853d55541  .io24-build/wineusb-function-scope-v1/build-a/include/config.h
+ba8736f5850be99950dfc8381ea343c056b2e6c04a4f212fab8f8154b5de0c46  .io24-build/wineusb-function-scope-v1/build-a/include/Makefile
+artifacts_a_b_dev_byte_identical=true
+configuration_outputs_a_b_byte_identical=true
+    Build ID: 1bb30939ec9d971c53102dfcd5d63e4738408599
+a_undefined_named_symbols=38
+libusb_free_interface_association_descriptors
+libusb_get_active_interface_association_descriptors

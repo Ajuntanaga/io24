@@ -1,0 +1,14 @@
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fffe35cde48 header_length=184 interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fffe35cde48 scope=all_interfaces interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fffe35cde48 interface_index=1 interface=2 pipe_index=0 endpoint=0x83 type=3 handle=0x383.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fffe35cde48 interface_index=2 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fffe35cde48 interface_index=2 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fffe35cde48 interfaces=3 pipes=3.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7fffe35cde48 reason=truncated_pipe_array interface_index=1 available=1 required=2 declared_pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffe35cde48 handle=0x202 endpoint=0x2 type=2 route=bulk length=512 buffer=(nil).
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fffe35cde48 handle=0x202 endpoint=0x2 route=bulk length=512 buffer=(nil) libusb_status=0 returned_status=0x103.
+FAIL test_nonzero_transfer_with_null_buffer_fails_before_submission:206: null-buffer transfer returned 0x103
+FAIL test_nonzero_transfer_with_null_buffer_fails_before_submission:207: null-buffer USBD status is 0
+FAIL test_nonzero_transfer_with_null_buffer_fails_before_submission:209: null-buffer transfer allocated libusb state
+FAIL test_nonzero_transfer_with_null_buffer_fails_before_submission:210: null-buffer transfer reached libusb submit
+4 WineUSB multi-interface handle contract check(s) failed

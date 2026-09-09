@@ -1,0 +1,87 @@
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -2940,7 +2940,21 @@ PMDL WINAPI MmAllocatePagesForMdl(PHYSICAL_ADDRESS lowaddress, PHYSICAL_ADDRESS
+  */
+ void WINAPI MmBuildMdlForNonPagedPool(MDL *mdl)
+ {
+-    FIXME("stub: %p\n", mdl);
++    PFN_NUMBER *pages = (PFN_NUMBER *)(mdl + 1);
++    ULONG page_count, i;
++    char *base;
++
++    TRACE("%p\n", mdl);
++
++    mdl->Process = NULL;
++    mdl->MappedSystemVa = (char *)mdl->StartVa + mdl->ByteOffset;
++    page_count = ADDRESS_AND_SIZE_TO_SPAN_PAGES(mdl->MappedSystemVa, mdl->ByteCount);
++    base = mdl->StartVa;
++
++    for (i = 0; i < page_count; ++i)
++        pages[i] = (PFN_NUMBER)((ULONG_PTR)(base + i * PAGE_SIZE) >> PAGE_SHIFT);
++
++    mdl->MdlFlags |= MDL_SOURCE_IS_NONPAGED_POOL;
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -307,6 +307,49 @@ static void test_mdl_map(void)
+     IoFreeMdl(mdl);
+ }
+ 
++static void test_mdl_nonpaged_pool(void)
++{
++    static const ULONG tag = 0x34326f69;
++    PFN_NUMBER *pages;
++    char *buffer, *mapped;
++    MDL *mdl;
++
++    buffer = ExAllocatePoolWithTag(NonPagedPool, 512, tag);
++    ok(buffer != NULL, "ExAllocatePoolWithTag failed\n");
++    if (!buffer) return;
++
++    buffer[0] = 0x24;
++    buffer[511] = 0x42;
++    mdl = IoAllocateMdl(buffer, 512, FALSE, FALSE, NULL);
++    ok(mdl != NULL, "IoAllocateMdl failed\n");
++    if (!mdl)
++    {
++        ExFreePoolWithTag(buffer, tag);
++        return;
++    }
++
++    ok(!(mdl->MdlFlags & MDL_SOURCE_IS_NONPAGED_POOL),
++       "MDL unexpectedly describes nonpaged pool, flags %#x\n", mdl->MdlFlags);
++    ok(mdl->MappedSystemVa == NULL, "unexpected mapped address %p\n", mdl->MappedSystemVa);
++    pages = (PFN_NUMBER *)(mdl + 1);
++
++    MmBuildMdlForNonPagedPool(mdl);
++
++    ok(mdl->MdlFlags & MDL_SOURCE_IS_NONPAGED_POOL,
++       "MDL does not describe nonpaged pool, flags %#x\n", mdl->MdlFlags);
++    ok(!(mdl->MdlFlags & MDL_PAGES_LOCKED), "MDL unexpectedly locked, flags %#x\n", mdl->MdlFlags);
++    ok(pages[0] == (PFN_NUMBER)((ULONG_PTR)mdl->StartVa >> PAGE_SHIFT),
++       "expected first PFN %#lx, got %#lx\n",
++       (ULONG)((ULONG_PTR)mdl->StartVa >> PAGE_SHIFT), pages[0]);
++    mapped = MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority);
++    ok(mapped == buffer, "expected mapped address %p, got %p\n", buffer, mapped);
++    if (mapped)
++        ok(mapped[0] == 0x24 && mapped[511] == 0x42, "mapped buffer does not alias the source\n");
++
++    IoFreeMdl(mdl);
++    ExFreePoolWithTag(buffer, tag);
++}
++
+ static void test_init_funcs(void)
+ {
+     KTIMER timer, timer2;
+@@ -2628,6 +2671,7 @@ START_TEST(driver)
+     test_current_thread(FALSE);
+     test_critical_region(TRUE);
+     test_mdl_map();
++    test_mdl_nonpaged_pool();
+     test_init_funcs();
+     test_load_driver();
+     test_sync();

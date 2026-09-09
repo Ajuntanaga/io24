@@ -1,0 +1,11 @@
+8cc8c6e5af441adaaa6d83be64ae6472d3a3b7ea4c4260012c8c69c0f8f31d61  io24.py
+32f158b055e0b7d9339a1576132ba3e73aa6ea0768f2e534e610d42db1038f56  io24_preset_record.py
+de2e86b7154a0342b2993ed70e23e10f785edb5b1b08da67acad152e99f431d9  io24_scene.py
+f0f328fee756644c0e93db63f34c9975ac6156e20448db3fe07536d758472f2c  tests/test_io24_preset_persistence.py
+a5bb665f7bef4412df9ff68d3622d7fd7310a7036975bd3c488d2d0982f02e4e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T004620-0700-json-stat-save/REPORT.md
+a0111f0a625ceeee6419d545fbf35018ecc96891bbd8f3f36995ec5e1edabc8a  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T004620-0700-json-stat-save/FIRMWARE-STATIC-ANCHORS.txt
+65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a  /tmp/io24-fw-1.28.7DrxHf.bin
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  /tmp/io24-uc472-extract.IHXUdb/hwaccess/dspusbdevice.dll
+9372757986afe56c933ba2fb76851326e4d27d4b600e7967d76de2c646e9de79  /home/ajuntanaga/Archive/Windows/Windows.old/Users/Anthony M. Vargas/Documents/PreSonus/Revelator IO/Scene/B A S E.scene
+34cfd6fd1f9da4be28f47542f08a5a727a59aeee2fa67737f696cf23b9f99ae1  /home/ajuntanaga/Archive/Windows/Windows.old/Users/Anthony M. Vargas/Documents/PreSonus/Revelator IO/Scene/Main.scene
+8ac483a08be9d37e5f2082840122d625f9d62d394c20ee37f8fa13162149761c  /home/ajuntanaga/Archive/Windows/Windows.old/Users/Anthony M. Vargas/Documents/PreSonus/Revelator IO/Scene/Piano Accomany.scene

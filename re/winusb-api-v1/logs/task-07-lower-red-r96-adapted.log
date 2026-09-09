@@ -1,0 +1,288 @@
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffeff0e6090 header_length=64 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffeff0e6090 scope=function root=5 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffeff0e6090 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_alternate:351: submit_request(&device,r)==STATUS_SUCCESS
+FAIL group_alternate:351: c->set_alternate==1
+FAIL group_alternate:351: io24_fake_libusb_record()->interface_number==5&&io24_fake_libusb_record()->alternate==1
+FAIL group_alternate:351: r->Interface.Pipes[0].PipeHandle&&r->Interface.Pipes[1].PipeHandle
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_alternate:354: submit_request(&device,r)==STATUS_INVALID_PARAMETER
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_alternate:356: submit_request(&device,r)==STATUS_INVALID_PARAMETER
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_alternate:359: submit_request(&device,r)==STATUS_UNSUCCESSFUL
+FAIL group_alternate:359: io24_fake_libusb_counts()->set_alternate==before+1
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_alternate:361: submit_request(&device,r)==STATUS_INVALID_PARAMETER
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_atomicity:396: submit_request(&device,r)==STATUS_INSUFFICIENT_RESOURCES
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_atomicity:406: submit_request(&device,r)==STATUS_SUCCESS
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_atomicity:409: submit_request(&device,r)==STATUS_INSUFFICIENT_RESOURCES
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+FAIL group_atomicity:417: submit_request(&device,r)==STATUS_INVALID_PARAMETER
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffeff0e61d0 header_length=6232 interfaces=1 pipes=257.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffeff0e61d0 scope=all_interfaces root=0 interfaces=1 pipes=257.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=1 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=2 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=3 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=4 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=5 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=6 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=7 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=8 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=9 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=10 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=11 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=12 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=13 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=14 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=15 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=16 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=17 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=18 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=19 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=20 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=21 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=22 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=23 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=24 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=25 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=26 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=27 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=28 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=29 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=30 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=31 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=32 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=33 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=34 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=35 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=36 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=37 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=38 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=39 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=40 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=41 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=42 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=43 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=44 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=45 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=46 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=47 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=48 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=49 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=50 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=51 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=52 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=53 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=54 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=55 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=56 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=57 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=58 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=59 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=60 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=61 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=62 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=63 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=64 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=65 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=66 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=67 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=68 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=69 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=70 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=71 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=72 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=73 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=74 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=75 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=76 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=77 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=78 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=79 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=80 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=81 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=82 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=83 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=84 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=85 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=86 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=87 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=88 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=89 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=90 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=91 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=92 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=93 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=94 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=95 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=96 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=97 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=98 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=99 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=100 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=101 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=102 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=103 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=104 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=105 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=106 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=107 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=108 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=109 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=110 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=111 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=112 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=113 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=114 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=115 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=116 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=117 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=118 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=119 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=120 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=121 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=122 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=123 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=124 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=125 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=126 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=127 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=128 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=129 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=130 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=131 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=132 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=133 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=134 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=135 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=136 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=137 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=138 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=139 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=140 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=141 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=142 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=143 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=144 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=145 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=146 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=147 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=148 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=149 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=150 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=151 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=152 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=153 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=154 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=155 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=156 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=157 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=158 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=159 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=160 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=161 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=162 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=163 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=164 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=165 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=166 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=167 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=168 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=169 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=170 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=171 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=172 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=173 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=174 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=175 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=176 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=177 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=178 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=179 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=180 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=181 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=182 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=183 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=184 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=185 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=186 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=187 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=188 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=189 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=190 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=191 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=192 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=193 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=194 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=195 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=196 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=197 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=198 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=199 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=200 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=201 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=202 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=203 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=204 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=205 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=206 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=207 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=208 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=209 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=210 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=211 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=212 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=213 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=214 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=215 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=216 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=217 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=218 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=219 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=220 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=221 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=222 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=223 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=224 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=225 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=226 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=227 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=228 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=229 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=230 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=231 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=232 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=233 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=234 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=235 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=236 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=237 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=238 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=239 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=240 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=241 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=242 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=243 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=244 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=245 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=246 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=247 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=248 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=249 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=250 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=251 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=252 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=253 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=254 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=255 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffeff0e61d0 interface_index=0 interface=0 pipe_index=256 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffeff0e61d0 interfaces=1 pipes=257.
+FAIL group_atomicity:441: submit_request(&device,configuration)==STATUS_INSUFFICIENT_RESOURCES
+FAIL group_atomicity:444: configuration->Interface.Pipes[0].PipeHandle==(HANDLE)(uintptr_t)0x3333&& configuration->Interface.Pipes[256].PipeHandle==(HANDLE)(uintptr_t)0x3333
+CP33 lower executed mode=--alternate completions=0 failures=15

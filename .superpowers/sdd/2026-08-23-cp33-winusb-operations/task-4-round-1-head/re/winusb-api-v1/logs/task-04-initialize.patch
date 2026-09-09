@@ -1,0 +1,2737 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-22 23:50:21.985188951 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 03:40:28.019271158 -0700
+@@ -1298,6 +1298,7 @@
+             FIXME("IO24_HANDLE_POPULATION event=populated irp=%p interfaces=%u pipes=%u.\n",
+                     irp, interface_count, pipe_count);
+ 
++            req->Hdr.Status = USBD_STATUS_SUCCESS;
+             return STATUS_SUCCESS;
+         }
+ 
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in	2026-08-08 04:48:00.000000000 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in	2026-08-24 03:40:28.026032730 -0700
+@@ -1,4 +1,5 @@
+ MODULE    = winusb.dll
++IMPORTS   = kernelbase ntdll
+ 
+ SOURCES = \
+ 	main.c
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-08 04:48:00.000000000 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 03:40:28.027255028 -0700
+@@ -20,17 +20,342 @@
+ 
+ #include "windef.h"
+ #include "winbase.h"
++#include "winternl.h"
+ #include "winusb.h"
++#include "wine/winusb.h"
+ 
+-#include "wine/debug.h"
++#include "winusb_private.h"
++
++static BOOL submit_request(HANDLE, DWORD, void *, DWORD, void *, DWORD, DWORD *, BOOL);
+ 
+-WINE_DEFAULT_DEBUG_CHANNEL(winusb);
++#include "wine/debug.h"
+ 
+ /***********************************************************************
+  *           WinUsb_Free (winusb.@)
+  */
+ BOOL WINAPI WinUsb_Free(WINUSB_INTERFACE_HANDLE handle)
+ {
+-    FIXME( "(%p) - stub\n", handle );
++    struct winusb_handle *object = handle;
++    struct wine_winusb_request request = {.size = sizeof(request), .version = WINE_WINUSB_ABI_VERSION};
++    DWORD bytes;
++
++    if (!object || object->magic != WINUSB_HANDLE_MAGIC) return FALSE;
++    object->magic = 0;
++    request.session = object->session;
++    submit_request(object->device, IOCTL_WINE_WINUSB_RELEASE, &request, sizeof(request),
++            NULL, 0, &bytes, FALSE);
++    HeapFree(GetProcessHeap(), 0, object->snapshot);
++    HeapFree(GetProcessHeap(), 0, object);
++    return TRUE;
++}
++
++static BOOL query_file_mode(HANDLE device)
++{
++    FILE_MODE_INFORMATION mode;
++    IO_STATUS_BLOCK iosb;
++
++    if (!device || device == INVALID_HANDLE_VALUE) return FALSE;
++    memset(&mode, 0, sizeof(mode));
++    memset(&iosb, 0, sizeof(iosb));
++    if (NtQueryInformationFile(device, &iosb, &mode, sizeof(mode), FileModeInformation) ||
++            iosb.Status || iosb.Information != sizeof(mode)) return FALSE;
++    return !(mode.Mode & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT));
++}
++
++static BOOL submit_request(HANDLE device, DWORD code, void *input, DWORD input_size,
++        void *output, DWORD output_size, DWORD *bytes, BOOL size_query)
++{
++    OVERLAPPED overlapped;
++    HANDLE event;
++    BOOL ret, completed = FALSE;
++    DWORD error = ERROR_SUCCESS, local_bytes = 0;
++
++    memset(&overlapped, 0, sizeof(overlapped));
++    if (!(event = CreateEventW(NULL, TRUE, FALSE, NULL)))
++    {
++        error = GetLastError();
++        SetLastError(error ? error : ERROR_NOT_ENOUGH_MEMORY);
++        return FALSE;
++    }
++    overlapped.hEvent = event;
++    if (bytes) *bytes = 0;
++    ret = DeviceIoControl(device, code, input, input_size, output, output_size, &local_bytes, &overlapped);
++    if (!ret) error = GetLastError();
++    if (!ret && error == ERROR_IO_PENDING)
++    {
++        DWORD wait = WaitForSingleObject(event, INFINITE);
++        if (wait != WAIT_OBJECT_0)
++        {
++            error = wait == WAIT_FAILED ? GetLastError() : ERROR_GEN_FAILURE;
++            CloseHandle(event);
++            SetLastError(error);
++            return FALSE;
++        }
++        ret = GetOverlappedResult(device, &overlapped, &local_bytes, FALSE);
++        if (!ret) error = GetLastError();
++        else error = ERROR_SUCCESS;
++        completed = TRUE;
++    }
++    else if (!ret) local_bytes = overlapped.InternalHigh;
++    if (bytes) *bytes = local_bytes;
++    CloseHandle(event);
++    if (size_query)
++    {
++        if (!ret && error == ERROR_INSUFFICIENT_BUFFER && local_bytes == sizeof(struct wine_winusb_snapshot)) return TRUE;
++        SetLastError(error == ERROR_INSUFFICIENT_BUFFER ? ERROR_BAD_DEVICE : (error ? error : ERROR_BAD_DEVICE));
++        return FALSE;
++    }
++    if (ret) return TRUE;
++    SetLastError(error ? error : (completed ? ERROR_BAD_DEVICE : ERROR_GEN_FAILURE));
++    return FALSE;
++}
++
++static BOOL range_end(SIZE_T total, UINT32 offset, UINT32 length, SIZE_T *end)
++{
++    if (offset > total || length > total - offset) return FALSE;
++    *end = offset + length;
++    return TRUE;
++}
++
++static BOOL array_end(SIZE_T total, UINT32 offset, UINT32 count, SIZE_T size, SIZE_T *end)
++{
++    SIZE_T length;
++
++    if (count > (SIZE_T)-1 / size) return FALSE;
++    length = (SIZE_T)count * size;
++    if (offset > total || length > total - offset) return FALSE;
++    *end = offset + length;
++    return TRUE;
++}
++
++static BOOL read_record(const BYTE *base, SIZE_T total, UINT32 offset, UINT32 index, void *record, SIZE_T size)
++{
++    SIZE_T start, end;
++
++    if (index > (SIZE_T)-1 / size || offset > (SIZE_T)-1 - index * size) return FALSE;
++    start = offset + index * size;
++    if (!range_end(total, start, size, &end)) return FALSE;
++    memcpy(record, base + start, size);
++    return TRUE;
++}
++
++static BOOL next_interface_descriptor(const BYTE **cursor, const BYTE *config_end, const BYTE **descriptor)
++{
++    while (*cursor + 2 <= config_end)
++    {
++        const BYTE *current = *cursor;
++
++        if (current[0] < 2 || current + current[0] > config_end) return FALSE;
++        *cursor = current + current[0];
++        if (current[1] == 4)
++        {
++            if (current[0] < 9) return FALSE;
++            *descriptor = current;
++            return TRUE;
++        }
++    }
++    return FALSE;
++}
++
++static BOOL find_endpoint_descriptor(const BYTE *interface_descriptor, const BYTE *config_end,
++        UINT32 index, const BYTE **descriptor)
++{
++    const BYTE *cursor = interface_descriptor + interface_descriptor[0];
++    UINT32 found = 0;
++
++    while (cursor + 2 <= config_end)
++    {
++        if (cursor[0] < 2 || cursor + cursor[0] > config_end) return FALSE;
++        if (cursor[1] == 4) break;
++        if (cursor[1] == 5 && cursor[0] >= 7)
++        {
++            if (found++ == index)
++            {
++                *descriptor = cursor;
++                return TRUE;
++            }
++        }
++        cursor += cursor[0];
++    }
++    return FALSE;
++}
++
++static BOOL validate_header(const struct wine_winusb_snapshot *snapshot)
++{
++    SIZE_T total = snapshot->total_size, device_end, config_end, interfaces_end, alternates_end, endpoints_end;
++
++    if (snapshot->size != sizeof(*snapshot) || snapshot->version != WINE_WINUSB_ABI_VERSION || snapshot->session ||
++            snapshot->reserved[0] || snapshot->reserved[1] || (snapshot->speed != LowSpeed && snapshot->speed != HighSpeed) ||
++            total < sizeof(*snapshot) || total > sizeof(*snapshot) + 0xffffu ||
++            snapshot->device_length != 18 || snapshot->configuration_length < 9 ||
++            !snapshot->interface_count || !snapshot->alternate_count ||
++            !range_end(total, snapshot->device_offset, snapshot->device_length, &device_end) ||
++            !range_end(total, snapshot->configuration_offset, snapshot->configuration_length, &config_end) ||
++            !array_end(total, snapshot->interfaces_offset, snapshot->interface_count, sizeof(struct wine_winusb_interface_snapshot), &interfaces_end) ||
++            !array_end(total, snapshot->alternates_offset, snapshot->alternate_count, sizeof(struct wine_winusb_alternate_snapshot), &alternates_end) ||
++            !array_end(total, snapshot->endpoints_offset, snapshot->endpoint_count, sizeof(struct wine_winusb_endpoint_snapshot), &endpoints_end)) return FALSE;
++    return snapshot->device_offset == sizeof(*snapshot) && snapshot->configuration_offset == device_end &&
++            snapshot->interfaces_offset == config_end && snapshot->alternates_offset == interfaces_end &&
++            snapshot->endpoints_offset == alternates_end && endpoints_end == total;
++}
++
++static BOOL snapshot_matches_header(const struct wine_winusb_snapshot *snapshot,
++        const struct wine_winusb_snapshot *header)
++{
++    return snapshot->size == header->size && snapshot->version == header->version &&
++            snapshot->speed == header->speed && snapshot->total_size == header->total_size &&
++            snapshot->device_offset == header->device_offset && snapshot->device_length == header->device_length &&
++            snapshot->configuration_offset == header->configuration_offset && snapshot->configuration_length == header->configuration_length &&
++            snapshot->interfaces_offset == header->interfaces_offset && snapshot->interface_count == header->interface_count &&
++            snapshot->alternates_offset == header->alternates_offset && snapshot->alternate_count == header->alternate_count &&
++            snapshot->endpoints_offset == header->endpoints_offset && snapshot->endpoint_count == header->endpoint_count &&
++            !snapshot->reserved[0] && !snapshot->reserved[1];
++}
++
++static BOOL validate_snapshot(const struct wine_winusb_snapshot *snapshot, DWORD bytes,
++        const struct wine_winusb_snapshot *header)
++{
++    const BYTE *base = (const BYTE *)snapshot, *config;
++    SIZE_T total = snapshot->total_size, device_end, config_end, interfaces_end, alternates_end, endpoints_end;
++    UINT32 i, j, configuration_interfaces = 0, configuration_endpoints = 0;
++    const BYTE *raw_cursor;
++    struct wine_winusb_interface_snapshot iface, previous_iface;
++    struct wine_winusb_alternate_snapshot alternate, previous_alternate;
++    struct wine_winusb_endpoint_snapshot endpoint;
++
++    if (bytes != total || !snapshot_matches_header(snapshot, header) || snapshot->size != sizeof(*snapshot) || snapshot->version != WINE_WINUSB_ABI_VERSION ||
++            !snapshot->session || total < sizeof(*snapshot) || snapshot->reserved[0] || snapshot->reserved[1] ||
++            (snapshot->speed != LowSpeed && snapshot->speed != HighSpeed)) return FALSE;
++    if (snapshot->device_length < 18 || snapshot->configuration_length < 9 ||
++            !range_end(total, snapshot->device_offset, snapshot->device_length, &device_end) ||
++            !range_end(total, snapshot->configuration_offset, snapshot->configuration_length, &config_end) ||
++            !array_end(total, snapshot->interfaces_offset, snapshot->interface_count, sizeof(iface), &interfaces_end) ||
++            !array_end(total, snapshot->alternates_offset, snapshot->alternate_count, sizeof(alternate), &alternates_end) ||
++            !array_end(total, snapshot->endpoints_offset, snapshot->endpoint_count, sizeof(endpoint), &endpoints_end)) return FALSE;
++    if (snapshot->device_offset != sizeof(*snapshot) || snapshot->configuration_offset != device_end ||
++            snapshot->interfaces_offset != config_end || snapshot->alternates_offset != interfaces_end ||
++            snapshot->endpoints_offset != alternates_end || endpoints_end != total || !snapshot->interface_count) return FALSE;
++    if (snapshot->device_length != 18 || base[snapshot->device_offset] != 18 || base[snapshot->device_offset + 1] != 1 ||
++            base[snapshot->configuration_offset] != 9 || base[snapshot->configuration_offset + 1] != 2) return FALSE;
++    config = base + snapshot->configuration_offset;
++    if (((UINT32)config[2] | ((UINT32)config[3] << 8)) != snapshot->configuration_length ||
++            config[4] != snapshot->interface_count) return FALSE;
++    for (i = 0; i < snapshot->configuration_length; )
++    {
++        if (config[i] < 2 || config[i] > snapshot->configuration_length - i) return FALSE;
++        if (config[i + 1] == 4)
++        {
++            if (config[i] < 9) return FALSE;
++            ++configuration_interfaces;
++        }
++        if (config[i + 1] == 5)
++        {
++            if (config[i] < 7) return FALSE;
++            ++configuration_endpoints;
++        }
++        i += config[i];
++    }
++    if (configuration_interfaces != snapshot->alternate_count || configuration_endpoints != snapshot->endpoint_count) return FALSE;
++    raw_cursor = config + config[0];
++    for (i = 0; i < snapshot->interface_count; ++i)
++    {
++        const BYTE *interface_descriptor;
++
++        if (!read_record(base, total, snapshot->interfaces_offset, i, &iface, sizeof(iface)) || iface.reserved ||
++                !iface.alternate_count || iface.first_alternate > snapshot->alternate_count ||
++                iface.alternate_count > snapshot->alternate_count - iface.first_alternate) return FALSE;
++        if (!i && iface.first_alternate) return FALSE;
++        if (i)
++        {
++            if (!read_record(base, total, snapshot->interfaces_offset, i - 1, &previous_iface, sizeof(previous_iface)) ||
++                    iface.first_alternate != previous_iface.first_alternate + previous_iface.alternate_count) return FALSE;
++            for (j = 0; j < i; ++j)
++            {
++                if (!read_record(base, total, snapshot->interfaces_offset, j, &previous_iface, sizeof(previous_iface)) ||
++                        iface.interface_number == previous_iface.interface_number) return FALSE;
++            }
++        }
++        for (j = 0; j < iface.alternate_count; ++j)
++        {
++            UINT32 k, alternate_index = iface.first_alternate + j;
++            if (!read_record(base, total, snapshot->alternates_offset, alternate_index, &alternate, sizeof(alternate)) ||
++                    alternate.interface_index != i || alternate.first_endpoint > snapshot->endpoint_count ||
++                    alternate.endpoint_count > snapshot->endpoint_count - alternate.first_endpoint || (!j && alternate.alternate_setting != 0) ||
++                    !next_interface_descriptor(&raw_cursor, config + snapshot->configuration_length, &interface_descriptor) ||
++                    interface_descriptor[2] != iface.interface_number || interface_descriptor[3] != alternate.alternate_setting ||
++                    interface_descriptor[4] != alternate.endpoint_count) return FALSE;
++            if (j)
++            {
++                if (!read_record(base, total, snapshot->alternates_offset, alternate_index - 1, &previous_alternate, sizeof(previous_alternate)) ||
++                        alternate.alternate_setting <= previous_alternate.alternate_setting ||
++                        alternate.first_endpoint != previous_alternate.first_endpoint + previous_alternate.endpoint_count) return FALSE;
++            }
++            else if (!alternate_index && alternate.first_endpoint) return FALSE;
++            else if (alternate_index)
++            {
++                if (!read_record(base, total, snapshot->alternates_offset, alternate_index - 1, &previous_alternate, sizeof(previous_alternate)) ||
++                        alternate.first_endpoint != previous_alternate.first_endpoint + previous_alternate.endpoint_count) return FALSE;
++            }
++            for (k = 0; k < alternate.endpoint_count; ++k)
++            {
++                const BYTE *endpoint_descriptor;
++                UINT32 endpoint_index = alternate.first_endpoint + k;
++                if (!read_record(base, total, snapshot->endpoints_offset, endpoint_index, &endpoint, sizeof(endpoint)) ||
++                        endpoint.alternate_index != alternate_index || !endpoint.pipe_id || endpoint.pipe_id > 0xff ||
++                        endpoint.pipe_type > 3 || !endpoint.maximum_packet_size) return FALSE;
++                if (!find_endpoint_descriptor(interface_descriptor, config + snapshot->configuration_length, k, &endpoint_descriptor) ||
++                        endpoint.pipe_id != endpoint_descriptor[2] || endpoint.pipe_type != (endpoint_descriptor[3] & 3) ||
++                        endpoint.maximum_packet_size != ((UINT32)endpoint_descriptor[4] | ((UINT32)endpoint_descriptor[5] << 8))) return FALSE;
++                for (UINT32 previous = 0; previous < k; ++previous)
++                {
++                    const BYTE *previous_descriptor;
++                    if (!find_endpoint_descriptor(interface_descriptor, config + snapshot->configuration_length, previous, &previous_descriptor) ||
++                            previous_descriptor[2] == endpoint_descriptor[2]) return FALSE;
++                }
++            }
++            if (alternate_index == snapshot->alternate_count - 1 &&
++                    alternate.first_endpoint + alternate.endpoint_count != snapshot->endpoint_count) return FALSE;
++        }
++        if (i == snapshot->interface_count - 1 && iface.first_alternate + iface.alternate_count != snapshot->alternate_count) return FALSE;
++    }
++    return TRUE;
++}
++
++BOOL WINAPI WinUsb_Initialize(HANDLE device, PWINUSB_INTERFACE_HANDLE handle)
++{
++    struct wine_winusb_snapshot header, *snapshot;
++    struct winusb_handle *object;
++    struct wine_winusb_request release = {.size = sizeof(release), .version = WINE_WINUSB_ABI_VERSION};
++    DWORD bytes = 0;
++
++    if (!handle) { SetLastError(ERROR_INVALID_PARAMETER); return FALSE; }
++    *handle = NULL;
++    if (!query_file_mode(device)) { SetLastError(ERROR_INVALID_HANDLE); return FALSE; }
++    memset(&header, 0, sizeof(header));
++    if (!submit_request(device, IOCTL_WINE_WINUSB_INITIALIZE, &(struct wine_winusb_request){.size=24,.version=1}, 24, &header, sizeof(header), &bytes, TRUE)) return FALSE;
++    if (bytes != sizeof(header) || !validate_header(&header)) { SetLastError(ERROR_BAD_DEVICE); return FALSE; }
++    if (!(snapshot = HeapAlloc(GetProcessHeap(), 0, header.total_size))) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); return FALSE; }
++    if (!submit_request(device, IOCTL_WINE_WINUSB_INITIALIZE, &(struct wine_winusb_request){.size=24,.version=1}, 24, snapshot, header.total_size, &bytes, FALSE)) goto bad_transport;
++    if (!validate_snapshot(snapshot, bytes, &header)) goto bad_postcommit;
++    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object)))) goto bad_postcommit_memory;
++    object->magic = WINUSB_HANDLE_MAGIC; object->device = device; object->session = snapshot->session; object->snapshot = snapshot;
++    *handle = object;
+     return TRUE;
++bad_postcommit:
++    release.session = snapshot->session;
++    submit_request(device, IOCTL_WINE_WINUSB_RELEASE, &release, sizeof(release), NULL, 0, &bytes, FALSE);
++    HeapFree(GetProcessHeap(), 0, snapshot);
++    SetLastError(ERROR_BAD_DEVICE);
++    return FALSE;
++bad_transport:
++    bytes = GetLastError();
++    HeapFree(GetProcessHeap(), 0, snapshot);
++    SetLastError(bytes);
++    return FALSE;
++bad_postcommit_memory:
++    release.session = snapshot->session;
++    submit_request(device, IOCTL_WINE_WINUSB_RELEASE, &release, sizeof(release), NULL, 0, &bytes, FALSE);
++    HeapFree(GetProcessHeap(), 0, snapshot);
++    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
++    return FALSE;
+ }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	1969-12-31 16:00:00.000000000 -0800
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 03:40:28.028411046 -0700
+@@ -0,0 +1,15 @@
++#ifndef __WINE_WINUSB_DLL_PRIVATE_H
++#define __WINE_WINUSB_DLL_PRIVATE_H
++
++#include "wine/winusb.h"
++
++#define WINUSB_HANDLE_MAGIC 0x42535557u
++struct winusb_handle
++{
++    UINT32 magic;
++    HANDLE device;
++    UINT64 session;
++    void *snapshot;
++};
++
++#endif
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in	2026-08-23 03:43:04.373689586 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in	2026-08-24 03:40:28.020552122 -0700
+@@ -4,4 +4,5 @@
+ 
+ SOURCES = \
+ 	main.c \
++	session.c \
+ 	winusb.rc
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 01:30:16.848825236 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 03:40:28.024656572 -0700
+@@ -134,6 +134,15 @@
+     return status;
+ }
+ 
++static NTSTATUS complete_irp_with_information(IRP *irp, NTSTATUS status,
++        ULONG_PTR information)
++{
++    irp->IoStatus.Status = status;
++    irp->IoStatus.Information = information;
++    IoCompleteRequest(irp, IO_NO_INCREMENT);
++    return status;
++}
++
+ static BOOL file_is_linked(const struct winusb_device *device,
+         const struct winusb_file *file, const FILE_OBJECT *file_object)
+ {
+@@ -148,6 +157,42 @@
+     return FALSE;
+ }
+ 
++static NTSTATUS acquire_file_for_io(struct winusb_device *device,
++        FILE_OBJECT *file_object, struct winusb_file **ret_file)
++{
++    struct winusb_file *file;
++    KIRQL device_irql, file_irql;
++    NTSTATUS status = STATUS_INVALID_DEVICE_STATE;
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    file = file_object->FsContext;
++    if (device->state == WINUSB_DEVICE_STARTED && file &&
++            file_is_linked(device, file, file_object))
++    {
++        KeAcquireSpinLock(&file->lock, &file_irql);
++        if (file->state < WINUSB_FILE_RELEASING)
++        {
++            if (!file->outstanding++)
++                KeClearEvent(&file->zero_outstanding);
++            *ret_file = file;
++            status = STATUS_SUCCESS;
++        }
++        KeReleaseSpinLock(&file->lock, file_irql);
++    }
++    KeReleaseSpinLock(&device->lock, device_irql);
++    return status;
++}
++
++static void release_file_from_io(struct winusb_file *file)
++{
++    KIRQL irql;
++
++    KeAcquireSpinLock(&file->lock, &irql);
++    if (file->outstanding && !--file->outstanding)
++        KeSetEvent(&file->zero_outstanding, IO_NO_INCREMENT, FALSE);
++    KeReleaseSpinLock(&file->lock, irql);
++}
++
+ static void mark_files_removed(struct winusb_device *device)
+ {
+     LIST_ENTRY *entry;
+@@ -322,6 +367,39 @@
+     return complete_irp(irp, STATUS_SUCCESS);
+ }
+ 
++static NTSTATUS WINAPI driver_device_control(DEVICE_OBJECT *device_obj, IRP *irp)
++{
++    IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
++    struct winusb_device *device = device_obj->DeviceExtension;
++    FILE_OBJECT *file_object = stack->FileObject;
++    const struct wine_winusb_request *request = irp->AssociatedIrp.SystemBuffer;
++    struct winusb_file *file;
++    ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
++    ULONG input_length = stack->Parameters.DeviceIoControl.InputBufferLength;
++    ULONG output_length = stack->Parameters.DeviceIoControl.OutputBufferLength;
++    ULONG_PTR information = 0;
++    NTSTATUS status;
++
++    if (code != IOCTL_WINE_WINUSB_INITIALIZE && code != IOCTL_WINE_WINUSB_RELEASE)
++        return complete_irp(irp, STATUS_NOT_SUPPORTED);
++    if (!file_object || !request)
++        return complete_irp(irp, STATUS_INVALID_PARAMETER);
++
++    if (!NT_SUCCESS(status = acquire_file_for_io(device, file_object, &file)))
++        return complete_irp(irp, status);
++
++    if (code == IOCTL_WINE_WINUSB_INITIALIZE)
++        status = winusb_session_initialize(device, file, request, input_length,
++                irp->MdlAddress, output_length, &information);
++    else if (output_length || irp->MdlAddress)
++        status = STATUS_INVALID_PARAMETER;
++    else
++        status = winusb_session_release(device, file, request, input_length,
++                &information);
++    release_file_from_io(file);
++    return complete_irp_with_information(irp, status, information);
++}
++
+ static NTSTATUS WINAPI driver_pnp(DEVICE_OBJECT *device_obj, IRP *irp)
+ {
+     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
+@@ -484,6 +562,7 @@
+     TRACE("driver %p, path %s.\n", driver,
+             path ? debugstr_w(path->Buffer) : "(null)");
+ 
++    winusb_session_driver_init();
+     driver->DriverExtension->AddDevice = driver_add_device;
+     driver->DriverUnload = driver_unload;
+     driver->MajorFunction[IRP_MJ_CREATE] = driver_create;
+@@ -491,7 +570,7 @@
+     driver->MajorFunction[IRP_MJ_CLEANUP] = driver_cleanup;
+     driver->MajorFunction[IRP_MJ_READ] = driver_unsupported;
+     driver->MajorFunction[IRP_MJ_WRITE] = driver_unsupported;
+-    driver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = driver_device_control;
+     driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = driver_unsupported;
+     driver->MajorFunction[IRP_MJ_PNP] = driver_pnp;
+     return STATUS_SUCCESS;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	1969-12-31 16:00:00.000000000 -0800
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 03:40:28.021893360 -0700
+@@ -0,0 +1,844 @@
++/*
++ * WinUSB function-driver session support
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include <stdarg.h>
++#include <string.h>
++
++#include "ntstatus.h"
++#include "windef.h"
++#include "winternl.h"
++#include "ddk/wdm.h"
++#include "ddk/usb.h"
++#ifndef METHOD_NEITHER
++#define METHOD_NEITHER 3
++#endif
++#include "ddk/usbioctl.h"
++
++#include "winusb_private.h"
++
++struct parsed_configuration
++{
++    SIZE_T interface_count;
++    SIZE_T alternate_count;
++    SIZE_T endpoint_count;
++    SIZE_T total_size;
++    SIZE_T device_offset;
++    SIZE_T configuration_offset;
++    SIZE_T interfaces_offset;
++    SIZE_T alternates_offset;
++    SIZE_T endpoints_offset;
++};
++
++static KSPIN_LOCK session_lock;
++static UINT64 session_counter;
++
++static BOOL add_size(SIZE_T left, SIZE_T right, SIZE_T *result)
++{
++    if (right > ~(SIZE_T)0 - left) return FALSE;
++    *result = left + right;
++    return TRUE;
++}
++
++static BOOL multiply_size(SIZE_T left, SIZE_T right, SIZE_T *result)
++{
++    if (left && right > ~(SIZE_T)0 / left) return FALSE;
++    *result = left * right;
++    return TRUE;
++}
++
++static BOOL descriptor_next(const UCHAR *buffer, SIZE_T length, SIZE_T offset,
++        SIZE_T *next)
++{
++    SIZE_T header_end;
++    UCHAR descriptor_length;
++
++    if (!add_size(offset, 2, &header_end) || header_end > length) return FALSE;
++    descriptor_length = buffer[offset];
++    if (descriptor_length < 2) return FALSE;
++    if (!add_size(offset, descriptor_length, next) || *next > length) return FALSE;
++    return TRUE;
++}
++
++static NTSTATUS submit_urb(struct winusb_device *device, URB *urb)
++{
++    IO_STATUS_BLOCK io_status = {{STATUS_UNSUCCESSFUL}, 0};
++    IO_STACK_LOCATION *stack;
++    KEVENT event;
++    NTSTATUS status;
++    IRP *irp;
++
++    KeInitializeEvent(&event, NotificationEvent, FALSE);
++    urb->UrbHeader.Status = USBD_STATUS_NOT_ACCESSED;
++    if (!(irp = IoBuildDeviceIoControlRequest(IOCTL_INTERNAL_USB_SUBMIT_URB,
++            device->lower_device, urb, urb->UrbHeader.Length, NULL, 0, TRUE,
++            &event, &io_status)))
++        return STATUS_NO_MEMORY;
++    stack = IoGetNextIrpStackLocation(irp);
++    stack->Parameters.Others.Argument1 = urb;
++    status = IoCallDriver(device->lower_device, irp);
++    if (status == STATUS_PENDING)
++    {
++        status = KeWaitForSingleObject(&event, Executive, KernelMode,
++                FALSE, NULL);
++        if (!NT_SUCCESS(status)) return status;
++    }
++    status = io_status.Status;
++    if (!NT_SUCCESS(status)) return status;
++    if (urb->UrbHeader.Status != USBD_STATUS_SUCCESS)
++        return STATUS_UNSUCCESSFUL;
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS read_descriptor(struct winusb_device *device, UCHAR type,
++        void *buffer, ULONG requested, ULONG *returned)
++{
++    URB urb;
++    NTSTATUS status;
++
++    memset(&urb, 0, sizeof(urb));
++    urb.UrbControlDescriptorRequest.Hdr.Length =
++            sizeof(urb.UrbControlDescriptorRequest);
++    urb.UrbControlDescriptorRequest.Hdr.Function =
++            URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE;
++    urb.UrbControlDescriptorRequest.TransferBufferLength = requested;
++    urb.UrbControlDescriptorRequest.TransferBuffer = buffer;
++    urb.UrbControlDescriptorRequest.DescriptorType = type;
++    if (!NT_SUCCESS(status = submit_urb(device, &urb))) return status;
++    *returned = urb.UrbControlDescriptorRequest.TransferBufferLength;
++    return STATUS_SUCCESS;
++}
++
++static BOOL prior_interface(const UCHAR *configuration, SIZE_T current,
++        UCHAR number, UCHAR alternate, BOOL *same_interface)
++{
++    SIZE_T offset = 0, next;
++
++    *same_interface = FALSE;
++    while (offset < current)
++    {
++        if (!descriptor_next(configuration, current, offset, &next)) return TRUE;
++        if (configuration[offset + 1] == USB_INTERFACE_DESCRIPTOR_TYPE &&
++                configuration[offset] >= sizeof(USB_INTERFACE_DESCRIPTOR))
++        {
++            const USB_INTERFACE_DESCRIPTOR *interface =
++                    (const void *)(configuration + offset);
++            if (interface->bInterfaceNumber == number)
++            {
++                *same_interface = TRUE;
++                if (interface->bAlternateSetting == alternate) return TRUE;
++            }
++        }
++        offset = next;
++    }
++    return FALSE;
++}
++
++static BOOL interface_has_default(const UCHAR *configuration, SIZE_T length,
++        UCHAR number)
++{
++    SIZE_T offset = 0, next;
++
++    while (offset < length)
++    {
++        if (!descriptor_next(configuration, length, offset, &next)) return FALSE;
++        if (configuration[offset + 1] == USB_INTERFACE_DESCRIPTOR_TYPE &&
++                configuration[offset] >= sizeof(USB_INTERFACE_DESCRIPTOR))
++        {
++            const USB_INTERFACE_DESCRIPTOR *interface =
++                    (const void *)(configuration + offset);
++            if (interface->bInterfaceNumber == number &&
++                    !interface->bAlternateSetting)
++                return TRUE;
++        }
++        offset = next;
++    }
++    return FALSE;
++}
++
++static BOOL validate_default_alternates(const UCHAR *configuration,
++        SIZE_T length)
++{
++    SIZE_T offset = 0, next;
++
++    while (offset < length)
++    {
++        if (!descriptor_next(configuration, length, offset, &next)) return FALSE;
++        if (configuration[offset + 1] == USB_INTERFACE_DESCRIPTOR_TYPE &&
++                configuration[offset] >= sizeof(USB_INTERFACE_DESCRIPTOR))
++        {
++            const USB_INTERFACE_DESCRIPTOR *interface =
++                    (const void *)(configuration + offset);
++            BOOL same_interface;
++
++            prior_interface(configuration, offset, interface->bInterfaceNumber,
++                    0xff, &same_interface);
++            if (!same_interface && !interface_has_default(configuration, length,
++                    interface->bInterfaceNumber))
++                return FALSE;
++        }
++        offset = next;
++    }
++    return TRUE;
++}
++
++static BOOL calculate_snapshot_layout(struct parsed_configuration *parsed,
++        SIZE_T configuration_length)
++{
++    SIZE_T bytes, offset = sizeof(struct wine_winusb_snapshot);
++
++    parsed->device_offset = offset;
++    if (!add_size(offset, sizeof(USB_DEVICE_DESCRIPTOR), &offset)) return FALSE;
++    parsed->configuration_offset = offset;
++    if (!add_size(offset, configuration_length, &offset)) return FALSE;
++    parsed->interfaces_offset = offset;
++    if (!multiply_size(parsed->interface_count,
++            sizeof(struct wine_winusb_interface_snapshot), &bytes) ||
++            !add_size(offset, bytes, &offset))
++        return FALSE;
++    parsed->alternates_offset = offset;
++    if (!multiply_size(parsed->alternate_count,
++            sizeof(struct wine_winusb_alternate_snapshot), &bytes) ||
++            !add_size(offset, bytes, &offset))
++        return FALSE;
++    parsed->endpoints_offset = offset;
++    if (!multiply_size(parsed->endpoint_count,
++            sizeof(struct wine_winusb_endpoint_snapshot), &bytes) ||
++            !add_size(offset, bytes, &offset))
++        return FALSE;
++    parsed->total_size = offset;
++    return offset <= ~(ULONG)0;
++}
++
++static BOOL parse_configuration(const UCHAR *configuration, SIZE_T length,
++        struct parsed_configuration *parsed)
++{
++    const USB_CONFIGURATION_DESCRIPTOR *header;
++    SIZE_T offset = 0, next;
++    ULONG expected_endpoints = 0, seen_endpoints = 0;
++    BOOL have_interface = FALSE;
++    UCHAR active_interface = 0;
++
++    memset(parsed, 0, sizeof(*parsed));
++    if (length < sizeof(*header)) return FALSE;
++    header = (const void *)configuration;
++    if (header->bLength != sizeof(*header) ||
++            header->bDescriptorType != USB_CONFIGURATION_DESCRIPTOR_TYPE ||
++            header->wTotalLength != length)
++        return FALSE;
++
++    while (offset < length)
++    {
++        UCHAR type;
++
++        if (!descriptor_next(configuration, length, offset, &next)) return FALSE;
++        type = configuration[offset + 1];
++        if (offset && type == USB_INTERFACE_DESCRIPTOR_TYPE)
++        {
++            const USB_INTERFACE_DESCRIPTOR *interface;
++            BOOL same_interface;
++
++            if (have_interface && seen_endpoints != expected_endpoints) return FALSE;
++            if (configuration[offset] < sizeof(*interface)) return FALSE;
++            interface = (const void *)(configuration + offset);
++            if (prior_interface(configuration, offset,
++                    interface->bInterfaceNumber, interface->bAlternateSetting,
++                    &same_interface))
++                return FALSE;
++            if (same_interface && active_interface != interface->bInterfaceNumber)
++                return FALSE;
++            if (!same_interface) parsed->interface_count++;
++            parsed->alternate_count++;
++            have_interface = TRUE;
++            active_interface = interface->bInterfaceNumber;
++            expected_endpoints = interface->bNumEndpoints;
++            seen_endpoints = 0;
++        }
++        else if (offset && type == USB_ENDPOINT_DESCRIPTOR_TYPE)
++        {
++            if (!have_interface || configuration[offset] < sizeof(USB_ENDPOINT_DESCRIPTOR))
++                return FALSE;
++            seen_endpoints++;
++            if (seen_endpoints > expected_endpoints) return FALSE;
++            parsed->endpoint_count++;
++        }
++        offset = next;
++    }
++    if (have_interface && seen_endpoints != expected_endpoints) return FALSE;
++    if (!parsed->interface_count ||
++            header->bNumInterfaces != parsed->interface_count ||
++            !validate_default_alternates(configuration, length))
++        return FALSE;
++    return calculate_snapshot_layout(parsed, length);
++}
++
++static BOOL snapshot_record_offset(SIZE_T total_size, SIZE_T base,
++        SIZE_T index, SIZE_T record_size, SIZE_T *offset)
++{
++    SIZE_T index_offset, end;
++
++    return multiply_size(index, record_size, &index_offset) &&
++            add_size(base, index_offset, offset) &&
++            add_size(*offset, record_size, &end) && end <= total_size;
++}
++
++static BOOL read_snapshot_record(const UCHAR *memory, SIZE_T total_size,
++        SIZE_T base, SIZE_T index, SIZE_T record_size, void *record)
++{
++    SIZE_T offset;
++
++    if (!snapshot_record_offset(total_size, base, index, record_size, &offset))
++        return FALSE;
++    memcpy(record, memory + offset, record_size);
++    return TRUE;
++}
++
++static BOOL write_snapshot_record(UCHAR *memory, SIZE_T total_size,
++        SIZE_T base, SIZE_T index, SIZE_T record_size, const void *record)
++{
++    SIZE_T offset;
++
++    if (!snapshot_record_offset(total_size, base, index, record_size, &offset))
++        return FALSE;
++    memcpy(memory + offset, record, record_size);
++    return TRUE;
++}
++
++static BOOL find_interface_record(const UCHAR *memory,
++        const struct parsed_configuration *parsed, ULONG count, ULONG number,
++        ULONG *index)
++{
++    ULONG i;
++
++    for (i = 0; i < count; ++i)
++    {
++        struct wine_winusb_interface_snapshot record;
++
++        if (!read_snapshot_record(memory, parsed->total_size,
++                parsed->interfaces_offset, i, sizeof(record), &record))
++            return FALSE;
++        if (record.interface_number == number)
++        {
++            *index = i;
++            return TRUE;
++        }
++    }
++    *index = count;
++    return TRUE;
++}
++
++static BOOL build_snapshot(void *memory, const USB_DEVICE_DESCRIPTOR *device,
++        const UCHAR *configuration, const struct parsed_configuration *parsed,
++        UCHAR speed)
++{
++    struct wine_winusb_snapshot *snapshot = memory;
++    SIZE_T offset = 0, next;
++    ULONG interface_count = 0, alternate_count = 0, endpoint_count = 0;
++    ULONG current_alternate = 0;
++
++    memset(memory, 0, parsed->total_size);
++    snapshot->size = sizeof(*snapshot);
++    snapshot->version = WINE_WINUSB_ABI_VERSION;
++    snapshot->speed = speed;
++    snapshot->total_size = parsed->total_size;
++    snapshot->device_offset = parsed->device_offset;
++    snapshot->device_length = sizeof(*device);
++    snapshot->configuration_offset = parsed->configuration_offset;
++    snapshot->configuration_length = ((const USB_CONFIGURATION_DESCRIPTOR *)configuration)->wTotalLength;
++    snapshot->interfaces_offset = parsed->interfaces_offset;
++    snapshot->interface_count = parsed->interface_count;
++    snapshot->alternates_offset = parsed->alternates_offset;
++    snapshot->alternate_count = parsed->alternate_count;
++    snapshot->endpoints_offset = parsed->endpoints_offset;
++    snapshot->endpoint_count = parsed->endpoint_count;
++    memcpy((UCHAR *)memory + parsed->device_offset, device, sizeof(*device));
++    memcpy((UCHAR *)memory + parsed->configuration_offset, configuration,
++            snapshot->configuration_length);
++    while (offset < snapshot->configuration_length)
++    {
++        UCHAR type;
++
++        if (!descriptor_next(configuration, snapshot->configuration_length,
++                offset, &next))
++            return FALSE;
++        type = configuration[offset + 1];
++        if (offset && type == USB_INTERFACE_DESCRIPTOR_TYPE)
++        {
++            struct wine_winusb_interface_snapshot interface_record;
++            struct wine_winusb_alternate_snapshot alternate_record = {0};
++            const USB_INTERFACE_DESCRIPTOR *descriptor =
++                    (const void *)(configuration + offset);
++            ULONG index;
++
++            if (!find_interface_record(memory, parsed, interface_count,
++                    descriptor->bInterfaceNumber, &index))
++                return FALSE;
++            if (index == interface_count)
++            {
++                if (interface_count >= parsed->interface_count) return FALSE;
++                memset(&interface_record, 0, sizeof(interface_record));
++                interface_record.interface_number = descriptor->bInterfaceNumber;
++                interface_record.first_alternate = alternate_count;
++                interface_count++;
++            }
++            else if (!read_snapshot_record(memory, parsed->total_size,
++                    parsed->interfaces_offset, index, sizeof(interface_record),
++                    &interface_record))
++                return FALSE;
++            interface_record.alternate_count++;
++            if (!write_snapshot_record(memory, parsed->total_size,
++                    parsed->interfaces_offset, index, sizeof(interface_record),
++                    &interface_record))
++                return FALSE;
++            if (alternate_count >= parsed->alternate_count) return FALSE;
++            current_alternate = alternate_count++;
++            alternate_record.interface_index = index;
++            alternate_record.alternate_setting = descriptor->bAlternateSetting;
++            alternate_record.first_endpoint = endpoint_count;
++            alternate_record.endpoint_count = descriptor->bNumEndpoints;
++            if (!write_snapshot_record(memory, parsed->total_size,
++                    parsed->alternates_offset, current_alternate,
++                    sizeof(alternate_record), &alternate_record))
++                return FALSE;
++        }
++        else if (offset && type == USB_ENDPOINT_DESCRIPTOR_TYPE)
++        {
++            struct wine_winusb_endpoint_snapshot endpoint_record = {0};
++            const USB_ENDPOINT_DESCRIPTOR *descriptor =
++                    (const void *)(configuration + offset);
++
++            if (endpoint_count >= parsed->endpoint_count) return FALSE;
++            endpoint_record.alternate_index = current_alternate;
++            endpoint_record.pipe_id = descriptor->bEndpointAddress;
++            endpoint_record.pipe_type =
++                    descriptor->bmAttributes & USB_ENDPOINT_TYPE_MASK;
++            endpoint_record.maximum_packet_size =
++                    descriptor->wMaxPacketSize;
++            if (!write_snapshot_record(memory, parsed->total_size,
++                    parsed->endpoints_offset, endpoint_count,
++                    sizeof(endpoint_record), &endpoint_record))
++                return FALSE;
++            endpoint_count++;
++        }
++        offset = next;
++    }
++    return interface_count == parsed->interface_count &&
++            alternate_count == parsed->alternate_count &&
++            endpoint_count == parsed->endpoint_count;
++}
++
++static BOOL build_interface_state(const struct wine_winusb_snapshot *snapshot,
++        struct winusb_interface_state *state)
++{
++    const UCHAR *memory = (const UCHAR *)snapshot;
++    ULONG i, j;
++
++    for (i = 0; i < snapshot->interface_count; ++i)
++    {
++        struct wine_winusb_interface_snapshot interface_record;
++        SIZE_T alternate_end;
++        BOOL found = FALSE;
++
++        if (!read_snapshot_record(memory, snapshot->total_size,
++                snapshot->interfaces_offset, i, sizeof(interface_record),
++                &interface_record) ||
++                !add_size(interface_record.first_alternate,
++                interface_record.alternate_count, &alternate_end) ||
++                alternate_end > snapshot->alternate_count)
++            return FALSE;
++        for (j = 0; j < interface_record.alternate_count; ++j)
++        {
++            struct wine_winusb_alternate_snapshot alternate_record;
++            SIZE_T alternate_index;
++
++            if (!add_size(interface_record.first_alternate, j,
++                    &alternate_index) ||
++                    !read_snapshot_record(memory, snapshot->total_size,
++                    snapshot->alternates_offset,
++                    alternate_index,
++                    sizeof(alternate_record), &alternate_record))
++                return FALSE;
++            if (!alternate_record.alternate_setting)
++            {
++                state[i].interface_number = interface_record.interface_number;
++                state[i].alternate_setting = 0;
++                state[i].first_endpoint = alternate_record.first_endpoint;
++                state[i].endpoint_count = alternate_record.endpoint_count;
++                found = TRUE;
++                break;
++            }
++        }
++        if (!found) return FALSE;
++    }
++    return TRUE;
++}
++
++static BOOL calculate_select_size(const struct winusb_interface_state *state,
++        ULONG interface_count, SIZE_T *size)
++{
++    SIZE_T total = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++    ULONG i;
++
++    for (i = 0; i < interface_count; ++i)
++    {
++        SIZE_T pipes_size, interface_size;
++
++        if (!multiply_size(state[i].endpoint_count,
++                sizeof(USBD_PIPE_INFORMATION), &pipes_size) ||
++                !add_size(offsetof(USBD_INTERFACE_INFORMATION, Pipes),
++                pipes_size, &interface_size) || interface_size > 0xffffu ||
++                !add_size(total, interface_size, &total) || total > 0xffffu)
++            return FALSE;
++    }
++    *size = total;
++    return TRUE;
++}
++
++static BOOL build_select_urb(struct _URB_SELECT_CONFIGURATION *select,
++        SIZE_T select_size, USB_CONFIGURATION_DESCRIPTOR *configuration,
++        const struct wine_winusb_snapshot *snapshot,
++        const struct winusb_interface_state *state)
++{
++    const UCHAR *memory = (const UCHAR *)snapshot;
++    SIZE_T cursor = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++    ULONG i;
++
++    memset(select, 0, select_size);
++    select->Hdr.Length = select_size;
++    select->Hdr.Function = URB_FUNCTION_SELECT_CONFIGURATION;
++    select->ConfigurationDescriptor = configuration;
++    for (i = 0; i < snapshot->interface_count; ++i)
++    {
++        USBD_INTERFACE_INFORMATION *information;
++        SIZE_T endpoint_end, interface_size, pipes_size;
++        ULONG j;
++
++        if (!multiply_size(state[i].endpoint_count,
++                sizeof(USBD_PIPE_INFORMATION), &pipes_size) ||
++                !add_size(offsetof(USBD_INTERFACE_INFORMATION, Pipes),
++                pipes_size, &interface_size) || interface_size > 0xffffu ||
++                !add_size(state[i].first_endpoint, state[i].endpoint_count,
++                &endpoint_end) || endpoint_end > snapshot->endpoint_count ||
++                cursor > select_size || interface_size > select_size - cursor)
++            return FALSE;
++        information = (void *)((UCHAR *)select + cursor);
++        information->Length = interface_size;
++        information->InterfaceNumber = state[i].interface_number;
++        information->AlternateSetting = 0;
++        information->NumberOfPipes = state[i].endpoint_count;
++        for (j = 0; j < state[i].endpoint_count; ++j)
++        {
++            struct wine_winusb_endpoint_snapshot endpoint;
++            USBD_PIPE_INFORMATION *pipe = &information->Pipes[j];
++            SIZE_T endpoint_index;
++
++            if (!add_size(state[i].first_endpoint, j, &endpoint_index) ||
++                    !read_snapshot_record(memory, snapshot->total_size,
++                    snapshot->endpoints_offset, endpoint_index,
++                    sizeof(endpoint), &endpoint) ||
++                    endpoint.pipe_id > 0xffu ||
++                    endpoint.pipe_type > UsbdPipeTypeInterrupt ||
++                    endpoint.maximum_packet_size > 0xffffu)
++                return FALSE;
++            pipe->MaximumPacketSize = endpoint.maximum_packet_size;
++            pipe->EndpointAddress = endpoint.pipe_id;
++            pipe->PipeType = endpoint.pipe_type;
++        }
++        cursor += interface_size;
++    }
++    return cursor == select_size;
++}
++
++static void restore_uninitialized(struct winusb_device *device,
++        struct winusb_file *file)
++{
++    KIRQL device_irql, file_irql;
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (file->state == WINUSB_FILE_INITIALIZING)
++    {
++        file->state = WINUSB_FILE_UNINITIALIZED;
++        file->session = 0;
++        file->snapshot = NULL;
++        file->snapshot_size = 0;
++        file->interfaces = NULL;
++        file->interface_count = 0;
++    }
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++}
++
++static UINT64 allocate_session_cookie(void)
++{
++    UINT64 cookie;
++    KIRQL irql;
++
++    KeAcquireSpinLock(&session_lock, &irql);
++    cookie = ++session_counter;
++    if (!cookie) cookie = ++session_counter;
++    KeReleaseSpinLock(&session_lock, irql);
++    return cookie;
++}
++
++void winusb_session_driver_init(void)
++{
++    KeInitializeSpinLock(&session_lock);
++    session_counter = 0;
++}
++
++NTSTATUS winusb_session_initialize(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_request *request,
++        ULONG input_length, MDL *mdl, ULONG output_length,
++        ULONG_PTR *information)
++{
++    struct parsed_configuration parsed;
++    struct wine_winusb_snapshot size_header;
++    struct winusb_interface_state *interfaces = NULL;
++    struct _URB_SELECT_CONFIGURATION *select = NULL;
++    USB_DEVICE_DESCRIPTOR *device_descriptor = NULL;
++    USB_CONFIGURATION_DESCRIPTOR *configuration_header = NULL;
++    UCHAR *configuration = NULL, *output;
++    void *snapshot = NULL;
++    SIZE_T mapped_end, interfaces_size, select_size;
++    ULONG returned, configuration_size = 0;
++    UINT64 cookie;
++    NTSTATUS status = STATUS_INVALID_PARAMETER;
++    KIRQL device_irql, file_irql;
++    BOOL reserved = FALSE, committed = FALSE;
++
++    *information = 0;
++    if (!request || input_length != sizeof(*request) ||
++            request->size != sizeof(*request) ||
++            request->version != WINE_WINUSB_ABI_VERSION || request->session ||
++            request->interface_index || request->reserved)
++        return STATUS_INVALID_PARAMETER;
++    if (!mdl || mdl->ByteCount < output_length) return STATUS_INVALID_PARAMETER;
++    if (!(output = MmGetSystemAddressForMdlSafe(mdl, NormalPagePriority)))
++        return STATUS_NO_MEMORY;
++    if (!add_size((SIZE_T)output, output_length, &mapped_end))
++        return STATUS_INVALID_PARAMETER;
++    if (output_length < sizeof(struct wine_winusb_snapshot))
++        return STATUS_BUFFER_TOO_SMALL;
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_UNINITIALIZED || file->session ||
++            file->snapshot || file->interfaces)
++        status = STATUS_INVALID_DEVICE_STATE;
++    else
++    {
++        file->state = WINUSB_FILE_INITIALIZING;
++        reserved = TRUE;
++        status = STATUS_SUCCESS;
++    }
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (!NT_SUCCESS(status)) return status;
++
++    if (!(device_descriptor = ExAllocatePool(NonPagedPool,
++            sizeof(*device_descriptor))))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    returned = 0;
++    if (!NT_SUCCESS(status = read_descriptor(device, USB_DEVICE_DESCRIPTOR_TYPE,
++            device_descriptor, sizeof(*device_descriptor), &returned)))
++        goto done;
++    if (returned != sizeof(*device_descriptor) ||
++            device_descriptor->bLength != sizeof(*device_descriptor) ||
++            device_descriptor->bDescriptorType != USB_DEVICE_DESCRIPTOR_TYPE)
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++
++    if (!(configuration_header = ExAllocatePool(NonPagedPool,
++            sizeof(*configuration_header))))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    returned = 0;
++    if (!NT_SUCCESS(status = read_descriptor(device,
++            USB_CONFIGURATION_DESCRIPTOR_TYPE, configuration_header,
++            sizeof(*configuration_header), &returned)))
++        goto done;
++    if (returned != sizeof(*configuration_header) ||
++            configuration_header->bLength != sizeof(*configuration_header) ||
++            configuration_header->bDescriptorType != USB_CONFIGURATION_DESCRIPTOR_TYPE ||
++            configuration_header->wTotalLength < sizeof(*configuration_header))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    configuration_size = configuration_header->wTotalLength;
++    if (!(configuration = ExAllocatePool(NonPagedPool, configuration_size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    returned = 0;
++    if (!NT_SUCCESS(status = read_descriptor(device,
++            USB_CONFIGURATION_DESCRIPTOR_TYPE, configuration,
++            configuration_size, &returned)))
++        goto done;
++    if (returned != configuration_size ||
++            !parse_configuration(configuration, configuration_size, &parsed))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++
++    memset(&size_header, 0, sizeof(size_header));
++    size_header.size = sizeof(size_header);
++    size_header.version = WINE_WINUSB_ABI_VERSION;
++    size_header.speed = device->speed;
++    size_header.total_size = parsed.total_size;
++    size_header.device_offset = parsed.device_offset;
++    size_header.device_length = sizeof(*device_descriptor);
++    size_header.configuration_offset = parsed.configuration_offset;
++    size_header.configuration_length = configuration_size;
++    size_header.interfaces_offset = parsed.interfaces_offset;
++    size_header.interface_count = parsed.interface_count;
++    size_header.alternates_offset = parsed.alternates_offset;
++    size_header.alternate_count = parsed.alternate_count;
++    size_header.endpoints_offset = parsed.endpoints_offset;
++    size_header.endpoint_count = parsed.endpoint_count;
++    if (output_length < parsed.total_size)
++    {
++        memcpy(output, &size_header, sizeof(size_header));
++        *information = sizeof(size_header);
++        status = STATUS_BUFFER_TOO_SMALL;
++        goto done;
++    }
++    if (output_length != parsed.total_size)
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++
++    if (!(snapshot = ExAllocatePool(NonPagedPool, parsed.total_size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    if (!build_snapshot(snapshot, device_descriptor, configuration, &parsed,
++            device->speed))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    if (!multiply_size(parsed.interface_count, sizeof(*interfaces),
++            &interfaces_size) ||
++            !(interfaces = ExAllocatePool(NonPagedPool, interfaces_size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    if (!build_interface_state(snapshot, interfaces))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    if (!calculate_select_size(interfaces, parsed.interface_count, &select_size) ||
++            !(select = ExAllocatePool(NonPagedPool, select_size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    if (!build_select_urb(select, select_size, (void *)configuration, snapshot,
++            interfaces))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    if (!NT_SUCCESS(status = submit_urb(device, (URB *)select))) goto done;
++
++    cookie = allocate_session_cookie();
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_INITIALIZING || file->session ||
++            file->snapshot || file->interfaces)
++        status = STATUS_INVALID_DEVICE_STATE;
++    else
++    {
++        ((struct wine_winusb_snapshot *)snapshot)->session = cookie;
++        memcpy(output, snapshot, parsed.total_size);
++        file->snapshot = snapshot;
++        file->snapshot_size = parsed.total_size;
++        file->interfaces = interfaces;
++        file->interface_count = parsed.interface_count;
++        file->session = cookie;
++        file->state = WINUSB_FILE_INITIALIZED;
++        *information = parsed.total_size;
++        committed = TRUE;
++        status = STATUS_SUCCESS;
++    }
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++
++done:
++    if (select) ExFreePool(select);
++    if (!committed && interfaces) ExFreePool(interfaces);
++    if (!committed && snapshot) ExFreePool(snapshot);
++    if (configuration) ExFreePool(configuration);
++    if (configuration_header) ExFreePool(configuration_header);
++    if (device_descriptor) ExFreePool(device_descriptor);
++    if (reserved && !committed) restore_uninitialized(device, file);
++    return status;
++}
++
++NTSTATUS winusb_session_release(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_request *request,
++        ULONG input_length, ULONG_PTR *information)
++{
++    struct winusb_interface_state *interfaces;
++    void *snapshot;
++    KIRQL device_irql, file_irql;
++
++    *information = 0;
++    if (!request || input_length != sizeof(*request) ||
++            request->size != sizeof(*request) ||
++            request->version != WINE_WINUSB_ABI_VERSION || !request->session ||
++            request->interface_index || request->reserved)
++        return STATUS_INVALID_PARAMETER;
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if ((device->state == WINUSB_DEVICE_SURPRISE_REMOVED ||
++            device->state == WINUSB_DEVICE_REMOVED) ||
++            file->state != WINUSB_FILE_INITIALIZED ||
++            file->session != request->session || !file->snapshot ||
++            !file->interfaces)
++    {
++        KeReleaseSpinLock(&file->lock, file_irql);
++        KeReleaseSpinLock(&device->lock, device_irql);
++        return STATUS_INVALID_DEVICE_STATE;
++    }
++    file->state = WINUSB_FILE_RELEASING;
++    snapshot = file->snapshot;
++    interfaces = file->interfaces;
++    file->snapshot = NULL;
++    file->snapshot_size = 0;
++    file->interfaces = NULL;
++    file->interface_count = 0;
++    file->session = 0;
++    file->state = WINUSB_FILE_UNINITIALIZED;
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++
++    ExFreePool(interfaces);
++    ExFreePool(snapshot);
++    return STATUS_SUCCESS;
++}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 00:59:37.673946594 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 03:40:28.023387201 -0700
+@@ -14,8 +14,15 @@
+ 
+ #include "windef.h"
+ #include "ddk/wdm.h"
++#include "wine/winusb.h"
+ 
+-struct winusb_interface_state;
++struct winusb_interface_state
++{
++    ULONG interface_number;
++    ULONG alternate_setting;
++    ULONG first_endpoint;
++    ULONG endpoint_count;
++};
+ 
+ enum winusb_device_state
+ {
+@@ -70,4 +77,13 @@
+     UCHAR speed;
+ };
+ 
++void winusb_session_driver_init(void);
++NTSTATUS winusb_session_initialize(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_request *request,
++        ULONG input_length, MDL *mdl, ULONG output_length,
++        ULONG_PTR *information);
++NTSTATUS winusb_session_release(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_request *request,
++        ULONG input_length, ULONG_PTR *information);
++
+ #endif /* __WINE_WINUSB_PRIVATE_H */
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_binding_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_binding_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_binding_contract.c	2026-08-24 01:26:53.725560606 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_binding_contract.c	2026-08-24 03:40:28.032207075 -0700
+@@ -188,6 +188,24 @@
+     return status;
+ }
+ 
++#ifdef WINUSB_FUNCTION_BINDING_STANDALONE
++PIRP WINAPI IoBuildDeviceIoControlRequest(ULONG code, DEVICE_OBJECT *device,
++        PVOID input, ULONG input_size, PVOID output, ULONG output_size,
++        BOOLEAN internal, PKEVENT event, IO_STATUS_BLOCK *io)
++{
++    CHECK(FALSE, "CP32 binding contract unexpectedly built a Task 4 session IRP");
++    return NULL;
++}
++
++PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDLX mdl, KPROCESSOR_MODE mode,
++        MEMORY_CACHING_TYPE cache, PVOID address, ULONG bugcheck,
++        MM_PAGE_PRIORITY priority)
++{
++    CHECK(FALSE, "CP32 binding contract unexpectedly mapped Task 4 session output");
++    return NULL;
++}
++#endif
++
+ /* The driver uses a synchronous local IRP for metadata query and PnP forwarding. */
+ PIRP WINAPI IoBuildSynchronousFsdRequest(ULONG major, PDEVICE_OBJECT device, PVOID buffer,
+         ULONG length, PLARGE_INTEGER offset, PKEVENT event, PIO_STATUS_BLOCK iosb)
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_binding_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_binding_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_binding_contract.sh	2026-08-23 03:08:22.660411314 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_binding_contract.sh	2026-08-24 03:40:28.033240171 -0700
+@@ -13,11 +13,29 @@
+ readonly io24_build_dir="$(mktemp -d -p /tmp io24-winusb-function-binding.XXXXXX)"
+ trap 'rm -rf -- "$io24_build_dir"' EXIT INT TERM
+ 
++for io24_input in "$io24_driver_dir/main.c" "$io24_driver_dir/session.c"; do
++    if [[ ! -r "$io24_input" ]]; then
++        echo "HARNESS: missing or unreadable input: $io24_input" >&2
++        exit 2
++    fi
++done
++
+ # Deliberately compile the actual driver.  Against CP31 this RED is expected:
+ # main.c and winusb_busif.h do not exist, proving the missing CP32 surface.
+-cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ \
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ \
++    -DWINUSB_FUNCTION_BINDING_STANDALONE \
+     -I"$io24_source/include" -I"$io24_driver_dir" -I"$io24_bus_dir" \
+     "$io24_test_dir/winusb_function_binding_contract.c" \
+-    -o "$io24_build_dir/winusb_function_binding_contract"
++    "$io24_driver_dir/session.c" \
++    -o "$io24_build_dir/winusb_function_binding_contract"; then
++    echo "HARNESS: compiling actual winusb.sys main/session fake-WDM contract failed" >&2
++    exit 2
++fi
+ 
+-"$io24_build_dir/winusb_function_binding_contract"
++io24_code=0
++"$io24_build_dir/winusb_function_binding_contract" || io24_code=$?
++if (( io24_code != 0 && io24_code != 1 )); then
++    echo "HARNESS: retained binding contract exited $io24_code" >&2
++    exit 2
++fi
++exit "$io24_code"
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_io_contract.c	2026-08-24 01:30:49.813543920 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_io_contract.c	2026-08-24 03:40:28.029644727 -0700
+@@ -1,9 +1,18 @@
+ /* Executed CP33 contract: actual winusb.sys main.c inside the retained fake WDM. */
+ #include <stdint.h>
+ #define main io24_retained_cp32_main
++#define ExAllocatePool io24_retained_ExAllocatePool
++#define IoCallDriver io24_retained_IoCallDriver
+ #include "winusb_function_binding_contract.c"
++#undef IoCallDriver
++#undef ExAllocatePool
+ #undef main
+ #include "wine/winusb.h"
++#include "ddk/usb.h"
++#ifndef METHOD_NEITHER
++#define METHOD_NEITHER 3
++#endif
++#include "ddk/usbioctl.h"
+ 
+ #define IO24_PRIVATE_FIELD(type, member, expected) \
+     _Static_assert(_Generic(((struct type *)0)->member, expected: 1, default: 0), #type "." #member " type")
+@@ -35,7 +44,20 @@
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ static ULONG last_ioctl;static NTSTATUS last_status;static unsigned int mode_ioctls;
+-#define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
++static unsigned int session_allocation_calls, session_fail_allocation;
++#define IO24_CHECK(expr) do { if (!(expr)) { \
++    fprintf(stderr, "FAIL %s:%u: %s\n", __func__, __LINE__, #expr); \
++    ++counts.failures; \
++} } while (0)
++
++PVOID WINAPI ExAllocatePool(POOL_TYPE type, SIZE_T size)
++{
++    (void)type;
++    session_allocation_calls++;
++    if (session_fail_allocation == session_allocation_calls) return NULL;
++    pool_allocations++;
++    return calloc(1, size);
++}
+ 
+ #define IO24_CTL_CODE(type,function,method,access) (((type)<<16)|((access)<<14)|((function)<<2)|(method))
+ #define IO24_IOCTL_INITIALIZE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x800,2,0)
+@@ -48,8 +70,207 @@
+     9,2,41,0,1,1,0,0x80,0xfa, 9,4,5,0,0,0xff,0,0,6,
+     9,4,5,1,2,0xff,0,0,6, 7,5,0x81,2,0,2,0, 7,5,0x01,2,0,2,0
+ };
++static const unsigned char default_endpoint_configuration[] =
++{
++    9,2,25,0,1,1,0,0x80,0xfa, 9,4,5,0,1,0xff,0,0,6,
++    7,5,0x82,2,64,0,0
++};
++static const unsigned char mi05_device[] =
++{
++    18,1,0x00,0x02,0,0,0,64,0x46,0x19,0x24,0x00,0x00,0x01,1,2,3,1
++};
++
++static unsigned char lower_configuration[256];
++static ULONG lower_configuration_size;
++static ULONG lower_header_actual, lower_body_actual;
++static NTSTATUS descriptor_nt_status, select_nt_status;
++static USBD_STATUS descriptor_urb_status, select_urb_status;
++static BOOL descriptor_writes_urb_status, select_writes_urb_status;
++static BOOL lower_returns_pending;
++static unsigned int descriptor_reads, select_calls;
++static unsigned int urb_builds, fail_urb_build;
++static unsigned int builder_allocations, builder_frees;
++static ULONG expected_select_pipes;
++static UCHAR expected_select_endpoint;
++static USBD_PIPE_TYPE expected_select_type;
++static USHORT expected_select_packet_size;
++static FILE_OBJECT *active_session_file;
++
++struct session_irp_allocation
++{
++    IRP irp;
++    IO_STACK_LOCATION stack[2];
++    PKEVENT event;
++    PIO_STATUS_BLOCK iosb;
++    URB *urb;
++};
++
++static void reset_initialize_lower(void)
++{
++    memset(lower_configuration, 0, sizeof(lower_configuration));
++    memcpy(lower_configuration, mi05_configuration, sizeof(mi05_configuration));
++    lower_configuration_size = sizeof(mi05_configuration);
++    lower_header_actual = sizeof(USB_CONFIGURATION_DESCRIPTOR);
++    lower_body_actual = sizeof(mi05_configuration);
++    descriptor_nt_status = select_nt_status = STATUS_SUCCESS;
++    descriptor_urb_status = select_urb_status = USBD_STATUS_SUCCESS;
++    descriptor_writes_urb_status = select_writes_urb_status = TRUE;
++    lower_returns_pending = FALSE;
++    descriptor_reads = select_calls = urb_builds = fail_urb_build = 0;
++    builder_allocations = builder_frees = 0;
++    expected_select_pipes = 0;
++    expected_select_endpoint = 0;
++    expected_select_type = UsbdPipeTypeControl;
++    expected_select_packet_size = 0;
++}
++
++PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDLX mdl, KPROCESSOR_MODE mode,
++        MEMORY_CACHING_TYPE cache, PVOID address, ULONG bugcheck, MM_PAGE_PRIORITY priority)
++{
++    (void)mode; (void)cache; (void)address; (void)bugcheck; (void)priority;
++    return mdl ? mdl->MappedSystemVa : NULL;
++}
++
++PIRP WINAPI IoBuildDeviceIoControlRequest(ULONG code, PDEVICE_OBJECT device,
++        PVOID input, ULONG input_length, PVOID output, ULONG output_length,
++        BOOLEAN internal, PKEVENT event, PIO_STATUS_BLOCK iosb)
++{
++    struct session_irp_allocation *allocation;
++    URB *urb = input;
++
++    (void)device;
++    IO24_CHECK(code == IOCTL_INTERNAL_USB_SUBMIT_URB);
++    IO24_CHECK(internal && urb && input_length == urb->UrbHeader.Length);
++    IO24_CHECK(!output && !output_length);
++    urb_builds++;
++    if (fail_urb_build == urb_builds) return NULL;
++    if (!(allocation = calloc(1, sizeof(*allocation))))
++    {
++        fputs("HARNESS: allocating builder IRP failed\n", stderr);
++        exit(2);
++    }
++    builder_allocations++;
++    allocation->stack[0].MajorFunction = IRP_MJ_INTERNAL_DEVICE_CONTROL;
++    allocation->stack[0].Parameters.DeviceIoControl.IoControlCode = code;
++    allocation->stack[0].Parameters.DeviceIoControl.Type3InputBuffer = urb;
++    allocation->irp.Tail.Overlay.CurrentStackLocation = &allocation->stack[1];
++    allocation->event = event;
++    allocation->iosb = iosb;
++    allocation->urb = urb;
++    return &allocation->irp;
++}
++
++NTSTATUS WINAPI IoCallDriver(PDEVICE_OBJECT device, PIRP irp)
++{
++    struct session_irp_allocation *allocation = (void *)irp;
++    IO_STACK_LOCATION *next = IoGetNextIrpStackLocation(irp);
++    URB *urb = next->Parameters.Others.Argument1;
++    NTSTATUS status = STATUS_NOT_SUPPORTED;
++    ULONG actual = 0;
++
++    (void)device;
++    lower_calls++;
++    IO24_CHECK(active_session_file != NULL && active_session_file->FsContext != NULL);
++    if (active_session_file && active_session_file->FsContext)
++    {
++        const struct winusb_file *file = active_session_file->FsContext;
++        IO24_CHECK(file->outstanding == 1);
++        IO24_CHECK(!file->zero_outstanding.Header.SignalState);
++    }
++    IO24_CHECK(next->MajorFunction == IRP_MJ_INTERNAL_DEVICE_CONTROL);
++    IO24_CHECK(next->Parameters.DeviceIoControl.IoControlCode == IOCTL_INTERNAL_USB_SUBMIT_URB);
++    IO24_CHECK(urb == allocation->urb);
++    if (urb) IO24_CHECK(urb->UrbHeader.Status == USBD_STATUS_NOT_ACCESSED);
++    if (!urb) goto done;
++    if (urb->UrbHeader.Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE)
++    {
++        struct _URB_CONTROL_DESCRIPTOR_REQUEST *request =
++                &urb->UrbControlDescriptorRequest;
++        const unsigned char *source = NULL;
++        BOOL configuration_header = FALSE;
++
++        IO24_CHECK(request->DescriptorType == USB_DEVICE_DESCRIPTOR_TYPE ||
++                request->DescriptorType == USB_CONFIGURATION_DESCRIPTOR_TYPE);
++        if (request->DescriptorType == USB_DEVICE_DESCRIPTOR_TYPE)
++        {
++            IO24_CHECK(descriptor_reads == 0);
++            IO24_CHECK(request->TransferBufferLength == sizeof(mi05_device));
++            source = mi05_device;
++            actual = sizeof(mi05_device);
++        }
++        else if (descriptor_reads == 1)
++        {
++            IO24_CHECK(request->TransferBufferLength == sizeof(USB_CONFIGURATION_DESCRIPTOR));
++            source = lower_configuration;
++            actual = lower_header_actual;
++            configuration_header = TRUE;
++        }
++        else
++        {
++            IO24_CHECK(descriptor_reads == 2);
++            IO24_CHECK(request->TransferBufferLength == lower_configuration_size);
++            source = lower_configuration;
++            actual = lower_body_actual;
++        }
++        descriptor_reads++;
++        status = descriptor_nt_status;
++        if (descriptor_writes_urb_status)
++            request->Hdr.Status = descriptor_urb_status;
++        if (NT_SUCCESS(status) && descriptor_urb_status == USBD_STATUS_SUCCESS &&
++                request->TransferBuffer && source)
++        {
++            ULONG copy = actual < request->TransferBufferLength ? actual : request->TransferBufferLength;
++            memcpy(request->TransferBuffer, source, copy);
++            request->TransferBufferLength = actual;
++            if (configuration_header && copy >= sizeof(USB_CONFIGURATION_DESCRIPTOR))
++                ((USB_CONFIGURATION_DESCRIPTOR *)request->TransferBuffer)->wTotalLength =
++                        lower_configuration_size;
++        }
++    }
++    else if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_CONFIGURATION)
++    {
++        struct _URB_SELECT_CONFIGURATION *request = &urb->UrbSelectConfiguration;
++        select_calls++;
++        IO24_CHECK(descriptor_reads == 3);
++        IO24_CHECK(request->ConfigurationDescriptor != NULL);
++        IO24_CHECK(request->Interface.InterfaceNumber == 5);
++        IO24_CHECK(request->Interface.AlternateSetting == 0);
++        IO24_CHECK(request->Interface.NumberOfPipes == expected_select_pipes);
++        IO24_CHECK(request->Interface.Length == offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
++                expected_select_pipes * sizeof(USBD_PIPE_INFORMATION));
++        IO24_CHECK(request->Hdr.Length == offsetof(struct _URB_SELECT_CONFIGURATION, Interface) +
++                request->Interface.Length);
++        if (expected_select_pipes)
++        {
++            const USBD_PIPE_INFORMATION *pipe = &request->Interface.Pipes[0];
++            IO24_CHECK(expected_select_pipes == 1);
++            IO24_CHECK(pipe->EndpointAddress == expected_select_endpoint);
++            IO24_CHECK(pipe->PipeType == expected_select_type);
++            IO24_CHECK(pipe->MaximumPacketSize == expected_select_packet_size);
++        }
++        status = select_nt_status;
++        if (select_writes_urb_status)
++            request->Hdr.Status = select_urb_status;
++    }
++    else
++    {
++        IO24_CHECK(FALSE);
++        status = STATUS_NOT_SUPPORTED;
++    }
++done:
++    irp->IoStatus.Status = status;
++    if (allocation->iosb) *allocation->iosb = irp->IoStatus;
++    if (allocation->event) allocation->event->Header.SignalState = 1;
++    memset(allocation, 0xdd, sizeof(*allocation));
++    free(allocation);
++    builder_frees++;
++    return lower_returns_pending ? STATUS_PENDING : status;
++}
++
+ struct request { uint32_t version,size,session,interface_index,generation,value; unsigned char descriptor[sizeof(mi05_configuration)]; };
+ struct guarded_request { unsigned char before[16]; struct request request; unsigned char after[16]; };
++struct guarded_initialize { unsigned char before[16]; struct wine_winusb_request request; unsigned char after[16]; };
++struct guarded_snapshot { unsigned char before[16]; unsigned char bytes[256]; unsigned char after[16]; };
+ 
+ struct dispatch_effect
+ {
+@@ -79,13 +300,90 @@
+     check_guards(guarded);return effect;
+ }
+ 
++static void reset_initialize_buffers(struct guarded_initialize *input,
++        struct guarded_snapshot *output)
++{
++    memset(input, GUARD_BYTE, sizeof(*input));
++    input->request.size = sizeof(input->request);
++    input->request.version = WINE_WINUSB_ABI_VERSION;
++    input->request.session = 0;
++    input->request.interface_index = 0;
++    input->request.reserved = 0;
++    memset(output, GUARD_BYTE, sizeof(*output));
++}
++
++static void check_initialize_guards(const struct guarded_initialize *input,
++        const struct guarded_snapshot *output)
++{
++    unsigned int i;
++
++    for (i = 0; i < sizeof(input->before); ++i) IO24_CHECK(input->before[i] == GUARD_BYTE);
++    for (i = 0; i < sizeof(input->after); ++i) IO24_CHECK(input->after[i] == GUARD_BYTE);
++    for (i = 0; i < sizeof(output->before); ++i) IO24_CHECK(output->before[i] == GUARD_BYTE);
++    for (i = 0; i < sizeof(output->after); ++i) IO24_CHECK(output->after[i] == GUARD_BYTE);
++}
++
++static struct dispatch_effect dispatch_session_ioctl(PDRIVER_OBJECT driver, PDEVICE_OBJECT fdo,
++        ULONG code, struct guarded_initialize *input, ULONG input_length,
++        struct guarded_snapshot *output, ULONG output_length, ULONG mdl_length,
++        PVOID system_buffer, PVOID mapped_address, FILE_OBJECT *file)
++{
++    struct wine_winusb_request before = input->request;
++    IRP irp;
++    IO_STACK_LOCATION stack[2];
++    MDL mdl;
++    struct dispatch_effect effect;
++
++    memset(&irp, 0, sizeof(irp));
++    memset(stack, 0, sizeof(stack));
++    memset(&mdl, 0, sizeof(mdl));
++    stack[1].MajorFunction = IRP_MJ_DEVICE_CONTROL;
++    stack[1].FileObject = file;
++    stack[1].Parameters.DeviceIoControl.IoControlCode = code;
++    stack[1].Parameters.DeviceIoControl.InputBufferLength = input_length;
++    stack[1].Parameters.DeviceIoControl.OutputBufferLength = output_length;
++    irp.AssociatedIrp.SystemBuffer = system_buffer;
++    irp.Tail.Overlay.CurrentStackLocation = &stack[1];
++    if (mapped_address != (PVOID)(UINT_PTR)1)
++    {
++        mdl.MdlFlags = MDL_MAPPED_TO_SYSTEM_VA;
++        mdl.MappedSystemVa = mapped_address;
++        mdl.ByteCount = mdl_length;
++        irp.MdlAddress = &mdl;
++    }
++    effect.lower_before = lower_calls;
++    effect.complete_before = completes;
++    counts.submits++;
++    active_session_file = file;
++    driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
++    active_session_file = NULL;
++    IO24_CHECK(builder_allocations == builder_frees);
++    if (file && file->FsContext)
++    {
++        const struct winusb_file *context = file->FsContext;
++        IO24_CHECK(context->outstanding == 0);
++        IO24_CHECK(context->zero_outstanding.Header.SignalState);
++    }
++    effect.lower_after = lower_calls;
++    effect.complete_after = completes;
++    effect.status = irp.IoStatus.Status;
++    effect.information = irp.IoStatus.Information;
++    last_ioctl = code;
++    last_status = effect.status;
++    mode_ioctls++;
++    check_initialize_guards(input, output);
++    IO24_CHECK(!memcmp(&before, &input->request, sizeof(before)));
++    return effect;
++}
++
+ static void setup_added(DRIVER_OBJECT*d,DRIVER_EXTENSION*e,DEVICE_OBJECT*p,struct guarded_request*g,FILE_OBJECT*file)
+ {
+     unsigned int previous_failures=counts.failures;
+     memset(&counts,0,sizeof(counts)); counts.failures=previous_failures;memset(g,GUARD_BYTE,sizeof(*g));memset(file,0,sizeof(*file));last_ioctl=0;last_status=0;mode_ioctls=0;
+     g->request.version=1; g->request.size=sizeof(g->request); g->request.interface_index=5;
+     memcpy(g->request.descriptor,mi05_configuration,sizeof(mi05_configuration));
+-    reset(); initialize(d,e,p); IO24_CHECK(NT_SUCCESS(add(d,p)));
++    reset(); reset_initialize_lower(); session_allocation_calls=session_fail_allocation=0;
++    initialize(d,e,p); IO24_CHECK(NT_SUCCESS(add(d,p)));
+ }
+ static void setup(DRIVER_OBJECT*d,DRIVER_EXTENSION*e,DEVICE_OBJECT*p,struct guarded_request*g,FILE_OBJECT*file)
+ {
+@@ -148,6 +446,7 @@
+     struct winusb_device *device;
+     struct expected_winusb_file *context;
+     unsigned int frees_before;
++    unsigned int expected_close_frees;
+     unsigned int removal_waits;
+     unsigned int drain_waits;
+ };
+@@ -166,7 +465,8 @@
+         effect=dispatch_request(lifecycle_wait.driver,last_fdo,IRP_MJ_CLOSE,0,
+                 lifecycle_wait.guarded,lifecycle_wait.file);
+         IO24_CHECK(effect.status==STATUS_SUCCESS&&lifecycle_wait.file->FsContext==NULL);
+-        IO24_CHECK(pool_frees==lifecycle_wait.frees_before+1);
++        IO24_CHECK(pool_frees==lifecycle_wait.frees_before+
++                lifecycle_wait.expected_close_frees);
+         IO24_CHECK(lifecycle_wait.device->file_count==0);
+         IO24_CHECK(lifecycle_wait.device->removal_event.Header.SignalState);
+     }
+@@ -181,14 +481,560 @@
+     }
+     else IO24_CHECK(FALSE);
+ }
++
++static void check_file_uninitialized(const FILE_OBJECT *file)
++{
++    const struct winusb_file *context = file->FsContext;
++
++    IO24_CHECK(context != NULL);
++    if (!context) return;
++    IO24_CHECK(context->state == WINUSB_FILE_UNINITIALIZED);
++    IO24_CHECK(context->session == 0);
++    IO24_CHECK(context->snapshot == NULL && context->snapshot_size == 0);
++    IO24_CHECK(context->interfaces == NULL && context->interface_count == 0);
++}
++
++static void check_snapshot_tail(const struct guarded_snapshot *output, ULONG start)
++{
++    ULONG i;
++
++    for (i = start; i < sizeof(output->bytes); ++i) IO24_CHECK(output->bytes[i] == GUARD_BYTE);
++}
++
++static void check_exact_snapshot(const struct guarded_snapshot *output, UINT64 session)
++{
++    struct wine_winusb_snapshot snapshot;
++    struct wine_winusb_interface_snapshot interfaces[1];
++    struct wine_winusb_alternate_snapshot alternates[2];
++    struct wine_winusb_endpoint_snapshot endpoints[2];
++
++    memcpy(&snapshot, output->bytes, sizeof(snapshot));
++    memcpy(interfaces, output->bytes + 131, sizeof(interfaces));
++    memcpy(alternates, output->bytes + 147, sizeof(alternates));
++    memcpy(endpoints, output->bytes + 179, sizeof(endpoints));
++    IO24_CHECK(snapshot.size == 72 && snapshot.version == WINE_WINUSB_ABI_VERSION);
++    IO24_CHECK(snapshot.session == session && snapshot.speed == HighSpeed);
++    IO24_CHECK(snapshot.total_size == 211);
++    IO24_CHECK(snapshot.device_offset == 72 && snapshot.device_length == 18);
++    IO24_CHECK(snapshot.configuration_offset == 90 && snapshot.configuration_length == 41);
++    IO24_CHECK(snapshot.interfaces_offset == 131 && snapshot.interface_count == 1);
++    IO24_CHECK(snapshot.alternates_offset == 147 && snapshot.alternate_count == 2);
++    IO24_CHECK(snapshot.endpoints_offset == 179 && snapshot.endpoint_count == 2);
++    IO24_CHECK(snapshot.reserved[0] == 0 && snapshot.reserved[1] == 0);
++    IO24_CHECK(!memcmp(output->bytes + 72, mi05_device, sizeof(mi05_device)));
++    IO24_CHECK(!memcmp(output->bytes + 90, mi05_configuration, sizeof(mi05_configuration)));
++    IO24_CHECK(interfaces[0].interface_number == 5 && interfaces[0].first_alternate == 0 &&
++            interfaces[0].alternate_count == 2 && interfaces[0].reserved == 0);
++    IO24_CHECK(alternates[0].interface_index == 0 && alternates[0].alternate_setting == 0 &&
++            alternates[0].first_endpoint == 0 && alternates[0].endpoint_count == 0);
++    IO24_CHECK(alternates[1].interface_index == 0 && alternates[1].alternate_setting == 1 &&
++            alternates[1].first_endpoint == 0 && alternates[1].endpoint_count == 2);
++    IO24_CHECK(endpoints[0].alternate_index == 1 && endpoints[0].pipe_id == 0x81 &&
++            endpoints[0].pipe_type == UsbdPipeTypeBulk && endpoints[0].maximum_packet_size == 512);
++    IO24_CHECK(endpoints[1].alternate_index == 1 && endpoints[1].pipe_id == 0x01 &&
++            endpoints[1].pipe_type == UsbdPipeTypeBulk && endpoints[1].maximum_packet_size == 512);
++    check_snapshot_tail(output, 211);
++}
++
++static struct dispatch_effect call_initialize(PDRIVER_OBJECT driver, FILE_OBJECT *file,
++        struct guarded_initialize *input, struct guarded_snapshot *output,
++        ULONG output_length, ULONG mdl_length, PVOID system_buffer, PVOID mapped_address)
++{
++    return dispatch_session_ioctl(driver, last_fdo, IOCTL_WINE_WINUSB_INITIALIZE,
++            input, sizeof(input->request), output, output_length, mdl_length,
++            system_buffer, mapped_address, file);
++}
++
++static struct dispatch_effect call_release(PDRIVER_OBJECT driver, FILE_OBJECT *file,
++        struct guarded_initialize *input, ULONG input_length)
++{
++    struct guarded_snapshot output;
++
++    memset(&output, GUARD_BYTE, sizeof(output));
++    return dispatch_session_ioctl(driver, last_fdo, IOCTL_WINE_WINUSB_RELEASE,
++            input, input_length, &output, 0, 0, &input->request,
++            (PVOID)(UINT_PTR)1, file);
++}
++
++static void expect_malformed_configuration(PDRIVER_OBJECT driver, FILE_OBJECT *file,
++        const unsigned char *configuration, ULONG length,
++        ULONG header_actual, ULONG body_actual, unsigned int expected_reads)
++{
++    struct guarded_initialize input;
++    struct guarded_snapshot output, before;
++    struct dispatch_effect effect;
++    unsigned int allocations_before = pool_allocations, frees_before = pool_frees;
++
++    reset_initialize_lower();
++    memcpy(lower_configuration, configuration, length);
++    lower_configuration_size = length;
++    lower_header_actual = header_actual;
++    lower_body_actual = body_actual;
++    session_allocation_calls = 0;
++    reset_initialize_buffers(&input, &output);
++    before = output;
++    effect = call_initialize(driver, file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER);
++    IO24_CHECK(effect.information == 0 && effect.complete_after == effect.complete_before + 1);
++    IO24_CHECK(effect.lower_after == effect.lower_before + expected_reads);
++    IO24_CHECK(descriptor_reads == expected_reads && select_calls == 0);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output)));
++    check_file_uninitialized(file);
++    IO24_CHECK(pool_allocations - allocations_before == pool_frees - frees_before);
++}
++
++static void test_initialize_input_and_buffer_rejections(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file, alien = {0};
++    struct guarded_request retained;
++    struct guarded_initialize input;
++    struct guarded_snapshot output, before;
++    struct dispatch_effect effect;
++    struct winusb_device *device;
++    struct winusb_file *context;
++
++    setup(&driver, &extension, &pdo, &retained, &file);
++    IO24_CHECK(create_file(&driver, &retained, &file));
++    device = last_fdo->DeviceExtension;
++    context = file.FsContext;
++
++#define IO24_REJECT_INIT() do { \
++    reset_initialize_lower(); session_allocation_calls = 0; before = output; \
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211, \
++            &input.request, output.bytes); \
++    IO24_CHECK(!NT_SUCCESS(effect.status) && effect.information == 0); \
++    IO24_CHECK(effect.lower_after == effect.lower_before && descriptor_reads == 0 && select_calls == 0); \
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file); \
++} while (0)
++
++    reset_initialize_buffers(&input, &output); input.request.size--; IO24_REJECT_INIT();
++    reset_initialize_buffers(&input, &output); input.request.version++; IO24_REJECT_INIT();
++    reset_initialize_buffers(&input, &output); input.request.session = 1; IO24_REJECT_INIT();
++    reset_initialize_buffers(&input, &output); input.request.interface_index = 1; IO24_REJECT_INIT();
++    reset_initialize_buffers(&input, &output); input.request.reserved = 1; IO24_REJECT_INIT();
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = dispatch_session_ioctl(&driver, last_fdo, IOCTL_WINE_WINUSB_INITIALIZE,
++            &input, sizeof(input.request) - 1, &output, 211, 211,
++            &input.request, output.bytes, &file);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.information == 0);
++    IO24_CHECK(effect.lower_after == effect.lower_before && !memcmp(&output, &before, sizeof(output)));
++    check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211, NULL, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &alien, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    IO24_CHECK(!NT_SUCCESS(effect.status) && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, (PVOID)(UINT_PTR)1);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, NULL);
++    IO24_CHECK(effect.status == STATUS_NO_MEMORY && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 210,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 71, 71,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_BUFFER_TOO_SMALL && effect.information == 0);
++    IO24_CHECK(effect.lower_after == effect.lower_before && !memcmp(&output, &before, sizeof(output)));
++    check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 72, 72,
++            &input.request, (PVOID)(UINT_PTR)(~(SIZE_T)0 - 31));
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    device->state = WINUSB_DEVICE_STOPPED;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_DEVICE_STATE && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output)));
++    device->state = WINUSB_DEVICE_STARTED; check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); before = output;
++    context->state = WINUSB_FILE_INITIALIZING;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_DEVICE_STATE && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output)));
++    context->state = WINUSB_FILE_UNINITIALIZED; check_file_uninitialized(&file);
++
++#undef IO24_REJECT_INIT
++    teardown(&driver, &retained, &file);
++}
++
++static void test_initialize_malformed_descriptors(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file;
++    struct guarded_request retained;
++    unsigned char malformed[256];
++
++    setup(&driver, &extension, &pdo, &retained, &file);
++    IO24_CHECK(create_file(&driver, &retained, &file));
++
++    memcpy(malformed, mi05_configuration, sizeof(mi05_configuration));
++    expect_malformed_configuration(&driver, &file, malformed, 41, 8, 41, 2);
++    expect_malformed_configuration(&driver, &file, malformed, 41, 9, 40, 3);
++
++    memcpy(malformed, mi05_configuration, 41); malformed[2] = 40;
++    expect_malformed_configuration(&driver, &file, malformed, 41, 9, 41, 3);
++    memcpy(malformed, mi05_configuration, 41); malformed[9] = 1;
++    expect_malformed_configuration(&driver, &file, malformed, 41, 9, 41, 3);
++    memcpy(malformed, mi05_configuration, 41); malformed[9] = 250;
++    expect_malformed_configuration(&driver, &file, malformed, 41, 9, 41, 3);
++
++    memcpy(malformed, (unsigned char[]){9,2,16,0,1,1,0,0x80,0xfa,7,5,0x81,2,0,2,0}, 16);
++    expect_malformed_configuration(&driver, &file, malformed, 16, 9, 16, 3);
++    memcpy(malformed, (unsigned char[]){9,2,9,0,0,1,0,0x80,0xfa}, 9);
++    expect_malformed_configuration(&driver, &file, malformed, 9, 9, 9, 3);
++    memcpy(malformed, (unsigned char[]){9,2,18,0,1,1,0,0x80,0xfa,9,4,5,1,0,0xff,0,0,6}, 18);
++    expect_malformed_configuration(&driver, &file, malformed, 18, 9, 18, 3);
++    memcpy(malformed, (unsigned char[]){9,2,27,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,0,0,0xff,0,0,6}, 27);
++    expect_malformed_configuration(&driver, &file, malformed, 27, 9, 27, 3);
++    memcpy(malformed, (unsigned char[]){9,2,36,0,2,1,0,0x80,0xfa,
++            9,4,5,0,0,0xff,0,0,6, 9,4,6,0,0,0xff,0,0,6,
++            9,4,5,1,0,0xff,0,0,6}, 36);
++    expect_malformed_configuration(&driver, &file, malformed, 36, 9, 36, 3);
++
++    teardown(&driver, &retained, &file);
++}
++
++static void test_initialize_size_full_release_reinitialize(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file, other = {0};
++    struct guarded_request retained;
++    struct guarded_initialize input;
++    struct guarded_snapshot output, before;
++    struct dispatch_effect effect;
++    struct winusb_file *context;
++    struct wine_winusb_snapshot snapshot;
++    UINT64 first_session, second_session;
++    void *committed_snapshot, *committed_interfaces;
++    unsigned int frees_before;
++
++    setup(&driver, &extension, &pdo, &retained, &file);
++    IO24_CHECK(create_file(&driver, &retained, &file));
++    context = file.FsContext;
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); session_allocation_calls = 0;
++    effect = call_initialize(&driver, &file, &input, &output, 72, 72,
++            &input.request, output.bytes);
++    memcpy(&snapshot, output.bytes, sizeof(snapshot));
++    IO24_CHECK(effect.status == STATUS_BUFFER_TOO_SMALL && effect.information == 72);
++    IO24_CHECK(effect.lower_after == effect.lower_before + 3 && descriptor_reads == 3 && select_calls == 0);
++    IO24_CHECK(snapshot.size == 72 && snapshot.version == WINE_WINUSB_ABI_VERSION &&
++            snapshot.session == 0 && snapshot.speed == HighSpeed && snapshot.total_size == 211);
++    IO24_CHECK(snapshot.device_offset == 72 && snapshot.device_length == 18 &&
++            snapshot.configuration_offset == 90 && snapshot.configuration_length == 41);
++    IO24_CHECK(snapshot.interfaces_offset == 131 && snapshot.interface_count == 1 &&
++            snapshot.alternates_offset == 147 && snapshot.alternate_count == 2 &&
++            snapshot.endpoints_offset == 179 && snapshot.endpoint_count == 2);
++    check_snapshot_tail(&output, 72); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); session_allocation_calls = 0;
++    effect = call_initialize(&driver, &file, &input, &output, 100, 100,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_BUFFER_TOO_SMALL && effect.information == 72);
++    IO24_CHECK(effect.lower_after == effect.lower_before + 3 && select_calls == 0);
++    check_snapshot_tail(&output, 72); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); session_allocation_calls = 0; before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 212, 212,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_PARAMETER && effect.information == 0);
++    IO24_CHECK(effect.lower_after == effect.lower_before + 3 && select_calls == 0);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); session_allocation_calls = 0;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    memcpy(&snapshot, output.bytes, sizeof(snapshot)); first_session = snapshot.session;
++    IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 211);
++    IO24_CHECK(effect.lower_after == effect.lower_before + 4 && descriptor_reads == 3 && select_calls == 1);
++    IO24_CHECK(session_allocation_calls == 6 && first_session != 0);
++    check_exact_snapshot(&output, first_session);
++    IO24_CHECK(context->state == WINUSB_FILE_INITIALIZED && context->session == first_session);
++    IO24_CHECK(context->snapshot && context->snapshot != output.bytes && context->snapshot_size == 211);
++    IO24_CHECK(context->interfaces && context->interface_count == 1);
++    committed_snapshot = context->snapshot; committed_interfaces = context->interfaces;
++
++    IO24_CHECK(create_file(&driver, &retained, &other));
++    reset_initialize_buffers(&input, &output); input.request.session = first_session;
++    frees_before = pool_frees;
++    effect = call_release(&driver, &other, &input, sizeof(input.request));
++    IO24_CHECK(!NT_SUCCESS(effect.status) && pool_frees == frees_before);
++    IO24_CHECK(context->state == WINUSB_FILE_INITIALIZED && context->session == first_session &&
++            context->snapshot == committed_snapshot && context->interfaces == committed_interfaces);
++    check_file_uninitialized(&other);
++    IO24_CHECK(dispatch_request(&driver, last_fdo, IRP_MJ_CLEANUP, 0,
++            &retained, &other).status == STATUS_SUCCESS);
++    IO24_CHECK(dispatch_request(&driver, last_fdo, IRP_MJ_CLOSE, 0,
++            &retained, &other).status == STATUS_SUCCESS && other.FsContext == NULL);
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); before = output;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    IO24_CHECK(effect.status == STATUS_INVALID_DEVICE_STATE && effect.lower_after == effect.lower_before);
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output)));
++    IO24_CHECK(context->session == first_session && context->snapshot == committed_snapshot &&
++            context->interfaces == committed_interfaces);
++
++#define IO24_REJECT_RELEASE(field, value) do { \
++    reset_initialize_buffers(&input, &output); input.request.session = first_session; \
++    input.request.field = (value); frees_before = pool_frees; \
++    effect = call_release(&driver, &file, &input, sizeof(input.request)); \
++    IO24_CHECK(!NT_SUCCESS(effect.status) && effect.information == 0); \
++    IO24_CHECK(effect.lower_after == effect.lower_before && pool_frees == frees_before); \
++    IO24_CHECK(context->state == WINUSB_FILE_INITIALIZED && context->session == first_session && \
++            context->snapshot == committed_snapshot && context->interfaces == committed_interfaces); \
++} while (0)
++    IO24_REJECT_RELEASE(size, sizeof(input.request) - 1);
++    IO24_REJECT_RELEASE(version, WINE_WINUSB_ABI_VERSION + 1);
++    IO24_REJECT_RELEASE(reserved, 1);
++    IO24_REJECT_RELEASE(interface_index, 1);
++    IO24_REJECT_RELEASE(session, first_session + 1);
++#undef IO24_REJECT_RELEASE
++
++    reset_initialize_buffers(&input, &output); input.request.session = first_session;
++    effect = call_release(&driver, &file, &input, sizeof(input.request) - 1);
++    IO24_CHECK(!NT_SUCCESS(effect.status) && context->session == first_session);
++    reset_initialize_buffers(&input, &output); input.request.session = first_session;
++    frees_before = pool_frees;
++    effect = call_release(&driver, &file, &input, sizeof(input.request));
++    IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 0);
++    IO24_CHECK(effect.lower_after == effect.lower_before && pool_frees == frees_before + 2);
++    check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); input.request.session = first_session;
++    effect = call_release(&driver, &file, &input, sizeof(input.request));
++    IO24_CHECK(!NT_SUCCESS(effect.status)); check_file_uninitialized(&file);
++
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); session_allocation_calls = 0;
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++            &input.request, output.bytes);
++    memcpy(&snapshot, output.bytes, sizeof(snapshot)); second_session = snapshot.session;
++    IO24_CHECK(effect.status == STATUS_SUCCESS && second_session > first_session && second_session != 0);
++    check_exact_snapshot(&output, second_session);
++    reset_initialize_buffers(&input, &output); input.request.session = second_session;
++    IO24_CHECK(call_release(&driver, &file, &input, sizeof(input.request)).status == STATUS_SUCCESS);
++    check_file_uninitialized(&file);
++    teardown(&driver, &retained, &file);
++}
++
++static void test_initialize_default_endpoint_select_layout(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file; struct guarded_request retained;
++    struct guarded_initialize input; struct guarded_snapshot output;
++    struct wine_winusb_snapshot snapshot;
++    struct wine_winusb_interface_snapshot interface;
++    struct wine_winusb_alternate_snapshot alternate;
++    struct wine_winusb_endpoint_snapshot endpoint;
++    struct winusb_file *context;
++    struct dispatch_effect effect;
++
++    setup(&driver, &extension, &pdo, &retained, &file);
++    IO24_CHECK(create_file(&driver, &retained, &file));
++    reset_initialize_buffers(&input, &output); reset_initialize_lower();
++    memcpy(lower_configuration, default_endpoint_configuration,
++            sizeof(default_endpoint_configuration));
++    lower_configuration_size = lower_body_actual = sizeof(default_endpoint_configuration);
++    expected_select_pipes = 1;
++    expected_select_endpoint = 0x82;
++    expected_select_type = UsbdPipeTypeBulk;
++    expected_select_packet_size = 64;
++    session_allocation_calls = 0;
++    effect = call_initialize(&driver, &file, &input, &output, 163, 163,
++            &input.request, output.bytes);
++    memcpy(&snapshot, output.bytes, sizeof(snapshot));
++    memcpy(&interface, output.bytes + 115, sizeof(interface));
++    memcpy(&alternate, output.bytes + 131, sizeof(alternate));
++    memcpy(&endpoint, output.bytes + 147, sizeof(endpoint));
++    IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 163);
++    IO24_CHECK(descriptor_reads == 3 && select_calls == 1);
++    IO24_CHECK(snapshot.total_size == 163 && snapshot.interfaces_offset == 115 &&
++            snapshot.alternates_offset == 131 && snapshot.endpoints_offset == 147);
++    IO24_CHECK(interface.interface_number == 5 && interface.first_alternate == 0 &&
++            interface.alternate_count == 1);
++    IO24_CHECK(alternate.interface_index == 0 && alternate.alternate_setting == 0 &&
++            alternate.first_endpoint == 0 && alternate.endpoint_count == 1);
++    IO24_CHECK(endpoint.alternate_index == 0 && endpoint.pipe_id == 0x82 &&
++            endpoint.pipe_type == UsbdPipeTypeBulk && endpoint.maximum_packet_size == 64);
++    context = file.FsContext;
++    IO24_CHECK(context->interfaces[0].interface_number == 5 &&
++            context->interfaces[0].alternate_setting == 0 &&
++            context->interfaces[0].first_endpoint == 0 &&
++            context->interfaces[0].endpoint_count == 1);
++    teardown(&driver, &retained, &file);
++}
++
++static void test_initialize_allocation_and_lower_failures(void)
++{
++    unsigned int fail;
++
++    for (fail = 1; fail <= 6; ++fail)
++    {
++        DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++        FILE_OBJECT file; struct guarded_request retained;
++        struct guarded_initialize input; struct guarded_snapshot output, before;
++        struct dispatch_effect effect;
++
++        setup(&driver, &extension, &pdo, &retained, &file);
++        IO24_CHECK(create_file(&driver, &retained, &file));
++        reset_initialize_buffers(&input, &output); reset_initialize_lower();
++        before = output; session_allocation_calls = 0; session_fail_allocation = fail;
++        effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++                &input.request, output.bytes);
++        IO24_CHECK(effect.status == STATUS_NO_MEMORY && effect.information == 0);
++        IO24_CHECK(session_allocation_calls == fail && select_calls == 0);
++        IO24_CHECK(descriptor_reads == (fail > 3 ? 3 : fail - 1));
++        IO24_CHECK(effect.lower_after == effect.lower_before + descriptor_reads);
++        IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file);
++        session_fail_allocation = 0;
++        teardown(&driver, &retained, &file);
++    }
++
++#define IO24_BUILDER_FAILURE(build_number, expected_reads) do { \
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo; \
++    FILE_OBJECT file; struct guarded_request retained; struct guarded_initialize input; \
++    struct guarded_snapshot output, before; struct dispatch_effect effect; \
++    setup(&driver, &extension, &pdo, &retained, &file); IO24_CHECK(create_file(&driver, &retained, &file)); \
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); before = output; \
++    fail_urb_build = (build_number); session_allocation_calls = 0; \
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211, &input.request, output.bytes); \
++    IO24_CHECK(effect.status == STATUS_NO_MEMORY && effect.information == 0); \
++    IO24_CHECK(descriptor_reads == (expected_reads) && select_calls == 0); \
++    IO24_CHECK(effect.lower_after == effect.lower_before + (expected_reads)); \
++    IO24_CHECK(!memcmp(&output, &before, sizeof(output))); check_file_uninitialized(&file); \
++    teardown(&driver, &retained, &file); \
++} while (0)
++    IO24_BUILDER_FAILURE(1, 0);
++    IO24_BUILDER_FAILURE(4, 3);
++#undef IO24_BUILDER_FAILURE
++
++#define IO24_LOWER_FAILURE(which_nt, nt_value, which_urb, urb_value, expect_select) do { \
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo; \
++    FILE_OBJECT file; struct guarded_request retained; struct guarded_initialize input; \
++    struct guarded_snapshot output, before; struct dispatch_effect effect; \
++    setup(&driver, &extension, &pdo, &retained, &file); IO24_CHECK(create_file(&driver, &retained, &file)); \
++    reset_initialize_buffers(&input, &output); reset_initialize_lower(); before = output; \
++    which_nt = (nt_value); which_urb = (urb_value); session_allocation_calls = 0; \
++    effect = call_initialize(&driver, &file, &input, &output, 211, 211, &input.request, output.bytes); \
++    IO24_CHECK(!NT_SUCCESS(effect.status) && effect.information == 0); \
++    IO24_CHECK(select_calls == (expect_select)); IO24_CHECK(!memcmp(&output, &before, sizeof(output))); \
++    IO24_CHECK(descriptor_reads == ((expect_select) ? 3u : 1u)); \
++    IO24_CHECK(effect.lower_after == effect.lower_before + ((expect_select) ? 4u : 1u)); \
++    check_file_uninitialized(&file); teardown(&driver, &retained, &file); \
++} while (0)
++    IO24_LOWER_FAILURE(descriptor_nt_status, STATUS_UNSUCCESSFUL,
++            descriptor_urb_status, USBD_STATUS_SUCCESS, 0);
++    IO24_LOWER_FAILURE(descriptor_nt_status, STATUS_SUCCESS,
++            descriptor_urb_status, USBD_STATUS_STALL_PID, 0);
++    IO24_LOWER_FAILURE(descriptor_nt_status, STATUS_SUCCESS,
++            descriptor_writes_urb_status, FALSE, 0);
++    IO24_LOWER_FAILURE(select_nt_status, STATUS_UNSUCCESSFUL,
++            select_urb_status, USBD_STATUS_SUCCESS, 1);
++    IO24_LOWER_FAILURE(select_nt_status, STATUS_SUCCESS,
++            select_urb_status, USBD_STATUS_STALL_PID, 1);
++    IO24_LOWER_FAILURE(select_nt_status, STATUS_SUCCESS,
++            select_writes_urb_status, FALSE, 1);
++#undef IO24_LOWER_FAILURE
++
++    {
++        DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++        FILE_OBJECT file; struct guarded_request retained;
++        struct guarded_initialize input; struct guarded_snapshot output;
++        struct dispatch_effect effect;
++
++        setup(&driver, &extension, &pdo, &retained, &file);
++        IO24_CHECK(create_file(&driver, &retained, &file));
++        reset_initialize_buffers(&input, &output); reset_initialize_lower();
++        lower_returns_pending = TRUE; session_allocation_calls = 0;
++        effect = call_initialize(&driver, &file, &input, &output, 211, 211,
++                &input.request, output.bytes);
++        IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 211);
++        IO24_CHECK(descriptor_reads == 3 && select_calls == 1);
++        IO24_CHECK(builder_allocations == 4 && builder_frees == 4);
++        teardown(&driver, &retained, &file);
++    }
++}
++
++static void test_initialized_remove_after_outstanding_drain(void);
++
++static void group_initialize(void)
++{
++    test_initialize_input_and_buffer_rejections();
++    test_initialize_malformed_descriptors();
++    test_initialize_size_full_release_reinitialize();
++    test_initialize_default_endpoint_select_layout();
++    test_initialize_allocation_and_lower_failures();
++    test_initialized_remove_after_outstanding_drain();
++}
++
+ static BOOL initialize_session(PDRIVER_OBJECT d,struct guarded_request *g,FILE_OBJECT *file)
+ {
+-    struct request before=g->request;struct dispatch_effect effect=dispatch_request(d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_INITIALIZE,g,file);
+-    IO24_CHECK(!memcmp(before.descriptor,mi05_configuration,sizeof(mi05_configuration)));
++    struct guarded_initialize input;struct guarded_snapshot output;struct dispatch_effect effect;
++    struct wine_winusb_snapshot snapshot;
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();session_allocation_calls=0;
++    effect=call_initialize(d,file,&input,&output,211,211,&input.request,output.bytes);
++    memcpy(&snapshot,output.bytes,sizeof(snapshot));g->request.session=snapshot.session;
+     IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+4);IO24_CHECK(effect.complete_after==effect.complete_before+1);
+-    IO24_CHECK(effect.information>0);IO24_CHECK(g->request.session!=0);IO24_CHECK(memcmp(&before,&g->request,sizeof(before))!=0);
++    IO24_CHECK(effect.information==211);IO24_CHECK(g->request.session!=0);
+     return effect.status==STATUS_SUCCESS&&g->request.session!=0;
+ }
++static void test_initialized_remove_after_outstanding_drain(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file; struct guarded_request guarded;
++    struct winusb_device *device; struct expected_winusb_file *context;
++    struct dispatch_effect effect;
++
++    setup(&driver,&extension,&pdo,&guarded,&file);
++    IO24_CHECK(create_file(&driver,&guarded,&file));
++    IO24_CHECK(initialize_session(&driver,&guarded,&file));
++    device=last_fdo->DeviceExtension;context=file.FsContext;
++    IO24_CHECK(context->snapshot!=NULL&&context->interfaces!=NULL);
++    context->outstanding=1;KeClearEvent(&context->zero_outstanding);
++    IO24_CHECK(NT_SUCCESS(dispatch(&driver,last_fdo,IRP_MJ_PNP,
++            IRP_MN_SURPRISE_REMOVAL)));
++    effect=dispatch_request(&driver,last_fdo,IRP_MJ_CLEANUP,0,&guarded,&file);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&file.FsContext==context);
++    memset(&lifecycle_wait,0,sizeof(lifecycle_wait));
++    lifecycle_wait.driver=&driver;lifecycle_wait.guarded=&guarded;
++    lifecycle_wait.file=&file;lifecycle_wait.device=device;
++    lifecycle_wait.context=context;lifecycle_wait.frees_before=pool_frees;
++    lifecycle_wait.expected_close_frees=3;wait_hook=lifecycle_wait_hook;
++    IO24_CHECK(NT_SUCCESS(dispatch(&driver,last_fdo,IRP_MJ_PNP,
++            IRP_MN_REMOVE_DEVICE)));
++    IO24_CHECK(lifecycle_wait.removal_waits==1&&lifecycle_wait.drain_waits==1);
++    IO24_CHECK(wait_failures==0&&file.FsContext==NULL);
++    IO24_CHECK(pool_frees==lifecycle_wait.frees_before+3);
++    IO24_CHECK(pool_allocations==pool_frees);wait_hook=NULL;
++}
+ static void dispatch_safe_rejection(PDRIVER_OBJECT d,struct guarded_request *g,FILE_OBJECT *file,ULONG code)
+ {
+     struct request before=g->request;struct dispatch_effect effect=dispatch_request(d,last_fdo,IRP_MJ_DEVICE_CONTROL,code,g,file);IO24_CHECK(!NT_SUCCESS(effect.status));IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);IO24_CHECK(effect.information==0);IO24_CHECK(!memcmp(&before,&g->request,sizeof(before)));
+@@ -264,6 +1110,7 @@
+     memset(&lifecycle_wait,0,sizeof(lifecycle_wait));
+     lifecycle_wait.driver=&d;lifecycle_wait.guarded=&g;lifecycle_wait.file=&second;
+     lifecycle_wait.device=device;lifecycle_wait.context=second_context;lifecycle_wait.frees_before=pool_frees;
++    lifecycle_wait.expected_close_frees=1;
+     wait_hook=lifecycle_wait_hook;
+     IO24_CHECK(NT_SUCCESS(dispatch(&d,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE)));
+     IO24_CHECK(lifecycle_wait.removal_waits==1&&lifecycle_wait.drain_waits==1);
+@@ -278,5 +1125,5 @@
+ {DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=7;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_POLICY);teardown(&d,&g,&file);return;}effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);teardown(&d,&g,&file);}
+ static void group_transfer(void)
+ {DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_READ_PIPE);teardown(&d,&g,&file);return;}g.request.value=1;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1);effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g,&file);IO24_CHECK(effect.status==STATUS_PENDING);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before);teardown(&d,&g,&file);}
+-static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();}
++static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))group_initialize();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();}
+ int main(int argc,char**argv){unsigned int retained;if(argc!=2)return 2;retained=io24_retained_cp32_main();if(retained){fprintf(stderr,"HARNESS: retained fake-WDM baseline failed\n");return 2;}run(argv[1]);printf("CP33 function executed mode=%s dispatches=%u mode-ioctls=%u last-ioctl=%#lx last-status=%#lx failures=%u\n",argv[1],counts.submits,mode_ioctls,(unsigned long)last_ioctl,(unsigned long)last_status,counts.failures);return counts.failures?1:0;}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_io_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_io_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_function_io_contract.sh	2026-08-23 05:32:17.682601056 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_function_io_contract.sh	2026-08-24 03:40:28.030950136 -0700
+@@ -2,12 +2,22 @@
+ set -uo pipefail
+ if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 mode=${2:---red}
+-case "$mode" in --red|--lifecycle|--session|--alternate|--policy|--transfer) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
++case "$mode" in --red|--lifecycle|--initialize|--session|--alternate|--policy|--transfer) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+ readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+-for input in "$source_root/dlls/winusb.sys/main.c" "$source_root/dlls/wineusb.sys/winusb_busif.h" "$test_dir/winusb_function_io_contract.c" "$test_dir/winusb_function_binding_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
++sanitize_flags=()
++if [[ "$mode" == --initialize ]]; then
++    sanitize_flags=(-fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer)
++fi
++for input in "$source_root/dlls/winusb.sys/main.c" "$source_root/dlls/winusb.sys/session.c" "$source_root/dlls/winusb.sys/winusb_private.h" "$source_root/dlls/wineusb.sys/winusb_busif.h" "$test_dir/winusb_function_io_contract.c" "$test_dir/winusb_function_binding_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
+ build_dir=$(mktemp -d -p /tmp io24-winusb-function-io.XXXXXX) || { echo 'HARNESS: mktemp failed' >&2; exit 2; }
+ trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
+-if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ -I"$test_dir" -I"$source_root/include" -I"$source_root/dlls/winusb.sys" -I"$source_root/dlls/wineusb.sys" "$test_dir/winusb_function_io_contract.c" -o "$build_dir/contract"; then echo 'HARNESS: compiling actual winusb.sys fake-WDM contract failed' >&2; exit 2; fi
+-"$build_dir/contract" "$mode"; code=$?
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ "${sanitize_flags[@]}" -I"$test_dir" -I"$source_root/include" -I"$source_root/dlls/winusb.sys" -I"$source_root/dlls/wineusb.sys" "$test_dir/winusb_function_io_contract.c" "$source_root/dlls/winusb.sys/session.c" -o "$build_dir/contract"; then echo 'HARNESS: compiling actual winusb.sys main/session fake-WDM contract failed' >&2; exit 2; fi
++if [[ "$mode" == --initialize ]]; then
++    ASAN_OPTIONS=halt_on_error=1:abort_on_error=0:exitcode=1:detect_leaks=1 \
++        UBSAN_OPTIONS=halt_on_error=1:exitcode=1 \
++        "$build_dir/contract" "$mode"; code=$?
++else
++    "$build_dir/contract" "$mode"; code=$?
++fi
+ (( code == 0 || code == 1 )) || { echo "HARNESS: function contract exited $code" >&2; exit 2; }
+ exit "$code"
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_user_api_contract.c	2026-08-23 23:05:16.066723289 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_user_api_contract.c	2026-08-24 03:40:28.034364761 -0700
+@@ -7,6 +7,7 @@
+ #include <string.h>
+ #include "windef.h"
+ #include "winbase.h"
++#include "winternl.h"
+ #include "winusb.h"
+ #include "wine/winusb.h"
+ #include "wine/debug.h"
+@@ -191,7 +192,7 @@
+ struct io24_wire_snapshot
+ {
+     struct wine_winusb_snapshot header;
+-    UINT8 descriptor_bytes[59];
++    UINT8 bytes[144];
+ };
+ union io24_wire_request
+ {
+@@ -204,9 +205,12 @@
+ _Static_assert(sizeof(struct io24_wire_alternate)==32,"alternate request size");
+ _Static_assert(sizeof(struct io24_wire_pipe)==32,"pipe request size");
+ _Static_assert(sizeof(struct io24_wire_control)==40,"control request size");
+-_Static_assert(sizeof(struct io24_wire_snapshot)==136,"snapshot response capacity");
+ static const uint8_t io24_device_descriptor[18]={18,1,0,2,0,0,0,64,0x94,0x19,0x71,0x00,0,1,1,2,3,1};
+ static const uint8_t io24_mi05_configuration[41]={9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0};
++static const uint8_t io24_low_configuration[25]={9,2,25,0,1,1,0,0x80,50,9,4,2,0,1,0xff,0,0,1,7,5,0x82,3,64,0,1};
++static const uint8_t io24_descending_configuration[27]={9,2,27,0,2,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,2,0,0,0xff,0,0,6};
++static const uint8_t io24_duplicate_interface_configuration[27]={9,2,27,0,2,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,0,0,0xff,0,0,6};
++static const uint8_t io24_reuse_endpoint_configuration[41]={9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,1,0xff,0,0,6,7,5,0x81,2,0,2,0,9,4,5,1,1,0xff,0,0,6,7,5,0x81,2,0,2,0};
+ static const uint8_t io24_string_descriptor_response[8]={8,3,'R',0,'4',0,'!',0};
+ static const uint8_t io24_read_response[IO24_READ_OVERLAPPED_LENGTH]={0x91,0x82,0x73,0x64,0x55,0x46,0x37,0x28,0x19,0xaa,0xbb,0xcc,0xdd};
+ 
+@@ -216,17 +220,23 @@
+ enum fake_event_kind { EVENT_IOCTL, EVENT_ALLOC, EVENT_FREE, EVENT_CLOSE, EVENT_DUPLICATE, EVENT_OVERLAPPED };
+ struct fake_event
+ {
+-    enum fake_event_kind kind; BOOL result; HANDLE handle; DWORD code,in_length,out_length;
+-    void *overlapped,*pointer;DWORD *bytes_returned_pointer;union io24_wire_request request;BOOL typed_request;
++    enum fake_event_kind kind; BOOL result; HANDLE handle; DWORD code,in_length,out_length,error;
++    void *overlapped,*pointer;DWORD *bytes_returned_pointer;HANDLE private_event;union io24_wire_request request;BOOL typed_request;
+     unsigned char output_before[160],output_after[160];unsigned int output_saved;DWORD returned_bytes;
+ };
+ struct io24_fake_win32
+ {
+-    DWORD last_error; BOOL ioctl_result,overlapped_result; DWORD ioctl_error;
+-    OVERLAPPED *caller_overlapped;
++    DWORD last_error; BOOL ioctl_result,overlapped_result; DWORD ioctl_error,query_ok; ULONG mode; NTSTATUS query_iosb_status; ULONG_PTR query_information;
++    struct { BOOL result,pending; DWORD error,bytes,completion_result,completion_error,completion_bytes; } private_call[8]; unsigned int private_call_count,private_call_index,active_private_call,release_ioctls,event_creates,event_closes,device_closes,alloc_fail_at,alloc_attempts; DWORD wait_result,wait_error;
++    OVERLAPPED *caller_overlapped; unsigned int snapshot_mutation,header_mutation,event_fail_at,fixture; BOOL low_speed_fixture;
+     struct fake_event events[128]; unsigned int event_count,duplicates,closes;
+ };
+ static struct io24_fake_win32 fake;
++enum io24_snapshot_mutation { SNAPSHOT_VALID, SNAPSHOT_BAD_VERSION, SNAPSHOT_BAD_TOTAL, SNAPSHOT_BAD_SPEED,
++    SNAPSHOT_BAD_REGION, SNAPSHOT_BAD_CONFIGURATION, SNAPSHOT_BAD_INTERFACE, SNAPSHOT_BAD_ALTERNATE,
++    SNAPSHOT_BAD_ENDPOINT, SNAPSHOT_BAD_RAW_ENDPOINT, SNAPSHOT_RAW_ALT_ORDER, SNAPSHOT_DUPLICATE_PIPE };
++enum io24_snapshot_fixture { SNAPSHOT_FIXTURE_MI05, SNAPSHOT_FIXTURE_DESCENDING,
++    SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE, SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE };
+ 
+ struct guarded_buffer { uint8_t before,bytes[32],after; };
+ struct guarded_ulong { uint32_t before;ULONG value;uint32_t after; };
+@@ -242,7 +252,63 @@
+ static void fake_reset(void)
+ {
+     unsigned int failures=counts.failures;memset(&fake,0,sizeof(fake));memset(&counts,0,sizeof(counts));counts.failures=failures;
+-    fake.ioctl_result=TRUE;fake.overlapped_result=TRUE;
++    fake.ioctl_result=TRUE;fake.overlapped_result=TRUE;fake.query_ok=TRUE;fake.query_information=sizeof(FILE_MODE_INFORMATION);fake.wait_result=WAIT_OBJECT_0;fake.wait_error=ERROR_GEN_FAILURE;fake.active_private_call=~0u;
++}
++static void mutate_snapshot(struct io24_wire_snapshot *snapshot)
++{
++    struct wine_winusb_interface_snapshot iface;
++    struct wine_winusb_alternate_snapshot alternate;
++    struct wine_winusb_endpoint_snapshot endpoint;
++
++    if(fake.fixture==SNAPSHOT_FIXTURE_DESCENDING||fake.fixture==SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE)
++    {
++        struct wine_winusb_interface_snapshot interfaces[2]={{5,0,1,0},{fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?2:5,1,1,0}};
++        struct wine_winusb_alternate_snapshot alternates[2]={{0,0,0,0},{1,0,0,0}};
++        snapshot->header.total_size=181;snapshot->header.configuration_length=27;snapshot->header.interfaces_offset=117;
++        snapshot->header.interface_count=2;snapshot->header.alternates_offset=149;snapshot->header.alternate_count=2;
++        snapshot->header.endpoints_offset=181;snapshot->header.endpoint_count=0;
++        memcpy(snapshot->bytes+18,fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?io24_descending_configuration:io24_duplicate_interface_configuration,27);
++        memcpy(snapshot->bytes+45,interfaces,sizeof(interfaces));memcpy(snapshot->bytes+77,alternates,sizeof(alternates));
++    }
++    else if(fake.fixture==SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE)
++    {
++        struct wine_winusb_alternate_snapshot alternates[2]={{0,0,0,1},{0,1,1,1}};
++        struct wine_winusb_endpoint_snapshot endpoints[2]={{0,0x81,2,512},{1,0x81,2,512}};
++        memcpy(snapshot->bytes+18,io24_reuse_endpoint_configuration,41);memcpy(snapshot->bytes+75,alternates,sizeof(alternates));
++        memcpy(snapshot->bytes+107,endpoints,sizeof(endpoints));
++    }
++    switch(fake.snapshot_mutation)
++    {
++        case SNAPSHOT_BAD_VERSION: snapshot->header.version++; break;
++        case SNAPSHOT_BAD_TOTAL: snapshot->header.total_size--; break;
++        case SNAPSHOT_BAD_SPEED: snapshot->header.speed=FullSpeed; break;
++        case SNAPSHOT_BAD_REGION: snapshot->header.alternates_offset--; break;
++        case SNAPSHOT_BAD_CONFIGURATION: snapshot->bytes[20]++; break;
++        case SNAPSHOT_BAD_INTERFACE: memcpy(&iface,snapshot->bytes+59,sizeof(iface));iface.reserved=1;memcpy(snapshot->bytes+59,&iface,sizeof(iface));break;
++        case SNAPSHOT_BAD_ALTERNATE: memcpy(&alternate,snapshot->bytes+75,sizeof(alternate));alternate.alternate_setting=2;memcpy(snapshot->bytes+75,&alternate,sizeof(alternate));break;
++        case SNAPSHOT_BAD_ENDPOINT: memcpy(&endpoint,snapshot->bytes+107,sizeof(endpoint));endpoint.maximum_packet_size=1;memcpy(snapshot->bytes+107,&endpoint,sizeof(endpoint));break;
++        case SNAPSHOT_BAD_RAW_ENDPOINT: snapshot->bytes[48]=3; break;
++        case SNAPSHOT_RAW_ALT_ORDER: snapshot->bytes[30]=1;snapshot->bytes[39]=0;break;
++        case SNAPSHOT_DUPLICATE_PIPE: snapshot->bytes[54]=0x81;memcpy(&endpoint,snapshot->bytes+123,sizeof(endpoint));endpoint.pipe_id=0x81;memcpy(snapshot->bytes+123,&endpoint,sizeof(endpoint));break;
++        default: break;
++    }
++}
++static void mutate_header(struct io24_wire_snapshot *snapshot)
++{
++    switch(fake.header_mutation)
++    {
++        case 1: snapshot->header.size--; break;
++        case 2: snapshot->header.version++; break;
++        case 3: snapshot->header.session=1; break;
++        case 4: snapshot->header.reserved[0]=1; break;
++        case 5: snapshot->header.speed=FullSpeed; break;
++        case 6: snapshot->header.total_size--; break;
++        case 7: snapshot->header.device_offset++; break;
++        case 8: snapshot->header.interface_count=0; break;
++        case 9: snapshot->header.endpoint_count++; break;
++        case 10: snapshot->header.total_size=65651;snapshot->header.configuration_length=9;snapshot->header.interfaces_offset=99;snapshot->header.interface_count=1;snapshot->header.alternates_offset=115;snapshot->header.alternate_count=1;snapshot->header.endpoints_offset=131;snapshot->header.endpoint_count=4095;break;
++        default: break;
++    }
+ }
+ static BOOL bytes_equal(const uint8_t *bytes,size_t length,uint8_t value)
+ {size_t i;for(i=0;i<length;i++)if(bytes[i]!=value)return FALSE;return TRUE;}
+@@ -288,16 +354,25 @@
+ int __cdecl __wine_dbg_header(enum __wine_debug_class c,struct __wine_debug_channel*d,const char*f){(void)c;(void)d;(void)f;return -1;}
+ int __cdecl __wine_dbg_output(const char*s){(void)s;return 0;}
+ const char *__cdecl __wine_dbg_strdup(const char*s){return s;}
+-LPVOID WINAPI HeapAlloc(HANDLE h,DWORD f,SIZE_T n){void*p;struct fake_event*e;(void)h;(void)f;p=calloc(1,n?n:1);e=record_event(EVENT_ALLOC);e->pointer=p;e->out_length=n;if(p)counts.allocations++;return p;}
+-BOOL WINAPI HeapFree(HANDLE h,DWORD f,LPVOID p){struct fake_event*e;(void)h;(void)f;e=record_event(EVENT_FREE);e->pointer=p;e->result=TRUE;if(p){counts.frees++;free(p);}return TRUE;}
+-HANDLE WINAPI CreateEventW(SECURITY_ATTRIBUTES*a,BOOL manual,BOOL initial,LPCWSTR name){struct fake_event*e;(void)a;(void)manual;(void)initial;(void)name;e=record_event(EVENT_ALLOC);e->pointer=(void*)(uintptr_t)(0xe000+fake.event_count);return e->pointer;}
+-DWORD WINAPI WaitForSingleObject(HANDLE h,DWORD timeout){(void)h;(void)timeout;return WAIT_OBJECT_0;}
+-BOOL WINAPI CloseHandle(HANDLE h){struct fake_event*e=record_event(EVENT_CLOSE);e->handle=h;e->result=TRUE;fake.closes++;counts.releases++;return TRUE;}
++#ifndef __WINESRC__
++HANDLE WINAPI GetProcessHeap(void){return (HANDLE)(uintptr_t)0x4444;}
++DWORD WINAPI GetLastError(void){return fake.last_error;}
++void WINAPI SetLastError(DWORD error){fake.last_error=error;}
++#endif
++NTSTATUS WINAPI NtQueryInformationFile(HANDLE h, IO_STATUS_BLOCK *iosb, void *info, ULONG length, FILE_INFORMATION_CLASS cls)
++{ FILE_MODE_INFORMATION *mode = info; (void)h; if (!fake.query_ok || cls != FileModeInformation || length != sizeof(*mode)) return STATUS_INVALID_HANDLE; mode->Mode = fake.mode; iosb->Status = fake.query_iosb_status; iosb->Information = fake.query_information; return 0; }
++LPVOID WINAPI HeapAlloc(HANDLE h,DWORD f,SIZE_T n){void*p;struct fake_event*e;(void)h;(void)f;p=++fake.alloc_attempts==fake.alloc_fail_at?NULL:calloc(1,n?n:1);e=record_event(EVENT_ALLOC);e->pointer=p;e->out_length=n;if(p)counts.allocations++;return p;}
++BOOL WINAPI HeapFree(HANDLE h,DWORD f,LPVOID p){struct fake_event*e;(void)h;(void)f;e=record_event(EVENT_FREE);e->pointer=p;e->result=TRUE;if(p){counts.frees++;free(p);}fake.last_error=ERROR_GEN_FAILURE;return TRUE;}
++HANDLE WINAPI CreateEventW(SECURITY_ATTRIBUTES*a,BOOL manual,BOOL initial,LPCWSTR name){struct fake_event*e;(void)a;(void)manual;(void)initial;(void)name;e=record_event(EVENT_ALLOC);fake.event_creates++;if(fake.event_fail_at==fake.event_creates){fake.last_error=ERROR_NOT_ENOUGH_MEMORY;return NULL;}e->pointer=(void*)(uintptr_t)(0xe000+fake.event_count);return e->pointer;}
++DWORD WINAPI WaitForSingleObject(HANDLE h,DWORD timeout){(void)h;(void)timeout;if(fake.wait_result==WAIT_FAILED)fake.last_error=fake.wait_error;return fake.wait_result;}
++BOOL WINAPI CloseHandle(HANDLE h){struct fake_event*e=record_event(EVENT_CLOSE);e->handle=h;e->result=TRUE;fake.closes++;if(h==IO24_FILE_HANDLE)fake.device_closes++;else fake.event_closes++;fake.last_error=ERROR_GEN_FAILURE;return TRUE;}
+ BOOL WINAPI DuplicateHandle(HANDLE a,HANDLE source,HANDLE b,HANDLE *target,DWORD c,BOOL d,DWORD flags)
+ {struct fake_event*e;(void)a;(void)b;(void)c;(void)d;(void)flags;e=record_event(EVENT_DUPLICATE);e->handle=source;e->result=TRUE;fake.duplicates++;if(target)*target=(HANDLE)((uintptr_t)source+0x100);e->pointer=target?*target:NULL;return TRUE;}
+ BOOL WINAPI DeviceIoControl(HANDLE device,DWORD code,void*in,DWORD in_length,void*out,DWORD out_length,DWORD*bytes,OVERLAPPED*ov)
+ {
+-    struct fake_event*e=record_event(EVENT_IOCTL);size_t expected=request_size_for_code(code),saved=out_length;DWORD transfer_length;e->handle=device;e->code=code;e->in_length=in_length;e->out_length=out_length;e->overlapped=ov;e->bytes_returned_pointer=bytes;e->result=fake.ioctl_result;
++    struct fake_event*e=record_event(EVENT_IOCTL);size_t expected=request_size_for_code(code),saved=out_length;DWORD transfer_length;e->handle=device;e->code=code;e->in_length=in_length;e->out_length=out_length;e->overlapped=ov;e->private_event=ov?ov->hEvent:NULL;e->bytes_returned_pointer=bytes;e->result=fake.ioctl_result;
++    if(code==IO24_IOCTL_RELEASE)fake.release_ioctls++;
++    if(code==IO24_IOCTL_INITIALIZE||code==IO24_IOCTL_RELEASE){if(fake.private_call_index<fake.private_call_count){unsigned int i=fake.private_call_index++;fake.active_private_call=i;e->result=fake.private_call[i].pending?FALSE:fake.private_call[i].result;if(!e->result)fake.last_error=fake.private_call[i].pending?ERROR_IO_PENDING:fake.private_call[i].error;}}
+     if(in&&expected&&in_length==expected){memcpy(&e->request,in,expected);e->typed_request=TRUE;}
+     if(saved>sizeof(e->output_before))saved=sizeof(e->output_before);
+     if(out&&saved)memcpy(e->output_before,out,saved);
+@@ -305,7 +380,7 @@
+     e->returned_bytes=0;
+     if(out&&out_length&&e->typed_request)
+     {
+-        if(code==IO24_IOCTL_INITIALIZE&&out_length>=sizeof(struct io24_wire_snapshot)&&e->typed_request){struct io24_wire_snapshot snapshot;memset(&snapshot,0,sizeof(snapshot));snapshot.header.size=sizeof(snapshot.header);snapshot.header.version=IO24_ABI_VERSION;snapshot.header.session=UINT64_C(0x1122334455667788);snapshot.header.total_size=offsetof(struct io24_wire_snapshot,descriptor_bytes)+sizeof(snapshot.descriptor_bytes);snapshot.header.speed=3;snapshot.header.device_offset=offsetof(struct io24_wire_snapshot,descriptor_bytes);snapshot.header.device_length=sizeof(io24_device_descriptor);snapshot.header.configuration_offset=snapshot.header.device_offset+snapshot.header.device_length;snapshot.header.configuration_length=sizeof(io24_mi05_configuration);snapshot.header.interface_count=1;memcpy(snapshot.descriptor_bytes,io24_device_descriptor,sizeof(io24_device_descriptor));memcpy(snapshot.descriptor_bytes+sizeof(io24_device_descriptor),io24_mi05_configuration,sizeof(io24_mi05_configuration));memcpy(out,&snapshot,sizeof(snapshot));e->returned_bytes=snapshot.header.total_size;}
++        if(code==IO24_IOCTL_INITIALIZE&&out_length>=sizeof(struct wine_winusb_snapshot)&&e->typed_request){struct io24_wire_snapshot snapshot;struct wine_winusb_interface_snapshot iface={5,0,2,0};struct wine_winusb_alternate_snapshot alternate[2]={{0,0,0,0},{0,1,0,2}};struct wine_winusb_endpoint_snapshot endpoint[2]={{1,0x81,2,512},{1,1,2,512}};DWORD total=211;memset(&snapshot,0,sizeof(snapshot));snapshot.header.size=72;snapshot.header.version=IO24_ABI_VERSION;snapshot.header.session=out_length==72?0:UINT64_C(0x1122334455667788);snapshot.header.total_size=211;snapshot.header.speed=3;snapshot.header.device_offset=72;snapshot.header.device_length=18;snapshot.header.configuration_offset=90;snapshot.header.configuration_length=41;snapshot.header.interfaces_offset=131;snapshot.header.interface_count=1;snapshot.header.alternates_offset=147;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=179;snapshot.header.endpoint_count=2;memcpy(snapshot.bytes,io24_device_descriptor,18);memcpy(snapshot.bytes+18,io24_mi05_configuration,41);memcpy(snapshot.bytes+59,&iface,sizeof(iface));memcpy(snapshot.bytes+75,alternate,sizeof(alternate));memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));if(fake.fixture==SNAPSHOT_FIXTURE_DESCENDING||fake.fixture==SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE){struct wine_winusb_interface_snapshot interfaces[2]={{5,0,1,0},{fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?2:5,1,1,0}};struct wine_winusb_alternate_snapshot alternates[2]={{0,0,0,0},{1,0,0,0}};total=181;snapshot.header.total_size=total;snapshot.header.configuration_length=27;snapshot.header.interfaces_offset=117;snapshot.header.interface_count=2;snapshot.header.alternates_offset=149;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=181;snapshot.header.endpoint_count=0;memcpy(snapshot.bytes+18,fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?io24_descending_configuration:io24_duplicate_interface_configuration,27);memcpy(snapshot.bytes+45,interfaces,sizeof(interfaces));memcpy(snapshot.bytes+77,alternates,sizeof(alternates));}else if(fake.fixture==SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE){snapshot.bytes[54]=0x81;endpoint[1].pipe_id=0x81;memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));}if(fake.low_speed_fixture){iface.interface_number=2;iface.first_alternate=0;iface.alternate_count=1;alternate[0]=(struct wine_winusb_alternate_snapshot){0,0,0,1};endpoint[0]=(struct wine_winusb_endpoint_snapshot){0,0x82,3,64};total=163;snapshot.header.total_size=total;snapshot.header.speed=LowSpeed;snapshot.header.configuration_length=25;snapshot.header.interfaces_offset=115;snapshot.header.alternates_offset=131;snapshot.header.alternate_count=1;snapshot.header.endpoints_offset=147;snapshot.header.endpoint_count=1;memcpy(snapshot.bytes+18,io24_low_configuration,25);memcpy(snapshot.bytes+43,&iface,sizeof(iface));memcpy(snapshot.bytes+59,alternate,sizeof(alternate[0]));memcpy(snapshot.bytes+75,endpoint,sizeof(endpoint[0]));}if(out_length==72)mutate_header(&snapshot);else mutate_snapshot(&snapshot);memcpy(out,&snapshot,out_length==72?72:total);e->returned_bytes=out_length==72?72:total;}
+         if(code==IO24_IOCTL_DESCRIPTOR&&out_length>=sizeof(io24_string_descriptor_response)){memcpy(out,io24_string_descriptor_response,sizeof(io24_string_descriptor_response));e->returned_bytes=sizeof(io24_string_descriptor_response);}
+         if(code==IO24_IOCTL_GET_POLICY&&out_length>=sizeof(struct io24_wire_policy)){struct io24_wire_policy response=e->request.policy;response.value_length=IO24_POLICY_RESPONSE_LENGTH;response.value=IO24_POLICY_RESPONSE_VALUE;memcpy(out,&response,sizeof(response));e->returned_bytes=sizeof(response);}
+         transfer_length=transfer_response_length(code,ov);
+@@ -315,13 +390,16 @@
+             e->returned_bytes=transfer_length;
+         }
+     }
++    if(code==IO24_IOCTL_INITIALIZE&&out_length==72&&!fake.private_call_count){e->result=FALSE;fake.last_error=ERROR_INSUFFICIENT_BUFFER;}
+     if(out&&saved)memcpy(e->output_after,out,saved);
+-    if(bytes)*bytes=e->returned_bytes;
++    if(fake.active_private_call!=~0u&&fake.active_private_call<fake.private_call_count&&fake.private_call[fake.active_private_call].bytes)e->returned_bytes=fake.private_call[fake.active_private_call].bytes;
++    if(ov)ov->InternalHigh=e->returned_bytes;
++    if(bytes && !(code==IO24_IOCTL_INITIALIZE&&out_length==72&&!e->result))*bytes=e->returned_bytes;
+     if(!fake.ioctl_result)fake.last_error=fake.ioctl_error;
+-    return fake.ioctl_result;
++    return e->result;
+ }
+ BOOL WINAPI GetOverlappedResult(HANDLE h,OVERLAPPED*ov,DWORD*b,BOOL wait)
+-{struct fake_event*e=record_event(EVENT_OVERLAPPED);e->handle=h;e->overlapped=ov;e->in_length=wait;e->result=fake.overlapped_result;e->returned_bytes=IO24_OVERLAPPED_RESULT_LENGTH;counts.completions++;if(b)*b=e->returned_bytes;return fake.overlapped_result;}
++{struct fake_event*e=record_event(EVENT_OVERLAPPED);e->handle=h;e->overlapped=ov;e->in_length=wait;e->result=fake.overlapped_result;e->returned_bytes=IO24_OVERLAPPED_RESULT_LENGTH;if(fake.active_private_call!=~0u&&fake.active_private_call<fake.private_call_count){e->result=fake.private_call[fake.active_private_call].completion_result;e->returned_bytes=fake.private_call[fake.active_private_call].completion_bytes;if(!e->result)fake.last_error=fake.private_call[fake.active_private_call].completion_error;}e->error=e->result?ERROR_SUCCESS:fake.last_error;counts.completions++;if(b)*b=e->returned_bytes;return e->result;}
+ 
+ typedef BOOL (WINAPI *fn_abort)(WINUSB_INTERFACE_HANDLE,UCHAR);
+ typedef BOOL (WINAPI *fn_control)(WINUSB_INTERFACE_HANDLE,WINUSB_SETUP_PACKET,UCHAR*,ULONG,ULONG*,OVERLAPPED*);
+@@ -377,13 +455,68 @@
+ 
+ static BOOL initialize_handle(const struct functions*f,WINUSB_INTERFACE_HANDLE *handle)
+ {
+-    unsigned int submits=counts.submits,events=fake.event_count;BOOL ok;*handle=NULL;
++    unsigned int submits=counts.submits,events=fake.event_count,i;const struct fake_event *header=NULL,*full=NULL,*allocation=NULL;struct wine_winusb_snapshot sizing;BOOL ok;*handle=NULL;
+     if(!f->initialize){IO24_CHECK(FALSE);return FALSE;}ok=f->initialize(IO24_FILE_HANDLE,handle);
+-    IO24_CHECK(ok&&*handle);IO24_CHECK(counts.submits==submits+1);IO24_CHECK(fake.event_count>events);
+-    if(fake.event_count>events){struct fake_event*e=&fake.events[events];IO24_CHECK(e->kind==EVENT_IOCTL&&e->code==IO24_IOCTL_INITIALIZE&&e->handle==IO24_FILE_HANDLE&&e->overlapped!=NULL&&e->result);}
++    IO24_CHECK(ok&&*handle);IO24_CHECK(counts.submits==submits+2);IO24_CHECK(fake.event_count>events);
++    for(i=events;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_IOCTL&&fake.events[i].code==IO24_IOCTL_INITIALIZE){if(!header)header=&fake.events[i];else full=&fake.events[i];}
++    if(header){IO24_CHECK(header->handle==IO24_FILE_HANDLE&&header->in_length==24&&header->out_length==72&&header->overlapped!=NULL&&!header->result&&header->returned_bytes==72);memcpy(&sizing,header->output_after,sizeof(sizing));for(i=events;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_ALLOC&&fake.events[i].out_length==sizing.total_size){allocation=&fake.events[i];break;}IO24_CHECK(full&&full->out_length==sizing.total_size&&allocation&&allocation->out_length==sizing.total_size);}
+     return ok&&*handle;
+ }
+-static void test_initialize(const struct functions*f){WINUSB_INTERFACE_HANDLE h;fake_reset();if(initialize_handle(f,&h)&&f->free_handle)IO24_CHECK(f->free_handle(h));}
++static void reject_size_query(const struct functions*f,BOOL result,DWORD error,DWORD bytes){WINUSB_INTERFACE_HANDLE h=(void *)(uintptr_t)1;fake_reset();fake.private_call_count=1;fake.private_call[0].result=result;fake.private_call[0].error=error;fake.private_call[0].bytes=bytes;IO24_CHECK(f->initialize&&!f->initialize(IO24_FILE_HANDLE,&h));IO24_CHECK(h==NULL&&counts.submits==1&&fake.release_ioctls==0&&counts.allocations==0&&counts.frees==0&&fake.event_creates==fake.event_closes&&!fake.device_closes&&!fake.duplicates);}
++static void check_release(const struct fake_event *event);
++static void reject_full_snapshot(const struct functions *f, unsigned int mutation)
++{
++    WINUSB_INTERFACE_HANDLE h=(void *)(uintptr_t)1;
++    fake_reset();fake.snapshot_mutation=mutation;
++    IO24_CHECK(f->initialize&&!f->initialize(IO24_FILE_HANDLE,&h));
++    IO24_CHECK(h==NULL&&counts.submits==3&&fake.release_ioctls==1&&fake.last_error==ERROR_BAD_DEVICE&&
++            fake.event_creates==fake.event_closes&&counts.allocations==counts.frees&&!fake.device_closes&&!fake.duplicates);
++    check_release(find_ioctl_after(0,IO24_IOCTL_RELEASE));
++}
++static void check_release(const struct fake_event *event)
++{unsigned int i,creates=0,closes=0;IO24_CHECK(event&&event->handle==IO24_FILE_HANDLE&&event->overlapped&&event->private_event&&event->in_length==24&&event->typed_request);if(!event)return;check_header(event,24,UINT64_C(0x1122334455667788),0);for(i=0;i<fake.event_count;i++){if(fake.events[i].kind==EVENT_ALLOC&&fake.events[i].pointer==event->private_event)creates++;if(fake.events[i].kind==EVENT_CLOSE&&fake.events[i].handle==event->private_event)closes++;}IO24_CHECK(creates==1&&closes==1);}
++static void release_variant(const struct functions *f, BOOL pending, BOOL result, DWORD error)
++{WINUSB_INTERFACE_HANDLE h;const struct fake_event *release;unsigned int completion_start;fake_reset();if(!initialize_handle(f,&h))return;fake.private_call_count=1;fake.private_call[0].result=result;fake.private_call[0].error=error;fake.private_call[0].pending=pending;fake.private_call[0].completion_result=result;fake.private_call[0].completion_error=error;fake.private_call[0].completion_bytes=0;completion_start=counts.completions;IO24_CHECK(f->free_handle&&f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees);release=find_ioctl_after(0,IO24_IOCTL_RELEASE);check_release(release);if(pending){const struct fake_event *completion=NULL;unsigned int i;for(i=0;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_OVERLAPPED)completion=&fake.events[i];IO24_CHECK(counts.completions==completion_start+1&&completion&&completion->handle==IO24_FILE_HANDLE&&completion->overlapped==release->overlapped&&completion->result==result&&completion->error==(result?ERROR_SUCCESS:error));}else IO24_CHECK(counts.completions==completion_start);}
++static void reject_header(const struct functions *f, unsigned int mutation)
++{
++    WINUSB_INTERFACE_HANDLE h=(void *)(uintptr_t)1;
++    fake_reset();fake.header_mutation=mutation;
++    IO24_CHECK(f->initialize&&!f->initialize(IO24_FILE_HANDLE,&h));
++    IO24_CHECK(h==NULL&&counts.submits==1&&fake.release_ioctls==0&&counts.allocations==0&&counts.frees==0&&
++            fake.last_error==ERROR_BAD_DEVICE&&fake.event_creates==fake.event_closes&&!fake.device_closes&&!fake.duplicates);
++}
++static void test_initialize(const struct functions*f)
++{
++    WINUSB_INTERFACE_HANDLE h;unsigned int mutation;
++    fake_reset();if(initialize_handle(f,&h)&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&!fake.device_closes&&!fake.duplicates);check_release(find_ioctl_after(0,IO24_IOCTL_RELEASE));
++    reject_size_query(f,TRUE,0,0);reject_size_query(f,FALSE,ERROR_INVALID_HANDLE,72);reject_size_query(f,FALSE,ERROR_INSUFFICIENT_BUFFER,71);reject_size_query(f,FALSE,ERROR_INSUFFICIENT_BUFFER,73);
++    fake_reset();h=(void *)(uintptr_t)1;IO24_CHECK(f->initialize&&!f->initialize(IO24_FILE_HANDLE,NULL)&&fake.last_error==ERROR_INVALID_PARAMETER);IO24_CHECK(!f->initialize(NULL,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE);
++    fake_reset();h=(void *)(uintptr_t)1;fake.query_ok=FALSE;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.query_iosb_status=STATUS_INVALID_HANDLE;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.query_information=0;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.mode=FILE_SYNCHRONOUS_IO_ALERT;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.mode=FILE_SYNCHRONOUS_IO_NONALERT;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;IO24_CHECK(!f->initialize(INVALID_HANDLE_VALUE,&h)&&h==NULL&&fake.last_error==ERROR_INVALID_HANDLE&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.event_fail_at=1;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY&&counts.submits==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.private_call_count=1;fake.private_call[0].result=FALSE;fake.private_call[0].error=ERROR_ACCESS_DENIED;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_ACCESS_DENIED&&counts.submits==1&&fake.release_ioctls==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.private_call_count=1;fake.private_call[0].pending=TRUE;fake.wait_result=WAIT_FAILED;fake.wait_error=ERROR_ACCESS_DENIED;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_ACCESS_DENIED&&counts.submits==1&&fake.release_ioctls==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.private_call_count=1;fake.private_call[0].pending=TRUE;fake.private_call[0].completion_result=TRUE;fake.private_call[0].completion_bytes=72;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_BAD_DEVICE&&counts.submits==1&&fake.release_ioctls==0);
++    for(mutation=1;mutation<=10;mutation++)reject_header(f,mutation);
++    for(mutation=SNAPSHOT_BAD_VERSION;mutation<=SNAPSHOT_DUPLICATE_PIPE;mutation++)reject_full_snapshot(f,mutation);
++    fake_reset();h=NULL;fake.fixture=SNAPSHOT_FIXTURE_DESCENDING;IO24_CHECK(f->initialize&&f->initialize(IO24_FILE_HANDLE,&h)&&h);if(h&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees);
++    fake_reset();h=(void *)(uintptr_t)1;fake.fixture=SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE;IO24_CHECK(f->initialize&&!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.release_ioctls==1&&fake.last_error==ERROR_BAD_DEVICE&&counts.allocations==counts.frees);check_release(find_ioctl_after(0,IO24_IOCTL_RELEASE));
++    fake_reset();h=NULL;fake.fixture=SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE;IO24_CHECK(f->initialize&&f->initialize(IO24_FILE_HANDLE,&h)&&h);if(h&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees);
++    fake_reset();h=(void *)(uintptr_t)1;fake.alloc_fail_at=1;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY&&counts.submits==1&&fake.release_ioctls==0);
++    fake_reset();h=(void *)(uintptr_t)1;fake.private_call_count=2;fake.private_call[0].result=FALSE;fake.private_call[0].error=ERROR_INSUFFICIENT_BUFFER;fake.private_call[0].bytes=72;fake.private_call[1].pending=TRUE;fake.private_call[1].completion_error=ERROR_ACCESS_DENIED;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_ACCESS_DENIED&&counts.submits==2&&fake.release_ioctls==0&&counts.frees==1);
++    fake_reset();h=(void *)(uintptr_t)1;fake.private_call_count=2;fake.private_call[0].result=FALSE;fake.private_call[0].error=ERROR_INSUFFICIENT_BUFFER;fake.private_call[0].bytes=72;fake.private_call[1].result=FALSE;fake.private_call[1].error=ERROR_ACCESS_DENIED;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_ACCESS_DENIED&&counts.submits==2&&fake.release_ioctls==0&&counts.frees==1);
++    fake_reset();h=(void *)(uintptr_t)1;fake.alloc_fail_at=2;IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&h)&&h==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY&&counts.submits==3&&fake.release_ioctls==1&&counts.allocations==counts.frees);
++    fake_reset();h=NULL;fake.low_speed_fixture=TRUE;IO24_CHECK(f->initialize&&f->initialize(IO24_FILE_HANDLE,&h)&&h);if(h&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees);
++    fake_reset();h=NULL;fake.private_call_count=3;fake.private_call[0].result=FALSE;fake.private_call[0].error=ERROR_INSUFFICIENT_BUFFER;fake.private_call[0].bytes=72;fake.private_call[1].pending=TRUE;fake.private_call[1].completion_result=TRUE;fake.private_call[1].completion_bytes=211;fake.private_call[2].result=TRUE;IO24_CHECK(f->initialize&&f->initialize(IO24_FILE_HANDLE,&h)&&h);if(h&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(counts.completions==1&&fake.release_ioctls==1&&counts.allocations==counts.frees);
++    fake_reset();h=NULL;fake.private_call_count=3;fake.private_call[0].pending=TRUE;fake.private_call[0].completion_error=ERROR_INSUFFICIENT_BUFFER;fake.private_call[0].completion_bytes=72;fake.private_call[1].result=TRUE;fake.private_call[2].result=TRUE;IO24_CHECK(f->initialize&&f->initialize(IO24_FILE_HANDLE,&h)&&h);if(h&&f->free_handle)IO24_CHECK(f->free_handle(h));IO24_CHECK(counts.completions==1&&counts.submits==3&&fake.release_ioctls==1&&fake.event_creates==fake.event_closes&&counts.allocations==counts.frees&&!fake.device_closes&&!fake.duplicates);
++    release_variant(f,FALSE,TRUE,0);release_variant(f,FALSE,FALSE,ERROR_ACCESS_DENIED);release_variant(f,TRUE,TRUE,0);release_variant(f,TRUE,FALSE,ERROR_ACCESS_DENIED);
++    fake_reset();if(initialize_handle(f,&h)){fake.event_fail_at=fake.event_creates+1;IO24_CHECK(f->free_handle&&f->free_handle(h));IO24_CHECK(fake.release_ioctls==0&&counts.allocations==counts.frees);}
++    fake_reset();if(initialize_handle(f,&h)){unsigned int completion_start=counts.completions;fake.private_call_count=1;fake.private_call[0].pending=TRUE;fake.wait_result=WAIT_FAILED;IO24_CHECK(f->free_handle&&f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees&&counts.completions==completion_start);check_release(find_ioctl_after(0,IO24_IOCTL_RELEASE));}
++}
+ static void test_handles(const struct functions*f)
+ {
+     WINUSB_INTERFACE_HANDLE root,associated=NULL;unsigned int frees_before,assoc_pos,root_pos;fake_reset();if(!initialize_handle(f,&root))return;frees_before=counts.frees;
+@@ -424,12 +557,12 @@
+ {
+     static const DWORD expected[]={IO24_IOCTL_INITIALIZE,IO24_IOCTL_DESCRIPTOR,IO24_IOCTL_GET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_ALTERNATE,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_READ_PIPE,IO24_IOCTL_READ_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_ABORT_PIPE,IO24_IOCTL_RESET_PIPE,IO24_IOCTL_RELEASE};
+     static const uint32_t policy[]={3,9,1,2,4,5,6,7};static const uint32_t pipe[]={0,0,1,0x81,0x81,0x81,0x81,0x81};static const uint32_t value[]={0,0,0,0,0,0,0,1};
+-    static const uint8_t setup[8]={0x41,1,2,0,5,0,32,0};const struct fake_event *ioctls[32];struct io24_wire_policy policy_result;struct io24_wire_snapshot snapshot;unsigned int i,n=0,assoc_pos,root_pos,overlapped_pos;uint64_t session;
++    static const uint8_t setup[8]={0x41,1,2,0,5,0,32,0};const struct fake_event *ioctls[32];struct io24_wire_policy policy_result;unsigned int i,n=0,assoc_pos,root_pos,overlapped_pos;uint64_t session;
+     for(i=0;i<fake.event_count;i++) if(fake.events[i].kind==EVENT_IOCTL&&n<32) ioctls[n++]=&fake.events[i];
+     IO24_CHECK(n==sizeof(expected)/sizeof(expected[0]));
+     for(i=0;i<n&&i<sizeof(expected)/sizeof(expected[0]);i++){IO24_CHECK(ioctls[i]->code==expected[i]);IO24_CHECK(ioctls[i]->handle==IO24_FILE_HANDLE);IO24_CHECK(ioctls[i]->result);}
+     if(n>=21){
+-        check_header(ioctls[0],sizeof(struct io24_wire_header),0,0);IO24_CHECK(ioctls[0]->out_length==sizeof(snapshot)&&ioctls[0]->output_saved>=sizeof(snapshot));memset(&snapshot,0,sizeof(snapshot));if(ioctls[0]->output_saved>=sizeof(snapshot))memcpy(&snapshot,ioctls[0]->output_after,sizeof(snapshot));IO24_CHECK(snapshot.header.size==sizeof(snapshot.header)&&snapshot.header.version==IO24_ABI_VERSION&&snapshot.header.session==UINT64_C(0x1122334455667788));IO24_CHECK(snapshot.header.total_size==offsetof(struct io24_wire_snapshot,descriptor_bytes)+59&&ioctls[0]->returned_bytes==snapshot.header.total_size&&snapshot.header.speed==3&&snapshot.header.device_offset==offsetof(struct io24_wire_snapshot,descriptor_bytes)&&snapshot.header.device_length==18&&snapshot.header.configuration_offset==snapshot.header.device_offset+18&&snapshot.header.configuration_length==41&&snapshot.header.interface_count==1);IO24_CHECK(!memcmp(snapshot.descriptor_bytes,io24_device_descriptor,18)&&!memcmp(snapshot.descriptor_bytes+18,io24_mi05_configuration,41));session=ioctls[1]->request.header.session;IO24_CHECK(session==snapshot.header.session);
++        check_header(ioctls[0],sizeof(struct io24_wire_header),0,0);IO24_CHECK(ioctls[0]->out_length==72);session=ioctls[1]->request.header.session;IO24_CHECK(session==UINT64_C(0x1122334455667788));
+         check_header(ioctls[1],sizeof(struct io24_wire_descriptor),session,0);IO24_CHECK(ioctls[1]->request.descriptor.type==3&&ioctls[1]->request.descriptor.index==1&&ioctls[1]->request.descriptor.language==0x409&&ioctls[1]->request.descriptor.length==32);IO24_CHECK(ioctls[1]->out_length==32&&ioctls[1]->returned_bytes==sizeof(io24_string_descriptor_response)&&ioctls[1]->output_before[0]==GUARD_BYTE);IO24_CHECK(ioctls[1]->output_saved>=sizeof(io24_string_descriptor_response)&&!memcmp(ioctls[1]->output_after,io24_string_descriptor_response,sizeof(io24_string_descriptor_response)));
+         check_header(ioctls[2],sizeof(struct io24_wire_policy),session,0);IO24_CHECK(ioctls[2]->request.policy.pipe_id==0x81&&ioctls[2]->request.policy.policy_id==8&&ioctls[2]->request.policy.value_length==IO24_VENDOR_POLICY_CAPACITY&&ioctls[2]->request.policy.value==0);IO24_CHECK(ioctls[2]->out_length==sizeof(policy_result)&&ioctls[2]->output_saved>=sizeof(policy_result)&&ioctls[2]->returned_bytes==sizeof(policy_result));if(ioctls[2]->output_saved>=sizeof(policy_result)){memcpy(&policy_result,ioctls[2]->output_after,sizeof(policy_result));IO24_CHECK(policy_result.request.size==sizeof(policy_result)&&policy_result.request.version==IO24_ABI_VERSION&&policy_result.request.session==session&&policy_result.request.interface_index==0&&policy_result.request.reserved==0);IO24_CHECK(policy_result.pipe_id==0x81&&policy_result.policy_id==8&&policy_result.value==IO24_POLICY_RESPONSE_VALUE&&policy_result.value_length==IO24_POLICY_RESPONSE_LENGTH);}
+         for(i=0;i<8;i++){check_header(ioctls[3+i],sizeof(struct io24_wire_policy),session,0);IO24_CHECK(ioctls[3+i]->request.policy.pipe_id==pipe[i]&&ioctls[3+i]->request.policy.policy_id==policy[i]&&ioctls[3+i]->request.policy.value_length==1&&ioctls[3+i]->request.policy.value==value[i]);}
+@@ -466,4 +599,4 @@
+     ok=f->free_handle&&f->free_handle(associated);IO24_CHECK(ok);ok=f->free_handle&&f->free_handle(root);IO24_CHECK(ok);check_buffer_guards(&g);validate_vendor_fake_trace(root,associated,&ov);
+ }
+ static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
+-int main(int argc,char**argv){void*m;struct functions f;uint32_t target,missing;if(argc!=3)return 2;m=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);target=target_mask(argv[2]);missing=target&~f.present_mask;check_target_symbols(&f,target);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s target-mask=%#x present-mask=%#x missing-mask=%#x fake-events=%u submits=%u releases=%u completions=%u failures=%u\n",argv[2],target,f.present_mask,missing,fake.event_count,counts.submits,counts.releases,counts.completions,counts.failures);return counts.failures?1:0;}
++int main(int argc,char**argv){void*m;struct functions f;uint32_t target,missing;if(argc!=3)return 2;m=dlopen(!strcmp(argv[1],"self")?NULL:argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);target=target_mask(argv[2]);missing=target&~f.present_mask;check_target_symbols(&f,target);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s target-mask=%#x present-mask=%#x missing-mask=%#x fake-events=%u submits=%u releases=%u completions=%u failures=%u\n",argv[2],target,f.present_mask,missing,fake.event_count,counts.submits,fake.release_ioctls,counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_user_api_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_user_api_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-base/tests/winusb_user_api_contract.sh	2026-08-23 23:30:40.987920141 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-4-round-1-head/tests/winusb_user_api_contract.sh	2026-08-24 03:40:28.035610944 -0700
+@@ -218,8 +218,15 @@
+     [[ "$mode" != --surface-only ]] || exit 0
+ fi
+ sources=("$source_root/dlls/winusb/main.c"); [[ ! -f "$source_root/dlls/winusb/io.c" ]] || sources+=("$source_root/dlls/winusb/io.c")
+-if ! cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -D__WINESRC__ -I"$source_root/include" "${sources[@]}" -o "$build_dir/winusb-production.so"; then echo 'HARNESS: compiling/linking actual winusb production module failed' >&2; exit 2; fi
+-if ! cc -std=c11 -Wall -Wextra -Werror -rdynamic -D__WINESRC__ -I"$source_root/include" "$test_dir/winusb_user_api_contract.c" -ldl -o "$build_dir/contract"; then echo 'HARNESS: compiling public host contract failed' >&2; exit 2; fi
+-"$build_dir/contract" "$build_dir/winusb-production.so" "$mode"; code=$?
++sanitizer=(); [[ "$mode" != --initialize ]] || sanitizer=(-fsanitize=undefined -fno-sanitize-recover=alignment)
++objects=("$build_dir/contract.o")
++if ! cc -std=c11 -Wall -Wextra -Werror "${sanitizer[@]}" -I"$source_root/include" -c "$test_dir/winusb_user_api_contract.c" -o "${objects[0]}"; then echo 'HARNESS: compiling public host contract with actual winusb source failed' >&2; exit 2; fi
++for ((source_index=0; source_index<${#sources[@]}; source_index++)); do
++    object="$build_dir/production-$source_index.o"
++    if ! cc -std=c11 -Wall -Wextra -Werror "${sanitizer[@]}" -I"$source_root/include" -c "${sources[source_index]}" -o "$object"; then echo 'HARNESS: compiling public host contract with actual winusb source failed' >&2; exit 2; fi
++    objects+=("$object")
++done
++if ! cc -rdynamic "${sanitizer[@]}" "${objects[@]}" -ldl -o "$build_dir/contract"; then echo 'HARNESS: compiling public host contract with actual winusb source failed' >&2; exit 2; fi
++"$build_dir/contract" self "$mode"; code=$?
+ (( code == 0 || code == 1 )) || { echo "HARNESS: public contract exited $code" >&2; exit 2; }
+ exit "$code"

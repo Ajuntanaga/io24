@@ -1,0 +1,10 @@
+5302e8bc082cade008c16f7bdb1969035fb559c59e6654f807e88285099eb599  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+3d7cd11d19818a03afcd0e94089e66a4889c499bbb2a98485ef497562224c670  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+23079216bd62ede0fa4aacc0e5d3e1722b66394cd7c5eba4d8dc9002d8a75248  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.h
+9e5d0e745a0b4ea0aaffa2c1b0477a4de8af8b0fe120f73c4485f2293efb2708  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+aa18767e417a7c9fc468e3da3053a6a26cd8fe91e3a9127e84e82b6e87d0a333  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+4657b50592e88a2b6f71c8f4db1a746f82701a5d104c4c68f63a37bd6cc45711  tests/wineusb_winusb_urb_contract.c
+c1cd66070b8e941af0318391a26c5074d333e3b4b889a21ebffa86ad62530ee5  tests/wineusb_winusb_urb_fake_libusb.c
+72f1b4778e72e714738f14cf494c36067f38a18f6877c4d9110afa6d1e5cf514  tests/wineusb_pipe_observe_contract.c
+dca7c91a845e1213732ecb6d939f22e0af1ae407059665f7880c50b856872efb  tests/winusb_function_io_contract.c
+ce7a98d00e2a9dfda0dd65d9cf94a50681498cc5f06aded20ea9025b92333c2f  tests/wineusb_function_scope_fake_libusb.c

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Revelator io24
+GenericName=Audio Interface Mixer
+Comment=Mixer, EQ, dynamics and routing for the PreSonus Revelator io24
+Exec=io24-mixer
+Icon=org.io24.Mixer
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=presonus;revelator;io24;mixer;interface;audio;eq;compressor;dsp;
+StartupNotify=true
+# Must match the GtkApplication's application_id, or the shell shows the window
+# under a second generic entry instead of this one.
+StartupWMClass=org.io24.Mixer

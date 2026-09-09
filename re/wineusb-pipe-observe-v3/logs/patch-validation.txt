@@ -1,0 +1,14 @@
+patch_sha256=ce4507d1b789e87195965b71e88c76d02a7de5ab504b52d41e1c431c560d949d
+dry_run_begin
+checking file dlls/wineusb.sys/wineusb.c
+checking file dlls/wineusb.sys/unixlib.c
+apply_begin
+patching file dlls/wineusb.sys/wineusb.c
+patching file dlls/wineusb.sys/unixlib.c
+tree_compare_begin
+tree_compare=identical
+regular_files=12445
+symlinks=0
+patch_leftovers=0
+ab94b70ceae65eee5019e053c9bf7ec3ce01f20af2a3e824282fbbc3d786785c  .io24-build/wineusb-pipe-observe-v3/patch-check-source/dlls/wineusb.sys/wineusb.c
+a54e499c8119282448b8854ed729ec6703b67d30342ad74cd79fc43130e22f44  .io24-build/wineusb-pipe-observe-v3/patch-check-source/dlls/wineusb.sys/unixlib.c

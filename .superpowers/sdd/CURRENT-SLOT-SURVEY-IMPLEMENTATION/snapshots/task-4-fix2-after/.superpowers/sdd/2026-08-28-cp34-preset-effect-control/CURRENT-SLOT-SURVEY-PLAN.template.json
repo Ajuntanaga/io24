@@ -1,0 +1,68 @@
+{
+  "schema": "cp34-current-slot-survey-plan-v1",
+  "run_id": "20260829T120000-0700-current-slot-survey",
+  "device_serial": "AB7C22200355",
+  "authorization_status": "NOT_AUTHORIZED",
+  "stop_on_first_positive": true,
+  "battery_stop_percent": 10,
+  "evidence_dir": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260829T120000-0700-current-slot-survey",
+  "source": {
+    "kind": "external_line_level",
+    "device": "UNRECORDED",
+    "power": "UNRECORDED",
+    "stimulus_path": "UNRECORDED",
+    "stimulus_sha256": "UNRECORDED",
+    "cable": "UNRECORDED",
+    "volume": "UNRECORDED"
+  },
+  "audio": {
+    "device": "hw:CARD=R24,DEV=0",
+    "format": "S32_LE",
+    "rate": 48000,
+    "channels": 6,
+    "effect_candidates": [3, 4]
+  },
+  "state_reads": ["P0", "P1", "P2"],
+  "continuous_interface_claim": false,
+  "candidates": [
+    {
+      "label": "ch1-slot1",
+      "channel": 1,
+      "numeric_slot": 0,
+      "physical_input": 1,
+      "connection": "player line out to io24 input 1",
+      "restore_connection": "remove cable from io24 input 1",
+      "actions": [
+        {"id": "T1", "kind": "manual_preset_toggle", "press": "long"},
+        {"id": "T2", "kind": "manual_preset_toggle", "press": "long"}
+      ]
+    },
+    {
+      "label": "ch2-slot1",
+      "channel": 2,
+      "numeric_slot": 2,
+      "physical_input": 2,
+      "connection": "player line out to io24 input 2",
+      "restore_connection": "remove cable from io24 input 2",
+      "actions": [
+        {"id": "T1", "kind": "manual_preset_toggle", "press": "long"},
+        {"id": "T2", "kind": "manual_preset_toggle", "press": "long"}
+      ]
+    }
+  ],
+  "prohibited_actions": [
+    "slot_selection",
+    "mapped_write",
+    "device_output_playback",
+    "io24_monitoring",
+    "wine",
+    "network",
+    "firmware",
+    "reset",
+    "dfu",
+    "install",
+    "stage",
+    "usb_detach",
+    "guessed_packet"
+  ]
+}

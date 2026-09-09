@@ -1,0 +1,27 @@
+CP32 generic WinUSB function-binding RED
+Date: 2026-08-23
+Baseline: sealed CP31 patch-check source
+CP31_SHA256SUMS SHA-256: 32afc37705b8f78d1a6f151f71e72be4475914c896eb8f660c647b660bf1b0ca
+Containment: unshared network; empty sysfs; private minimal /dev and /tmp;
+read-only CP31 source and tests; native compilation/parsing only; no Wine
+process, prefix, USB node, device operation, service, or firmware artifact.
+
+Command: tests/wineusb_winusb_busif_contract.sh CP31_SOURCE
+FAIL: missing WineUSB WinUSB metadata bus-interface contract input: /run/io24-source/dlls/wineusb.sys/winusb_busif.h
+Result: exit 1
+
+Command: tests/winusb_function_binding_contract.sh CP31_SOURCE
+/run/io24-tests/winusb_function_binding_contract.c:10:10: fatal error: winusb_busif.h: No such file or directory
+   10 | #include "winusb_busif.h"
+      |          ^~~~~~~~~~~~~~~~
+compilation terminated.
+Result: exit 1
+
+Command: python3 tests/winusb_function_binding_inf_contract.py --wine-source CP31_SOURCE
+CP32 WinUSB function-binding INF contract: FAIL: CP32 function-driver directory missing: /run/io24-source/dlls/winusb.sys
+Result: exit 1
+
+Interpretation: all three expected failures are caused by the deliberately absent
+CP32 production surface: CP31 has no metadata bus interface, generic winusb.sys
+function driver, INF route, or build publication. No harness/compiler defect was
+accepted as the missing-feature RED.

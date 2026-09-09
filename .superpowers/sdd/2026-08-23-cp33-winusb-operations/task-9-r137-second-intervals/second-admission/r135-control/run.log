@@ -1,0 +1,205 @@
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL group_control_descriptor:3007: effect.status == (((NTSTATUS) 0xC000000D)) && effect.information == 0
+FAIL group_control_descriptor:3007: control_calls == before && effect.lower_after == effect.lower_before
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL IoCallDriver:902: request->TransferBufferLength == control_expected_length
+FAIL IoCallDriver:905: !memcmp(request->SetupPacket, control_expected_setup, sizeof(control_expected_setup))
+FAIL group_control_descriptor:3014: effect.status == (((NTSTATUS) 0xC000000D)) && effect.information == 0
+FAIL group_control_descriptor:3014: control_calls == before && effect.lower_after == effect.lower_before
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL IoCallDriver:902: request->TransferBufferLength == control_expected_length
+FAIL group_control_descriptor:3042: effect.status == (((NTSTATUS) 0xC0000184)) && effect.information == 0
+FAIL group_control_descriptor:3042: control_calls == before && effect.lower_after == effect.lower_before
+FAIL IoCallDriver:748: file->session_mutex.Owner == NULL
+FAIL group_control_descriptor:3073: blocked_seen
+FAIL group_control_descriptor:3080: control_mutex_schedule.effect.status == STATUS_INVALID_DEVICE_STATE && lower_calls == lower_before && !control_pending_irp
+FAIL IoCallDriver:748: file->session_mutex.Owner == NULL
+FAIL group_control_descriptor:3136: blocked_seen
+FAIL group_control_descriptor:3143: control_mutex_schedule.effect.status == STATUS_INVALID_PARAMETER && control_mutex_schedule.effect.information == 0 && lower_calls == lower_before && !control_pending_count
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL IoCallDriver:905: !memcmp(request->SetupPacket, control_expected_setup, sizeof(control_expected_setup))
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL control_retirement_end:434: control_retirement_events == 4
+FAIL control_retirement_end:435: control_retirement_order[0] == CONTROL_EVENT_UNLINK
+FAIL control_retirement_end:436: control_retirement_order[1] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:437: control_retirement_order[2] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:438: control_retirement_order[3] == CONTROL_EVENT_DEREF
+FAIL group_control_descriptor:3333: effect.status == (((NTSTATUS) 0x00000000))
+FAIL group_control_descriptor:3333: control_calls == before + 1 && effect.lower_after == effect.lower_before + 1
+FAIL group_control_descriptor:3333: control_lower_completions == lower_completion_before + 1 && control_upper_completions == upper_completion_before + 1
+FAIL group_control_descriptor:3333: control_file_references == references_before + 1 && control_file_dereferences == dereferences_before + 1
+FAIL control_pool_check_complete:256: control_pool_attempts == expected_attempts
+FAIL control_pool_check_complete:257: control_pool_count == expected_allocations
+FAIL control_pool_check_complete:270: urb_allocations == 1
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL IoCallDriver:905: !memcmp(request->SetupPacket, control_expected_setup, sizeof(control_expected_setup))
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL IoCallDriver:905: !memcmp(request->SetupPacket, control_expected_setup, sizeof(control_expected_setup))
+FAIL group_control_descriptor:3405: NT_SUCCESS(select_control_alternate_status(&d, last_fdo, &file, 0, 0))
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL group_control_descriptor:3597: NT_SUCCESS(select_control_alternate_status(&d, last_fdo, &file, 1, 1))
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL control_retirement_end:434: control_retirement_events == 4
+FAIL control_retirement_end:435: control_retirement_order[0] == CONTROL_EVENT_UNLINK
+FAIL control_retirement_end:436: control_retirement_order[1] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:437: control_retirement_order[2] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:438: control_retirement_order[3] == CONTROL_EVENT_DEREF
+FAIL group_control_descriptor:3618: effect.status == (((NTSTATUS) 0x00000000))
+FAIL group_control_descriptor:3618: control_calls == descriptor_before + 1 && effect.lower_after == effect.lower_before + 1
+FAIL group_control_descriptor:3618: effect.information == (18)
+FAIL group_control_descriptor:3618: control_file_references == references_before + 1 && control_file_dereferences == dereferences_before + 1
+FAIL control_pool_check_complete:256: control_pool_attempts == expected_attempts
+FAIL control_pool_check_complete:257: control_pool_count == expected_allocations
+FAIL control_pool_check_complete:270: urb_allocations == 1
+FAIL control_retirement_end:434: control_retirement_events == 4
+FAIL control_retirement_end:435: control_retirement_order[0] == CONTROL_EVENT_UNLINK
+FAIL control_retirement_end:436: control_retirement_order[1] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:437: control_retirement_order[2] == CONTROL_EVENT_FREE
+FAIL control_retirement_end:438: control_retirement_order[3] == CONTROL_EVENT_DEREF
+FAIL group_control_descriptor:3621: effect.status == (((NTSTATUS) 0x00000000))
+FAIL group_control_descriptor:3621: control_calls == descriptor_before + 1 && effect.lower_after == effect.lower_before + 1
+FAIL group_control_descriptor:3621: effect.information == (18)
+FAIL group_control_descriptor:3621: control_file_references == references_before + 1 && control_file_dereferences == dereferences_before + 1
+FAIL control_pool_check_complete:256: control_pool_attempts == expected_attempts
+FAIL control_pool_check_complete:257: control_pool_count == expected_allocations
+FAIL control_pool_check_complete:270: urb_allocations == 1
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObReferenceObject:448: ((struct winusb_file *)control_expected_file->FsContext)->session_mutex.Owner != NULL
+FAIL control_note_free:413: file && file->outstanding == expected_task9_completion_outstanding
+FAIL ObDereferenceObject:465: file && file->outstanding == expected_task9_completion_outstanding
+CP32 winusb function-binding lifecycle checks passed
+CP33 function executed mode=--control-descriptor dispatches=35 mode-ioctls=29 last-ioctl=0x22200a last-status=0xffffffffc000009a failures=203

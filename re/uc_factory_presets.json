@@ -1,0 +1,2582 @@
+[
+ {
+  "preset_name": "Broadcast",
+  "icon_id": "broadcast",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -1.75,
+   "eqq1": 1.0,
+   "eqfreq1": 59.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": -1.0,
+   "eqq2": 1.0,
+   "eqfreq2": 275.499969,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 6249.998535,
+   "eqbandon3": 1,
+   "eqgain4": 0.0,
+   "eqq4": 0.6,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 0,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 154720979
+ },
+ {
+  "preset_name": "Vocal",
+  "icon_id": "vocal",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 159.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 154721803
+ },
+ {
+  "preset_name": "Electric Guitar",
+  "icon_id": "electricguitar",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 80.0
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -35.0,
+   "output": -18.000002,
+   "attack": 0.00023,
+   "release": 0.81174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": 2.0,
+   "lowfreq": 3,
+   "lowmidgain": -1.5,
+   "lowmidfreq": 2,
+   "himidgain": 1.5,
+   "himidfreq": 0,
+   "higain": -1.0
+  },
+  "_offset": 154723475
+ },
+ {
+  "preset_name": "Vintage Channel",
+  "icon_id": "vintage",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 154724175
+ },
+ {
+  "preset_name": "Slap Echo",
+  "icon_id": "slapecho",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "on": 1,
+   "time": 0.15,
+   "feedback": 0.25,
+   "mix": 0.5
+  },
+  "_offset": 154724835
+ },
+ {
+  "preset_name": "Detuned Vocal",
+  "icon_id": "vocaldetune",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+   "on": 1,
+   "detune": 1,
+   "mix": 0.8
+  },
+  "_offset": 154725687
+ },
+ {
+  "preset_name": "Robot",
+  "icon_id": "robot",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.5,
+   "eqq2": 0.6,
+   "eqfreq2": 520.000244,
+   "eqbandon2": 1,
+   "eqgain3": 5.75,
+   "eqq3": 0.6,
+   "eqfreq3": 890.000183,
+   "eqbandon3": 1,
+   "eqgain4": 3.000001,
+   "eqq4": 0.6,
+   "eqfreq4": 1500.000122,
+   "eqbandon4": 1,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+   "on": 1,
+   "ctune": 0.4,
+   "cfb": 0.5,
+   "cdamp": 0.4,
+   "cdist": 0.4,
+   "cvol": 1.0,
+   "cmix": 0.6
+  },
+  "_offset": 154726335
+ },
+ {
+  "preset_name": "Broadcast HS",
+  "icon_id": "broadcastheadset",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 1.391752,
+   "eqq1": 1.0,
+   "eqfreq1": 104.204773,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": -1.0,
+   "eqq2": 1.9,
+   "eqfreq2": 275.499969,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 1.7,
+   "eqfreq3": 1030.810547,
+   "eqbandon3": 1,
+   "eqgain4": -2.938144,
+   "eqq4": 1.8,
+   "eqfreq4": 4867.23291,
+   "eqbandon4": 1,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 154727183
+ },
+ {
+  "preset_name": "Big Vocal",
+  "icon_id": "vocalbig",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 24.0
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "eq": {
+   "__classid": "{C0730CBB-5135-4558-9222-C40BDBA036ED}",
+   "eqallon": 1,
+   "bboost": 3.899999,
+   "batten": 0.0,
+   "bfreq": 3,
+   "mboost": 1.8,
+   "bbwidth": 4.55,
+   "mfreq": 6,
+   "hatten": 0.0,
+   "hsfreq": 2
+  },
+  "_offset": 154727911
+ },
+ {
+  "preset_name": "Bright Vocal",
+  "icon_id": "vocalbright",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": 0.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 1.082475,
+   "eqq1": 0.6,
+   "eqfreq1": 132.128708,
+   "eqbandon1": 1,
+   "eqbandop1": 0,
+   "eqgain2": -2.164948,
+   "eqq2": 0.6,
+   "eqfreq2": 353.317841,
+   "eqbandon2": 1,
+   "eqgain3": 0.0,
+   "eqq3": 0.6,
+   "eqfreq3": 1057.874756,
+   "eqbandon3": 0,
+   "eqgain4": 6.030929,
+   "eqq4": 0.6,
+   "eqfreq4": 3926.376953,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "_offset": 154728487
+ },
+ {
+  "preset_name": "Smooth Vocal",
+  "icon_id": "vocalsmooth",
+  "opt": {
+   "swapcompeq": 1
+  },
+  "filter": {
+   "hpf": 39.999996
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": 0.960001,
+   "lowfreq": 2,
+   "lowmidgain": -8.640001,
+   "lowmidfreq": 2,
+   "himidgain": 0.0,
+   "himidfreq": 1,
+   "higain": 0.639999
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -30.0,
+   "ratio": 3.0,
+   "attack": 0.005,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 7600.0,
+   "keylisten": 0
+  },
+  "_offset": 154729211
+ },
+ {
+  "preset_name": "Forward Vocal",
+  "icon_id": "vocalforward",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 80
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": 0.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 3.556702,
+   "eqq1": 0.883783,
+   "eqfreq1": 123.463135,
+   "eqbandon1": 1,
+   "eqbandop1": 0,
+   "eqgain2": -3.420619,
+   "eqq2": 3.495004,
+   "eqfreq2": 235.183273,
+   "eqbandon2": 1,
+   "eqgain3": 1.391752,
+   "eqq3": 1.035626,
+   "eqfreq3": 1022.596375,
+   "eqbandon3": 1,
+   "eqgain4": -2.319587,
+   "eqq4": 0.6,
+   "eqfreq4": 9700.420898,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -14.320001,
+   "output": -23.799994,
+   "attack": 0.000226,
+   "release": 0.07525,
+   "ratio": 4,
+   "keyfilter": 1003.038635,
+   "keylisten": 0
+  },
+  "_offset": 154729827
+ },
+ {
+  "preset_name": "Vocal HS",
+  "icon_id": "vocalheadset",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 159.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "eqallon": 1,
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "higain": 0.639999,
+   "himidfreq": 1,
+   "himidgain": 0.0,
+   "lowfreq": 2,
+   "lowgain": 0.960001,
+   "lowmidfreq": 2,
+   "lowmidgain": -8.640001
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 154730551
+ },
+ {
+  "preset_name": "Vintage Channel",
+  "icon_id": "vintage",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 154731147
+ },
+ {
+  "preset_name": "Telephone",
+  "icon_id": "telephone",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 999.999878
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": 0.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -15.0,
+   "eqq1": 1.0,
+   "eqfreq1": 689.999451,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 0.0,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 0,
+   "eqgain3": 15.0,
+   "eqq3": 0.8,
+   "eqfreq3": 1650.000244,
+   "eqbandon3": 1,
+   "eqgain4": -13.0,
+   "eqq4": 0.6,
+   "eqfreq4": 3300.000488,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 154731703
+ },
+ {
+  "preset_name": "Broadcast",
+  "icon_id": "broadcast",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -1.75,
+   "eqq1": 1.0,
+   "eqfreq1": 59.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": -1.0,
+   "eqq2": 1.0,
+   "eqfreq2": 275.499969,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 6249.998535,
+   "eqbandon3": 1,
+   "eqgain4": 0.0,
+   "eqq4": 0.6,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 0,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "on": 0,
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 155910319
+ },
+ {
+  "preset_name": "Vocal",
+  "icon_id": "vocal",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 159.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 155911143
+ },
+ {
+  "preset_name": "Electric Guitar",
+  "icon_id": "electricguitar",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 80.0
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -35.0,
+   "output": -18.000002,
+   "attack": 0.00023,
+   "release": 0.81174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": 2.0,
+   "lowfreq": 3,
+   "lowmidgain": -1.5,
+   "lowmidfreq": 2,
+   "himidgain": 1.5,
+   "himidfreq": 0,
+   "higain": -1.0
+  },
+  "_offset": 155912815
+ },
+ {
+  "preset_name": "Vintage Channel",
+  "icon_id": "vintage",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 155913515
+ },
+ {
+  "preset_name": "Slap Echo",
+  "icon_id": "slapecho",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "on": 1,
+   "time": 0.15,
+   "feedback": 0.25,
+   "mix": 0.5
+  },
+  "_offset": 155914175
+ },
+ {
+  "preset_name": "Detuned Vocal",
+  "icon_id": "vocaldetune",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+   "on": 1,
+   "detune": 1,
+   "mix": 0.8
+  },
+  "_offset": 155915027
+ },
+ {
+  "preset_name": "Robot",
+  "icon_id": "robot",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.5,
+   "eqq2": 0.6,
+   "eqfreq2": 520.000244,
+   "eqbandon2": 1,
+   "eqgain3": 5.75,
+   "eqq3": 0.6,
+   "eqfreq3": 890.000183,
+   "eqbandon3": 1,
+   "eqgain4": 3.000001,
+   "eqq4": 0.6,
+   "eqfreq4": 1500.000122,
+   "eqbandon4": 1,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+   "on": 1,
+   "ctune": 0.4,
+   "cfb": 0.5,
+   "cdamp": 0.4,
+   "cdist": 0.4,
+   "cvol": 1.0,
+   "cmix": 0.6
+  },
+  "_offset": 155915675
+ },
+ {
+  "preset_name": "Broadcast",
+  "icon_id": "broadcast",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -1.75,
+   "eqq1": 1.0,
+   "eqfreq1": 59.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": -1.0,
+   "eqq2": 1.0,
+   "eqfreq2": 275.499969,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 6249.998535,
+   "eqbandon3": 1,
+   "eqgain4": 0.0,
+   "eqq4": 0.6,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 0,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 155916523
+ },
+ {
+  "preset_name": "Vocal",
+  "icon_id": "vocal",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 159.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -27.200001,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.18174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 155917347
+ },
+ {
+  "preset_name": "Electric Guitar",
+  "icon_id": "electricguitar",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 80.0
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.000092,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -35.0,
+   "output": -18.000002,
+   "attack": 0.00023,
+   "release": 0.81174,
+   "ratio": 0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": 2.0,
+   "lowfreq": 3,
+   "lowmidgain": -1.5,
+   "lowmidfreq": 2,
+   "himidgain": 1.5,
+   "himidfreq": 0,
+   "higain": -1.0
+  },
+  "_offset": 155919019
+ },
+ {
+  "preset_name": "Stereo Acoustic",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 160.0
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -1.5,
+   "eqq1": 0.8,
+   "eqfreq1": 199.999985,
+   "eqbandon1": 1,
+   "eqbandop1": 0,
+   "eqgain2": 0.0,
+   "eqq2": 0.6,
+   "eqfreq2": 319.999969,
+   "eqbandon2": 0,
+   "eqgain3": 1.5,
+   "eqq3": 1.1,
+   "eqfreq3": 3999.994141,
+   "eqbandon3": 1,
+   "eqgain4": 2.0,
+   "eqq4": 1.0,
+   "eqfreq4": 15000.000977,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 1,
+   "automode": 1,
+   "threshold": -30.0,
+   "ratio": 1.981179,
+   "attack": 0.0002,
+   "release": 0.15,
+   "gain": 3.0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 155920431
+ },
+ {
+  "preset_name": "Broadcast Basic",
+  "icon_id": "broadcastbasic",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 40
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -0.100001,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 0.0,
+   "eqq2": 1.0,
+   "eqfreq2": 251.69014,
+   "eqbandon2": 1,
+   "eqgain3": 1.764706,
+   "eqq3": 2.043599,
+   "eqfreq3": 994.202881,
+   "eqbandon3": 1,
+   "eqgain4": 1.050001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 157052175
+ },
+ {
+  "preset_name": "Broadcast Light",
+  "icon_id": "broadcastlight",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -3.947368,
+   "eqq1": 1.0,
+   "eqfreq1": 120.702827,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 0.0,
+   "eqq2": 1.0,
+   "eqfreq2": 251.69014,
+   "eqbandon2": 1,
+   "eqgain3": 1.764706,
+   "eqq3": 2.043599,
+   "eqfreq3": 994.202881,
+   "eqbandon3": 1,
+   "eqgain4": 1.050001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 157053035
+ },
+ {
+  "preset_name": "Broadcast Radio",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 40.881599
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 4.058823,
+   "eqq1": 1.0,
+   "eqfreq1": 106.587799,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 0.0,
+   "eqq2": 1.0,
+   "eqfreq2": 251.69014,
+   "eqbandon2": 1,
+   "eqgain3": 1.764706,
+   "eqq3": 2.043599,
+   "eqfreq3": 994.202881,
+   "eqbandon3": 1,
+   "eqgain4": 1.050001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 157053899
+ },
+ {
+  "preset_name": "Broadcast Clear",
+  "icon_id": "broadcastclear",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 107.813477
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 798.645142,
+   "threshold": -42.879997,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -0.200001
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 0.6,
+   "eqfreq1": 130.000015,
+   "eqbandon1": 1,
+   "eqbandop1": 0,
+   "eqgain2": -0.176472,
+   "eqq2": 0.6,
+   "eqfreq2": 305.025421,
+   "eqbandon2": 1,
+   "eqgain3": 0.0,
+   "eqq3": 0.6,
+   "eqfreq3": 1399.999756,
+   "eqbandon3": 1,
+   "eqgain4": 5.117647,
+   "eqq4": 0.6,
+   "eqfreq4": 1501.909058,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -24.079998,
+   "ratio": 3.552398,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.759999,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "_offset": 157054735
+ },
+ {
+  "preset_name": "Reverb",
+  "icon_id": "reverb",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 131.944809
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 1253.846313,
+   "threshold": -66.51194,
+   "range": -84.0,
+   "attack": 0.005,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 0,
+   "threshold": 0.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": -0.087719,
+   "eqq1": 0.6,
+   "eqfreq1": 260.373169,
+   "eqbandon1": 1,
+   "eqbandop1": 0,
+   "eqgain2": 0.0,
+   "eqq2": 0.6,
+   "eqfreq2": 319.999969,
+   "eqbandon2": 1,
+   "eqgain3": 1.31579,
+   "eqq3": 3.1,
+   "eqfreq3": 3428.247559,
+   "eqbandon3": 1,
+   "eqgain4": 0.789474,
+   "eqq4": 0.6,
+   "eqfreq4": 6312.650391,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -23.799994,
+   "ratio": 2.0,
+   "attack": 0.009786,
+   "release": 0.15,
+   "gain": 0.0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+   "on": 1,
+   "lows": 0.06,
+   "width": 0.405,
+   "mix": 0.295
+  },
+  "_offset": 157055599
+ },
+ {
+  "preset_name": "Delay",
+  "icon_id": "delay",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.000122,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.000122,
+   "eqbandon3": 1,
+   "eqgain4": 1.200001,
+   "eqq4": 1.0,
+   "eqfreq4": 4999.999023,
+   "eqbandon4": 1,
+   "eqbandop4": 1
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "on": 1,
+   "time": 0.168742,
+   "feedback": 0.365,
+   "mix": 0.105
+  },
+  "_offset": 157056443
+ },
+ {
+  "preset_name": "Witness Protection",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 290.593658
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.263159,
+   "eqq2": 0.6,
+   "eqfreq2": 988.494446,
+   "eqbandon2": 1,
+   "eqgain3": 0.789474,
+   "eqq3": 0.6,
+   "eqfreq3": 333.899536,
+   "eqbandon3": 1,
+   "eqgain4": 0.087719,
+   "eqq4": 0.6,
+   "eqfreq4": 1644.082886,
+   "eqbandon4": 1,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+   "on": 1,
+   "input": -26.639999,
+   "output": -15.0,
+   "attack": 0.000183,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+   "on": 1,
+   "detune": 4,
+   "mix": 0.74
+  },
+  "_offset": 157057287
+ },
+ {
+  "preset_name": "Computron 4000",
+  "icon_id": "computron4000",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 290.593658
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 99.999992,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.263159,
+   "eqq2": 0.6,
+   "eqfreq2": 988.494446,
+   "eqbandon2": 1,
+   "eqgain3": 0.789474,
+   "eqq3": 0.6,
+   "eqfreq3": 333.899536,
+   "eqbandon3": 1,
+   "eqgain4": 0.087719,
+   "eqq4": 0.6,
+   "eqfreq4": 1644.082886,
+   "eqbandon4": 1,
+   "eqbandop4": 0
+  },
+  "comp": {
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -27.720003,
+   "ratio": 2.528445,
+   "attack": 0.004443,
+   "release": 0.15,
+   "gain": 0.0,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+   "on": 1,
+   "ctune": 0.075,
+   "cfb": 1.0,
+   "cdamp": 0.06,
+   "cdist": 0.745,
+   "cvol": 1.0,
+   "cmix": 1.0
+  },
+  "_offset": 157058083
+ },
+ {
+  "preset_name": "Broadcast Male",
+  "icon_id": "broadcastmale",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999996
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.0,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "comp": {
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 100.0,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.0,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.0,
+   "eqbandon3": 1,
+   "eqgain4": 1.2,
+   "eqq4": 1.0,
+   "eqfreq4": 5000.0,
+   "eqbandon4": 1,
+   "eqbandop4": 1,
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 157533575
+ },
+ {
+  "preset_name": "Broadcast Female",
+  "icon_id": "broadcastfemale",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 159.999985
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.0,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "comp": {
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 100.0,
+   "eqbandon1": 0,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 340.0,
+   "eqbandon2": 1,
+   "eqgain3": -1.5,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.0,
+   "eqbandon3": 1,
+   "eqgain4": 1.2,
+   "eqq4": 1.0,
+   "eqfreq4": 5000.0,
+   "eqbandon4": 1,
+   "eqbandop4": 1,
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.5
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 157534387
+ },
+ {
+  "preset_name": "CB Radio",
+  "icon_id": "cbradio",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.0,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "comp": {
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 100.0,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.5,
+   "eqq2": 0.6,
+   "eqfreq2": 520.0,
+   "eqbandon2": 1,
+   "eqgain3": 5.75,
+   "eqq3": 0.6,
+   "eqfreq3": 890.0,
+   "eqbandon3": 1,
+   "eqgain4": 3.0,
+   "eqq4": 0.6,
+   "eqfreq4": 1500.0,
+   "eqbandon4": 1,
+   "eqbandop4": 0,
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 157535203
+ },
+ {
+  "preset_name": "Slap Echo",
+  "icon_id": "slapecho",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.0,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "comp": {
+   "on": 1,
+   "softknee": 0,
+   "automode": 0,
+   "threshold": -26.5,
+   "ratio": 2.0,
+   "attack": 0.02,
+   "release": 0.15,
+   "gain": 11.5,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "eqgain1": 2.0,
+   "eqq1": 1.0,
+   "eqfreq1": 100.0,
+   "eqbandon1": 1,
+   "eqbandop1": 1,
+   "eqgain2": 1.5,
+   "eqq2": 1.0,
+   "eqfreq2": 260.0,
+   "eqbandon2": 1,
+   "eqgain3": -3.0,
+   "eqq3": 2.3,
+   "eqfreq3": 1200.0,
+   "eqbandon3": 1,
+   "eqgain4": 1.2,
+   "eqq4": 1.0,
+   "eqfreq4": 5000.0,
+   "eqbandon4": 1,
+   "eqbandop4": 1,
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -3.0
+  },
+  "voicefx": {
+   "on": 1,
+   "time": 0.15,
+   "feedback": 0.25,
+   "mix": 0.5,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}"
+  },
+  "_offset": 157536863
+ },
+ {
+  "preset_name": "Detuned Vocal",
+  "icon_id": "vocaldetune",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.000244,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.499999
+  },
+  "voicefxopt": {
+   " ": " "
+  },
+  "eq": {
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75
+  },
+  "comp": {
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}",
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0
+  },
+  "voicefx": {
+   "__classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+   "on": 1,
+   "detune": 1,
+   "mix": 0.8
+  },
+  "_offset": 157537695
+ },
+ {
+  "preset_name": "AM Radio",
+  "icon_id": "amradio",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 79.999992
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 730.0,
+   "threshold": -47.5,
+   "range": -60.0,
+   "attack": 0.025,
+   "release": 0.7
+  },
+  "comp": {
+   "on": 1,
+   "mode": 0,
+   "gain": 55.0,
+   "peak": 62.5,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{7F8A4262-D377-48E3-9D48-15D82C400A71}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "lowgain": -9.0,
+   "lowfreq": 2,
+   "lowmidgain": 2.1,
+   "lowmidfreq": 0,
+   "himidgain": 3.0,
+   "himidfreq": 0,
+   "higain": 2.75,
+   "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.5
+  },
+  "voicefx": {
+   "on": 0,
+   "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+   "feedback": 0.2,
+   "mix": 0.5,
+   "time": 0.19
+  },
+  "_offset": 157538343
+ },
+ {
+  "preset_name": "Robot",
+  "icon_id": "robot",
+  "opt": {
+   "swapcompeq": 0
+  },
+  "filter": {
+   "hpf": 39.999996
+  },
+  "gate": {
+   "on": 1,
+   "keylisten": 0,
+   "expander": 1,
+   "keyfilter": 480.0,
+   "threshold": -60.0,
+   "range": -60.0,
+   "attack": 0.014,
+   "release": 0.57
+  },
+  "comp": {
+   "on": 1,
+   "input": -23.0,
+   "output": -15.0,
+   "attack": 0.00023,
+   "release": 0.805,
+   "ratio": 4,
+   "keyfilter": 40.0,
+   "keylisten": 0,
+   "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}"
+  },
+  "eq": {
+   "eqallon": 1,
+   "eqgain1": 0.0,
+   "eqq1": 1.0,
+   "eqfreq1": 100.0,
+   "eqbandon1": 0,
+   "eqbandop1": 0,
+   "eqgain2": -0.5,
+   "eqq2": 0.6,
+   "eqfreq2": 520.0,
+   "eqbandon2": 1,
+   "eqgain3": 5.75,
+   "eqq3": 0.6,
+   "eqfreq3": 890.0,
+   "eqbandon3": 1,
+   "eqgain4": 3.0,
+   "eqq4": 0.6,
+   "eqfreq4": 1500.0,
+   "eqbandon4": 1,
+   "eqbandop4": 0,
+   "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
+  },
+  "limit": {
+   "limiteron": 1,
+   "threshold": -1.5
+  },
+  "voicefx": {
+   "on": 1,
+   "ctune": 0.4,
+   "cfb": 0.5,
+   "cdamp": 0.4,
+   "cdist": 0.4,
+   "cvol": 1.0,
+   "cmix": 0.6,
+   "__classid": "{491FED97-6761-4FF6-91E1-E155891291AA}"
+  },
+  "_offset": 157538975
+ }
+]

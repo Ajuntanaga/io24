@@ -1,0 +1,24 @@
+timestamp=2026-08-22T14:51:22-07:00
+battery=69% status=Discharging
+capture inode=4074908 size=187249 mode=600 owner=1000:1000 mtime=2026-08-22 14:50:19.542251503 -0700
+ab998beda7e6544cf56d574b66212ee3129d17e4f7b97cf3378582d5ef105da8  clone/out/live-service-usb.txt
+service_state=RUNNING
+synchronize_json=absent
+active_io24_wine_units=none
+candidate_processes=none
+device sysfs=3-1 node=/dev/bus/usb/003/002 serial=AB7C22200355 authorized=1 config=1 speed=480
+interface=3-1:1.0 alt=0 driver=snd-usb-audio
+interface=3-1:1.1 alt=0 driver=snd-usb-audio
+interface=3-1:1.2 alt=0 driver=snd-usb-audio
+interface=3-1:1.3 alt=0 driver=snd-usb-audio
+interface=3-1:1.4 alt=0 driver=snd-usb-audio
+interface=3-1:1.5 alt=0 driver=none
+interface=3-1:1.6 alt=0 driver=none
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  source/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  source/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  source/out/live-service-usb.txt
+38b006a496f0d5d9e3183016d9716c163bcc7e502b69807c8a8bb5a0350aa7ea  clone/prefix/system.reg
+11fcbcd3887f19e173e993aedec1519d1786e7ffd6f0d15887c6b94bcd3e629b  clone/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  clone/out/inherited-live-service-usb-observe-v2-20260819T194220PDT.txt
+protected_prefix inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+LIVE_POSTFLIGHT_IMMEDIATE=PASS

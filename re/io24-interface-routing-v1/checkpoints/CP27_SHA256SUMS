@@ -1,0 +1,14 @@
+b381b5b2b1f07747c4f84af63895db3f38f12626ead5be213f9b2338dae7f669  ../MANIFEST.md
+a6d91cf864ff2b7048356dc95e3936a7e77162a2b7c4fce9e4170c927f980a97  CP27_INTERFACE4_ROUTING_ANALYSIS.md
+5fd2098235f76dfe793062cd3fd1479cb0fd493e3e615967d95f2907f8ca0849  ../../../tests/io24_usbmon_function_topology.py
+e64e8db1949c97e682247dfdf37d64882664dc739e79229b7352bf74ad283da0  ../../../tests/io24_usbmon_function_topology_contract.py
+194a4b2619e0bddcdeef2108b0969cf13c029b3d2516309123c6567437b2922d  ../../io24-passive-usbmon/passive-usbmon-range-v1-20260821T023641-0700/control-urbs.pcap
+f08d7c20e084ecfc736818aa7a38bd72b5964652802590cde4ae419ef826b0eb  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/source-a/dlls/wineusb.sys/unixlib.c
+ab94b70ceae65eee5019e053c9bf7ec3ce01f20af2a3e824282fbbc3d786785c  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/source-a/dlls/wineusb.sys/wineusb.c
+6d4f31ada0350d2ae63382b77d653e586a32ce90b05ab6885dce1feca814e30c  ../../wine-ntoskrnl-mdl-nonpaged-v1/checkpoints/CP24_SHA256SUMS
+5d4ad56359bb3b7a5f555a3a2cd06f136bd8906aafd3e398a61907ad4bc9b951  ../../wineusb-immediate-submit-cleanup-v1/checkpoints/CP26_SHA256SUMS
+fcd8b46d5af756172cb740386f89373e4129d0baa7f6ecb1ff1a173aed49c7bb  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/PaeDSPUSB.sys
+3473acc6dc107c93a7aa91bc012f3a2dbec5ea219e263c6ad5edebc13d6adf66  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/paedspusb.inf.txt
+7920f680cb5057f29b29bd2264b81c9dda2cb0cfa968e7cff4c79b3228beb55b  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/prefix/drive_c/windows/inf/paedspusb.inf
+ddc74cea184a22990939cf8bab7b846161847b784882e1b224b650f8fd83e124  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/service-install.log
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll

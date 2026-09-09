@@ -1,0 +1,11 @@
+starting driver-load in /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821 (unit io24-wine-driver-load-212427.service)
+Running as unit: io24-wine-driver-load-212427.service; invocation ID: d600b869c0d148b6b6b67d9564e4479f
+offline isolation verified: no host home, hardware, bus, or network
+exact NT registry probe status: 0
+PaeDSPUSB start status: 0; query status: 0
+registry-handle, Windows 7 NT DDI, and SSE2 gates executed with USB hidden
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 17.909s
+             CPU time consumed: 3.362s
+                   Memory peak: 119.5M (swap: 0B)

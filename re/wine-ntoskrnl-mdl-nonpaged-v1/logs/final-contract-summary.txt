@@ -1,0 +1,34 @@
+CP22 final offline contract, 2026-08-22T12:22:49-07:00
+
+Containment for both comparison runs:
+- Bubblewrap network, IPC, PID, and UTS namespaces
+- minimal private /dev
+- empty private /sys
+- ephemeral /run, /tmp, HOME, and WINEPREFIX
+- matching fake-PE and Unix-builtin ntoskrnl selectors
+- identical updated ntoskrnl test binary on both sides
+
+Final rebuild:
+- exit status: 0
+- changed test translation unit: no warning
+
+Candidate kernel:
+- process exit status: 13
+- driver subtest: 1055 tests, 12 known baseline failures
+- overall: 26476 tests, 13 known baseline failures
+- MDL contract failures: 0
+
+Corrected pre-MDL kernel:
+- process exit status: 16
+- driver subtest: 1054 tests, 15 failures
+- overall: 26475 tests, 16 failures
+- MDL contract failures: 3
+  driver.c:338: MDL does not describe nonpaged pool, flags 0
+  driver.c:341: expected first PFN 0x800, got 0
+  driver.c:345: expected mapped address 0000000000800C70, got 0000000000000000
+
+Interpretation:
+- The three added RED failures are confined to the new MDL contract.
+- The candidate removes all three and leaves the 13 pre-existing failures unchanged.
+- The candidate executes one additional alias assertion because mapping succeeds.
+- Nonzero overall statuses are retained baseline failures, not CP22 regressions.

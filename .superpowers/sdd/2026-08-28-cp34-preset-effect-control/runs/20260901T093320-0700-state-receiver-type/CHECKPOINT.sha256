@@ -1,0 +1,11 @@
+# CP34 state-apply receiver-type recovery checkpoint, 2026-09-01T09:41:33-07:00.
+# Run `sha256sum -c <this file>` from the workspace root.
+# Scope: static-only provenance of the existing 0x54730 receiver. No image or
+# hardware action is authorized by this checkpoint.
+
+89827efe7c8280f71be0a806984729b40b87d6c77bf35c99696aaa7068f86f04  re/cp34_lane_control_firmware_static.py
+0edb3bbd65a9833356c057f1c5b17b74f0791811675548fe9140286dc982ab96  tests/test_cp34_lane_control_firmware_static.py
+769592c288dab7acb7c29d4b18a917aee65dd0ae23c573b6b278e5118045b82d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+f8392d70fb93b2bf468ed50c9c6ceebe66106778cb59283c4a7abe4715933c36  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T093320-0700-state-receiver-type/SCOPE.md
+02c03699ccb7f7aa9a8bb0566360f9396ebdf5edad5b3ea58dd160a658e400f6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T093320-0700-state-receiver-type/PROGRESS.md
+96fdcb5ea147e0ee1270f9355b67f0bf8f2fb4089441954674da8e651bfd8953  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T093320-0700-state-receiver-type/OBSIDIAN.md

@@ -1,0 +1,44 @@
+CP15 offline runtime-path census
+
+sealed CP14 service-install.log sha256:
+b15c906ceecaf95142aab21f1858074ba79f24ea243e3525a34cac7f9794adca
+
+CP14 service-install.log counts:
+IO24_CLASS_IN reject=6
+Failed to clear halt=4
+MmBuildMdlForNonPagedPool stub=24
+MmMapLockedPagesSpecifyCache=8
+KeInsertQueueDpc stub=8
+IO24_OBSERVE select-interface=0
+
+CP14 live-service-usb.txt:
+standard endpoint-zero control-IN submissions=172
+status-zero callbacks=172
+bulk submissions=0
+interrupt submissions=0
+
+Source-path observations from the exact CP14 Wine 11.15 tree:
+- wineusb.c rejects unsupported class-interface tuples with
+  USBD_STATUS_NOT_SUPPORTED / STATUS_NOT_SUPPORTED.
+- unixlib.c calls libusb_clear_halt for
+  URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL, logs a libusb error, and
+  returns STATUS_SUCCESS regardless of that error.
+- unixlib.c SELECT_CONFIGURATION initializes pipe handles only for the first
+  embedded req->Interface structure's NumberOfPipes.
+- wdm.h routes an unmapped MDL through MmMapLockedPagesSpecifyCache.
+- ntoskrnl.c implements MmMapLockedPagesSpecifyCache as a stub returning NULL.
+- ntoskrnl.c implements KeInsertQueueDpc as a stub returning TRUE without
+  invoking the deferred routine.
+
+Passive current sysfs observation at CP15:
+interfaces 0-4: alternate setting 0, snd-usb-audio bound
+interface 5: alternate setting 0, unclaimed, no active endpoint directory
+interface 6: alternate setting 0, unclaimed, no active endpoint directory
+
+Classification:
+- The driver continues beyond all three class-IN rejects in each cycle.
+- The four clear-halt errors do not propagate as WineUSB NTSTATUS failures.
+- The absent bulk/interrupt traffic coincides with unresolved pipe topology,
+  null MDL mappings, and no real DPC dispatch. Existing evidence cannot rank
+  those three causes conclusively.
+

@@ -1,0 +1,124 @@
+{
+  "boundary": "STATIC_HOST_STATE_ROUTE_SOURCE_BOUND_RUNTIME_EVENT_PROPAGATION_DEVICE_STORAGE_RECALL_GATE_AND_AUDIBILITY_UNOBSERVED",
+  "component_model": {
+    "activePresetSlotIndex": 150,
+    "fxmodel": 450,
+    "presetHotKey": 151,
+    "presetHotKeyTitle": 152,
+    "processingChannel": 149,
+    "voicefx_child_mutable": true,
+    "voicefx_selector_component": "voicefxopt"
+  },
+  "embedded_ui": {
+    "hotkey_control": "presetHotKey",
+    "hotkey_options": [
+      "momentary",
+      "transparent"
+    ],
+    "hotkey_selector_style": "BigKnobSelectBox.HotKey",
+    "normal_slot_values": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "preset_select_path": "presets/preset",
+    "same_endless_knob_path": true
+  },
+  "hotkey_persistence": {
+    "active_capture": "0x180042624 -> 0x18002e270",
+    "channel_load": "0x1800424b0",
+    "channel_save": "0x180042680",
+    "record_key": "hotkey",
+    "same_serializer": true,
+    "snapshot_offset": "complete channel object +0x180",
+    "store_preset_capture": "0x18003b5b3 -> 0x18002e270"
+  },
+  "hotkey_toggle": {
+    "deserializer_apply": "0x180041348 -> 0x18002e690",
+    "dispatch_case": 7,
+    "dispatch_index": 42,
+    "handler": "0x1800412b0",
+    "off_source": "active normal slot selected by parameter 150",
+    "on_source": "complete channel object +0x180 Hot Key snapshot",
+    "parameter_change_dispatch": "0x180041160",
+    "parameter_id": 151,
+    "post_apply": "channel vtable +0x130"
+  },
+  "linux_host_implication": {
+    "apply": "instantiate/select the model before applying its state; preserve the full-channel Hot Key/normal-slot transition",
+    "prior_channel2_trial_gap": "direct VoiceFX parameter write was omitted",
+    "save": "persist model/class id, voicefx.on, and only the selected model state",
+    "unknown_attached_state": "cannot be recovered from block 201 readback; explicitly select a model or consume a complete known snapshot"
+  },
+  "model_class_ids": {
+    "0": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+    "1": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+    "2": "{981F8B8F-D1D8-4634-BB04-2148AF2123E3}",
+    "3": "{4B4CAD90-7709-451F-A7DD-AF6F0E954F57}",
+    "4": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+    "5": "{98A527BA-2D6E-4B35-BB26-251EC081A067}"
+  },
+  "sources": {
+    "component_model": {
+      "sha256": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",
+      "size": 20450
+    },
+    "dsp": {
+      "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+      "size": 4979672
+    },
+    "fx_params": {
+      "sha256": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
+      "size": 13925
+    },
+    "panel": {
+      "sha256": "52e48cb1453b815abc4b55fd0232131e11115d1aceb2eb0ed899750db6c08dd8",
+      "size": 41828312
+    }
+  },
+  "status": "UC472_HOTKEY_FULL_CHANNEL_OVERRIDE_AND_VOICEFX_SELECTION_ROUTE_SOURCE_BOUND",
+  "voicefx_channel_ownership": {
+    "change_refresh": "0x18004193f -> 0x18003e6c0",
+    "initial_apply": "0x180040729 -> 0x18003e6c0",
+    "nonowning_channel_action": "deactivate voicefxopt/fxmodel and select host model -1",
+    "ownership_switch": "0x18003e6c0",
+    "owning_channel_action": "activate voicefxopt/fxmodel and select its current model",
+    "owning_predicate": "processingChannel == 0",
+    "parameter_change_handler": "0x18004145e",
+    "selector_parameter": "processingChannel",
+    "selector_parameter_id": 149,
+    "stock_instance_count": 1,
+    "voicefx_on_role": "separate storable enable inside the selected model state"
+  },
+  "voicefx_selection": {
+    "deserialize_function": "0x180049870",
+    "enable_is_separate": "voicefx.on",
+    "model_factory": "0x180049260",
+    "model_zero": "Transformer/Doubler",
+    "model_zero_is_off": false,
+    "no_model_value": -1,
+    "parameter_handler": "0x1800491f0",
+    "save_source": "host component state, not a readable DSP register",
+    "selector_parameter": "voicefxopt/fxmodel",
+    "selector_parameter_id": 450,
+    "serialized_parent": "voicefx",
+    "serialized_selector": "__classid",
+    "valid_values": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "wire_selector": {
+      "block": 201,
+      "block_index": 0,
+      "send": "0x1800497c1 -> 0x180053420",
+      "size": 16,
+      "tag": "VoFx"
+    }
+  }
+}

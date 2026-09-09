@@ -1,0 +1,15 @@
+candidate_hashes
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/wineusb.sys.so
+96f5a63a76d5f0e9a73425717d81e17d1fd6883c7a909508e703897a22fe4039  .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/wineusb.so
+candidate_sizes
+2560 .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+202392 .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/wineusb.sys.so
+102600 .io24-build/wineusb-multi-interface-handles-v1/dev-build/dlls/wineusb.sys/wineusb.so
+build_ids
+builtin     Build ID: 0857e44f13501e673ba64c795a297fe8a757feb9
+unixlib     Build ID: be6c3c09298d93e060effd9433dfc5c955a54bfa
+fake_pe_vs_cp17=identical
+builtin_vs_cp17=identical
+unixlib_vs_cp17=changed
+undefined_dynamic_symbols=identical count=37

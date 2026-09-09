@@ -1,0 +1,30 @@
+CP12 independent contract summary
+Reached: 2026-08-21T03:14:22-07:00
+
+Build A
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+exit=0 elapsed=0.29s peak_rss_kib=37096 swaps=0
+
+Build B
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+exit=0 elapsed=0.29s peak_rss_kib=37292 swaps=0
+
+Each side ran in a separate Bubblewrap invocation with user, PID, network,
+IPC, UTS, and cgroup namespaces unshared, all capabilities dropped, a private
+/dev, host /sys and /run hidden behind temporary filesystems, a read-only
+project tree, a 1 GiB address-space ceiling, bounded wall and CPU time, nice
+level 15, and idle I/O priority.
+No USB node, host Wine prefix, audio device, or network was exposed.
+
+Raw workspace log hashes
+adfb1160ed30a3b038f53c95eb665ad847b9fd29853af35b4cc476126386baa4  contracts-a-resource.txt
+e7a467677749d32f1aec0c8e4742d6a0908749d1c2b3f2e10dfbff57c66bd59a  contracts-a.log
+50d79198fc781a6e217cef07c559962607eed48a71da38e95e4e287b8cd78f54  contracts-b-resource.txt
+e7a467677749d32f1aec0c8e4742d6a0908749d1c2b3f2e10dfbff57c66bd59a  contracts-b.log
+
+The raw logs remain under:
+    .io24-build/wineusb-class-interface-range-v2/logs/

@@ -1,0 +1,32 @@
+{
+  "capture_sha256": "e587d9a7cbf78312eabcb4b2b4ee5e2f806d88335d3c812dd4d7372b1120aa14",
+  "effect_conclusion": "UNPROVED_NO_ABOVE_GATE_STIMULUS",
+  "factory_gate": {
+    "enabled": true,
+    "peak_headroom_below_threshold_db": 36.16,
+    "threshold_dbfs": -47.5
+  },
+  "linked_slot3_window": {
+    "end_seconds": 9.8,
+    "input2_peak_dbfs": -83.66,
+    "input2_rms_dbfs": -97.15,
+    "monitor_channels": [3, 4, 5, 6],
+    "monitor_input2_correlation": 0.99999668,
+    "monitor_input2_direct_coefficient": 0.70797731,
+    "monitor_input2_lag150ms_coefficient": 0.00000642,
+    "monitor_input2_lag300ms_coefficient": -0.00000161,
+    "monitor_model_residual_db_relative": -51.67,
+    "monitor_peak_dbfs": -86.66,
+    "monitor_rms_dbfs": -100.15,
+    "start_seconds": 5.25
+  },
+  "observation": "The linked capture buses carried a direct minus-3-dB copy of Input 2 and no measurable 150 ms repeat component, but Input 2 contained only noise far below the factory preset gate threshold.",
+  "repeat_observation": "NO_150MS_COMPONENT_IN_CAPTURED_NOISE",
+  "schema": "cp34-linked-recall-passive-audio-analysis-v1",
+  "signal_adequacy": "INADEQUATE_FOR_AUDIBILITY",
+  "windows": {
+    "dry_slot2_seconds": [1.25, 3.9],
+    "linked_slot3_seconds": [5.25, 9.8],
+    "post_unlinked_seconds": [10.75, 13.75]
+  }
+}

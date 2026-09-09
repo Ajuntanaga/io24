@@ -1,0 +1,8 @@
+starting live-audit in /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822 (unit io24-wine-live-audit-193839.service)
+Running as unit: io24-wine-live-audit-193839.service; invocation ID: c4e23c43c79d4e7fb4c4a22049e3829d
+live isolation verified: one io24 node; no audio, GPU, home, bus, or external network
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 606ms
+             CPU time consumed: 130ms
+                   Memory peak: 4.9M (swap: 0B)

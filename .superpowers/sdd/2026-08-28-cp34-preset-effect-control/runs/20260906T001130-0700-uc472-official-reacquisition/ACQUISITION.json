@@ -1,0 +1,14 @@
+{
+  "acquired_at": "2026-09-06T00:12:49-07:00",
+  "asset_url": "https://www.fmicassets.com/Damroot/Original/10121/PreSonus_Universal_Control_v4_7_2-108537.exe",
+  "expected_identity_match": true,
+  "http_status": 200,
+  "installer": {
+    "name": "PreSonus_Universal_Control_v4_7_2-108537.exe",
+    "sha256": "1b5ddd6fd3ad4b93529caf8e5933bcd52b13194bdfa62652292b46ddcd980b95",
+    "size": 186792552
+  },
+  "official_product_page": "https://se.presonus.com/products/iostation-24c",
+  "request_count": 1,
+  "vendor_code_executed": false
+}

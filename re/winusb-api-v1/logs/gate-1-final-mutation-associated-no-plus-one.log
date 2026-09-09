@@ -1,0 +1,6 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+test_sha256 7547c6f2292c3a8650bb18b0610959eee30927418e1d6b279a5bf6f6e8751fca
+mutation associated-no-plus-one
+command timeout 20s bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/task-5-round-1-mutations/associated-no-plus-one --handles
+CP33 public executed mode=--handles target-mask=0x8c present-mask=0x19c missing-mask=0 fake-events=17 submits=3 releases=1 completions=0 failures=572
+exit_code 1

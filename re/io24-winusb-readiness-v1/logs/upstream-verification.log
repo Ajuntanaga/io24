@@ -1,0 +1,15 @@
+verified_at=2026-08-22
+official_remote=https://gitlab.winehq.org/wine/wine.git
+master_commit=8da89f8493b21ebfbe344a54dbef0cde23c7ea59
+master_title=Release 11.16.
+master_commit_date=2026-08-21T22:25:07+02:00
+dfc9616f254e4e9f6acd10d10aa08dfab27d3fee9d91d7f6fbc83021100865ce  dlls/winusb/winusb.spec
+54fe006bce49d7bf52e0bfe3268964d1099da2fc13fe32b3225aa2c95c106089  dlls/winusb/main.c
+f52202d30cd528d571e33a8cb726f16622114558e8b0a2ad3034baa5f7301cfd  dlls/wineusb.sys/wineusb.c
+ece69385446001072853c747342e84e2f1be4c3a18b42c663f6c9b050664d12e  dlls/wineusb.sys/wineusb.inf
+winusb_spec_stub_exports=21
+required_vendor_apis_implemented=0/14
+compatible_ids=USB class IDs only
+wineusb_inf_match=root\wineusb only
+WinUsb_Free_history_commit=1df5309a822ac33daabda5654a3eaf93b88dffea
+WinUsb_Free_history_title=winusb: Add WinUsb_Free stub.

@@ -1,0 +1,1007 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 04:01:50.180658741 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 04:21:41.383901653 -0700
+@@ -1,6 +1,6 @@
+-1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
+-3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
++ad694447f07b2999d67c12c614f14e726fc3dc4623efd5040a0bd73cc8768d08  re/cp34_current_slot_survey.py
++2c315c79a68e477807d4ae34e33a50dc93b60b5374186310998256f2b60499a4  tests/test_cp34_current_slot_survey.py
+ 8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++5bb402f6b0e98f83f2ab082d738d7fd9a071356c07ae64cf0119ea7886f116f8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+ 7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 04:01:50.180620118 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 04:21:41.383859887 -0700
+@@ -107,10 +107,12 @@
+ `UNAVAILABLE` means no toggle and no replacement scan of channels 1, 2, 5, or 6.
+ 
+ For an enabled `P0`, analyze the retained derivatives exactly as follows (replace
+-`N` with the already-frozen channel; this is an offline file-analysis command):
++`N` with the already-frozen channel; this is an offline file-analysis command).
++Run it with the run directory as the working directory so the report preserves
++the verifier's exact run-relative path labels:
+ 
+ ```text
+-python3 re/cp34_live_matrix.py analyze-slot --candidate ch1-slot1 --audible-attested --dry RUN/ch1-slot1/S2.mixN.mono.wav --dry RUN/ch1-slot1/S3.mixN.mono.wav --active RUN/ch1-slot1/S1.mixN.mono.wav --active RUN/ch1-slot1/S4.mixN.mono.wav
++survey_root=$(pwd) && (cd RUN && python3 "$survey_root/re/cp34_live_matrix.py" analyze-slot --candidate ch1-slot1 --audible-attested --dry ch1-slot1/S2.mixN.mono.wav --dry ch1-slot1/S3.mixN.mono.wav --active ch1-slot1/S1.mixN.mono.wav --active ch1-slot1/S4.mixN.mono.wav)
+ ```
+ 
+ For a bypassed `P0`, pass `S1` and `S4` as the two `--dry` values and `S2` and
+@@ -137,6 +139,15 @@
+ attestation; it supports only a restored repeatable audible 150 ms effect
+ signature on the controlled path. JaSt cannot prove every internal DSP byte.
+ 
++The verifier does not trust `MAP.json` or `AB.json` as assertions. It
++recomputes the canonical map from the snapshotted `MAP.raw.wav` bytes and the
++plan's physical input, then compares the complete map result. It also invokes
++the single `analyze-slot` algorithm on the four already-snapshotted derivative
++byte buffers with their exact run-relative labels and compares the complete A/B
++result. It creates no temporary WAV, rereads no live path, and imports no
++driver. `MAP.raw.wav` and `S1.raw.wav` through `S4.raw.wav` must all be present
++and exact six-channel S32_LE/48 kHz files independently of manifest exactness.
++
+ After saving the verifier JSON as `RESTORATION.json` and writing `REPORT.md`,
+ make the final retained-file seal and verify it:
+ 
+@@ -164,6 +175,15 @@
+ unambiguous front-panel observation, do not blind-toggle; record
+ `RESTORATION_FAILED` and stop for direction.
+ 
++Before channel 2 can become eligible, the verifier requires the complete saved
++channel-1 restoration result, including empty reasons, exact scope, frozen
++channel, JaSt limitation, and scoped input hashes. It then independently
++re-evaluates channel 1's plan, JaSt/raw snapshots, map, action log, five raw
++captures, four derivatives, A/B result, audible attestation, and physical
++restoration from the same immutable run snapshot. The saved result must exactly
++equal that recomputation; neither a newly manifested result assertion nor its
++hash is proof by itself.
++
+ No outcome proves a negative, a preset title, a model identity, custom
+ device-resident storage, or complete internal-DSP restoration. The procedure
+ never claims a title or model.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 04:01:50.180729211 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 04:21:41.383976244 -0700
+@@ -426,10 +426,10 @@
+ `LINUX-OFFLINE-SHA256SUMS`. The tracked artifact hashes are:
+ 
+ ```text
+-1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
+-3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
++ad694447f07b2999d67c12c614f14e726fc3dc4623efd5040a0bd73cc8768d08  re/cp34_current_slot_survey.py
++2c315c79a68e477807d4ae34e33a50dc93b60b5374186310998256f2b60499a4  tests/test_cp34_current_slot_survey.py
+ 8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++5bb402f6b0e98f83f2ab082d738d7fd9a071356c07ae64cf0119ea7886f116f8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+ 7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+ ```
+@@ -482,3 +482,37 @@
+ front-panel action, preset/effect operation, mapped write, firmware/reset/DFU,
+ installation, external staging, network action, or audio monitoring occurred
+ during this integration.
++
++### Fix round 1 canonical replay evidence
++
++The first independent integration review rejected four assertions that were
++structural but not canonical. The offline verifier now closes each one:
++
++- `analyze_map_bytes` consumes the already-snapshotted `MAP.raw.wav` bytes.
++  Restoration recomputes the complete `cp34-current-slot-map-v1` result using
++  the plan's physical input and requires exact type-preserving equality with
++  `MAP.json`, including raw hash, metrics, scores, status, reasons, and frozen
++  winner.
++- `re/cp34_live_matrix.py` exposes `analyze_slot_bytes`, which accepts exactly
++  two dry and two active `(run-relative label, immutable bytes)` inputs. The
++  ordinary path CLI reads each file once and delegates to that same algorithm.
++  Restoration invokes the byte seam directly with the four snapshotted
++  derivatives and requires complete equality with `AB.json`; it creates no
++  temporary file and does not reread a live path.
++- `MAP.raw.wav` and `S1.raw.wav` through `S4.raw.wav` are now individually
++  required and validated as exact six-channel S32_LE/48 kHz captures. The plan,
++  three JaSt summaries and raw bindings, action log, map, four deterministic
++  derivatives, A/B, audible attestation, physical restoration, and exact input
++  manifest remain independent mandatory inputs.
++- A channel-2 check recomputes the complete channel-1 restoration result from
++  the same immutable run snapshot. The saved predecessor must exactly match
++  that result, including empty reasons, slot/channel/frozen scope, literal JaSt
++  limitation, and scoped input hashes. A newly manifested result JSON or hash
++  cannot substitute for valid underlying channel-1 evidence.
++
++The immutable analyzer seam is pinned here as
++`re/cp34_live_matrix.py` SHA-256
++`aac2a39a49284cc42c01247fca53fbaf6b0af1a04dd3182b82aa7358c5db95c8`
++and `tests/test_cp34_live_matrix.py` SHA-256
++`0f27703b9ba94b4af9807ca6bc1f9389f81deb31d12d8d14f435055d1d4b7b8f`.
++No live action occurred. Independent re-review remains required.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 04:01:50.180846475 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 04:21:41.384087851 -0700
+@@ -249,6 +249,13 @@
+ stage manifest. It does not modify this title-verified L02-L07 matrix and was
+ not executed.
+ 
++Fix round 1 adds one immutable-byte seam to this file's existing
++`analyze-slot` implementation. The path-based CLI reads each derivative once
++and delegates to `analyze_slot_bytes`; the current-slot restoration verifier
++passes four already-snapshotted byte buffers with exact run-relative labels to
++that same algorithm. There is no duplicated classifier, temporary WAV, driver
++import, live reread, ALSA access, or hardware path.
++
+ That survey can produce only positive signal-domain evidence after exact
+ restoration. Its actual analyzer input schema is `cp34-slot-survey-audio-v1`;
+ it fixes `model_identity` to `UNRESOLVED` and title/live/restoration flags to
+@@ -258,8 +265,8 @@
+ `INCONCLUSIVE`, never a negative, and channel 2 is forbidden after either
+ `UNAVAILABLE` or `RESTORATION_FAILED` channel 1.
+ 
+-The integrated files are eligible only for independent offline review. A clean
+-review must precede, and cannot replace, a separately exact authorization for
++The corrected files are eligible only for independent offline re-review. A
++clean review must precede, and cannot replace, a separately exact authorization for
+ the named live run. No validator, template, fixture, manifest, or offline
+ `SIGNATURE_PRESENT` result authorizes USB, ALSA, front-panel, preset/effect, or
+ other hardware action.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 04:01:50.180811414 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 04:21:41.384053558 -0700
+@@ -158,11 +158,14 @@
+ provenance. `map-channel` freezes channel 3 or 4 before any effect result.
+ `verify-restoration` consumes the existing `cp34-slot-survey-audio-v1` schema,
+ requires JaSt summary-to-raw bindings and exact derivative path/hash bindings,
+-and fail-closes on any missing evidence input. A passing offline result is not
++and fail-closes on any missing evidence input. Fix round 1 recomputes both the
++complete map and complete A/B report from their immutable captured bytes,
++validates all five six-channel raw captures, and recomputes channel 1 before
++accepting its exact saved result as the channel-2 predecessor. A passing offline result is not
+ a preset title or model claim, is never a negative result, and is not live
+ authority. Channel 2 requires a sealed channel-1 result of exactly `RESTORED`
+ plus `INCONCLUSIVE`.
+ 
+-The next gate is an independent offline review. Only after that review is clean
++The next gate is an independent offline re-review. Only after that review is clean
+ may a new separately exact authorization be requested for a named live run.
+ No live action occurred while producing or integrating this stage.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 04:01:50.180890126 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 04:21:41.384125425 -0700
+@@ -1,23 +1,23 @@
+ 8675c57273ea856909b673d58f780035b375c13af281de4a707486855833cf19  re/cp34_host_queue_inventory.py
+ a7e13d48310ae64b51c550d987460bb0ef6b85005ea98c45c90d2ba244f20faa  tests/test_cp34_host_queue_inventory.py
+-6d3f309aa63a90b6c4f68ab5ee7c0511fb86dbca0c7f133ecd2d91f40cc17659  re/cp34_live_matrix.py
+-165028a3cee10900cd320bdacdfd1621f767f940f1c6148ec1263a11f77e2980  tests/test_cp34_live_matrix.py
++aac2a39a49284cc42c01247fca53fbaf6b0af1a04dd3182b82aa7358c5db95c8  re/cp34_live_matrix.py
++0f27703b9ba94b4af9807ca6bc1f9389f81deb31d12d8d14f435055d1d4b7b8f  tests/test_cp34_live_matrix.py
+ af5472545139711aa8a3ca305851888cb9af20513fd16c16e34a8b8bbe9ebfac  io24.py
+ 89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d  re/uc_factory_presets.json
+ 6502fa83125fb519d61bd2bba40e9d10d81f0307bdbe104e2d0e38304b1d6fce  tests/fx_gate_probe.py
+ 2e71faaa046d1bd87a02c62fe36c8a5692e7e7f7007c2c6a11352c5db956bb6c  PROTOCOL.md
+-7f64dc4fe2a445ccda584a657b286fd210b5c9d616e2a13f6052ded9404d3912  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
++07f49dd926b91872564b1e3928944f7a018ea6921ff34e8880cf4a57766aa971  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+ c6238bac7efb7eda37f3289be948eb2fc34455f44a1b3fbfd6cb7c55389f86e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CAPTURE-MANIFEST.md
+ 2267f83eb9eaec10ad493b2d0d520135d55ccba3e96e05ad70eb0a90d319f6b6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PRESTATE.md
+-ef1f1063ed82cb15b13196755578daa420b992c43d571c2e649fe79ab38bf773  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+-f1bc0ac0e8eb2b0e43637db80beb2b55e10f7f0c313705d0ed090bfa67561709  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+-76be841805716bdc1216f7ae57fd12925e7370348ed4b6bda8052a1d614056e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+-5be41b257c781ab9d014d4a885537c977e2ca9dc5965fbb99716343ef62f3a7b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+-1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
+-3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
++d8c0b4dab170e44d19138fa914bec3ab8e0ced2749aaf2de8f7db7af41fcd31b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
++3dbdeadc9766dd319a5f926d1d715c6c868a109929228379271f3c3a14072803  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
++55dc732722ee0097b57e5929c1c8445efa93ff466be70ad5f326d44d274e4a87  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
++120c7c66d4446768dbefb53cc195c42921e4fb75cc047fb4aafa5bf68c27e37e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++ad694447f07b2999d67c12c614f14e726fc3dc4623efd5040a0bd73cc8768d08  re/cp34_current_slot_survey.py
++2c315c79a68e477807d4ae34e33a50dc93b60b5374186310998256f2b60499a4  tests/test_cp34_current_slot_survey.py
+ 8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++5bb402f6b0e98f83f2ab082d738d7fd9a071356c07ae64cf0119ea7886f116f8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+ 7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+-25fbebbed34be6b11809f58e563a68844b675dfb3604805a51281b3d06c97f28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
++645fbe169ed13830edd7a3e2d893a1bbfad9d45d091a80cc57a2989c140403d6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+ 567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 04:01:50.180689331 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 04:21:41.383934269 -0700
+@@ -68,13 +68,13 @@
+ offline stage. Its exact tracked artifacts are:
+ 
+ - `re/cp34_current_slot_survey.py` —
+-  `1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3`;
++  `ad694447f07b2999d67c12c614f14e726fc3dc4623efd5040a0bd73cc8768d08`;
+ - `tests/test_cp34_current_slot_survey.py` —
+-  `3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c`;
++  `2c315c79a68e477807d4ae34e33a50dc93b60b5374186310998256f2b60499a4`;
+ - `CURRENT-SLOT-SURVEY-DESIGN.md` —
+   `8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28`;
+ - `CURRENT-SLOT-SURVEY.md` —
+-  `295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43`;
++  `5bb402f6b0e98f83f2ab082d738d7fd9a071356c07ae64cf0119ea7886f116f8`;
+ - `CURRENT-SLOT-SURVEY-PLAN.template.json` —
+   `3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3`;
+ - `CURRENT-SLOT-SURVEY-IMPLEMENTATION.md` —
+@@ -86,3 +86,12 @@
+ exact authorization be considered for a named run; validator, analyzer,
+ restoration-verifier, template, test, or manifest success is never live
+ authority.
++
++Fix round 1 closes the independent rejection gate's four verifier gaps. The
++restoration verifier now recomputes the map from immutable `MAP.raw.wav` bytes,
++recomputes A/B through the live-matrix analyzer's immutable-byte seam, requires
++and validates all five raw captures independently of manifest exactness, and
++replays all channel-1 evidence before accepting an exact full predecessor
++result for channel 2. These are offline verification guarantees only. The next
++gate remains a new independent offline review, followed only after a clean
++result by a separately exact authorization.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 04:01:50.180774119 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 04:21:41.384017799 -0700
+@@ -1,8 +1,8 @@
+ # CP34 device preset and Voice FX continuation
+ 
+ Timestamp: 2026-08-29
+-Status: active; current-slot survey offline stage integrated, independent
+-review required before any authorization request
++Status: active; current-slot survey fix round 1 offline-sealed, independent
++re-review required before any authorization request
+ 
+ ## Outcomes
+ 
+@@ -182,7 +182,10 @@
+ 1. The current-slot survey implementation, six-row
+    `CURRENT-SLOT-SURVEY-STAGE.sha256`, 94-test plus 27-subtest regression, two
+    pinned host inventories, and `LINUX-OFFLINE-SHA256SUMS` have been reproduced
+-   offline. Obtain an independent offline review of this integrated stage.
++   offline. Fix round 1 additionally makes map and A/B reports canonical from
++   immutable bytes, requires every raw capture, and re-evaluates channel 1
++   before channel 2. Obtain a new independent offline review of this corrected
++   stage.
+    Passing tools, templates, tests, or manifests does not authorize hardware.
+ 2. Treat device-resident custom store/assignment as unsupported by this exact
+    host-module/firmware pair unless a new source artifact shows another io24
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/re/cp34_current_slot_survey.py	2026-08-29 04:01:50.180264903 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/re/cp34_current_slot_survey.py	2026-08-29 04:21:41.383540222 -0700
+@@ -2,6 +2,7 @@
+ """Offline validator for CP34 current-slot survey plans."""
+ 
+ import hashlib
++import importlib.util
+ import io
+ import json
+ import math
+@@ -171,12 +172,8 @@
+     }
+ 
+ 
+-def analyze_map(path: str, input_channel: int) -> dict:
+-    """Map a recorded input to the preplanned Mix A candidates, offline only."""
+-    try:
+-        raw = open(path, "rb").read()
+-    except (OSError, TypeError, ValueError):
+-        raw = b""
++def analyze_map_bytes(raw: bytes, input_channel: int) -> dict:
++    """Map immutable WAV bytes to the preplanned Mix A candidates."""
+     raw_sha256 = hashlib.sha256(raw).hexdigest()
+     if input_channel not in (1, 2):
+         return _unavailable(raw_sha256, input_channel, "input_channel_must_be_1_or_2")
+@@ -230,6 +227,15 @@
+     }
+ 
+ 
++def analyze_map(path: str, input_channel: int) -> dict:
++    """Map a recorded input to the preplanned Mix A candidates, offline only."""
++    try:
++        raw = open(path, "rb").read()
++    except (OSError, TypeError, ValueError):
++        raw = b""
++    return analyze_map_bytes(raw, input_channel)
++
++
+ def _contains_unrecorded(value):
+     if isinstance(value, str):
+         return "UNRECORDED" in value
+@@ -683,6 +689,41 @@
+     return list(dict.fromkeys(reasons))
+ 
+ 
++def _same_json_value(first, second):
++    if type(first) is not type(second):
++        return False
++    if isinstance(first, dict):
++        return (set(first) == set(second)
++                and all(_same_json_value(first[key], second[key]) for key in first))
++    if isinstance(first, list):
++        return (len(first) == len(second)
++                and all(_same_json_value(a, b) for a, b in zip(first, second)))
++    return first == second
++
++
++def _canonical_slot_analysis(dry_inputs, active_inputs, candidate,
++                             audible_attested):
++    module_path = Path(__file__).with_name("cp34_live_matrix.py")
++    spec = importlib.util.spec_from_file_location(
++        "cp34_live_matrix_for_current_slot", module_path,
++    )
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module.analyze_slot_bytes(
++        dry_inputs, active_inputs, candidate,
++        audible_attested=audible_attested,
++    )
++
++
++def _candidate_input_hashes(input_hashes, candidate):
++    prefix = candidate + "/"
++    return {
++        path: digest for path, digest in input_hashes.items()
++        if path == "PLAN.json"
++        or (path.startswith(prefix) and path != prefix + "RESTORATION.json")
++    }
++
++
+ def verify_restoration(run_dir: str, candidate: str) -> dict:
+     """Verify completed CP34 evidence offline without mutating its run tree."""
+     reasons = []
+@@ -690,6 +731,14 @@
+     reasons.extend(snapshot_reasons)
+     input_hashes, manifest_reasons = _verify_input_manifest(run_dir, inputs)
+     reasons.extend(manifest_reasons)
++    return _verify_restoration_inputs(inputs, input_hashes, candidate, reasons,
++                                      run_dir_name=Path(run_dir).name)
++
++
++def _verify_restoration_inputs(inputs, input_hashes, candidate, initial_reasons=(),
++                               run_dir_name=None):
++    """Verify one candidate entirely from a single immutable run snapshot."""
++    reasons = list(initial_reasons)
+     candidate_spec = next(
+         (item for item in EXPECTED_CANDIDATES if item["label"] == candidate), None,
+     )
+@@ -701,7 +750,7 @@
+         "channel": candidate_spec["channel"] if candidate_spec else None,
+         "selected_slot": candidate_spec["numeric_slot"] if candidate_spec else None,
+         "frozen_mix_channel": None,
+-        "input_hashes": input_hashes,
++        "input_hashes": _candidate_input_hashes(input_hashes, candidate),
+         "ja_st_limitation": JA_ST_LIMITATION,
+         "reasons": reasons,
+     }
+@@ -735,7 +784,8 @@
+             not _same_json_scalar(plan_candidate.get(key), expected)
+             for key, expected in candidate_spec.items()):
+         reasons.append("plan_candidate_scope_mismatch")
+-    if isinstance(plan, dict) and Path(run_dir).name != plan.get("run_id"):
++    if (isinstance(plan, dict) and run_dir_name is not None
++            and run_dir_name != plan.get("run_id")):
+         reasons.append("run_dir_basename_must_match_plan_run_id")
+ 
+     prefix = candidate + "/"
+@@ -824,6 +874,19 @@
+         if toggle.get("press") != "long":
+             reasons.append("manual_toggle_must_be_long_press")
+ 
++    raw_captures = {}
++    for capture in ("MAP", "S1", "S2", "S3", "S4"):
++        relative = prefix + capture + ".raw.wav"
++        raw_capture = inputs.get(relative)
++        raw_captures[capture] = raw_capture
++        if raw_capture is None:
++            reasons.append("required_input_missing:%s" % relative)
++            continue
++        try:
++            _read_six_channel_wav(raw_capture)
++        except (TypeError, ValueError):
++            reasons.append("%s_wav_invalid" % capture.lower())
++
+     map_result = _json_input(inputs, prefix + "MAP.json", reasons)
+     frozen_channel = map_result.get("frozen_mix_channel") if isinstance(map_result, dict) else None
+     result["frozen_mix_channel"] = frozen_channel
+@@ -840,11 +903,15 @@
+             reasons.append("map_input_channel_mismatch")
+         if not any(_same_json_scalar(frozen_channel, channel) for channel in MIX_CHANNELS):
+             reasons.append("map_frozen_channel_invalid")
+-        map_raw = inputs.get(prefix + "MAP.raw.wav")
+-        if map_raw is None:
+-            reasons.append("required_input_missing:%sMAP.raw.wav" % prefix)
+-        elif map_result.get("raw_sha256") != hashlib.sha256(map_raw).hexdigest():
++        map_raw = raw_captures["MAP"]
++        if map_raw is not None and map_result.get("raw_sha256") != hashlib.sha256(map_raw).hexdigest():
+             reasons.append("map_raw_hash_mismatch")
++        if map_raw is not None:
++            canonical_map = analyze_map_bytes(
++                map_raw, candidate_spec["physical_input"],
++            )
++            if not _same_json_value(map_result, canonical_map):
++                reasons.append("map_result_not_canonical")
+ 
+     for event in events:
+         if (event.get("kind") == "audio_capture"
+@@ -855,14 +922,6 @@
+                 "audio_capture_frozen_channel_mismatch:%s" % event.get("id"),
+             )
+ 
+-    s4_raw = inputs.get(prefix + "S4.raw.wav")
+-    if s4_raw is None:
+-        reasons.append("required_input_missing:%sS4.raw.wav" % prefix)
+-    else:
+-        try:
+-            _read_six_channel_wav(s4_raw)
+-        except (TypeError, ValueError):
+-            reasons.append("s4_wav_invalid")
+     s4_events = [event for event in events if event.get("id") == "S4"]
+     if len(s4_events) != 1 or s4_events[0].get("frozen_mix_channel") != frozen_channel:
+         reasons.append("s4_must_use_frozen_mix_channel")
+@@ -942,6 +1001,38 @@
+             and _same_json_scalar(audible.get("dry_repeats_heard"), 0)
+         )
+ 
++    if isinstance(ab_result, dict) and isinstance(p0, dict):
++        if p0.get("enabled") is True:
++            dry_ids, active_ids = ("S2", "S3"), ("S1", "S4")
++        elif p0.get("enabled") is False:
++            dry_ids, active_ids = ("S1", "S4"), ("S2", "S3")
++        else:
++            dry_ids, active_ids = (), ()
++        dry_inputs = [
++            (prefix + "%s.mix%s.mono.wav" % (capture, frozen_channel),
++             inputs.get(prefix + "%s.mix%s.mono.wav" % (capture, frozen_channel)))
++            for capture in dry_ids
++        ]
++        active_inputs = [
++            (prefix + "%s.mix%s.mono.wav" % (capture, frozen_channel),
++             inputs.get(prefix + "%s.mix%s.mono.wav" % (capture, frozen_channel)))
++            for capture in active_ids
++        ]
++        if (len(dry_inputs) == 2 and len(active_inputs) == 2
++                and all(isinstance(raw, bytes)
++                        for _, raw in dry_inputs + active_inputs)):
++            try:
++                canonical_ab = _canonical_slot_analysis(
++                    dry_inputs, active_inputs, candidate, audible_positive,
++                )
++            except (EOFError, OSError, TypeError, ValueError, wave.Error):
++                reasons.append("ab_canonical_analysis_failed")
++            else:
++                if not _same_json_value(ab_result, canonical_ab):
++                    reasons.append("ab_result_not_canonical")
++        else:
++            reasons.append("ab_canonical_inputs_missing")
++
+     physical = _json_input(inputs, prefix + "PHYSICAL-RESTORATION.json", reasons)
+     if isinstance(physical, dict):
+         reasons.extend(_scope_reasons(physical, candidate_spec, "physical_restoration"))
+@@ -957,12 +1048,22 @@
+         first_result = _json_input(
+             inputs, "ch1-slot1/RESTORATION.json", reasons,
+         )
+-        if not (isinstance(first_result, dict)
+-                and first_result.get("schema") == "cp34-current-slot-restoration-v1"
+-                and _same_json_scalar(first_result.get("candidate"), "ch1-slot1")
+-                and _same_json_scalar(first_result.get("channel"), 1)
+-                and first_result.get("status") == "RESTORED"
+-                and first_result.get("survey_outcome") == "INCONCLUSIVE"):
++        canonical_first = _verify_restoration_inputs(
++            inputs, input_hashes, "ch1-slot1", (),
++            run_dir_name=run_dir_name,
++        )
++        first_evidence_valid = (
++            canonical_first.get("status") == "RESTORED"
++            and canonical_first.get("survey_outcome") == "INCONCLUSIVE"
++            and canonical_first.get("reasons") == []
++        )
++        if not first_evidence_valid:
++            reasons.append("second_candidate_first_evidence_invalid")
++        if (not isinstance(first_result, dict)
++                or not _same_json_value(first_result, canonical_first)):
++            reasons.append("second_candidate_first_result_not_canonical")
++        if (not first_evidence_valid or not isinstance(first_result, dict)
++                or not _same_json_value(first_result, canonical_first)):
+             reasons.append("second_candidate_requires_restored_inconclusive_first")
+ 
+     result["reasons"] = _deduplicate(reasons)
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/re/cp34_live_matrix.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/re/cp34_live_matrix.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/re/cp34_live_matrix.py	2026-08-29 04:01:50.180450612 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/re/cp34_live_matrix.py	2026-08-29 04:21:41.383706306 -0700
+@@ -7,6 +7,7 @@
+ 
+ import argparse
+ import hashlib
++import io
+ import json
+ import math
+ import os
+@@ -90,8 +91,8 @@
+             math.isfinite(value) and minimum <= value <= maximum)
+ 
+ 
+-def _read_mono_wav(path):
+-    with wave.open(path, "rb") as handle:
++def _read_mono_wav_bytes(raw_bytes, path_label):
++    with wave.open(io.BytesIO(raw_bytes), "rb") as handle:
+         channels = handle.getnchannels()
+         width = handle.getsampwidth()
+         rate = handle.getframerate()
+@@ -99,9 +100,10 @@
+         raw = handle.readframes(frames)
+     if channels != 1:
+         raise ValueError("%s: expected mono derivative, got %d channels" %
+-                         (path, channels))
++                         (path_label, channels))
+     if rate != RATE:
+-        raise ValueError("%s: expected %d Hz, got %d" % (path, RATE, rate))
++        raise ValueError("%s: expected %d Hz, got %d" %
++                         (path_label, RATE, rate))
+     if width == 4:
+         values = struct.unpack("<%di" % frames, raw)
+         scale = 2147483648.0
+@@ -109,10 +111,16 @@
+         values = struct.unpack("<%dh" % frames, raw)
+         scale = 32768.0
+     else:
+-        raise ValueError("%s: expected 16-bit or 32-bit PCM" % path)
++        raise ValueError("%s: expected 16-bit or 32-bit PCM" % path_label)
+     return [value / scale for value in values]
+ 
+ 
++def _read_mono_wav(path):
++    with open(path, "rb") as handle:
++        raw_bytes = handle.read()
++    return _read_mono_wav_bytes(raw_bytes, path)
++
++
+ def _direct_arrivals(samples):
+     peak = max((abs(value) for value in samples), default=0.0)
+     if peak <= 1e-8:
+@@ -136,11 +144,11 @@
+     return math.sqrt(sum(value * value for value in samples) / len(samples))
+ 
+ 
+-def _capture_metrics(path):
+-    samples = _read_mono_wav(path)
++def _capture_metrics_bytes(raw_bytes, path_label):
++    samples = _read_mono_wav_bytes(raw_bytes, path_label)
+     peak = max(abs(value) for value in samples)
+     if peak >= 0.98:
+-        raise ValueError("%s: capture clips at %.6f" % (path, peak))
++        raise ValueError("%s: capture clips at %.6f" % (path_label, peak))
+     arrivals = _direct_arrivals(samples)
+     delay = int(EXPECTED_DELAY_S * RATE)
+     tolerance = int(DELAY_TOLERANCE_S * RATE)
+@@ -160,14 +168,14 @@
+         late = max(abs(value) for value in samples[late_lo:late_hi])
+         late_ratios.append(late / direct if direct else 0.0)
+     if len(ratios) < 5:
+-        raise ValueError("%s: incomplete 150 ms observation windows" % path)
++        raise ValueError("%s: incomplete 150 ms observation windows" % path_label)
+     ratios.sort()
+     ratio = ratios[len(ratios) // 2]
+     late_ratios.sort()
+     late_ratio = late_ratios[len(late_ratios) // 2]
+     return {
+-        "path": path,
+-        "sha256": _sha256(path),
++        "path": path_label,
++        "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+         "impulses": len(arrivals),
+         "arrival_offsets_samples": [value - arrivals[0] for value in arrivals],
+         "peak": peak,
+@@ -177,6 +185,12 @@
+     }
+ 
+ 
++def _capture_metrics(path):
++    with open(path, "rb") as handle:
++        raw_bytes = handle.read()
++    return _capture_metrics_bytes(raw_bytes, path)
++
++
+ def _sha256(path):
+     digest = hashlib.sha256()
+     with open(path, "rb") as handle:
+@@ -270,13 +284,32 @@
+ 
+ 
+ def analyze_slot(dry_paths, active_paths, candidate, audible_attested=False):
++    dry_inputs = []
++    active_inputs = []
++    for path in dry_paths:
++        with open(path, "rb") as handle:
++            dry_inputs.append((path, handle.read()))
++    for path in active_paths:
++        with open(path, "rb") as handle:
++            active_inputs.append((path, handle.read()))
++    return analyze_slot_bytes(
++        dry_inputs, active_inputs, candidate,
++        audible_attested=audible_attested,
++    )
++
++
++def analyze_slot_bytes(dry_inputs, active_inputs, candidate,
++                       audible_attested=False):
++    """Analyze immutable labeled WAV bytes using the canonical slot algorithm."""
+     if candidate not in SLOT_CANDIDATES:
+         raise ValueError("unsupported slot candidate %r" % candidate)
+-    if len(dry_paths) != 2 or len(active_paths) != 2:
++    if len(dry_inputs) != 2 or len(active_inputs) != 2:
+         raise ValueError("exactly two dry and two active captures are required")
+ 
+-    dry = [_capture_metrics(path) for path in dry_paths]
+-    active = [_capture_metrics(path) for path in active_paths]
++    dry = [_capture_metrics_bytes(raw_bytes, path_label)
++           for path_label, raw_bytes in dry_inputs]
++    active = [_capture_metrics_bytes(raw_bytes, path_label)
++              for path_label, raw_bytes in active_inputs]
+     captures = dry + active
+     worst_dry_echo = max(row["echo_ratio_db"] for row in dry)
+     worst_dry_late = max(row["late_ratio_db"] for row in dry)
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/tests/test_cp34_current_slot_survey.py	2026-08-29 04:01:50.180362472 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/tests/test_cp34_current_slot_survey.py	2026-08-29 04:21:41.383637023 -0700
+@@ -142,11 +142,26 @@
+ 
+ 
+ def _write_minimal_mono_wav(path):
++    """Write a deterministic five-impulse mono A/B fixture."""
++    _write_mono_impulses(path)
++
++
++def _write_mono_impulses(path, *, echo_gain=0.0):
++    origins = (0.4, 1.1, 1.8, 2.5, 3.2)
++    frames = [0.0] * (48000 * 4)
++    for second in origins:
++        origin = int(second * 48000)
++        frames[origin] = 0.4
++        if echo_gain:
++            frames[origin + int(0.15 * 48000)] = 0.4 * echo_gain
+     with wave.open(str(path), "wb") as output:
+         output.setnchannels(1)
+         output.setsampwidth(4)
+         output.setframerate(48000)
+-        output.writeframes(b"\0" * 4)
++        output.writeframes(b"".join(
++            struct.pack("<i", round(sample * 2147483647.0))
++            for sample in frames
++        ))
+ 
+ 
+ def _refresh_evidence_manifest(run_dir):
+@@ -159,14 +174,7 @@
+     (run_dir / "EVIDENCE-SHA256SUMS").write_text("".join(rows), encoding="utf-8")
+ 
+ 
+-def _build_restoration_run(base, *, candidate="ch1-slot1", enabled=True,
+-                           outcome="SIGNATURE_PRESENT", include_first_result=False):
+-    run_id = "20260829T120000-0700-current-slot-survey"
+-    run_dir = Path(base) / run_id
+-    run_dir.mkdir()
+-    plan = _valid_plan()
+-    (run_dir / "PLAN.json").write_text(json.dumps(plan), encoding="utf-8")
+-
++def _populate_candidate(run_dir, plan, *, candidate, enabled, outcome):
+     candidate_spec = next(item for item in plan["candidates"] if item["label"] == candidate)
+     candidate_dir = run_dir / candidate
+     candidate_dir.mkdir()
+@@ -216,7 +224,10 @@
+         "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8",
+     )
+ 
+-    _write_minimal_six_channel_wav(candidate_dir / "MAP.raw.wav")
++    _write_six_channel_map_wav(
++        candidate_dir / "MAP.raw.wav",
++        input_channel=candidate_spec["physical_input"],
++    )
+     for capture in ("S1", "S2", "S3", "S4"):
+         _write_minimal_six_channel_wav(candidate_dir / f"{capture}.raw.wav")
+     map_hash = hashlib.sha256((candidate_dir / "MAP.raw.wav").read_bytes()).hexdigest()
+@@ -226,34 +237,57 @@
+         "raw_sha256": map_hash,
+         "input_metrics": {
+             "input_channel": candidate_spec["physical_input"],
+-            "peak_dbfs": -24.0,
++            "peak_dbfs": -24.031921937723535,
+             "arrivals": [0, 33600, 67200, 100800, 134400],
+         },
+-        "scores": {"3": 1.0, "4": 0.0},
++        "scores": (
++            {"3": 0.9999999999999577, "4": 0.2548227531020262}
++            if candidate_spec["physical_input"] == 1
++            else {"3": 0.9999999999984392, "4": 0.25482443833540586}
++        ),
+         "frozen_mix_channel": 3,
+         "reasons": [],
+     }), encoding="utf-8")
+     active_ids = ("S1", "S4") if enabled else ("S2", "S3")
+     dry_ids = ("S2", "S3") if enabled else ("S1", "S4")
+     metric_rows = {}
++    classifier_positive = outcome == "SIGNATURE_PRESENT"
+     for capture in ("S1", "S2", "S3", "S4"):
+         derivative = candidate_dir / f"{capture}.mix3.mono.wav"
+-        _write_minimal_mono_wav(derivative)
++        is_active = capture in active_ids
++        _write_mono_impulses(
++            derivative,
++            echo_gain=0.5 if classifier_positive and is_active else 0.0,
++        )
+         relative = derivative.relative_to(run_dir).as_posix()
+         metric_rows[capture] = {
+             "path": relative,
+             "sha256": hashlib.sha256(derivative.read_bytes()).hexdigest(),
+             "impulses": 5,
+             "arrival_offsets_samples": [0, 33600, 67200, 100800, 134400],
+-            "peak": 0.125,
+-            "rms_db": -40.0,
+-            "echo_ratio_db": -6.0 if capture in active_ids else -40.0,
+-            "late_ratio_db": -40.0,
++            "peak": 0.39999999990686774,
++            "rms_db": (
++                -52.83301229108018
++                if classifier_positive and is_active else -53.8021124191384
++            ),
++            "echo_ratio_db": (
++                -6.02059992339133
++                if classifier_positive and is_active else -280.0
++            ),
++            "late_ratio_db": -280.0,
+         }
+     for capture in active_ids:
+-        metric_rows[capture]["echo_delta_db"] = 34.0
++        metric_rows[capture]["echo_delta_db"] = (
++            273.97940007660867 if classifier_positive else 0.0
++        )
+         metric_rows[capture]["late_delta_db"] = 0.0
+-    classifier_positive = outcome == "SIGNATURE_PRESENT"
++    inconclusive_reasons = [
++        "audible result was not attested",
++        "active capture 1 has no usable 150 ms repeat",
++        "active capture 1 is less than 6 dB above dry",
++        "active capture 2 has no usable 150 ms repeat",
++        "active capture 2 is less than 6 dB above dry",
++    ]
+     (candidate_dir / "AB.json").write_text(json.dumps({
+         "schema": "cp34-slot-survey-audio-v1",
+         "status": "SIGNATURE_PRESENT" if classifier_positive else "INCONCLUSIVE",
+@@ -271,15 +305,15 @@
+         "expected_delay_s": 0.15,
+         "dry": [metric_rows[capture] for capture in dry_ids],
+         "active": [metric_rows[capture] for capture in active_ids],
+-        "reasons": [] if classifier_positive else ["audible result was not attested"],
++        "reasons": [] if classifier_positive else inconclusive_reasons,
+     }), encoding="utf-8")
+     (candidate_dir / "AUDIBLE-ATTESTATION.json").write_text(json.dumps({
+         "schema": "cp34-current-slot-audible-attestation-v1",
+         "phase": "POST_RESTORATION",
+         **scope,
+         "frozen_mix_channel": 3,
+-        "active_repeats_heard": 2,
+-        "dry_repeats_heard": 0,
++        "active_repeats_heard": 2 if classifier_positive else None,
++        "dry_repeats_heard": 0 if classifier_positive else None,
+         "operator_attested": True,
+     }), encoding="utf-8")
+     (candidate_dir / "PHYSICAL-RESTORATION.json").write_text(json.dumps({
+@@ -289,16 +323,43 @@
+         "operator_attested": True,
+         "restored_connection": candidate_spec["restore_connection"],
+     }), encoding="utf-8")
++
++
++def _build_restoration_run(base, *, candidate="ch1-slot1", enabled=True,
++                           outcome="SIGNATURE_PRESENT", include_first_result=False):
++    run_id = "20260829T120000-0700-current-slot-survey"
++    run_dir = Path(base) / run_id
++    run_dir.mkdir()
++    plan = _valid_plan()
++    (run_dir / "PLAN.json").write_text(json.dumps(plan), encoding="utf-8")
++
+     if include_first_result:
+-        first_dir = run_dir / "ch1-slot1"
+-        first_dir.mkdir(exist_ok=True)
+-        (first_dir / "RESTORATION.json").write_text(json.dumps({
++        _populate_candidate(
++            run_dir, plan, candidate="ch1-slot1", enabled=True,
++            outcome="INCONCLUSIVE",
++        )
++        first_input_hashes = {
++            path.relative_to(run_dir).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
++            for path in run_dir.rglob("*") if path.is_file()
++            and (path.relative_to(run_dir).as_posix() == "PLAN.json"
++                 or path.relative_to(run_dir).as_posix().startswith("ch1-slot1/"))
++        }
++        (run_dir / "ch1-slot1" / "RESTORATION.json").write_text(json.dumps({
+             "schema": "cp34-current-slot-restoration-v1",
+             "status": "RESTORED",
+             "survey_outcome": "INCONCLUSIVE",
+             "candidate": "ch1-slot1",
+             "channel": 1,
++            "selected_slot": 0,
++            "frozen_mix_channel": 3,
++            "input_hashes": first_input_hashes,
++            "ja_st_limitation": "JaSt cannot prove every internal DSP byte.",
++            "reasons": [],
+         }), encoding="utf-8")
++
++    _populate_candidate(
++        run_dir, plan, candidate=candidate, enabled=enabled, outcome=outcome,
++    )
+     _refresh_evidence_manifest(run_dir)
+     return run_dir
+ 
+@@ -595,6 +656,15 @@
+                 path.relative_to(run_dir).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                 for path in run_dir.rglob("*") if path.is_file()
+             }
++            map_path = run_dir / "ch1-slot1" / "MAP.json"
++            original_map = map_path.read_bytes()
++            self._mutate_json(
++                map_path,
++                lambda value: value["scores"].update({"3": 0.81, "4": 0.99}),
++            )
++            _refresh_evidence_manifest(run_dir)
++            forged_map_completed, forged_map_result = self._result(run_dir)
++            map_path.write_bytes(original_map)
+             ab = run_dir / "ch1-slot1" / "AB.json"
+             self._mutate_json(ab, lambda value: value.pop("expected_delay_s"))
+             self._mutate_json(ab, lambda value: value["dry"][0].pop("impulses"))
+@@ -635,6 +705,8 @@
+             result["ja_st_limitation"],
+             "JaSt cannot prove every internal DSP byte.",
+         )
++        self.assertEqual(forged_map_completed.returncode, 2)
++        self.assertIn("map_result_not_canonical", forged_map_result["reasons"])
+         self.assertEqual(malformed_completed.returncode, 2)
+         self.assertIn("ab_top_level_fields_invalid", malformed_result["reasons"])
+         self.assertIn("ab_metric_fields_invalid:dry:1", malformed_result["reasons"])
+@@ -668,9 +740,30 @@
+             }))
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir)
++            ab = run_dir / "ch1-slot1" / "AB.json"
++            self._mutate_json(
++                ab,
++                lambda value: value.update({
++                    "status": "SIGNATURE_PRESENT",
++                    "classification": "REPEAT_150MS_SIGNATURE",
++                    "audible_attested": True,
++                    "reasons": [],
++                }),
++            )
++            self._mutate_json(
++                ab,
++                lambda value: [row.update({
++                    "echo_ratio_db": -6.0,
++                    "echo_delta_db": 274.0,
++                }) for row in value["active"]],
++            )
++            _refresh_evidence_manifest(run_dir)
++            forged_completed, forged_result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 0)
+         self.assertEqual(result["status"], "RESTORED")
+         self.assertEqual(result["survey_outcome"], "INCONCLUSIVE")
++        self.assertEqual(forged_completed.returncode, 2)
++        self.assertIn("ab_result_not_canonical", forged_result["reasons"])
+ 
+     def test_selected_slot_drift_fails_restoration(self):
+         with tempfile.TemporaryDirectory() as directory:
+@@ -775,7 +868,8 @@
+     def test_missing_s4_fails_restoration(self):
+         with tempfile.TemporaryDirectory() as directory:
+             run_dir = _build_restoration_run(directory)
+-            (run_dir / "ch1-slot1" / "S4.raw.wav").unlink()
++            for capture in ("S1", "S2", "S3", "S4"):
++                (run_dir / "ch1-slot1" / f"{capture}.raw.wav").unlink()
+             ab = run_dir / "ch1-slot1" / "AB.json"
+             self._mutate_json(ab, lambda value: value.update(schema="wrong"))
+             self._mutate_json(
+@@ -799,6 +893,9 @@
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 2)
++        self.assertIn("required_input_missing:ch1-slot1/S1.raw.wav", result["reasons"])
++        self.assertIn("required_input_missing:ch1-slot1/S2.raw.wav", result["reasons"])
++        self.assertIn("required_input_missing:ch1-slot1/S3.raw.wav", result["reasons"])
+         self.assertIn("required_input_missing:ch1-slot1/S4.raw.wav", result["reasons"])
+         self.assertIn("ab_schema_invalid", result["reasons"])
+         self.assertIn("ab_metric_path_unsafe:dry:1", result["reasons"])
+@@ -856,12 +953,15 @@
+             first_result = run_dir / "ch1-slot1" / "RESTORATION.json"
+             self._mutate_json(
+                 first_result,
+-                lambda value: value.update(reasons=["stale swapped bytes"]),
++                lambda value: value.update(
++                    reasons=["fabricated result"], selected_slot=2,
++                ),
+             )
++            _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir, "ch2-slot1")
+             self.assertEqual(completed.returncode, 2)
+             self.assertIn(
+-                "evidence_manifest_hash_mismatch:ch1-slot1/RESTORATION.json",
++                "second_candidate_first_result_not_canonical",
+                 result["reasons"],
+             )
+ 
+@@ -870,14 +970,12 @@
+                 directory, candidate="ch2-slot1", enabled=True,
+                 outcome="INCONCLUSIVE", include_first_result=True,
+             )
+-            nested = run_dir / "ch1-slot1" / "RESTORATION.json"
+-            root_result = run_dir / "RESTORATION.json"
+-            root_result.write_bytes(nested.read_bytes())
+-            nested.unlink()
++            p2 = run_dir / "ch1-slot1" / "P2.json"
++            self._mutate_json(p2, lambda value: value.update(selected_slot=1))
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir, "ch2-slot1")
+         self.assertEqual(completed.returncode, 2)
+         self.assertIn(
+-            "second_candidate_requires_restored_inconclusive_first",
++            "second_candidate_first_evidence_invalid",
+             result["reasons"],
+         )
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/tests/test_cp34_live_matrix.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/tests/test_cp34_live_matrix.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-before/tests/test_cp34_live_matrix.py	2026-08-29 04:01:50.180494683 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-fix1-after/tests/test_cp34_live_matrix.py	2026-08-29 04:21:41.383748630 -0700
+@@ -3,6 +3,7 @@
+ 
+ import json
+ import hashlib
++import importlib.util
+ import os
+ import struct
+ import subprocess
+@@ -10,11 +11,15 @@
+ import tempfile
+ import unittest
+ import wave
++from pathlib import Path
+ 
+ 
+ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ SCRIPT = os.path.join(ROOT, "re", "cp34_live_matrix.py")
+ RATE = 48000
++LIVE_SPEC = importlib.util.spec_from_file_location("cp34_live_matrix", SCRIPT)
++LIVE = importlib.util.module_from_spec(LIVE_SPEC)
++LIVE_SPEC.loader.exec_module(LIVE)
+ 
+ 
+ def _sha256_file(path):
+@@ -403,6 +408,20 @@
+             _write_impulses(active1, echo_gain=0.5)
+             _write_impulses(active2, echo_gain=0.5)
+ 
++            self.assertTrue(hasattr(LIVE, "analyze_slot_bytes"))
++            byte_report = LIVE.analyze_slot_bytes(
++                [
++                    ("evidence/dry-1.wav", Path(dry1).read_bytes()),
++                    ("evidence/dry-2.wav", Path(dry2).read_bytes()),
++                ],
++                [
++                    ("evidence/active-1.wav", Path(active1).read_bytes()),
++                    ("evidence/active-2.wav", Path(active2).read_bytes()),
++                ],
++                "ch1-slot1",
++                audible_attested=True,
++            )
++
+             result = subprocess.run(
+                 [
+                     sys.executable, SCRIPT, "analyze-slot",
+@@ -426,6 +445,15 @@
+         self.assertFalse(report["title_verified"])
+         self.assertFalse(report["live_ready"])
+         self.assertFalse(report["restoration_verified"])
++        self.assertEqual(byte_report["status"], "SIGNATURE_PRESENT")
++        self.assertEqual(
++            [row["path"] for row in byte_report["dry"]],
++            ["evidence/dry-1.wav", "evidence/dry-2.wav"],
++        )
++        self.assertEqual(
++            [row["path"] for row in byte_report["active"]],
++            ["evidence/active-1.wav", "evidence/active-2.wav"],
++        )
+ 
+     def test_analyze_slot_keeps_a_non_specific_late_tail_inconclusive(self):
+         """A late tail alone cannot identify either its source or the loaded model."""

@@ -1,0 +1,3 @@
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+tests/winusb_user_api_contract.c

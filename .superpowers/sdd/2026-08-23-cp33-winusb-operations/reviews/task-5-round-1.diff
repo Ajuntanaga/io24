@@ -1,0 +1,202 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 04:57:48.403032944 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 05:09:52.080241754 -0700
+@@ -39,6 +39,7 @@
+ };
+ static CRITICAL_SECTION handle_registry_lock = { &handle_registry_lock_debug, -1, 0, 0, 0, 0 };
+ static struct list handle_registry = LIST_INIT(handle_registry);
++static ULONG_PTR next_handle_token = 1;
+ 
+ struct acquired_handle
+ {
+@@ -52,10 +53,19 @@
+     struct winusb_handle *candidate;
+ 
+     LIST_FOR_EACH_ENTRY(candidate, &handle_registry, struct winusb_handle, entry)
+-        if ((WINUSB_INTERFACE_HANDLE)candidate == opaque && candidate->live) return candidate;
++        if (candidate->token == opaque && candidate->live) return candidate;
+     return NULL;
+ }
+ 
++/* Called only with handle_registry_lock held.  Odd tokens cannot be heap addresses. */
++static BOOL allocate_handle_token(struct winusb_handle *handle)
++{
++    if (!next_handle_token || next_handle_token == ~(ULONG_PTR)0) return FALSE;
++    handle->token = (WINUSB_INTERFACE_HANDLE)next_handle_token;
++    next_handle_token += 2;
++    return TRUE;
++}
++
+ static BOOL acquire_handle(WINUSB_INTERFACE_HANDLE opaque, struct acquired_handle *acquired)
+ {
+     struct winusb_handle *handle;
+@@ -89,6 +99,11 @@
+     EnterCriticalSection(&handle_registry_lock);
+     EnterCriticalSection(&root->lock);
+     --handle->api_references;
++    if (!handle->live && !handle->api_references)
++    {
++        list_remove(&handle->entry);
++        HeapFree(GetProcessHeap(), 0, handle);
++    }
+     --root->references;
+     if (root->retiring && !root->references) WakeAllConditionVariable(&root->drained);
+     LeaveCriticalSection(&root->lock);
+@@ -111,7 +126,6 @@
+     struct winusb_root *root;
+     struct wine_winusb_request request = {.size = sizeof(request), .version = WINE_WINUSB_ABI_VERSION};
+     DWORD bytes = 0;
+-    struct winusb_handle *retired, *next;
+     BOOL final;
+ 
+     EnterCriticalSection(&handle_registry_lock);
+@@ -125,12 +139,15 @@
+     root = object->root;
+     EnterCriticalSection(&root->lock);
+     list_remove(&object->entry);
+-    list_add_tail(&root->retired_handles, &object->entry);
+     object->live = FALSE;
+     if (object->interface_index < root->interface_count &&
+             root->interface_handles[object->interface_index] == object)
+         root->interface_handles[object->interface_index] = NULL;
+     --root->live_handles;
++    if (object->api_references)
++        list_add_tail(&root->retired_handles, &object->entry);
++    else
++        HeapFree(GetProcessHeap(), 0, object);
+     --root->references;
+     final = !root->live_handles;
+     if (final) root->retiring = TRUE;
+@@ -145,11 +162,6 @@
+ 
+     request.session = root->session;
+     submit_request(root->device, IOCTL_WINE_WINUSB_RELEASE, &request, sizeof(request), NULL, 0, &bytes, FALSE);
+-    LIST_FOR_EACH_ENTRY_SAFE(retired, next, &root->retired_handles, struct winusb_handle, entry)
+-    {
+-        list_remove(&retired->entry);
+-        HeapFree(GetProcessHeap(), 0, retired);
+-    }
+     HeapFree(GetProcessHeap(), 0, root->interface_handles);
+     HeapFree(GetProcessHeap(), 0, root->snapshot);
+     DeleteCriticalSection(&root->lock);
+@@ -472,6 +484,7 @@
+     EnterCriticalSection(&root->lock);
+     if (root->retiring) error = ERROR_INVALID_HANDLE;
+     else if (root->interface_handles[root_index]) error = ERROR_ALREADY_EXISTS;
++    else if (!allocate_handle_token(object)) error = ERROR_NOT_ENOUGH_MEMORY;
+     else
+     {
+         object->live = TRUE;
+@@ -490,7 +503,7 @@
+         return fail_after_release(&acquired, error);
+     }
+ 
+-    *associated = object;
++    *associated = object->token;
+     release_handle(&acquired);
+     return TRUE;
+ }
+@@ -632,9 +645,14 @@
+     object->live = TRUE;
+ 
+     EnterCriticalSection(&handle_registry_lock);
++    if (!allocate_handle_token(object))
++    {
++        LeaveCriticalSection(&handle_registry_lock);
++        goto bad_postcommit_memory;
++    }
+     list_add_tail(&handle_registry, &object->entry);
+     LeaveCriticalSection(&handle_registry_lock);
+-    *handle = object;
++    *handle = object->token;
+     return TRUE;
+ bad_postcommit:
+     release.session = snapshot->session;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 04:57:48.408510060 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 05:09:52.086223126 -0700
+@@ -11,6 +11,7 @@
+ {
+     struct list entry;
+     struct winusb_root *root;
++    WINUSB_INTERFACE_HANDLE token;
+     UINT32 interface_index;
+     ULONG api_references;
+     BOOL live;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/tests/winusb_user_api_contract.c	2026-08-24 04:57:48.414040605 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/tests/winusb_user_api_contract.c	2026-08-24 05:09:52.091735512 -0700
+@@ -525,7 +525,7 @@
+ {
+     unsigned int submits=counts.submits,events=fake.event_count,i;const struct fake_event *header=NULL,*full=NULL,*allocation=NULL;struct wine_winusb_snapshot sizing;BOOL ok;*handle=NULL;
+     if(!f->initialize){IO24_CHECK(FALSE);return FALSE;}ok=f->initialize(IO24_FILE_HANDLE,handle);
+-    IO24_CHECK(ok&&*handle);IO24_CHECK(counts.submits==submits+2);IO24_CHECK(fake.event_count>events);
++    IO24_CHECK(ok&&*handle&&*handle!=INVALID_HANDLE_VALUE);IO24_CHECK(counts.submits==submits+2);IO24_CHECK(fake.event_count>events);
+     for(i=events;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_IOCTL&&fake.events[i].code==IO24_IOCTL_INITIALIZE){if(!header)header=&fake.events[i];else full=&fake.events[i];}
+     if(header&&full){IO24_CHECK(header->handle==IO24_FILE_HANDLE&&header->in_length==24&&header->out_length==72&&header->overlapped!=NULL&&!header->result&&header->returned_bytes==72);memcpy(&sizing,header->output_after,sizeof(sizing));for(i=events;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_ALLOC&&fake.events[i].pointer==full->pointer){allocation=&fake.events[i];break;}IO24_CHECK(full->out_length==sizing.total_size&&full->pointer&&allocation&&allocation->pointer==full->pointer&&allocation->out_length==sizing.total_size);}else IO24_CHECK(FALSE);
+     return ok&&*handle;
+@@ -690,7 +690,7 @@
+ 
+ static void test_handles(const struct functions*f)
+ {
+-    WINUSB_INTERFACE_HANDLE root,associated=NULL,associated2=NULL,duplicate=(void *)(uintptr_t)1;unsigned int frees_before,assoc_pos,root_pos,releases;
++    WINUSB_INTERFACE_HANDLE root,associated=NULL,associated2=NULL,duplicate=(void *)(uintptr_t)1,issued[32];unsigned int frees_before,releases,baseline,i,j;
+ 
+     check_bad_free(f,(void *)(uintptr_t)1);check_unreadable_admission(f,0);check_unreadable_admission(f,1);check_unreadable_admission(f,2);check_task5_initialize_allocations(f);
+     if(!f->associated||!f->free_handle||!f->initialize) return;
+@@ -698,8 +698,8 @@
+     if(!initialize_three_interface_handle(f,&root)) return;
+     frees_before=counts.frees;
+     associated=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,0,NULL)&&fake.last_error==ERROR_INVALID_PARAMETER);
+-    IO24_CHECK(f->associated(root,0,&associated)&&associated&&associated!=root);
+-    IO24_CHECK(f->associated(root,1,&associated2)&&associated2&&associated2!=root&&associated2!=associated);
++    IO24_CHECK(f->associated(root,0,&associated)&&associated&&associated!=INVALID_HANDLE_VALUE&&associated!=root);
++    IO24_CHECK(f->associated(root,1,&associated2)&&associated2&&associated2!=INVALID_HANDLE_VALUE&&associated2!=root&&associated2!=associated);
+     duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,0,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_ALREADY_EXISTS);
+     duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,1,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_ALREADY_EXISTS);
+     duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,2,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_NO_MORE_ITEMS);
+@@ -715,8 +715,10 @@
+     IO24_CHECK(f->free_handle(associated)&&f->free_handle(associated2));IO24_CHECK(fake.release_ioctls==releases+1&&counts.frees>=frees_before+3&&!fake.device_closes);
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;associated=NULL;IO24_CHECK(f->associated(root,0,&associated));
+     releases=fake.release_ioctls;IO24_CHECK(f->free_handle(associated));IO24_CHECK(fake.release_ioctls==releases);IO24_CHECK(f->free_handle(root));
+-    assoc_pos=event_position(EVENT_FREE,associated);root_pos=event_position(EVENT_FREE,root);
+-    IO24_CHECK(assoc_pos!=~0u&&root_pos!=~0u&&assoc_pos<root_pos&&fake.release_ioctls==releases+1&&!fake.device_closes);
++    IO24_CHECK(fake.release_ioctls==releases+1&&!fake.device_closes);
++    fake_reset();if(!initialize_two_interface_handle(f,&root))return;baseline=counts.allocations-counts.frees;
++    for(i=0;i<32;++i){associated=NULL;IO24_CHECK(f->associated(root,0,&associated)&&associated&&associated!=INVALID_HANDLE_VALUE);for(j=0;j<i;++j)IO24_CHECK(associated!=issued[j]);issued[i]=associated;IO24_CHECK(f->free_handle(associated));IO24_CHECK(counts.allocations-counts.frees==baseline&&fake.release_ioctls==0);}
++    IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees&&!fake.device_closes);
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;test_acquire_before_free(f,root);
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;fake.alloc_fail_at=fake.alloc_attempts+1;associated=(void *)(uintptr_t)1;
+     IO24_CHECK(!f->associated(root,0,&associated)&&associated==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY);IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees);
+@@ -767,11 +769,11 @@
+ static void test_cancel(const struct functions*f)
+ {WINUSB_INTERFACE_HANDLE h;unsigned int submits;fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;IO24_CHECK(f->abort_pipe&&f->abort_pipe(h,0x81));IO24_CHECK(f->reset_pipe&&f->reset_pipe(h,0x81));IO24_CHECK(counts.submits==submits+2);if(f->free_handle)f->free_handle(h);}
+ 
+-static void validate_vendor_fake_trace(WINUSB_INTERFACE_HANDLE root,WINUSB_INTERFACE_HANDLE associated,OVERLAPPED *caller)
++static void validate_vendor_fake_trace(OVERLAPPED *caller)
+ {
+     static const DWORD expected[]={IO24_IOCTL_INITIALIZE,IO24_IOCTL_DESCRIPTOR,IO24_IOCTL_GET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_ALTERNATE,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_READ_PIPE,IO24_IOCTL_READ_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_ABORT_PIPE,IO24_IOCTL_RESET_PIPE,IO24_IOCTL_RELEASE};
+     static const uint32_t policy[]={3,9,1,2,4,5,6,7};static const uint32_t pipe[]={0,0,1,0x81,0x81,0x81,0x81,0x81};static const uint32_t value[]={0,0,0,0,0,0,0,1};
+-    static const uint8_t setup[8]={0x41,1,2,0,5,0,32,0};const struct fake_event *ioctls[32];struct io24_wire_policy policy_result;unsigned int i,n=0,assoc_pos,root_pos,overlapped_pos;uint64_t session;
++    static const uint8_t setup[8]={0x41,1,2,0,5,0,32,0};const struct fake_event *ioctls[32];struct io24_wire_policy policy_result;unsigned int i,n=0,overlapped_pos;uint64_t session;
+     for(i=0;i<fake.event_count;i++) if(fake.events[i].kind==EVENT_IOCTL&&n<32) ioctls[n++]=&fake.events[i];
+     IO24_CHECK(n==sizeof(expected)/sizeof(expected[0]));
+     for(i=0;i<n&&i<sizeof(expected)/sizeof(expected[0]);i++){IO24_CHECK(ioctls[i]->code==expected[i]);IO24_CHECK(ioctls[i]->handle==IO24_FILE_HANDLE);IO24_CHECK(ioctls[i]->result);}
+@@ -790,7 +792,7 @@
+         IO24_CHECK(ioctls[13]->overlapped==caller&&ioctls[15]->overlapped==caller&&ioctls[17]->overlapped==caller);IO24_CHECK(ioctls[12]->overlapped&&ioctls[12]->overlapped!=caller&&ioctls[14]->overlapped&&ioctls[14]->overlapped!=caller&&ioctls[16]->overlapped&&ioctls[16]->overlapped!=caller);
+     }
+     overlapped_pos=event_position(EVENT_OVERLAPPED,NULL);IO24_CHECK(overlapped_pos!=~0u&&fake.events[overlapped_pos].handle==IO24_FILE_HANDLE&&fake.events[overlapped_pos].overlapped==caller&&fake.events[overlapped_pos].result&&fake.events[overlapped_pos].returned_bytes==IO24_OVERLAPPED_RESULT_LENGTH);
+-    assoc_pos=event_position(EVENT_FREE,associated);root_pos=event_position(EVENT_FREE,root);IO24_CHECK(assoc_pos!=~0u&&root_pos!=~0u&&assoc_pos<root_pos);IO24_CHECK(fake.closes==0);
++    IO24_CHECK(fake.closes==0);
+ }
+ static void test_vendor_sequence(const struct functions*f)
+ {
+@@ -810,7 +812,7 @@
+     guard_buffer_reset(&g,0x6c);n=IO24_LENGTH_SENTINEL;ok=f->write_pipe&&f->write_pipe(root,1,g.bytes,sizeof(g.bytes),&n,NULL);IO24_CHECK(ok);IO24_CHECK(n==IO24_WRITE_SYNC_LENGTH);IO24_CHECK(bytes_equal(g.bytes,sizeof(g.bytes),0x6c));check_buffer_guards(&g);
+     guard_buffer_reset(&g,0x6d);n=IO24_LENGTH_SENTINEL;ok=f->write_pipe&&f->write_pipe(root,1,g.bytes,sizeof(g.bytes),&n,&ov);IO24_CHECK(ok);IO24_CHECK(n==IO24_WRITE_OVERLAPPED_LENGTH);IO24_CHECK(bytes_equal(g.bytes,sizeof(g.bytes),0x6d));check_buffer_guards(&g);
+     n=IO24_LENGTH_SENTINEL;ok=f->overlapped&&f->overlapped(root,&ov,&n,TRUE);IO24_CHECK(ok);IO24_CHECK(n==IO24_OVERLAPPED_RESULT_LENGTH);ok=f->abort_pipe&&f->abort_pipe(root,0x81);IO24_CHECK(ok);ok=f->reset_pipe&&f->reset_pipe(root,0x81);IO24_CHECK(ok);ok=f->associated&&f->associated(root,0,&associated);IO24_CHECK(ok&&associated&&associated!=root);if(!associated){if(f->free_handle)f->free_handle(root);return;}
+-    ok=f->free_handle&&f->free_handle(associated);IO24_CHECK(ok);ok=f->free_handle&&f->free_handle(root);IO24_CHECK(ok);check_buffer_guards(&g);validate_vendor_fake_trace(root,associated,&ov);
++    ok=f->free_handle&&f->free_handle(associated);IO24_CHECK(ok);ok=f->free_handle&&f->free_handle(root);IO24_CHECK(ok);check_buffer_guards(&g);validate_vendor_fake_trace(&ov);
+ }
+ static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
+ int main(int argc,char**argv){void*m;struct functions f;uint32_t target,missing;if(argc!=3)return 2;m=dlopen(!strcmp(argv[1],"self")?NULL:argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);target=target_mask(argv[2]);missing=target&~f.present_mask;check_target_symbols(&f,target);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s target-mask=%#x present-mask=%#x missing-mask=%#x fake-events=%u submits=%u releases=%u completions=%u failures=%u\n",argv[2],target,f.present_mask,missing,fake.event_count,counts.submits,fake.release_ioctls,counts.completions,counts.failures);return counts.failures?1:0;}

@@ -1,0 +1,6 @@
+c7093dd7b8f7b626505b4c113e6ff8d785e79327bae3135b3363849127cffcab  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T172026-0700-structured-state-record-prefix-gate/SCOPE.md
+4ac81c507689b22d3ce6e8d3ef320d902a7843459060bb82d50b2077855134c6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T172026-0700-structured-state-record-prefix-gate/PROGRESS.md
+7e6cd454c8b3e38017119f51148805bab1b239375fb777fdd47c9ca685c527cc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T172026-0700-structured-state-record-prefix-gate/OBSIDIAN.md
+01af57a9d60c944e0dfd2d057a7c178b058afdf92b0973a25633eefc10f66e77  re/cp34_lane_control_firmware_static.py
+546a482d9e95f13eb3101f9ef781a2ab5561d21c1a6b978c6feb51304a304cdb  tests/test_cp34_lane_control_firmware_static.py
+e28522bc5fb375925d3127b5802acad9b92973631dbf2e4b057add274ebeb773  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md

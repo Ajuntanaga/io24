@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+peer_project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+peer_workspace="$peer_project_root/.claude-peer"
+cd "$peer_workspace"
+
+# The Codex-driven consult was retired. This optional interactive seat has its
+# own working directory and history. The unattended canonical channel is
+# `./claude-io24-peer-turn`; never resume the retired consult ID.
+peer_continue=()
+if [[ "${1:-}" == "--continue" ]]; then
+  peer_continue=(--continue)
+  shift
+fi
+
+# LOAD-BEARING: `--restricted` confines 2.1.263 file tools to .claude-peer/.
+# Do not remove it when debugging or broadening permissions.
+exec /home/ajuntanaga/.local/bin/claude \
+  "${peer_continue[@]}" \
+  --name io24-claude-peer \
+  --restricted \
+  --strict-mcp-config \
+  --permission-mode manual \
+  --allowedTools Read,Grep,Glob,Edit,Write \
+  --disallowedTools Bash,WebSearch,WebFetch,NotebookEdit \
+  --settings "$peer_project_root/.claude/io24-peer-ledger-settings.json"

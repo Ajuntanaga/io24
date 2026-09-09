@@ -1,0 +1,457 @@
+{
+  "firmware": {
+    "code_slices": {
+      "application_router": {
+        "offset": "0x20754",
+        "sha256": "2b03f9ae7407c774bcd93c252b6833b3db299f7bf65de180376d280901508913",
+        "size": 60
+      },
+      "callback_bridge": {
+        "offset": "0x3163c",
+        "sha256": "4cc5dd6fae37fc54a1cf40d9726f807b774957aff61cbf36d58ca9e89bb5ecff",
+        "size": 56
+      },
+      "device_component_table_binder": {
+        "offset": "0x5e014",
+        "sha256": "94fe5ba1d6c74e69f0c77960cf7f7e33dea86e19dbae17992d03a918f4ef4e87",
+        "size": 84
+      },
+      "factory_bank_binder": {
+        "offset": "0x3066c",
+        "sha256": "b53ff9d91a43f6f095adb39f11dd95ab0faf9752eb6a0afecf86c9452d60e782",
+        "size": 72
+      },
+      "fragment_callback": {
+        "offset": "0x2f8ac",
+        "sha256": "5eff2a6ade387c5e4c4a2a46fd2fe640bf42e2a6d71082f681381bbc47a17f17",
+        "size": 88
+      },
+      "live_dispatch_tag": {
+        "offset": "0x420bc",
+        "sha256": "bb6d8f1dcb856f0618b4115b782addae7887ac1fedc85bbeb10e407df7e7f829",
+        "size": 50
+      },
+      "live_stat_record_branch": {
+        "offset": "0x42200",
+        "sha256": "2528259839a4a64ca6fa9f628dd3018feb4f7966f5d8c4db390616ed24cf5ea0",
+        "size": 130
+      },
+      "preset_table_binder": {
+        "offset": "0x3c9ee",
+        "sha256": "cae1994270c45081441276d225f7f10ac77403e223970094186ef5ee549b9bcd",
+        "size": 80
+      },
+      "router_singleton_lookup": {
+        "offset": "0x34cb8",
+        "sha256": "3f96d7faa885ddc791e911b60343107d9a19e6ffaacb42b65378231f2cabb3e5",
+        "size": 12
+      },
+      "singleton_interface_projection": {
+        "offset": "0x3cc08",
+        "sha256": "eea00f3392bbbf5ec7ea83e049192860f6e231d5978f598abaafbf0076ca004d",
+        "size": 4
+      },
+      "singleton_record_forward": {
+        "offset": "0x3cc40",
+        "sha256": "ec43a5b416faa096ceee09c541a94c2187976a57c29585345b5364dfc3f2ae53",
+        "size": 46
+      },
+      "slot_change_dispatch": {
+        "offset": "0x2f3e4",
+        "sha256": "f8890a0ecedcfb99226d9967bcbd2a17ba3d9efbb6cbcfc77dd1e2d3fe91d4a6",
+        "size": 56
+      },
+      "stat_recall": {
+        "offset": "0x2f0d0",
+        "sha256": "54498abfd4282dd20683120259929407f6618f90217ab98045270b39dd386352",
+        "size": 108
+      },
+      "stat_record_reader": {
+        "offset": "0x30be0",
+        "sha256": "32091a8693dae4a94c30e242f83e83cb68618605eb43dfd0ecb6c561afd644ee",
+        "size": 84
+      },
+      "state_component_dispatch": {
+        "offset": "0x53222",
+        "sha256": "1a61bd7651e7ac8d60a096288c72e4e322e4488704dcd8fc73ff61fd47d6fe43",
+        "size": 364
+      },
+      "voicefx_block_constructor": {
+        "offset": "0x591bc",
+        "sha256": "757744a5de70949bc0f39469d4b26ac34b045776ad5d4ceab2eebc7ca8e5c418",
+        "size": 146
+      },
+      "voicefx_model_select": {
+        "offset": "0x55388",
+        "sha256": "8f1ecb6e2ed75578c94d1d1fe641c3fd2ca39186a404bf7ce35546dcfdcaa96a",
+        "size": 72
+      },
+      "voicefx_state_gate_arm": {
+        "offset": "0x554a6",
+        "sha256": "e5fc9c4031722a40b150e96e592bf08d21fe8aa4955de93e3359d0f3a8df50cf",
+        "size": 32
+      }
+    },
+    "factory_bank_size_tables": [
+      [
+        822,
+        814,
+        854,
+        697,
+        659,
+        850,
+        645,
+        846
+      ],
+      [
+        822,
+        814,
+        854,
+        697,
+        712,
+        731,
+        720,
+        537
+      ]
+    ],
+    "factory_records": [
+      {
+        "bank": 0,
+        "offset": "0x6a2b8",
+        "preset_name": "Broadcast",
+        "size": 822,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6a5f0",
+        "preset_name": "Vocal",
+        "size": 814,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6a920",
+        "preset_name": "Acoustic Guitar",
+        "size": 854,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6ac78",
+        "preset_name": "Electric Guitar",
+        "size": 697,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6af34",
+        "preset_name": "Vintage Channel",
+        "size": 659,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b1c8",
+        "preset_name": "Slap Echo",
+        "size": 850,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b51c",
+        "preset_name": "Detuned Vocal",
+        "size": 645,
+        "voicefx_classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b7a4",
+        "preset_name": "Robot",
+        "size": 846,
+        "voicefx_classid": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 1,
+        "offset": "0x6baf4",
+        "preset_name": "Broadcast",
+        "size": 822,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6be2c",
+        "preset_name": "Vocal",
+        "size": 814,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c15c",
+        "preset_name": "Acoustic Guitar",
+        "size": 854,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c4b4",
+        "preset_name": "Electric Guitar",
+        "size": 697,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c770",
+        "preset_name": "Bass Guitar",
+        "size": 712,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6ca38",
+        "preset_name": "Stereo Acoustic",
+        "size": 731,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6cd14",
+        "preset_name": "Stereo Piano",
+        "size": 720,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6cfe4",
+        "preset_name": "Stereo DJ",
+        "size": 537,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      }
+    ],
+    "instruction_anchors": {
+      "live_stat_tag": {
+        "bytes": "74617453",
+        "offset": "0x423d4"
+      },
+      "voicefx_model_gate_a_assignment": {
+        "bytes": "01236269a56184f84430",
+        "offset": "0x553a2"
+      },
+      "voicefx_state_gate_bc_assignment": {
+        "bytes": "002540f20113b1693046356433874ff0000afff761ff",
+        "offset": "0x554b0"
+      }
+    },
+    "load_base": "0x60020000",
+    "sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "size": 1104448,
+    "stat_descriptor_lengths": [
+      1088,
+      1088,
+      1028,
+      1028
+    ],
+    "voicefx_processing_gate": {
+      "assignments": [
+        {
+          "field": "+0x40",
+          "site": "0x554ba",
+          "value": 0
+        },
+        {
+          "field": "+0x39",
+          "site": "0x554bc",
+          "source": "high byte of little-endian halfword 0x0101 at +0x38",
+          "value": 1
+        },
+        {
+          "field": "+0x44",
+          "site": "0x553a8",
+          "source": "valid model selection called by 0x554c2",
+          "value": 1
+        }
+      ],
+      "component_base_offset": "0x11e0",
+      "component_id": 201,
+      "gated_handler": "0x50af8",
+      "primary_vtable_file_offset": "0x10c6bc",
+      "required_conditions": [
+        "+0x44 != 0",
+        "+0x39 != 0",
+        "+0x40 == 0"
+      ],
+      "state_apply": {
+        "adjustor": "0x555b8",
+        "target": "0x5545c"
+      },
+      "state_interface_offset": "0x11e4",
+      "state_interface_vtable_file_offset": "0x10c700"
+    },
+    "vtable_anchors": {
+      "application_router": {
+        "target_file_offset": "0x20790",
+        "thumb_pointer": "0x60040791",
+        "vtable_word_offset": "0x10be8c"
+      },
+      "live_record_dispatcher": {
+        "target_file_offset": "0x420bc",
+        "thumb_pointer": "0x600620bd",
+        "vtable_word_offset": "0x10cb40"
+      },
+      "live_structured_state_apply": {
+        "target_file_offset": "0x531e0",
+        "thumb_pointer": "0x600731e1",
+        "vtable_word_offset": "0x10cb78"
+      },
+      "manager_callback_bridge": {
+        "target_file_offset": "0x31674",
+        "thumb_pointer": "0x60051675",
+        "vtable_word_offset": "0x676d4"
+      },
+      "preset_stat_reader": {
+        "target_file_offset": "0x30be0",
+        "thumb_pointer": "0x60050be1",
+        "vtable_word_offset": "0x6751c"
+      },
+      "root_fragment_apply": {
+        "target_file_offset": "0x2f8ac",
+        "thumb_pointer": "0x6004f8ad",
+        "vtable_word_offset": "0x6d254"
+      },
+      "root_memp_ingress": {
+        "target_file_offset": "0x2f210",
+        "thumb_pointer": "0x6004f211",
+        "vtable_word_offset": "0x6d288"
+      },
+      "root_slot_change": {
+        "target_file_offset": "0x2f334",
+        "thumb_pointer": "0x6004f335",
+        "vtable_word_offset": "0x6d274"
+      },
+      "root_stat_recall": {
+        "target_file_offset": "0x2f0d0",
+        "thumb_pointer": "0x6004f0d1",
+        "vtable_word_offset": "0x6d260"
+      },
+      "router_singleton_projection": {
+        "target_file_offset": "0x3cc08",
+        "thumb_pointer": "0x6005cc09",
+        "vtable_word_offset": "0x6d40c"
+      },
+      "router_singleton_record_forward": {
+        "target_file_offset": "0x3cc40",
+        "thumb_pointer": "0x6005cc41",
+        "vtable_word_offset": "0x6d434"
+      },
+      "voicefx_primary_gate_handler": {
+        "target_file_offset": "0x50af8",
+        "thumb_pointer": "0x60070af9",
+        "vtable_word_offset": "0x10c6cc"
+      },
+      "voicefx_primary_state_apply": {
+        "target_file_offset": "0x5545c",
+        "thumb_pointer": "0x6007545d",
+        "vtable_word_offset": "0x10c6e4"
+      },
+      "voicefx_primary_work_slot": {
+        "target_file_offset": "0x5f1f4",
+        "thumb_pointer": "0x6007f1f5",
+        "vtable_word_offset": "0x10c6f0"
+      },
+      "voicefx_state_apply_adjustor": {
+        "target_file_offset": "0x555b8",
+        "thumb_pointer": "0x600755b9",
+        "vtable_word_offset": "0x10c704"
+      }
+    }
+  },
+  "schema": "cp34-preset-recall-static-v2",
+  "static_conclusions": {
+    "boundary": "static structure does not prove physical nonvolatile commit, power-cycle survival, audible DSP output, or that voicefx.on itself is copied directly into field +0x44",
+    "separate_enable_packet": "the recovered native preset-application path contains its own processing-gate assignment; no additional standalone enable packet is missing from that path",
+    "stat_recall": "selected Stat 0..3 is read by the firmware preset component and forwarded through the native application callback/router",
+    "voicefx_on": "Voice FX activation intent is stored as voicefx.on in the same tagged preset record; three embedded active presets set it to 1",
+    "voicefx_processing_gate": "the native Voice FX component state loader sets +0x39=1, +0x40=0, and +0x44=1 before applying the selected model state; these are all three conditions checked by gate handler 0x50af8"
+  },
+  "uc_4_7_2_module": {
+    "field_accesses": [
+      {
+        "access": "write",
+        "address": "0x1800290e7",
+        "instruction": "mov byte ptr [rcx + 0xe6], 0"
+      },
+      {
+        "access": "read",
+        "address": "0x18003bb38",
+        "instruction": "cmp byte ptr [rcx + r14 + 0xe6], 0"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c037",
+        "instruction": "mov byte ptr [r13 + 0xe6], r15b"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c20d",
+        "instruction": "mov byte ptr [r13 + 0xe6], al"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c4e8",
+        "instruction": "mov byte ptr [r13 + 0xe6], r15b"
+      },
+      {
+        "access": "read",
+        "address": "0x180044e89",
+        "instruction": "movzx eax, byte ptr [rdx + 0xe6]"
+      }
+    ],
+    "field_literals": {
+      "record_child": "on",
+      "record_parent": "voicefx",
+      "serializer_label": "VoiceFxOn"
+    },
+    "image_base": "0x180000000",
+    "parser_anchors": {
+      "integer_or_real_equals_one": {
+        "address": "0x18003c2b6",
+        "bytes": "0fb742086683e07f6683f8017506488b4210eb116683f8027508f2480f2c4210eb03488bc34883f8010f8526ffffffe923ffffff"
+      },
+      "nested_on_name": {
+        "address": "0x18003c297",
+        "bytes": "488b424880386f750c8078016e750680780200740a"
+      },
+      "serializer_read": {
+        "address": "0x18003bb38",
+        "bytes": "4280bc31e6000000007440"
+      },
+      "voicefx_name_reference": {
+        "address": "0x18003c1a4",
+        "bytes": "4c8d3dbd973f00"
+      },
+      "voicefx_on_store": {
+        "address": "0x18003c20d",
+        "bytes": "418885e6000000"
+      }
+    },
+    "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+    "size": 4979672,
+    "voicefx_on_field_offset": "0xe6"
+  }
+}

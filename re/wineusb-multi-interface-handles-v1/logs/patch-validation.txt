@@ -1,0 +1,12 @@
+patch_sha256=f7fab610716f7a0cc2349cffe4f3a3edf45ada1a4527c451c7a0c71f718facde
+dry_run_begin
+checking file dlls/wineusb.sys/unixlib.c
+apply_begin
+patching file dlls/wineusb.sys/unixlib.c
+changed_paths
+Files .io24-build/wineusb-pipe-observe-v3/source-a/dlls/wineusb.sys/unixlib.c and .io24-build/wineusb-multi-interface-handles-v1/patch-check-source/dlls/wineusb.sys/unixlib.c differ
+tree_compare=identical
+regular_files=12445
+symlinks=0
+patch_leftovers=0
+6208edc110835b7bf196c29b7ecdd052780a906096365eb5ef7d1fb16264c0f2  .io24-build/wineusb-multi-interface-handles-v1/patch-check-source/dlls/wineusb.sys/unixlib.c

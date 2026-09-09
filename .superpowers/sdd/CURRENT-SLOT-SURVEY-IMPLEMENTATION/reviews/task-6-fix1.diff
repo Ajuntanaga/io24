@@ -1,0 +1,721 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 05:38:18.595877406 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 06:13:14.793683448 -0700
+@@ -13,6 +13,13 @@
+ Revision-1 evidence protocol is rejected and superseded. Revision 2 remains
+ pending fresh independent review; no offline fixture or seal is live authority.
+ 
++Fix1 contract: processing-channel map values are integers 0..6 (the six-channel
++capture-format bound). Physical restoration uses v2 with exact scope and a
++timestamp after S4. Audible attestation uses v2, exact separate non-io24
++playback/monitor identities, and four distinct hash-bound S1-S4 observations.
++`AB-PROVENANCE.json` v1 binds attestation and AB hashes after those observations.
++Root v1 evidence/restoration artifacts are forbidden; candidate seals are atomic.
++
+ ## Objective
+ 
+ Determine whether either currently selected front-panel preset produces a
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md	2026-08-29 05:38:18.598850772 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md	2026-08-29 06:13:14.797046251 -0700
+@@ -604,3 +604,8 @@
+ specification-and-quality review. Workers share this non-Git workspace, must
+ own only their assigned task files, must preserve unrelated edits, and must
+ never run hardware-facing commands.
++
++Fix1 implementation amendment: require physical-restoration-v2, exact
++audible-attestation-v2 observations, AB-PROVENANCE-v1 ordering, 0..6 processing
++map values, root-v1 artifact rejection, and `set -e -o pipefail` plus initial
++hash `&&` enumeration in each candidate seal.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 05:38:18.612850659 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 06:13:14.809046157 -0700
+@@ -1,6 +1,6 @@
+-dce1c67f549407d699f186821f287f77247c9397bec4d9c1ebea1d3aeb386855  re/cp34_current_slot_survey.py
+-ee88165ba2f051b7a7560427d7cf4e861c19a79a32f9ce94b5cfb9b06e1cf30e  tests/test_cp34_current_slot_survey.py
+-ac5acd57af526fe7ab7fe75222772f5ef6763d980aa483efed3c4653d396a629  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-b5d0392b2dc295c73dc483e64e7501182fa5e206bd2904f07c74bb9797ce9607  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++e48b34a31fc7c6d85756ff1fe0c2e006ed54085b2185caf54cc0df5c434b65b6  re/cp34_current_slot_survey.py
++d84bd72abc8b0f2521cc1a2c541532a6a42aa57a92eabdeb1780636ae8dbd03f  tests/test_cp34_current_slot_survey.py
++816e2a3a27ac1ecb15eea554d40fcca5d67354afd8b3fe7876708bb06bb9130f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++18a0c68f66e16a8d393aeeda8d035a2798f9e5621006924fead84db838c8f14b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-b5540b3463ca625b2d07744e72e90fbe17a880e6c20a99dc74c9ac5ebd0f45dd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++d8c671881a8007e65af9f959de66aa9288b2a27b8c7d834ccba6fbb8e771bc0b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 05:38:18.602850740 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 06:13:14.801046220 -0700
+@@ -126,6 +126,13 @@
+ after those four post-restoration observations, then run A/B analysis. A
+ no/failed hearing records null counts and `operator_attested: false`.
+ 
++The retained JSON contract is physical-restoration-v2 followed by
++audible-attestation-v2: exactly four distinct S1-S4 derivative path/hash/role/
++heard/timestamp observations through named separate non-io24 paths. Then write
++`AB-PROVENANCE.json` v1 binding both retained JSON hashes and an analysis
++timestamp after every observation. Root `EVIDENCE-SHA256SUMS` and root
++`RESTORATION.json` are forbidden protocol-v1 artifacts.
++
+ For an enabled `P0`, analyze the retained derivatives exactly as follows
+ (replace `N` with the already-frozen channel). Run it with the run directory as
+ the working directory so the report preserves exact run-relative path labels.
+@@ -159,7 +166,7 @@
+ no-clobber semantics; never replace it.
+ 
+ ```text
+-(cd RUN && set -o pipefail && tmp=$(mktemp .ch1-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json; find ch1-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch1-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch1-slot1/EVIDENCE-SHA256SUMS)
++(cd RUN && set -e -o pipefail && tmp=$(mktemp .ch1-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json && find ch1-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch1-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch1-slot1/EVIDENCE-SHA256SUMS)
+ ```
+ 
+ ```text
+@@ -195,7 +202,7 @@
+ `RUN/ch2-slot1/RESTORATION.json`.
+ 
+ ```text
+-(cd RUN && set -o pipefail && tmp=$(mktemp .ch2-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json ch1-slot1/EVIDENCE-SHA256SUMS ch1-slot1/RESTORATION.json; find ch2-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch2-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch2-slot1/EVIDENCE-SHA256SUMS)
++(cd RUN && set -e -o pipefail && tmp=$(mktemp .ch2-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json ch1-slot1/EVIDENCE-SHA256SUMS ch1-slot1/RESTORATION.json && find ch2-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch2-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch2-slot1/EVIDENCE-SHA256SUMS)
+ ```
+ 
+ Only after the first positive or the terminal attempted candidate, write the
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 05:38:18.621850586 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 06:13:14.817046094 -0700
+@@ -519,7 +519,7 @@
+ `0f27703b9ba94b4af9807ca6bc1f9389f81deb31d12d8d14f435055d1d4b7b8f`.
+ No live action occurred. Independent re-review remains required.
+ 
+-### Final fix wave — current authoritative evidence
++### Historical revision-1 final fix wave — superseded
+ 
+ ```text
+ bf7484eb9257075259b77177d8f0ff00a1d281a97f0927bff0a3db6f897c753b  re/cp34_current_slot_survey.py
+@@ -567,3 +567,32 @@
+ before its first pipeline and requires physical restoration followed by separate
+ non-io24 replay of all four derivatives before audible attestation and A/B.
+ No live action occurred; this correction remains pending independent review.
++
++Fix1 authoritative current-slot evidence supersedes historical 94/31 claims:
++39 passed, 9 subtests passed in 129.12s, exit 0. It covers v2 physical/audible
++contracts, AB provenance, numeric bounds, root-artifact rejection, and seals.
++Broad-suite and manifest verification were pending at that intermediate
++checkpoint; the completed evidence below supersedes it.
++
++Controller broad verification is authoritative: 102 passed, 36 subtests in
++157.09s, exit 0. Historical 94/31 claims are superseded; no live action occurred.
++
++Current revision-2 fix1 core hashes are:
++
++```text
++e48b34a31fc7c6d85756ff1fe0c2e006ed54085b2185caf54cc0df5c434b65b6  re/cp34_current_slot_survey.py
++d84bd72abc8b0f2521cc1a2c541532a6a42aa57a92eabdeb1780636ae8dbd03f  tests/test_cp34_current_slot_survey.py
++816e2a3a27ac1ecb15eea554d40fcca5d67354afd8b3fe7876708bb06bb9130f  CURRENT-SLOT-SURVEY-DESIGN.md
++18a0c68f66e16a8d393aeeda8d035a2798f9e5621006924fead84db838c8f14b  CURRENT-SLOT-SURVEY.md
++83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  CURRENT-SLOT-SURVEY-PLAN.template.json
++d8c671881a8007e65af9f959de66aa9288b2a27b8c7d834ccba6fbb8e771bc0b  CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++```
++
++The six-row stage manifest verifies at
++`c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`;
++the 23-row offline manifest verifies completely, and its post-record file hash
++is retained in the task-local implementation report rather than in a file that
++the manifest itself pins.
++Passive sysfs reported BAT0 at 40 percent, discharging. These are offline seal
++facts only; independent fix1 re-review remains pending and no live action is
++authorized.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 05:38:18.636850464 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 06:13:14.829046000 -0700
+@@ -277,3 +277,15 @@
+ 
+ Revision 1 is rejected/superseded by the v2 current-slot evidence protocol.
+ Revision 2 is pending independent review and retains every no-live boundary.
++
++Fix1 current-slot gate is 39 passed, 9 subtests, 129.12s, exit 0; old 94/31
++claims are historical. Broad suite/manifests were pending at that intermediate
++checkpoint; the completed gate below supersedes it.
++
++Authoritative fix1 broad evidence is 102 passed, 36 subtests in 157.09s, exit
++0. Stage 6/6 and offline manifest 23/23 verify; the stage-manifest hash is
++`c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`.
++The offline-manifest file hash is kept in the task-local implementation report,
++outside the manifest's pinned inputs.
++BAT0 was 40 percent, discharging, via passive sysfs. The next gate is
++independent re-review, never implied live authority.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 05:38:18.631850505 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 06:13:14.825046031 -0700
+@@ -149,7 +149,8 @@
+   tests/test_io24_capture_decode.py
+ ```
+ 
+-Expected and reproduced: 94 passed and 31 subtests passed. The 31 current-slot
++Historical revision-1 result, now superseded: 94 passed and 31 subtests passed.
++The 31 then-current current-slot
+ contracts cover exact plan rejection, frozen six-channel Mix A mapping,
+ restoration and evidence-manifest verification, and the intentionally invalid
+ checked-in template. The extra four subtests cover S1-S4 raw/derivative
+@@ -177,3 +178,15 @@
+ independent offline re-review. Only after that review is clean
+ may a new separately exact authorization be requested for a named live run.
+ No live action occurred while producing or integrating this stage.
++
++Historical 94/31/hash statements are superseded by fix1 current-slot evidence:
++39 passed, 9 subtests in 129.12s, exit 0. Broad verification was pending at
++that intermediate checkpoint and is superseded below.
++
++Fix1 broad gate is authoritative: 102 passed, 36 subtests in 157.09s, exit 0.
++The prior 94/31 result is historical/superseded. Stage 6/6 and offline manifest
++23/23 verify; the stage-manifest hash is
++`c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`.
++The offline-manifest file hash is recorded outside its pinned input set in the
++task-local implementation report.
++Passive sysfs reported BAT0 at 40 percent, discharging; no live action occurred.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 05:38:18.640850432 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 06:13:14.833045968 -0700
+@@ -6,18 +6,18 @@
+ 89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d  re/uc_factory_presets.json
+ 6502fa83125fb519d61bd2bba40e9d10d81f0307bdbe104e2d0e38304b1d6fce  tests/fx_gate_probe.py
+ 2e71faaa046d1bd87a02c62fe36c8a5692e7e7f7007c2c6a11352c5db956bb6c  PROTOCOL.md
+-dc32a3ff2cb209314748174ea4a4c43c7c72926aadc852871ac6d411cfbb7e7b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
++fa761489ad5ec7aec9aa9a0d2da2b1d745b2e2cd0f682b8d59761fbe72b94051  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+ c6238bac7efb7eda37f3289be948eb2fc34455f44a1b3fbfd6cb7c55389f86e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CAPTURE-MANIFEST.md
+ 2267f83eb9eaec10ad493b2d0d520135d55ccba3e96e05ad70eb0a90d319f6b6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PRESTATE.md
+-a190bfe821a02cc0c7f61d6dfdd2b92dad94306113e6b25d82fcedb5e8dbf394  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+-2ddc276cb876ecfffd5a6509634cf1bfbb09743e2bc0c30c70ab7f5e46c2eb7f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+-1c3a79dd8a393d3e5dfdb6fc2adfa6acbe07e78c28851d45ddb19f728b674623  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+-6e717d125ae7317a45c61f2a56fd051f57c336f1b239478963bc6ee1613eccc3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+-dce1c67f549407d699f186821f287f77247c9397bec4d9c1ebea1d3aeb386855  re/cp34_current_slot_survey.py
+-ee88165ba2f051b7a7560427d7cf4e861c19a79a32f9ce94b5cfb9b06e1cf30e  tests/test_cp34_current_slot_survey.py
+-ac5acd57af526fe7ab7fe75222772f5ef6763d980aa483efed3c4653d396a629  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-b5d0392b2dc295c73dc483e64e7501182fa5e206bd2904f07c74bb9797ce9607  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++bfe3e625bc5266297d499aac8c39726484c2405d2c94d75c386b2e2299d53062  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
++712f6e2b84753d212fa4774227549cb3aa2f684a5091f15ede3851d5dd77f339  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
++2750a8e75674f6a5e52750d26e3325d0cdc1f37217aa58d9422d732cc75faa20  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
++121d0ab70bc6fa40257f40e96c2833a054cf59529358b87ddd78e34e4e6e2706  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++e48b34a31fc7c6d85756ff1fe0c2e006ed54085b2185caf54cc0df5c434b65b6  re/cp34_current_slot_survey.py
++d84bd72abc8b0f2521cc1a2c541532a6a42aa57a92eabdeb1780636ae8dbd03f  tests/test_cp34_current_slot_survey.py
++816e2a3a27ac1ecb15eea554d40fcca5d67354afd8b3fe7876708bb06bb9130f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++18a0c68f66e16a8d393aeeda8d035a2798f9e5621006924fead84db838c8f14b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-b5540b3463ca625b2d07744e72e90fbe17a880e6c20a99dc74c9ac5ebd0f45dd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+-f1fd3d4ae29008384a36c21354ff203415f530b74cbfa46bbecf9b683acc899e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
++d8c671881a8007e65af9f959de66aa9288b2a27b8c7d834ccba6fbb8e771bc0b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+ 567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 05:38:18.617850618 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 06:13:14.813046125 -0700
+@@ -65,7 +65,8 @@
+ ## Current-slot survey offline stage
+ 
+ The positive-only current-slot survey is implemented as a review-eligible
+-offline stage. Its six-row core-stage manifest tracks:
++offline stage. The following six-row list is the historical revision-1
++snapshot and is superseded by the revision-2 fix1 block below:
+ 
+ - `re/cp34_current_slot_survey.py` —
+   `bf7484eb9257075259b77177d8f0ff00a1d281a97f0927bff0a3db6f897c753b`;
+@@ -84,7 +85,8 @@
+ in `re/cp34_live_matrix.py` and its tests; those are dependencies, not two more
+ rows in the current-survey core-stage manifest.
+ 
+-The complete hardware-free regression passed with 94 tests and 31 subtests.
++At that historical revision-1 checkpoint, the complete hardware-free regression
++passed with 94 tests and 31 subtests.
+ The stage does not run a survey and does not authorize hardware. Its next gate
+ is an independent offline review. Only after a clean review may a separately
+ exact authorization be considered for a named run; validator, analyzer,
+@@ -102,6 +104,23 @@
+ a scoped independent re-review, followed only after a clean result by a
+ separately exact authorization.
+ 
++Revision-2 fix1 supersedes prior 94/31 and prior hash statements (historical).
++Current-slot gate: 39 passed, 9 subtests, 129.12s, exit 0. At that checkpoint,
++broad-suite and manifest refresh were pending; the completed gate below
++supersedes that intermediate state.
++
++Controller verification is now complete: 102 passed, 36 subtests in 157.09s,
++exit 0. Historical 94/31 remains superseded; independent fix1 re-review is next.
++
++Current revision-2 core hashes are `e48b34a3...65b6` (CLI),
++`d84bd72a...d03f` (tests), `816e2a3a...130f` (design),
++`18a0c68f...f14b` (procedure), `83db1ffc...e590` (invalid template), and
++`d8c67188...1bc0` (implementation plan). The verified six-row stage-manifest
++hash is `c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`;
++the 23-row offline manifest verifies completely, with its post-record file hash
++kept in the task-local implementation report to avoid a self-referential seal.
++Passive sysfs reported BAT0 at 40 percent, discharging. No live action occurred.
++
+ Revision 1 is rejected/superseded by evidence protocol v2. Revision 2 adds
+ total JaSt numeric rejection, candidate-scoped `pipefail` seals, and the
+ post-restoration four-derivative audible sequence; it is pending independent
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 05:38:18.626850545 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 06:13:14.821046063 -0700
+@@ -232,3 +232,15 @@
+    not expose.
+ 
+ Do not call either outcome resolved until the observable checks in step 8 pass.
++
++Fix1 current-slot gate supersedes historical 94/31 evidence: 39 passed, 9
++subtests in 129.12s, exit 0. Broad suite and manifests were still pending at
++that intermediate checkpoint; the completed gate below supersedes it.
++
++Authoritative fix1 broad gate: 102 passed, 36 subtests passed in 157.09s
++(0:02:37), exit 0. Stage 6/6 and offline manifest 23/23 verify, with stage hash
++`c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`.
++The offline-manifest file hash is recorded outside its tracked inputs in the
++task-local implementation report.
++Passive sysfs reported BAT0 at 40 percent, discharging. Next gate is independent
++revision-2 fix1 re-review; no live run or hardware action is authorized.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md	2026-08-29 05:38:18.646618788 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md	2026-08-29 06:13:14.837799807 -0700
+@@ -1,6 +1,7 @@
+ # Task 6 revision-2 correction report
+ 
+-Status: pending complete offline regression and independent revision-2 review.
++Status: fix round 1 implemented and offline-verified; independent revision-2
++re-review pending.
+ 
+ ## TDD evidence
+ 
+@@ -39,7 +40,7 @@
+ 
+ No Wine, USB, ALSA/audio, device, network, or other live action was performed.
+ 
+-## Verification and seals
++## Historical pre-fix1 verification checkpoint — superseded
+ 
+ - Focused correction plus plan contracts: `14 passed in 12.69s`.
+ - Current-slot collection: `35 tests collected`; the focused current-slot run
+@@ -54,8 +55,8 @@
+   `dspusbdevice.dll` is
+   `567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b`,
+   and both queue-inventory producer/test hashes match the manifest.
+-- Battery sysfs exposed no capacity/status files in this environment, so passive
+-  battery state is unavailable rather than inferred.
++- Battery sysfs exposed no capacity/status files at that checkpoint; the final
++  controller seal below supersedes that unavailable observation.
+ 
+ Touched core-file hashes are the six rows in the verified stage manifest:
+ 
+@@ -72,3 +73,90 @@
+ review is required. This task is not approval and grants no live authority.
+ 
+ READY FOR INDEPENDENT REVISION-2 REVIEW
++
++## Fix1 checkpoint A
++
++Focused command:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_root_v1_artifacts_are_rejected tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_ab_provenance_rejects_extra_field_and_bad_timestamp
++```
++
++Output: `2 passed, 2 subtests passed in 11.37s`.
++
++The procedure now uses `set -e -o pipefail` and makes the explicit prerequisite
++`sha256sum` succeed with `&&` before candidate file enumeration. Root v1
++artifacts are snapshotted and rejected rather than ignored. Remaining checkpoint
++A work is the broader numeric/attestation/seal failure-injection matrix and the
++complete current-slot run.
++
++### Checkpoint A1 focused RED/GREEN
++
++RED output: the new raw-channel test initially failed because its changed raw
++hash was correctly rejected by the immutable manifest/snapshot binding before
++semantic validation. The fixture now updates only the declared summary raw hash
++to reach the numeric validator; the candidate manifest mismatch remains a
++separate fail-closed reason.
++
++GREEN command:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_v2_evidence_contract_rejects_numeric_and_attestation_tampering tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_ab_provenance_rejects_extra_field_and_bad_timestamp tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_root_v1_artifacts_are_rejected
++```
++
++Output: `3 passed, 2 subtests passed in 17.52s`.
++
++### Checkpoint A3 stale expectation repair
++
++First stale failure was
++`SurveyTemplateContractTests.test_checked_in_template_is_rejected_as_unrecorded_and_unauthorized`:
++it required the superseded literal `set -o pipefail` prefix. Updated it to the
++required revision-2 `set -e -o pipefail` command. A later full-file run still
++reports two failures after 22 successful tests; diagnosis remains pending.
++
++### Checkpoint A5 current-slot terminal result
++
++The first complete terminal run reported `1 failed, 38 passed, 9 subtests
++passed in 142.11s`. Exact failure:
++`RestorationVerifierTests.test_selected_slot_drift_fails_restoration` raised
++`TypeError: 'NoneType' object is not iterable` at `_jast_summary_from_raw` for
++the intentionally arbitrary raw JaSt fixture. This was a product regression in
++the new numeric/canonical branch, not a stale test: non-object raw JaSt must
++produce structured rejection. Fixed by deriving a summary only after the raw
++object passes exact-field, schema, checkpoint, numeric, and canonical checks.
++
++Focused GREEN command output:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_selected_slot_drift_fails_restoration
++```
++
++`1 passed in 15.48s`.
++
++Controller current-slot gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py` returned `39 passed, 9 subtests passed in 129.12s (0:02:09)`, exit 0. Broad suite and manifest refresh remain pending.
++
++Controller broad gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_host_queue_inventory.py tests/test_cp34_live_matrix.py tests/test_cp34_current_slot_survey.py tests/test_io24_preset_persistence.py tests/test_normalize_io24_capture.py tests/test_io24_capture_decode.py` returned `102 passed, 36 subtests passed in 157.09s (0:02:37)`, exit 0.
++
++### Fix1 terminal offline seal
++
++- Six-row stage manifest: 6/6 OK; manifest SHA-256
++  `c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410`.
++- Twenty-three-row offline manifest: 23/23 OK; manifest SHA-256
++  `4f7632b0d034d9f3a2da2cf3c6eed3f79a4e0e562372b42483e1bf366ad3068d`.
++- Passive sysfs battery: BAT0 40 percent, Discharging, above the 10 percent
++  hard-stop floor.
++- Inventory producer/test/DLL inputs were unchanged and remain pinned by the
++  verified offline manifest; no inventory rerun was needed for this fix.
++- No Wine, USB, ALSA/audio device, hardware interface, network, firmware,
++  preset/effect, driver, installation, staging, or other live action occurred.
++
++READY FOR TASK-6 FIX1 RE-REVIEW
++
++### Checkpoint A2 seal injection
++
++Focused command output: `1 passed, 3 subtests passed in 0.10s` for the actual
++candidate-seal structure with missing ch1 PLAN, missing ch2 PLAN, and missing
++ch2 predecessor inputs. Each failed nonzero and published no candidate manifest.
++
++At that historical checkpoint the current-slot regression was still running;
++the terminal controller result and offline seal above supersede it.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/re/cp34_current_slot_survey.py	2026-08-29 05:38:18.576572003 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/re/cp34_current_slot_survey.py	2026-08-29 06:13:14.776046416 -0700
+@@ -46,6 +46,7 @@
+     "phantom_1", "phantom_2", "gain_1", "gain_2", "headphone",
+     "main", "monitor_blend",
+ )
++MAX_PROCESSING_CHANNEL = 6  # Six-channel S32_LE capture format; no wider map is evidenced.
+ EXPECTED_EVENTS = (
+     ("P0", "state_read"), ("M0", "audio_capture"),
+     ("S1", "audio_capture"), ("T1", "manual_preset_toggle"),
+@@ -459,8 +460,6 @@
+                 elif entry.is_dir(follow_symlinks=False):
+                     visit(entry.path, child_relative)
+                 elif entry.is_file(follow_symlinks=False):
+-                    if child_relative in _EXCLUDED_INPUT_PATHS:
+-                        continue
+                     try:
+                         inputs[child_relative] = _read_regular_file_once(entry.path)
+                     except OSError:
+@@ -471,6 +470,9 @@
+                 reasons.append("input_unreadable_or_changed:%s" % child_relative)
+ 
+     visit(str(root), "")
++    for forbidden in ("EVIDENCE-SHA256SUMS", "RESTORATION.json"):
++        if forbidden in inputs:
++            reasons.append("root_v1_artifact_prohibited:%s" % forbidden)
+     return inputs, reasons
+ 
+ 
+@@ -613,10 +615,18 @@
+ 
+ def _state_type_reasons(state, prefix):
+     reasons = []
++    channel = state.get("channel")
++    if not isinstance(channel, int) or isinstance(channel, bool):
++        reasons.append("%s_channel_must_be_integer" % prefix)
+     for key in ("selected_slot", "processing_channel_1", "processing_channel_2"):
+         value = state.get(key)
+         if not isinstance(value, int) or isinstance(value, bool):
+             reasons.append("%s_%s_must_be_integer" % (prefix, key))
++    for key in ("processing_channel_1", "processing_channel_2"):
++        value = state.get(key)
++        if (isinstance(value, int) and not isinstance(value, bool)
++                and not 0 <= value <= MAX_PROCESSING_CHANNEL):
++            reasons.append("%s_%s_outside_six_channel_bound" % (prefix, key))
+     for key in ("enabled", "phantom_1", "phantom_2"):
+         if not isinstance(state.get(key), bool):
+             reasons.append("%s_%s_must_be_boolean" % (prefix, key))
+@@ -951,21 +961,30 @@
+                             raw_value, "%s_jast_raw" % checkpoint_prefix,
+                         )
+                         reasons.extend(raw_type_reasons)
+-                    if (not isinstance(raw_value, dict)
++                        try:
++                            raw_is_canonical = _canonical_json_bytes(raw_value) == raw_bytes
++                        except (OverflowError, ValueError, TypeError):
++                            raw_is_canonical = False
++                            reasons.append("%s_jast_raw_numeric_unserializable" % checkpoint_prefix)
++                        if (not isinstance(raw_value, dict)
+                             or set(raw_value) != raw_fields
+                             or raw_value.get("schema")
+                                != "cp34-current-slot-jast-raw-v1"
+                             or raw_value.get("checkpoint") != checkpoint
+                             or raw_type_reasons
+-                            or _canonical_json_bytes(raw_value) != raw_bytes):
+-                        reasons.append(
+-                            "%s_jast_raw_noncanonical" % checkpoint_prefix,
+-                        )
++                            or not raw_is_canonical):
++                            reasons.append(
++                                "%s_jast_raw_noncanonical" % checkpoint_prefix,
++                            )
+                     else:
+-                        reasons.extend(_scope_reasons(
+-                            raw_value, candidate_spec,
+-                            "%s_jast_raw" % checkpoint_prefix,
+-                        ))
++                        reasons.append("%s_jast_raw_noncanonical" % checkpoint_prefix)
++                    if (isinstance(raw_value, dict) and not raw_type_reasons
++                            and set(raw_value) == raw_fields
++                            and raw_value.get("schema") == "cp34-current-slot-jast-raw-v1"
++                            and raw_value.get("checkpoint") == checkpoint
++                            and raw_is_canonical):
++                        reasons.extend(_scope_reasons(raw_value, candidate_spec,
++                                                      "%s_jast_raw" % checkpoint_prefix))
+                         expected_summary = _jast_summary_from_raw(
+                             raw_value, raw_path, raw_bytes,
+                         )
+@@ -1137,21 +1156,63 @@
+             inputs, raw_audio, reasons,
+         )
+ 
++    physical_for_order = _json_input(inputs, prefix + "PHYSICAL-RESTORATION.json", reasons)
++    physical_time = (physical_for_order.get("monotonic_ns")
++                     if isinstance(physical_for_order, dict) else None)
+     audible = _json_input(inputs, prefix + "AUDIBLE-ATTESTATION.json", reasons)
+     audible_positive = False
+     if isinstance(audible, dict):
+         reasons.extend(_scope_reasons(audible, candidate_spec, "audible_attestation"))
+-        if audible.get("schema") != "cp34-current-slot-audible-attestation-v1":
++        required_audible = {"schema", "phase", "candidate", "channel", "frozen_mix_channel", "operator_attested", "playback_identity", "monitoring_identity", "observations"}
++        if set(audible) != required_audible:
++            reasons.append("audible_attestation_fields_invalid")
++        if audible.get("schema") != "cp34-current-slot-audible-attestation-v2":
+             reasons.append("audible_attestation_schema_invalid")
+         if audible.get("phase") != "POST_RESTORATION":
+             reasons.append("audible_attestation_phase_invalid")
+         if not _same_json_scalar(audible.get("frozen_mix_channel"), frozen_channel):
+             reasons.append("audible_attestation_frozen_channel_mismatch")
+-        audible_positive = (
+-            audible.get("operator_attested") is True
+-            and _same_json_scalar(audible.get("active_repeats_heard"), 2)
+-            and _same_json_scalar(audible.get("dry_repeats_heard"), 0)
+-        )
++        observations = audible.get("observations")
++        expected_roles = dict(zip(("S1", "S2", "S3", "S4"),
++            ("active", "dry", "dry", "active") if p0.get("enabled") is True else ("dry", "active", "active", "dry")))
++        seen, observation_times, audible_positive = set(), [], True
++        if not isinstance(observations, list) or len(observations) != 4:
++            reasons.append("audible_observations_must_be_four")
++            audible_positive = False
++        else:
++            for row in observations:
++                if not isinstance(row, dict) or set(row) != {"path", "sha256", "role", "heard", "monotonic_ns"}:
++                    reasons.append("audible_observation_fields_invalid"); audible_positive = False; continue
++                path = row.get("path"); capture = next((x for x in expected_roles if path == "%s/%s.mix%s.mono.wav" % (candidate, x, frozen_channel)), None)
++                if capture is None or capture in seen or row.get("role") != expected_roles[capture] or not isinstance(row.get("heard"), bool):
++                    reasons.append("audible_observation_binding_invalid"); audible_positive = False; continue
++                seen.add(capture); observation_times.append(row.get("monotonic_ns"))
++                raw = inputs.get(path)
++                if raw is None or row.get("sha256") != hashlib.sha256(raw).hexdigest():
++                    reasons.append("audible_observation_hash_invalid"); audible_positive = False
++                if row["heard"] != (expected_roles[capture] == "active"):
++                    audible_positive = False
++        if (len(seen) != 4 or not all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in observation_times)
++                or any(b <= a for a, b in zip(observation_times, observation_times[1:]))
++                or physical_time is None or any(x <= physical_time for x in observation_times)):
++            reasons.append("audible_observation_timestamps_invalid"); audible_positive = False
++        audible_positive = audible_positive and audible.get("operator_attested") is True
++
++    provenance = _json_input(inputs, prefix + "AB-PROVENANCE.json", reasons)
++    if isinstance(provenance, dict):
++        required = {"schema", "candidate", "channel", "attestation_path", "attestation_sha256", "ab_path", "ab_sha256", "analysis_monotonic_ns"}
++        if set(provenance) != required:
++            reasons.append("ab_provenance_fields_invalid")
++        if provenance.get("schema") != "cp34-current-slot-ab-provenance-v1":
++            reasons.append("ab_provenance_schema_invalid")
++        reasons.extend(_scope_reasons(provenance, candidate_spec, "ab_provenance"))
++        for name, path in (("attestation", prefix + "AUDIBLE-ATTESTATION.json"), ("ab", prefix + "AB.json")):
++            if provenance.get(name + "_path") != path or provenance.get(name + "_sha256") != hashlib.sha256(inputs.get(path, b"")).hexdigest():
++                reasons.append("ab_provenance_%s_binding_invalid" % name)
++        analysis_time = provenance.get("analysis_monotonic_ns")
++        if (not isinstance(analysis_time, int) or isinstance(analysis_time, bool) or analysis_time < 0
++                or any(not isinstance(x, int) or analysis_time <= x for x in observation_times)):
++            reasons.append("ab_provenance_timestamp_invalid")
+ 
+     if isinstance(ab_result, dict) and isinstance(p0, dict):
+         if p0.get("enabled") is True:
+@@ -1185,16 +1246,23 @@
+         else:
+             reasons.append("ab_canonical_inputs_missing")
+ 
+-    physical = _json_input(inputs, prefix + "PHYSICAL-RESTORATION.json", reasons)
++    physical = physical_for_order
+     if isinstance(physical, dict):
+         reasons.extend(_scope_reasons(physical, candidate_spec, "physical_restoration"))
+-        if physical.get("schema") != "cp34-current-slot-physical-restoration-v1":
++        if set(physical) != {"schema", "candidate", "channel", "restored", "operator_attested", "restored_connection", "monotonic_ns"}:
++            reasons.append("physical_restoration_fields_invalid")
++        if physical.get("schema") != "cp34-current-slot-physical-restoration-v2":
+             reasons.append("physical_restoration_schema_invalid")
+         if physical.get("restored") is not True or physical.get("operator_attested") is not True:
+             reasons.append("physical_restoration_not_attested")
+         expected_connection = plan_candidate.get("restore_connection") if isinstance(plan_candidate, dict) else None
+         if not expected_connection or physical.get("restored_connection") != expected_connection:
+             reasons.append("physical_restoration_connection_mismatch")
++        physical_time = physical.get("monotonic_ns")
++        if not isinstance(physical_time, int) or isinstance(physical_time, bool) or physical_time < 0:
++            reasons.append("physical_restoration_timestamp_invalid")
++        elif events and physical_time <= events[-1].get("monotonic_ns", -1):
++            reasons.append("physical_restoration_must_follow_s4")
+ 
+     if candidate == "ch2-slot1":
+         first_manifest_reasons = _verify_candidate_manifest(
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-before/tests/test_cp34_current_slot_survey.py	2026-08-29 05:38:18.581771919 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix1-after/tests/test_cp34_current_slot_survey.py	2026-08-29 06:13:14.780547987 -0700
+@@ -353,21 +353,40 @@
+         "active": [metric_rows[capture] for capture in active_ids],
+         "reasons": ab_reasons,
+     }), encoding="utf-8")
++    observations = []
++    for offset, capture in enumerate(("S1", "S2", "S3", "S4"), 12):
++        derivative = candidate_dir / f"{capture}.mix3.mono.wav"
++        observations.append({"path": derivative.relative_to(run_dir).as_posix(),
++            "sha256": hashlib.sha256(derivative.read_bytes()).hexdigest(),
++            "role": "active" if capture in active_ids else "dry",
++            "heard": audible_positive and capture in active_ids, "monotonic_ns": offset})
+     (candidate_dir / "AUDIBLE-ATTESTATION.json").write_text(json.dumps({
+-        "schema": "cp34-current-slot-audible-attestation-v1",
++        "schema": "cp34-current-slot-audible-attestation-v2",
+         "phase": "POST_RESTORATION",
+         **scope,
+         "frozen_mix_channel": 3,
+-        "active_repeats_heard": 2 if audible_positive else None,
+-        "dry_repeats_heard": 0 if audible_positive else None,
+         "operator_attested": audible_positive,
++        "playback_identity": "separate-offline-player",
++        "monitoring_identity": "separate-offline-monitor",
++        "observations": observations,
+     }), encoding="utf-8")
+     (candidate_dir / "PHYSICAL-RESTORATION.json").write_text(json.dumps({
+-        "schema": "cp34-current-slot-physical-restoration-v1",
++        "schema": "cp34-current-slot-physical-restoration-v2",
+         **scope,
+         "restored": True,
+         "operator_attested": True,
+         "restored_connection": candidate_spec["restore_connection"],
++        "monotonic_ns": 11,
++    }), encoding="utf-8")
++    attestation = candidate_dir / "AUDIBLE-ATTESTATION.json"
++    ab = candidate_dir / "AB.json"
++    (candidate_dir / "AB-PROVENANCE.json").write_text(json.dumps({
++        "schema": "cp34-current-slot-ab-provenance-v1", **scope,
++        "attestation_path": attestation.relative_to(run_dir).as_posix(),
++        "attestation_sha256": hashlib.sha256(attestation.read_bytes()).hexdigest(),
++        "ab_path": ab.relative_to(run_dir).as_posix(),
++        "ab_sha256": hashlib.sha256(ab.read_bytes()).hexdigest(),
++        "analysis_monotonic_ns": 16,
+     }), encoding="utf-8")
+ 
+ 
+@@ -545,8 +564,8 @@
+         self.assertIn("A null signal is `INCONCLUSIVE`, never a negative.", procedure)
+         self.assertIn("-print0 | LC_ALL=C sort -z | xargs -0r sha256sum --", procedure)
+         self.assertIn("set -o pipefail && find", procedure)
+-        self.assertIn("(cd RUN && set -o pipefail && tmp=$(mktemp .ch1-evidence", procedure)
+-        self.assertIn("(cd RUN && set -o pipefail && tmp=$(mktemp .ch2-evidence", procedure)
++        self.assertIn("(cd RUN && set -e -o pipefail && tmp=$(mktemp .ch1-evidence", procedure)
++        self.assertIn("(cd RUN && set -e -o pipefail && tmp=$(mktemp .ch2-evidence", procedure)
+         self.assertIn("tmpdir=$(mktemp -d .sha256sums", procedure)
+         self.assertLess(
+             procedure.index("restore and attest the physical connection"),
+@@ -560,6 +579,18 @@
+         self.assertIn('ln "$tmpdir/SHA256SUMS" SHA256SUMS', procedure)
+         self.assertNotIn("> SHA256SUMS", procedure)
+ 
++    def test_candidate_seals_fail_without_prerequisites_and_do_not_publish(self):
++        commands = {
++            "ch1-slot1": "set -e -o pipefail; tmp=$(mktemp .ch1-evidence.XXXXXX); trap 'rm -f \"$tmp\"' EXIT; { sha256sum PLAN.json && find ch1-slot1 -type f -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > \"$tmp\" && ln \"$tmp\" ch1-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch1-slot1/EVIDENCE-SHA256SUMS",
++            "ch2-slot1": "set -e -o pipefail; tmp=$(mktemp .ch2-evidence.XXXXXX); trap 'rm -f \"$tmp\"' EXIT; { sha256sum PLAN.json ch1-slot1/EVIDENCE-SHA256SUMS ch1-slot1/RESTORATION.json && find ch2-slot1 -type f -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > \"$tmp\" && ln \"$tmp\" ch2-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch2-slot1/EVIDENCE-SHA256SUMS",
++        }
++        for candidate, missing in (("ch1-slot1", ("PLAN.json",)), ("ch2-slot1", ("PLAN.json",)), ("ch2-slot1", ("PLAN.json", "ch1-slot1/EVIDENCE-SHA256SUMS", "ch1-slot1/RESTORATION.json"))):
++            with self.subTest(candidate=candidate, missing=missing), tempfile.TemporaryDirectory() as directory:
++                run = Path(directory); (run / candidate).mkdir(); (run / candidate / "input").write_text("x")
++                completed = subprocess.run(["bash", "-c", commands[candidate]], cwd=run, text=True, capture_output=True)
++                self.assertNotEqual(completed.returncode, 0)
++                self.assertFalse((run / candidate / "EVIDENCE-SHA256SUMS").exists())
++
+ 
+ class MappingAnalyzerTests(unittest.TestCase):
+     def _invoke_map(self, path, input_channel=1):
+@@ -743,6 +774,51 @@
+             "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8",
+         )
+ 
++    def test_root_v1_artifacts_are_rejected(self):
++        for name in ("EVIDENCE-SHA256SUMS", "RESTORATION.json"):
++            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
++                run_dir = _build_restoration_run(directory)
++                (run_dir / name).write_text("{}\n", encoding="utf-8")
++                _, result = self._result(run_dir)
++                self.assertIn("root_v1_artifact_prohibited:" + name, result["reasons"])
++
++    def test_ab_provenance_rejects_extra_field_and_bad_timestamp(self):
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            provenance = run_dir / "ch1-slot1" / "AB-PROVENANCE.json"
++            self._mutate_json(provenance, lambda value: value.update(
++                io24_monitoring=True, analysis_monotonic_ns=1,
++            ))
++            _, result = self._result(run_dir)
++        self.assertIn("ab_provenance_fields_invalid", result["reasons"])
++        self.assertIn("ab_provenance_timestamp_invalid", result["reasons"])
++
++    def test_v2_evidence_contract_rejects_numeric_and_attestation_tampering(self):
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            raw = run_dir / "ch1-slot1" / "P0.raw.jast"
++            raw.write_text(raw.read_text().replace('"channel":1', '"channel":1e10000'), encoding="utf-8")
++            self._mutate_json(run_dir / "ch1-slot1" / "P0.json", lambda value: value.update(
++                raw_snapshot_sha256=hashlib.sha256(raw.read_bytes()).hexdigest()))
++            completed, result = self._result(run_dir)
++            self.assertEqual(completed.returncode, 2)
++            self.assertIn("p0_jast_raw_channel_must_be_integer", result["reasons"])
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            for checkpoint in ("P0", "P1", "P2"):
++                self._mutate_json(run_dir / "ch1-slot1" / (checkpoint + ".json"),
++                                  lambda value: value.update(processing_channel_1=999))
++            physical = run_dir / "ch1-slot1" / "PHYSICAL-RESTORATION.json"
++            self._mutate_json(physical, lambda value: value.update(monotonic_ns=1, io24_monitoring=True))
++            audible = run_dir / "ch1-slot1" / "AUDIBLE-ATTESTATION.json"
++            self._mutate_json(audible, lambda value: value.update(io24_playback=True, observations=value["observations"][:3]))
++            _, result = self._result(run_dir)
++            self.assertIn("p0_processing_channel_1_outside_six_channel_bound", result["reasons"])
++            self.assertIn("physical_restoration_fields_invalid", result["reasons"])
++            self.assertIn("physical_restoration_must_follow_s4", result["reasons"])
++            self.assertIn("audible_attestation_fields_invalid", result["reasons"])
++            self.assertIn("audible_observations_must_be_four", result["reasons"])
++
+     def _cli_result(self, run_dir, candidate="ch1-slot1"):
+         completed = subprocess.run(
+             [sys.executable, str(CLI), "verify-restoration", str(run_dir),
+@@ -891,11 +967,6 @@
+             run_dir = _build_restoration_run(
+                 directory, enabled=False, outcome=None,
+             )
+-            audible = run_dir / "ch1-slot1" / "AUDIBLE-ATTESTATION.json"
+-            self._mutate_json(audible, lambda value: value.update({
+-                "active_repeats_heard": None,
+-                "dry_repeats_heard": None,
+-            }))
+             completed, result = self._result(run_dir)
+             ab = run_dir / "ch1-slot1" / "AB.json"
+             self._mutate_json(

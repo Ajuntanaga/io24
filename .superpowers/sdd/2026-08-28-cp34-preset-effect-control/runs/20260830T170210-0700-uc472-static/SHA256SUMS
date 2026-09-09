@@ -1,0 +1,10 @@
+1b5ddd6fd3ad4b93529caf8e5933bcd52b13194bdfa62652292b46ddcd980b95  /tmp/PreSonus_Universal_Control_v4_7_2-108537.exe
+27f9fe550b466c9d783e3432d6663bb02af9aa001b23165985a56c96005e1a96  /tmp/io24-uc472-extract.IHXUdb/Universal Control.exe
+04cd73f8f6e65cd025c61b586b87c32093d75f3289e2d73e9e5ccf9b4506bd16  /tmp/io24-uc472-extract.IHXUdb/cclgui.dll
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  /tmp/io24-uc472-extract.IHXUdb/hwaccess/dspusbdevice.dll
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+8675c57273ea856909b673d58f780035b375c13af281de4a707486855833cf19  re/cp34_host_queue_inventory.py
+a7e13d48310ae64b51c550d987460bb0ef6b85005ea98c45c90d2ba244f20faa  tests/test_cp34_host_queue_inventory.py
+f61597bbb3c53016128a0a530855233f823d7a5ff2be76cfd03ac450f4a89e27  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260830T170210-0700-uc472-static/QUEUE-INVENTORY.json
+d99e152da357a85796866144ee4d6b3a11725a8d0fcdacc7fa71f72883aeeb2d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260830T170210-0700-uc472-static/WRITER-INVENTORY.json
+ee5edb7521cfc411d731acca9f39b44a6934b19fe6e9af8557f2d25271680396  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260830T170210-0700-uc472-static/REPORT.md

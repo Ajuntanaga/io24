@@ -1,0 +1,188 @@
+{
+  "firmware": {
+    "call_anchors": {
+      "block202_configures_shared_core": {
+        "call_file_offset": "0x5ade6",
+        "target_address": "0x6007a6a8",
+        "target_file_offset": "0x5a6a8"
+      },
+      "block202_constructs_shared_core": {
+        "call_file_offset": "0x5b274",
+        "target_address": "0x6007af14",
+        "target_file_offset": "0x5af14"
+      },
+      "device_constructs_block201": {
+        "call_file_offset": "0x5da12",
+        "target_address": "0x600791bc",
+        "target_file_offset": "0x591bc"
+      },
+      "device_constructs_block202": {
+        "call_file_offset": "0x5da1e",
+        "target_address": "0x6007b258",
+        "target_file_offset": "0x5b258"
+      },
+      "doubler_configures_private_core": {
+        "call_file_offset": "0x5ae0e",
+        "target_address": "0x6007a6a8",
+        "target_file_offset": "0x5a6a8"
+      },
+      "doubler_constructs_private_core": {
+        "call_file_offset": "0x5e37c",
+        "target_address": "0x6007af14",
+        "target_file_offset": "0x5af14"
+      },
+      "doubler_runtime_calls_private_config": {
+        "call_file_offset": "0x5c06c",
+        "target_address": "0x6007adfc",
+        "target_file_offset": "0x5adfc"
+      },
+      "model_zero_constructs_doubler": {
+        "call_file_offset": "0x5f260",
+        "target_address": "0x6007e270",
+        "target_file_offset": "0x5e270"
+      }
+    },
+    "code_slices": {
+      "block202_constructor": {
+        "offset": "0x5b258",
+        "sha256": "f867d055fe9f6d50fcc43b54520186cc845a2db4e9ebc6ab8e312ec895d335fc",
+        "size": 94
+      },
+      "block202_core_configuration": {
+        "offset": "0x5add4",
+        "sha256": "cdba3a95c542b0b50b06511534d62dfc338032862e3968be2232c1abeb677433",
+        "size": 40
+      },
+      "device_block_construction": {
+        "offset": "0x5d9a8",
+        "sha256": "c37631d303f2fd12358eb87de78f83f18792e16d082666af179fdbd651fc49af",
+        "size": 128
+      },
+      "doubler_private_core_configuration": {
+        "offset": "0x5adfc",
+        "sha256": "b9ce1ee4ae8d4efb020d6b31b6637d2134ed0888748c270714d66c6103c2cb6d",
+        "size": 28
+      },
+      "doubler_private_core_constructor": {
+        "offset": "0x5e356",
+        "sha256": "f9c142cf0f4a779203febe98de77f77e3810ef5b1c4f74f80b9c95a9b76b1688",
+        "size": 42
+      },
+      "doubler_runtime_configuration_call": {
+        "offset": "0x5c062",
+        "sha256": "105f71f96e3bd35f16feef6a86ae1c22857c2ae834eddebdf50cb09ce2978198",
+        "size": 22
+      },
+      "shared_reverb_core_constructor": {
+        "offset": "0x5af14",
+        "sha256": "baa75a3fce0d0bd57f91d50084bde1065a81d7f82a8b52c08f558caf4b334280",
+        "size": 64
+      },
+      "voicefx_model_factory": {
+        "offset": "0x5f254",
+        "sha256": "b289c54c6fae74e630918c36d4b39b967c8151d99864762702d2397033f2de40",
+        "size": 100
+      }
+    },
+    "implementation_identity": {
+      "configurator_file_offset": "0x5a6a8",
+      "constructor_file_offset": "0x5af14",
+      "same_core_implementation": true,
+      "same_state_instance": false
+    },
+    "load_base": "0x60020000",
+    "object_layout": {
+      "block201_voicefx": "device+0x11e0",
+      "block202_shared_reverb": "device+0x3a70",
+      "block202_shared_reverb_core": "device+0x3a80",
+      "doubler_private_reverb_core": "device+0x1574",
+      "instances_are_distinct": true,
+      "selected_model_object": "device+0x11f0"
+    },
+    "sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "size": 1104448,
+    "vtable_anchors": {
+      "block202_core_config": {
+        "target_file_offset": "0x5add4",
+        "thumb_pointer": "0x6007add5",
+        "vtable_word_offset": "0x10ca6c"
+      },
+      "block202_primary_handler": {
+        "target_file_offset": "0x56e70",
+        "thumb_pointer": "0x60076e71",
+        "vtable_word_offset": "0x10ca3c"
+      },
+      "doubler_primary_handler": {
+        "target_file_offset": "0x5bb6c",
+        "thumb_pointer": "0x6007bb6d",
+        "vtable_word_offset": "0x10c890"
+      },
+      "doubler_runtime_config": {
+        "target_file_offset": "0x5bfe0",
+        "thumb_pointer": "0x6007bfe1",
+        "vtable_word_offset": "0x10c8c0"
+      },
+      "doubler_structured_state": {
+        "target_file_offset": "0x5e0ec",
+        "thumb_pointer": "0x6007e0ed",
+        "vtable_word_offset": "0x10c8c4"
+      }
+    }
+  },
+  "schema": "cp34-doubler-private-reverb-v1",
+  "static_conclusions": {
+    "architecture": "Doubler/Transformer owns a private reverb-core instance; it uses the same constructor and configurator implementation as block 202 but not block 202's state object or send/return path",
+    "boundary": "static structure does not prove physical nonvolatile commit, front-panel recall, audible output, or power-cycle survival",
+    "preset_contract": "the device-slot Stat record stores the Doubler class id and on/lows/width/mix; it stores no vrvb, FXA, size, predelay, or hp_freq field",
+    "sample_rate": "sample rate is runtime configuration, not a preset-record field; native model configuration rebuilds the private core for the device's current rate, including 96 kHz",
+    "save_implication": "saving the scene-shaped JSON record is sufficient for this effect; a separate block-202 reverb or reverb-send write must not be added to the device-resident channel preset"
+  },
+  "uc_factory_preset_json": {
+    "forbidden_keys_present": [],
+    "forbidden_shared_reverb_keys": [
+      "FXA",
+      "hp_freq",
+      "predelay",
+      "reverb",
+      "size",
+      "vrvb"
+    ],
+    "record_count": 41,
+    "reverb_named_record": {
+      "extracted_file_offset": 157055599,
+      "index": 30,
+      "preset_name": "Reverb",
+      "voicefx": {
+        "__classid": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+        "lows": 0.06,
+        "mix": 0.295,
+        "on": 1,
+        "width": 0.405
+      }
+    },
+    "sha256": "89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d"
+  },
+  "uc_fx_parameter_model": {
+    "component_model_documents": 2,
+    "component_models_are_distinct": true,
+    "doubler_storable_fields": [
+      "on",
+      "lows",
+      "width",
+      "mix"
+    ],
+    "doubler_template": {
+      "classname": "VoiceOfGodComponent",
+      "id": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+      "paramlist": "VoiceOfGod"
+    },
+    "sha256": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
+    "shared_reverb_fields": [
+      "on",
+      "size",
+      "mix",
+      "hp_freq",
+      "predelay"
+    ]
+  }
+}

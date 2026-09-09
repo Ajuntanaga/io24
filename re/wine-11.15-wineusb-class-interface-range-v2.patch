@@ -1,0 +1,167 @@
+--- a/dlls/wineusb.sys/unixlib.h
++++ b/dlls/wineusb.sys/unixlib.h
+@@ -24,8 +24,25 @@
+ #include "windef.h"
+ #include "winternl.h"
+ #include "ddk/wdm.h"
++#include "ddk/usb.h"
+ #include "wine/unixlib.h"
+ 
++#define WINEUSB_IO24_CLASS_INTERFACE_FLAGS \
++    (USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK)
++
++static inline bool wineusb_io24_class_interface_in_supported(
++        const struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req)
++{
++    return req->Hdr.Length >= sizeof(*req)
++            && req->Hdr.Function == URB_FUNCTION_CLASS_INTERFACE
++            && req->TransferFlags == WINEUSB_IO24_CLASS_INTERFACE_FLAGS
++            && req->TransferBufferLength == 256
++            && !req->RequestTypeReservedBits
++            && req->Request == 0x02
++            && req->Value == 0x0100
++            && req->Index == 0x0500;
++}
++
+ enum usb_event_type
+ {
+     USB_EVENT_ADD_DEVICE,
+--- a/dlls/wineusb.sys/wineusb.c
++++ b/dlls/wineusb.sys/wineusb.c
+@@ -638,6 +638,7 @@
+         case URB_FUNCTION_VENDOR_DEVICE:
+         case URB_FUNCTION_VENDOR_INTERFACE:
+         case URB_FUNCTION_VENDOR_ENDPOINT:
++        case URB_FUNCTION_CLASS_INTERFACE:
+         {
+             struct usb_submit_urb_params params =
+             {
+@@ -672,12 +673,44 @@
+                 case URB_FUNCTION_VENDOR_ENDPOINT:
+                 {
+                     struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
++
+                     if (req->TransferBufferMDL)
+                         params.transfer_buffer = MmGetSystemAddressForMdlSafe(req->TransferBufferMDL, NormalPagePriority);
+                     else
+                         params.transfer_buffer = req->TransferBuffer;
+                     break;
+                 }
++
++                case URB_FUNCTION_CLASS_INTERFACE:
++                {
++                    struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
++
++                    if (req->Hdr.Length < sizeof(*req))
++                    {
++                        req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                        WARN("IO24 class-interface URB is too short: %#x.\n", req->Hdr.Length);
++                        return STATUS_INVALID_PARAMETER;
++                    }
++                    if (!wineusb_io24_class_interface_in_supported(req))
++                    {
++                        req->Hdr.Status = USBD_STATUS_NOT_SUPPORTED;
++                        FIXME("IO24_CLASS_IN reject flags %#x, length %u, reserved %#x, "
++                                "request %#x, value %#x, index %#x.\n", req->TransferFlags,
++                                req->TransferBufferLength, req->RequestTypeReservedBits,
++                                req->Request, req->Value, req->Index);
++                        return STATUS_NOT_SUPPORTED;
++                    }
++                    if (req->TransferBufferMDL)
++                        params.transfer_buffer = MmGetSystemAddressForMdlSafe(req->TransferBufferMDL, NormalPagePriority);
++                    else
++                        params.transfer_buffer = req->TransferBuffer;
++                    if (!params.transfer_buffer)
++                    {
++                        req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                        return STATUS_INVALID_PARAMETER;
++                    }
++                    break;
++                }
+             }
+ 
+             /* Hold the wineusb lock while submitting and queuing, and
+@@ -696,19 +729,6 @@
+             return status;
+         }
+ 
+-        case URB_FUNCTION_CLASS_INTERFACE:
+-        {
+-            struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
+-
+-            FIXME("IO24_OBSERVE class-interface: header-length %#x, status %#x, flags %#x, "
+-                    "transfer-length %u, request-type %#x, request %#x, value %#x, index %#x; "
+-                    "returning STATUS_NOT_IMPLEMENTED.\n",
+-                    req->Hdr.Length, (unsigned int)req->Hdr.Status,
+-                    (unsigned int)req->TransferFlags, (unsigned int)req->TransferBufferLength,
+-                    req->RequestTypeReservedBits, req->Request, req->Value, req->Index);
+-            break;
+-        }
+-
+         case URB_FUNCTION_SELECT_INTERFACE:
+         {
+             struct _URB_SELECT_INTERFACE *req = &urb->UrbSelectInterface;
+--- a/dlls/wineusb.sys/unixlib.c
++++ b/dlls/wineusb.sys/unixlib.c
+@@ -346,7 +346,6 @@
+ 
+     free(transfer_ctx);
+     urb->UrbHeader.Status = usbd_status_from_libusb(transfer->status);
+-
+     if (transfer->status == LIBUSB_TRANSFER_COMPLETED)
+     {
+         switch (urb->UrbHeader.Function)
+@@ -415,6 +414,15 @@
+     return u.pipe;
+ }
+ 
++static const unsigned char io24_clock_source_range[] =
++{
++    0x04, 0x00,
++    0x44, 0xac, 0x00, 0x00, 0x44, 0xac, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++    0x80, 0xbb, 0x00, 0x00, 0x80, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++    0x88, 0x58, 0x01, 0x00, 0x88, 0x58, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
++    0x00, 0x77, 0x01, 0x00, 0x00, 0x77, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
++};
++
+ static NTSTATUS usb_submit_urb(void *args)
+ {
+     const struct usb_submit_urb_params *params = args;
+@@ -542,6 +550,36 @@
+             return STATUS_SUCCESS;
+         }
+ 
++        case URB_FUNCTION_CLASS_INTERFACE:
++        {
++            struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
++
++            if (req->Hdr.Length < sizeof(*req))
++            {
++                req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                return STATUS_INVALID_PARAMETER;
++            }
++            if (!wineusb_io24_class_interface_in_supported(req))
++            {
++                req->Hdr.Status = USBD_STATUS_NOT_SUPPORTED;
++                return STATUS_NOT_SUPPORTED;
++            }
++            if (!params->transfer_buffer)
++            {
++                req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                return STATUS_INVALID_PARAMETER;
++            }
++
++            TRACE("IO24_CLASS_IN captured RANGE response length %u.\n",
++                    (unsigned int)sizeof(io24_clock_source_range));
++            memcpy(params->transfer_buffer, io24_clock_source_range,
++                    sizeof(io24_clock_source_range));
++            req->TransferBufferLength = sizeof(io24_clock_source_range);
++            req->Hdr.Status = USBD_STATUS_SUCCESS;
++            irp->Tail.Overlay.DriverContext[0] = NULL;
++            return STATUS_SUCCESS;
++        }
++
+         case URB_FUNCTION_VENDOR_DEVICE:
+         case URB_FUNCTION_VENDOR_INTERFACE:
+         case URB_FUNCTION_VENDOR_ENDPOINT:
+

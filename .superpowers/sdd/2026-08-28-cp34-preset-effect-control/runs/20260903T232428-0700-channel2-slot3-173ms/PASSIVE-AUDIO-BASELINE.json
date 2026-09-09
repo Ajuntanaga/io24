@@ -1,0 +1,33 @@
+{
+  "analysis": {
+    "input2_peak_dbfs": -24.139749440574803,
+    "reason": "input_must_contain_exactly_five_impulses",
+    "status": "SIGNAL_PRESENT_NOT_CLASSIFIABLE"
+  },
+  "capture": {
+    "channels": 6,
+    "duration_seconds": 3,
+    "endpoint": "hw:CARD=R24,DEV=0",
+    "format": "S32_LE",
+    "path": "input2-passive-baseline.wav",
+    "rate_hz": 48000,
+    "sha256": "9849926ca9c4b324f361fb33fa831a45f4b5c01012f2fa0eb113a1d90ab3600c"
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "effect_conclusion": "UNPROVED",
+  "preflight": {
+    "battery_percent": 96,
+    "input1_preset_enabled": false,
+    "input1_slot_index": 0,
+    "input2_preset_enabled": true,
+    "input2_slot_index": 3,
+    "jast_payload_sha256": "0166a241a601e3971d4cbccde2402d0e2e1b08b89be8fb69ac60dfa94308bc9d",
+    "status": "PASS"
+  },
+  "schema": "cp34-passive-audio-baseline-v1",
+  "scope": "ALSA capture only; no playback and no device setting or channel-1 operation",
+  "timestamp": "2026-09-03T23:50:16-07:00"
+}

@@ -1,0 +1,18 @@
+contained=1
+network=unshared
+repository=read-only
+sysfs=absent
+device_namespace=minimal
+WineUSB function-scope contract: pass
+WineUSB immediate-submit cleanup contract: pass
+WineUSB multi-interface handle contract: pass
+WineUSB pipe-observe fake-libusb behavior: pass
+WineUSB pipe-observe source/binary/runtime contract: pass
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+io24 usbmon class-IN evidence contract: pass
+io24 usbmon function topology contract: pass
+sealed topology analyzer: pass
+io24 WinUSB readiness contract: pass (known RED and synthetic structural GREEN)
+exit_status=0

@@ -1,0 +1,150 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:23:21.369937895 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:26:23.197934343 -0700
+@@ -1,2 +1,2 @@
+-13c67d0c5840df636bb49c8338acb2efc97f8a7478e3460469479e2549075d51  re/cp34_current_slot_survey.py
+-19bcfe269dd835943a75be2d9f23b0c5be24426fba0b2cb10c323cb330427535  tests/test_cp34_current_slot_survey.py
++12410ae2b6692cee6b2b03651f249227cdec65f7a392a7acd70cdb8839f6f73e  re/cp34_current_slot_survey.py
++c88f59d17c93ac8e78138cd6745277e8aa5bc1633feac309322ccdfc4f2dc077  tests/test_cp34_current_slot_survey.py
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/re/cp34_current_slot_survey.py	2026-08-29 03:23:21.369726554 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/re/cp34_current_slot_survey.py	2026-08-29 03:26:23.197716437 -0700
+@@ -57,6 +57,19 @@
+ _EXCLUDED_INPUT_PATHS = frozenset({
+     "EVIDENCE-SHA256SUMS", "RESTORATION.json", "REPORT.md", "SHA256SUMS",
+ })
++_AB_TOP_LEVEL_FIELDS = frozenset({
++    "schema", "status", "classification", "reverb_like_observed",
++    "candidate", "model_identity", "title_verified", "live_ready",
++    "restoration_verified", "audible_attested", "expected_delay_s",
++    "dry", "active", "reasons",
++})
++_AB_BASE_METRIC_FIELDS = frozenset({
++    "path", "sha256", "impulses", "arrival_offsets_samples", "peak",
++    "rms_db", "echo_ratio_db", "late_ratio_db",
++})
++_AB_ACTIVE_METRIC_FIELDS = _AB_BASE_METRIC_FIELDS | frozenset({
++    "echo_delta_db", "late_delta_db",
++})
+ 
+ 
+ def _has_exact_s32_pcm_semantics(raw):
+@@ -537,6 +550,11 @@
+     return type(first) is type(second) and first == second
+ 
+ 
++def _is_finite_numeric(value):
++    return (isinstance(value, (int, float)) and not isinstance(value, bool)
++            and math.isfinite(value))
++
++
+ def _state_type_reasons(state, prefix):
+     reasons = []
+     for key in ("selected_slot", "processing_channel_1", "processing_channel_2"):
+@@ -594,6 +612,33 @@
+                 reasons.append("ab_metric_row_invalid:%s:%d" % (role, index))
+                 role_binding_valid = False
+                 continue
++            expected_fields = (
++                _AB_ACTIVE_METRIC_FIELDS if role == "active"
++                else _AB_BASE_METRIC_FIELDS
++            )
++            if frozenset(row) != expected_fields:
++                reasons.append("ab_metric_fields_invalid:%s:%d" % (role, index))
++            impulses = row.get("impulses")
++            if (not isinstance(impulses, int) or isinstance(impulses, bool)
++                    or impulses != 5):
++                reasons.append("ab_metric_impulses_invalid:%s:%d" % (role, index))
++            offsets = row.get("arrival_offsets_samples")
++            if (not isinstance(offsets, list) or len(offsets) != 5
++                    or any(not isinstance(value, int) or isinstance(value, bool)
++                           for value in offsets)
++                    or not offsets or offsets[0] != 0):
++                reasons.append(
++                    "ab_metric_arrival_offsets_invalid:%s:%d" % (role, index),
++                )
++            numeric_fields = ["peak", "rms_db", "echo_ratio_db", "late_ratio_db"]
++            if role == "active":
++                numeric_fields.extend(("echo_delta_db", "late_delta_db"))
++            for field in numeric_fields:
++                if not _is_finite_numeric(row.get(field)):
++                    reasons.append(
++                        "ab_metric_%s_must_be_finite_numeric:%s:%d"
++                        % (field, role, index),
++                    )
+             path = row.get("path")
+             expected_path = "%s/%s.mix%d.mono.wav" % (
+                 candidate, capture, frozen_channel,
+@@ -821,6 +866,22 @@
+     ab_result = _json_input(inputs, prefix + "AB.json", reasons)
+     ab_status = None
+     if isinstance(ab_result, dict):
++        if frozenset(ab_result) != _AB_TOP_LEVEL_FIELDS:
++            reasons.append("ab_top_level_fields_invalid")
++        if any(not isinstance(ab_result.get(field), str) for field in (
++                "schema", "status", "classification", "candidate",
++                "model_identity")):
++            reasons.append("ab_top_level_string_types_invalid")
++        if any(not isinstance(ab_result.get(field), bool) for field in (
++                "reverb_like_observed", "title_verified", "live_ready",
++                "restoration_verified", "audible_attested")):
++            reasons.append("ab_top_level_boolean_types_invalid")
++        if not _same_json_scalar(ab_result.get("expected_delay_s"), 0.15):
++            reasons.append("ab_expected_delay_must_be_0_15")
++        ab_reasons = ab_result.get("reasons")
++        if (not isinstance(ab_reasons, list)
++                or any(not isinstance(reason, str) for reason in ab_reasons)):
++            reasons.append("ab_reasons_must_be_string_list")
+         if ab_result.get("schema") != "cp34-slot-survey-audio-v1":
+             reasons.append("ab_schema_invalid")
+         if not _same_json_scalar(ab_result.get("candidate"), candidate):
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-before/tests/test_cp34_current_slot_survey.py	2026-08-29 03:23:21.369820002 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix2-after/tests/test_cp34_current_slot_survey.py	2026-08-29 03:26:23.197809885 -0700
+@@ -567,6 +567,23 @@
+                 path.relative_to(run_dir).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                 for path in run_dir.rglob("*") if path.is_file()
+             }
++            ab = run_dir / "ch1-slot1" / "AB.json"
++            self._mutate_json(ab, lambda value: value.pop("expected_delay_s"))
++            self._mutate_json(ab, lambda value: value["dry"][0].pop("impulses"))
++            self._mutate_json(
++                ab,
++                lambda value: value["dry"][1].update(
++                    arrival_offsets_samples=[1, 2, 3, 4, 5], peak=True,
++                ),
++            )
++            self._mutate_json(
++                ab, lambda value: value["active"][0].pop("echo_delta_db"),
++            )
++            self._mutate_json(
++                ab, lambda value: value["active"][1].update(late_delta_db="bad"),
++            )
++            _refresh_evidence_manifest(run_dir)
++            malformed_completed, malformed_result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 0)
+         self.assertEqual(after, before)
+         self.assertNotIn("Traceback", completed.stderr)
+@@ -586,6 +603,22 @@
+             result["ja_st_limitation"],
+             "JaSt cannot prove every internal DSP byte.",
+         )
++        self.assertEqual(malformed_completed.returncode, 2)
++        self.assertIn("ab_top_level_fields_invalid", malformed_result["reasons"])
++        self.assertIn("ab_metric_fields_invalid:dry:1", malformed_result["reasons"])
++        self.assertIn(
++            "ab_metric_arrival_offsets_invalid:dry:2",
++            malformed_result["reasons"],
++        )
++        self.assertIn(
++            "ab_metric_peak_must_be_finite_numeric:dry:2",
++            malformed_result["reasons"],
++        )
++        self.assertIn("ab_metric_fields_invalid:active:1", malformed_result["reasons"])
++        self.assertIn(
++            "ab_metric_late_delta_db_must_be_finite_numeric:active:2",
++            malformed_result["reasons"],
++        )
+ 
+     def test_bypassed_first_restores_with_inconclusive_outcome(self):
+         with tempfile.TemporaryDirectory() as directory:

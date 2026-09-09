@@ -1,0 +1,25 @@
+2026-08-22T10:30:13-07:00
+[battery]
+capacity=61 status=Charging
+[device]
+sysfs=3-1 bus=3 devnum=4 config=1 serial=AB7C22200355
+interface=3-1:1.0 alt= 0 driver=snd-usb-audio
+interface=3-1:1.1 alt= 0 driver=snd-usb-audio
+interface=3-1:1.2 alt= 0 driver=snd-usb-audio
+interface=3-1:1.3 alt= 0 driver=snd-usb-audio
+interface=3-1:1.4 alt= 0 driver=snd-usb-audio
+interface=3-1:1.5 alt= 0 driver=none
+interface=3-1:1.6 alt= 0 driver=none
+[active-io24-units]
+  io24-crashwatch.service loaded active running Record power/load/thermal state so an abrupt crash leaves evidence
+[candidate-processes]
+[protected-prefix]
+inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+[source-baseline]
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+[candidate-registry]
+0c15d826572435c788d06e7f525d8750492ac53426a421d42db8fa8aaf813074  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/prefix/system.reg
+e390c966bcc3ef29d66b0e4ae590c8c93aa0e4df321af3cf6aa9bdb396554e14  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/prefix/user.reg
+[candidate-driver-outputs]

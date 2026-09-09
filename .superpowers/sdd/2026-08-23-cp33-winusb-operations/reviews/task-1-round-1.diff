@@ -1,0 +1,1088 @@
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md	2026-08-23 05:16:02.303695655 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md	2026-08-23 21:14:40.953716954 -0700
+@@ -1,26 +1,27 @@
+-# CP33 Task 1 report: hardware-free RED boundary
++# CP33 Task 1 report: executed hardware-free RED boundary
+ 
+-## Summary
++## Status and review history
++
++Correction round 1 is complete. The initial round-0 package is preserved
++unchanged under `reviews/`. Round 0 correctly failed because production objects
++were compiled but unused, host fakes were incomplete, focused modes were
++ignored, the vendor sequence was static-only, and raw tool failures could
++collide with feature exit 1. Round 1 replaces those source-only boundaries with
++executed production harnesses and addresses every blocking finding below.
++
++No production source was edited. No Wine process/prefix, USB device/node,
++sysfs USB path, driver, selector, Universal Control, Voice FX, or CP24 action
++was used. All work remained offline and hardware-free.
++
++## Files in Task 1 ownership
++
++The two fresh roots remain:
++
++- `.io24-build/winusb-api-v1/dev-source/`
++- `.io24-build/winusb-api-v1/patch-check-source/`
++
++The ten corrected contract/fake files are:
+ 
+-Task 1 is complete. The sealed CP32 `patch-check-source` was verified before
+-the fresh CP33 root was created. Both CP33 production clones were copied from
+-that immutable source and remain byte-for-byte equal to it. Five offline
+-contracts compile the actual relevant production translation units with
+-`cc -std=c11 -Wall -Wextra -Werror` (with narrowly required Wine-header/source
+-warning suppressions), use fresh temporary build directories, validate their
+-inputs, and return genuine missing-feature RED rather than harness failure.
+-No production source was edited. No Wine, prefix, USB, sysfs, driver, device,
+-Universal Control, Voice FX, selector, or CP24 action was used.
+-
+-## Exact files and directories created
+-
+-- `.io24-build/winusb-api-v1/dev-source/` (fresh CP32 clone)
+-- `.io24-build/winusb-api-v1/patch-check-source/` (fresh CP32 clone)
+-- `re/winusb-api-v1/checkpoints/`
+-- `re/winusb-api-v1/logs/cp32-seal-verify.log`
+-- `re/winusb-api-v1/logs/dspusbdevice-winusb-callsite.log`
+-- `re/winusb-api-v1/logs/cp33-red.log`
+-- `re/winusb-api-v1/logs/task-01-red.sha256`
+ - `tests/winusb_user_api_contract.c`
+ - `tests/winusb_user_api_contract.sh`
+ - `tests/winusb_function_io_contract.c`
+@@ -31,112 +32,180 @@
+ - `tests/winusb_overlapped_cancel_contract.c`
+ - `tests/winusb_overlapped_cancel_contract.sh`
+ - `tests/io24_winusb_vendor_profile_contract.py`
+-- `.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md`
+ 
+-## CP32 seal
++The four Task 1 evidence files are:
++
++- `re/winusb-api-v1/logs/cp32-seal-verify.log`
++- `re/winusb-api-v1/logs/dspusbdevice-winusb-callsite.log`
++- `re/winusb-api-v1/logs/cp33-red.log`
++- `re/winusb-api-v1/logs/task-01-red.sha256`
++
++`re/winusb-api-v1/checkpoints/` and this report are the only other Task 1
++paths created. No review, ledger, plan, spec, handoff, retained test, or other
++evidence file was edited.
++
++## Immutable baseline and vendor evidence
++
++The pre-creation CP32 verification remains valid: exactly 72 checksum lines,
++all 72 ending in `OK`, with no failure. The CP33 root nonexistence guard passed
++before initial creation.
++
++The static vendor evidence remains:
++
++- SHA-256 `567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b`;
++- exactly the expected fourteen imports;
++- policy-get disassembly at `0x180084d50`;
++- initializer disassembly at `0x180095e20`;
++- the exact nine policy pairs grouped as `all`, `out`, `in`, and `get`.
++
++## Executed production harnesses
++
++### Public DLL
++
++The wrapper builds the actual `dlls/winusb/main.c` (and optional future
++`io.c`) as a loadable host module, builds the contract executable with an
++exported controllable fake Win32 boundary, then uses `dlopen`/typed `dlsym`
++calls. The fake records IOCTL codes, input/output lengths, overlapped identity,
++allocation/free, duplicate/close, submission, release, and completion state.
++
++CP32 exposes only actual `WinUsb_Free`; focused handle and vendor modes invoke
++that production export and detect its missing ownership/release behavior.
++Absent exports are optional lookups and therefore feature RED, not link
++failure. The `--vendor` mode attempts the exact synthetic sequence in order:
++initialize; speed query; configuration and string descriptors; maximum-policy
++get; the exact eight policy-set pairs; alternate 1; synchronous/overlapped
++control, read, and write; overlapped result; abort; reset; associated handle;
++associated-first then root free. A 26-entry typed trace asserts the operation
++order, exact descriptor/policy/setup/pipe/length/overlapped arguments, every
++result, and the two-handle free order. Guard bytes surround all transfer outputs.
++
++Focused modes: `--initialize`, `--handles`, `--descriptors`, `--policy`,
++`--transfer`, `--cancel`, and `--vendor`; `--red` aggregates the six public
++behavior groups plus the vendor-sequence group. All eight freshly returned
++exactly 1 against CP32.
++
++### Generic function driver
++
++The contract reuses the retained fake-WDM lifecycle boundary without modifying
++it and includes the actual CP33-clone `dlls/winusb.sys/main.c`. It first runs
++the retained CP32 lifecycle baseline, invokes actual `DriverEntry`, AddDevice,
++start/remove PnP, create, and device-control dispatch functions, and delivers
++guarded CP33 requests through `IRP.AssociatedIrp.SystemBuffer`.
++
++The delivered MI05 descriptor has alternate 0 with zero endpoints and
++alternate 1 with bulk `0x81` and `0x01`, each maximum packet size 512.
++Focused modes `--lifecycle`, `--session`, `--alternate`, `--policy`, and
++`--transfer` exercise different actual dispatch/IOCTL paths; `--red` aggregates
++them. All six freshly returned exactly 1 because CP32 rejects create and every
++CP33 IOCTL and has no cleanup/transfer forwarding path.
++
++### Lower Unix backend
++
++The wrapper compiles actual `dlls/wineusb.sys/unixlib.c`, links it only with
++the assigned fake libusb and sealed CP32 `dlls/ntdll/ntdll.so`, loads the new
++module, resolves `__wine_unix_call_funcs`, runs the retained pipe-observe
++behavior baseline, and invokes real Unix call-table operations.
++
++The fake is externally resettable/queryable, records exact interface,
++alternate, configuration, endpoint/type/length, and control setup fields,
++supports injected submit/claim/alternate/control/clear-halt failures, and
++provides controlled natural/cancel completion. It exposes and the contract
++asserts claim, release, detach, auto-detach, set-configuration, set-alternate,
++control, bulk, interrupt, cancel, clear-halt, transfer-free, and close counts.
++Forbidden detach, auto-detach, and set-configuration counts must remain zero.
++
++Focused modes `--claims`, `--alternate`, `--control-descriptor`,
++`--sync-pipes`, and `--transfer-lifetime` execute distinct call-table paths;
++`--red` aggregates them. All six freshly returned exactly 1. CP32 lacks
++function claims/alternate selection/function-scoped generic control, returns
++success after reset backend failure, and leaves transfer ownership uncleared.
++
++### Cancellation, abort, and removal
++
++The cancellation wrapper also compiles/loads the actual Unix module. Its host
++contract directly includes actual `dlls/wineusb.sys/wineusb.c` with a fake WDM
++and fake Unix dispatcher. The dispatcher routes abort cancellation into the
++loaded actual `unix_usb_cancel_transfer`, so fake-libusb cancel accounting is
++produced by the real lower path. The contract directly invokes actual
++`usb_submit_urb`, `driver_internal_ioctl`, and `pdo_pnp` paths.
++
++Focused `--lower` observes actual all-pipe abort (two cancels for a requested
++single pipe), `--upper` observes pending submission without a cancel routine,
++and `--teardown` observes completion before any physical cancellation.
++`--red` aggregates the three. All four freshly returned exactly 1.
++
++### Exact vendor analyzer
++
++Python retains the hash/import/disassembly checks and invokes the public
++contract's executable `--vendor` sequence. On CP32 the executable sequence
++returns 1, while all static evidence passes. Python reports static definitions
++as supplemental evidence (1/14 including stub `Free`) and does not confuse that
++with callable behavior; the synthetic behavioral profile is RED.
++
++All `objdump` and subprocess exceptions are caught and diagnosed `HARNESS:`
++with exit 2.
++
++## Fresh RED, mode, usage, and harness evidence
++
++The complete retained output is `re/winusb-api-v1/logs/cp33-red.log`.
++
++Aggregate results against untouched CP32:
++
++- public: exit 1;
++- function: exit 1;
++- lower: exit 1;
++- cancel: exit 1;
++- vendor: exit 1.
++
++The same log records 24/24 focused-mode executions at exit 1 with distinct
++named diagnostics: public 8, function 6, lower 6, cancel 4.
++
++Usage with missing arguments returned 2 for all five families. Invalid-mode
++probes returned 2 for all four shell wrappers. Missing public/lower inputs and
++an intentionally unavailable `objdump` returned 2 with `HARNESS:` diagnostics.
++In total the retained log contains 12/12 exit-2 usage/harness probes.
++
++Every shell compiler/linker command is guarded; a failure prints `HARNESS:`
++and exits 2. Runtime loader/symbol failures are also `HARNESS:` exit 2. A child
++crash or unexpected status is remapped to `HARNESS:` exit 2. Exit 1 is reserved
++for successfully executed observable CP33 contract failures.
+ 
+-Command: `(cd re/winusb-function-binding-v1/checkpoints && sha256sum --check CP32_SHA256SUMS)`.
+-Result: exit 0; exactly 72 output lines; exactly 72 lines ended in `OK`; no
+-failed or missing checksum. Full output is retained in
+-`re/winusb-api-v1/logs/cp32-seal-verify.log`.
+-
+-The pre-creation guard `test ! -e .io24-build/winusb-api-v1` passed. The root
+-was created only after that check and the 72-entry seal verification.
+-
+-## Vendor hash, imports, and call sites
+-
+-- SHA-256: `567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b`.
+-- The PE imports exactly the expected 14 names: `WinUsb_AbortPipe`,
+-  `WinUsb_ControlTransfer`, `WinUsb_Free`, `WinUsb_GetAssociatedInterface`,
+-  `WinUsb_GetDescriptor`, `WinUsb_GetOverlappedResult`,
+-  `WinUsb_GetPipePolicy`, `WinUsb_Initialize`,
+-  `WinUsb_QueryDeviceInformation`, `WinUsb_ReadPipe`, `WinUsb_ResetPipe`,
+-  `WinUsb_SetCurrentAlternateSetting`, `WinUsb_SetPipePolicy`, and
+-  `WinUsb_WritePipe`.
+-- Static disassembly retained the policy-get site beginning at `0x180084d50`
+-  and initializer site beginning at `0x180095e20`.
+-- The frozen policy fixture contains the required nine `(policy,length)`
+-  pairs grouped as `all`, `out`, `in`, and `get`.
+-- Untouched CP32 has only 1/14 callable definitions, which is the intended
+-  vendor-profile RED.
+-
+-Only `sha256sum` and `objdump` read the vendor DLL for the retained evidence.
+-
+-## Command-by-command RED results
+-
+-All commands used absolute source/build/include/vendor paths. Exact commands
+-and output are retained in `re/winusb-api-v1/logs/cp33-red.log`.
+-
+-1. `tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT` returned exactly 1.
+-   Intended RED: public prototypes, definitions, and callable spec exports are
+-   only 1/14; the other thirteen imported CP33 operations are absent.
+-2. `tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT` returned exactly 1.
+-   Intended RED: create and device-control still dispatch to
+-   `driver_unsupported`; session, select-interface, and control handling are
+-   absent. The guarded MI05 fixture encodes alternate 0 with zero endpoints
+-   and alternate 1 with bulk `0x81`/`0x01`, maximum packet size 512.
+-3. `tests/wineusb_winusb_urb_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE`
+-   returned exactly 1. Intended RED: function claims, alternate selection,
+-   generic control, generation-aware pipes, and retained cancellation are
+-   absent; reset reports success after a backend clear-halt error.
+-4. `tests/winusb_overlapped_cancel_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE`
+-   returned exactly 1. Intended RED: upper/lower cancel ownership is absent,
+-   abort cancels all queued transfers instead of one pipe, and removal
+-   completes pending IRPs without first obtaining physical cancellation.
+-5. `python3 tests/io24_winusb_vendor_profile_contract.py --wine-source WINE_SOURCE_ROOT --vendor-dll VENDOR_DLL`
+-   returned exactly 1. Intended RED: the vendor hash, exact 14-import set, two
+-   call-site ranges, and nine-pair policy fixture are valid, but untouched CP32
+-   exposes only 1/14 callable implementations.
+-
+-Every shell wrapper returned 2 with no arguments; the Python wrapper's parser
+-also returned 2 with missing required arguments. All wrappers validate every
+-required source, contract, header, build, and vendor input before compilation.
+-
+-## Harness integrity
+-
+-The retained final run had no syntax error, missing fake/input, compiler or
+-linker failure, segmentation fault, crash, or unrelated retained-test failure.
+-The lower two wrappers compile `dlls/wineusb.sys/unixlib.c` from the untouched
+-CP33 dev clone and link it against the Task 1 fake libusb plus only the sealed
+-CP32 `dlls/ntdll/ntdll.so`. The fake exposes accounting for claim, release,
+-detach, auto-detach, set-configuration, set-alternate, control, bulk,
+-interrupt, cancel, clear-halt, transfer-free, and close. All four C contracts
+-use the common guard/accounting convention.
++The accepted round-1 run contained no compiler/linker failure, missing input,
++crash, syntax error, retained-baseline failure, or unrelated failure.
+ 
+-## Production-source equality
++## Source equality and checkpoint
+ 
+ Both final commands produced no output and exited 0:
+ 
+ - `diff -qr --no-dereference .io24-build/winusb-function-binding-v1/patch-check-source .io24-build/winusb-api-v1/dev-source`
+ - `diff -qr --no-dereference .io24-build/winusb-function-binding-v1/patch-check-source .io24-build/winusb-api-v1/patch-check-source`
+ 
+-Thus both production clones still equal CP32 byte-for-byte, including symlink
+-handling, after all Task 1 work.
+-
+-## Checkpoint and verification
++Thus both CP33 production clones remain byte-for-byte equal to CP32.
+ 
+ Checkpoint: `re/winusb-api-v1/logs/task-01-red.sha256`.
+ 
+-It is nonempty with 11 SHA-256 entries: the ten Task 1 contract/fake files and
+-`re/winusb-api-v1/logs/cp33-red.log`. Running
+-`sha256sum --check re/winusb-api-v1/logs/task-01-red.sha256` from the project
+-root returned exit 0 with all 11 entries `OK`.
+-
+-## Self-review
+-
+-- Ownership review: only the two fresh clones, ten assigned contract/fake
+-  files, four assigned logs/hashes, required evidence directories, and this
+-  report were created; no plan, spec, ledger, handoff, retained evidence, or
+-  production file was edited.
+-- Safety review: all evidence is static or synthetic and hardware-free.
+-- RED review: every accepted failure is a missing CP33 behavior; initial
+-  harness-only diagnostics were corrected before the retained run.
+-- Reproducibility review: all wrappers use fresh temporary roots, quoted
+-  absolute inputs, strict shell options, strict compiler warnings, and stable
+-  exit codes.
++It contains 11 entries (ten Task 1 contract/fake files plus `cp33-red.log`).
++`sha256sum --check` from the project root returned exit 0 and all 11 entries
++were `OK`.
++
++## Explicit round-0 finding self-review
++
++1. **Unused production objects:** corrected. Public loads actual `main.c`;
++   function invokes actual driver entry/dispatch; lower loads/invokes actual
++   Unix calls; cancel invokes actual kernel and loaded lower cancel paths.
++2. **Missing/inert fakes:** corrected. Win32, WDM/lower, and libusb state is
++   controllable and asserted; MI05 and guard regions cross production calls;
++   fake libusb records required/forbidden operations and completion races.
++3. **No synthetic vendor sequence:** corrected with the typed public
++   `--vendor` operation order, invoked by the Python analyzer.
++4. **Ignored modes:** corrected. Each advertised mode has a distinct named
++   executed behavior group; all 24 focused modes were independently run.
++5. **Exit-code collision:** corrected. Usage/input/compiler/linker/loader/tool,
++   subprocess, and unexpected runtime status paths return 2 with `HARNESS:`;
++   fresh probes verify the separation.
+ 
+ ## Concerns
+ 
+-No Task 1 blocker remains. These are deliberately RED contracts: they do not
+-claim CP33 implementation, GREEN behavior, build reproducibility, Wine runtime,
+-or physical USB compatibility.
++No Task 1 correction blocker remains. This evidence establishes a complete
++offline executable RED boundary; it does not claim CP33 GREEN, build
++reproducibility, Wine runtime compatibility, or physical USB compatibility.
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/re/winusb-api-v1/logs/cp33-red.log .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/re/winusb-api-v1/logs/cp33-red.log
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/re/winusb-api-v1/logs/cp33-red.log	2026-08-23 05:16:02.300542862 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/re/winusb-api-v1/logs/cp33-red.log	2026-08-23 21:14:40.951370274 -0700
+@@ -1,19 +1,82 @@
+-COMMAND: tests/winusb_user_api_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+-CP33 public RED: prototypes=1/14 definitions=1/14 callable-exports=1/14 failures=3
++CP33 TASK 1 CORRECTION ROUND 1 EXECUTED RED
++
++COMMAND public: tests/winusb_user_api_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
++CP33 public executed mode=--red submits=0 releases=0 completions=0 failures=57
+ EXIT: 1
+ 
+-COMMAND: tests/winusb_function_io_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+-CP33 function-driver RED: create/device-control/session/select/control absent failures=4
++COMMAND function: tests/winusb_function_io_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
++CP32 winusb function-binding lifecycle checks passed
++CP33 function executed mode=--red dispatches=1 completions=1 failures=6
+ EXIT: 1
+ 
+-COMMAND: tests/wineusb_winusb_urb_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+-CP33 lower RED: select-interface/control/cancel/function-claims missing; reset backend error is unconditionally reported success; failures=5
++COMMAND lower: tests/wineusb_winusb_urb_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
++err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7fff9c67fe18 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff9c67fe18 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7fff9c67ffc8.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fff9c67fe18 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7fff9c67ffc8 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff9c67fe18 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7fff9c67ffc8.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fff9c67fe18 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7fff9c67ffc8 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff9c67fe18 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7fff9c67ffc8.
++fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fff9c67fe18 header_length=88 interfaces=1 pipes=1.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff9c67fe18 scope=all_interfaces root=0 interfaces=1 pipes=1.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff9c67fe18 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
++fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fff9c67fe18 interfaces=1 pipes=1.
++fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fff9c67fe28 header_length=88 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff9c67fe28 scope=all_interfaces root=0 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fff9c67fe28 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb Unhandled function 0x1.
++err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7fff9c67fe28 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff9c67fe28 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7fff9c67ffd8.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fff9c67fe28 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7fff9c67ffd8 libusb_status=0 returned_status=0x103.
++WineUSB pipe-observe fake-libusb behavior: pass
++CP33 lower executed mode=--red completions=1 failures=8
+ EXIT: 1
+ 
+-COMMAND: tests/winusb_overlapped_cancel_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+-CP33 cancel RED: lower/upper cancel absent; abort is all-pipe; removal completes pending IRPs without physical cancel; failures=5
++COMMAND cancel: tests/winusb_overlapped_cancel_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
++err:wineusb:usb_cancel_transfer Failed to cancel transfer: io24 fake libusb
++err:wineusb:usb_cancel_transfer Failed to cancel transfer: io24 fake libusb
++CP33 cancel executed mode=--red cancels=0 completions=2 failures=5
+ EXIT: 1
+ 
+-COMMAND: python3 tests/io24_winusb_vendor_profile_contract.py --wine-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source --vendor-dll /home/ajuntanaga/Documents/Universal\ Control/hwaccess/dspusbdevice.dll
+-CP33 vendor RED: hash=OK imports=14/14 policy-callsite=0x180084d50 initializer=0x180095e20 callable=1/14 policy-pairs=9 failures=vendor callable count 1/14
++COMMAND vendor: python3 tests/io24_winusb_vendor_profile_contract.py --wine-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source --vendor-dll /home/ajuntanaga/Documents/Universal\ Control/hwaccess/dspusbdevice.dll
++CP33 public executed mode=--vendor submits=0 releases=0 completions=0 failures=51
++CP33 vendor RED: hash=OK imports=14/14 policy-callsite=0x180084d50 initializer=0x180095e20 static-definitions=1/14 synthetic-sequence=RED policy-pairs=9 failures=vendor callable count 1/14; synthetic fourteen-operation sequence
+ EXIT: 1
++
++MODE public --red EXIT=1 DIAGNOSTIC=CP33 public executed mode=--red submits=0 releases=0 completions=0 failures=57 
++MODE public --initialize EXIT=1 DIAGNOSTIC=CP33 public executed mode=--initialize submits=0 releases=0 completions=0 failures=1 
++MODE public --handles EXIT=1 DIAGNOSTIC=CP33 public executed mode=--handles submits=0 releases=0 completions=0 failures=1 
++MODE public --descriptors EXIT=1 DIAGNOSTIC=CP33 public executed mode=--descriptors submits=0 releases=0 completions=0 failures=1 
++MODE public --policy EXIT=1 DIAGNOSTIC=CP33 public executed mode=--policy submits=0 releases=0 completions=0 failures=1 
++MODE public --transfer EXIT=1 DIAGNOSTIC=CP33 public executed mode=--transfer submits=0 releases=0 completions=0 failures=1 
++MODE public --cancel EXIT=1 DIAGNOSTIC=CP33 public executed mode=--cancel submits=0 releases=0 completions=0 failures=1 
++MODE public --vendor EXIT=1 DIAGNOSTIC=CP33 public executed mode=--vendor submits=0 releases=0 completions=0 failures=51 
++MODE function --red EXIT=1 DIAGNOSTIC=CP33 function executed mode=--red dispatches=1 completions=1 failures=6 
++MODE function --lifecycle EXIT=1 DIAGNOSTIC=CP33 function executed mode=--lifecycle dispatches=1 completions=1 failures=2 
++MODE function --session EXIT=1 DIAGNOSTIC=CP33 function executed mode=--session dispatches=1 completions=1 failures=1 
++MODE function --alternate EXIT=1 DIAGNOSTIC=CP33 function executed mode=--alternate dispatches=1 completions=1 failures=1 
++MODE function --policy EXIT=1 DIAGNOSTIC=CP33 function executed mode=--policy dispatches=1 completions=1 failures=1 
++MODE function --transfer EXIT=1 DIAGNOSTIC=CP33 function executed mode=--transfer dispatches=1 completions=1 failures=1 
++MODE lower --red EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--red completions=1 failures=8 
++MODE lower --claims EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--claims completions=0 failures=1 
++MODE lower --alternate EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--alternate completions=0 failures=3 
++MODE lower --control-descriptor EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--control-descriptor completions=0 failures=2 
++MODE lower --sync-pipes EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--sync-pipes completions=0 failures=1 
++MODE lower --transfer-lifetime EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--transfer-lifetime completions=1 failures=1 
++MODE cancel --red EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--red cancels=0 completions=2 failures=5 
++MODE cancel --lower EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--lower cancels=2 completions=0 failures=2 
++MODE cancel --upper EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--upper cancels=0 completions=0 failures=1 
++MODE cancel --teardown EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--teardown cancels=0 completions=2 failures=2 
++PROBE public_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE] 
++PROBE function_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT [MODE] 
++PROBE lower_usage EXIT=2 DIAGNOSTIC=usage: tests/wineusb_winusb_urb_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE] 
++PROBE cancel_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_overlapped_cancel_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE] 
++PROBE vendor_usage EXIT=2 DIAGNOSTIC=io24_winusb_vendor_profile_contract.py: error: the following arguments are required: --wine-source, --vendor-dll 
++PROBE public_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
++PROBE function_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
++PROBE lower_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
++PROBE cancel_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
++PROBE public_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-log.g0Q6KU/missing-source/include/winusb.h 
++PROBE lower_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-log.g0Q6KU/missing-libusb/libusb.h 
++PROBE vendor_missing_tool EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 2] No such file or directory: 'objdump' 
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/re/winusb-api-v1/logs/task-01-red.sha256 .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/re/winusb-api-v1/logs/task-01-red.sha256
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/re/winusb-api-v1/logs/task-01-red.sha256	2026-08-23 05:16:02.301873486 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/re/winusb-api-v1/logs/task-01-red.sha256	2026-08-23 21:14:40.952513582 -0700
+@@ -1,11 +1,11 @@
+-cfe2b5157a158bd4e4b66f3bfad600bf71c1a48ed24ce54e2bb7d92b41073944  tests/winusb_user_api_contract.c
+-16262120134332d79fda6c0da28c24d9ef4d03ea823bdea9598d4cf8c19927ad  tests/winusb_user_api_contract.sh
+-f789a94c1bc78abd0e9d0fc0b0117dd2591dd12ef54cd78e6ed0fd1d47e6ee86  tests/winusb_function_io_contract.c
+-a78ea89ba44bf56003bcc40bc7a206d432c511312bb2661dd2252001eb8b888b  tests/winusb_function_io_contract.sh
+-588e68f63c1fde96d6a66b54b75da9f0c9407d10f9ed2eabd795d1b9833a9217  tests/wineusb_winusb_urb_contract.c
+-cc534c92a58dcd9e0bf8d6de2b207637a8bb5a7b79721d2df56012954ab9901a  tests/wineusb_winusb_urb_contract.sh
+-7ba0e14ff7d281e5f79703d534b8bcb4361365b5548fd8dcc8603f8411318270  tests/wineusb_winusb_urb_fake_libusb.c
+-e58c1d342ddcca1f69e0fa42e3f3b4b96626f246b66a16f92382cdc980694890  tests/winusb_overlapped_cancel_contract.c
+-0f2f67e673dc10f29ca007f28b21bebe18d36712bed7c39e77f9a070467371e4  tests/winusb_overlapped_cancel_contract.sh
+-9a6305e1f4fb4077c5c46467a09b01c7af93da9285cd33ded67e9f9844f48f34  tests/io24_winusb_vendor_profile_contract.py
+-60b8fa7b61c97be1efa5983b9f71ef77e0b2d074b5f629310455debdc3f3edcb  re/winusb-api-v1/logs/cp33-red.log
++a1f156540c530aeb498df93e7a046758af498502d129f6fba12a730af1accc4e  tests/winusb_user_api_contract.c
++40e3cc94883c816b568f58bcc7b125b0ee65e094f694557a97a22845b2ee36f1  tests/winusb_user_api_contract.sh
++8577a051ad7946ddebccf8d046f1acf624989d78ba5294671219924df1d13192  tests/winusb_function_io_contract.c
++f856d211aadfa62021898ef5577cf57693d9a8bd523b17bf1eda3d03fb876759  tests/winusb_function_io_contract.sh
++2bcc20c836efe25f2e0418f66887d9473bcdc2234178244055baa140d21270b6  tests/wineusb_winusb_urb_contract.c
++4076a1bda411fe2295f8f1afe2c6f54ee0a49bbf93632a95d03c316a2a0b0829  tests/wineusb_winusb_urb_contract.sh
++ade21778bccfe0ad4cde03eeb7148d6703abf17bb845832bbbcff7fea3d1a776  tests/wineusb_winusb_urb_fake_libusb.c
++252b34a0ad813172804c23aac510c9e7ded0e306bf81a37250d10574b9fdbc5c  tests/winusb_overlapped_cancel_contract.c
++e07cb1399844e758ed29c016e7c62a3d75977a1ca7af6ab8d9662da8c37a27f3  tests/winusb_overlapped_cancel_contract.sh
++1ebafae606c07191299f86e8e51f4a927925e2bde98c281555360a6ca0ca5753  tests/io24_winusb_vendor_profile_contract.py
++f8cbafe1f81afe86fde6e71ae623adcec1de407253654d2d191c3b218a7fad9e  re/winusb-api-v1/logs/cp33-red.log
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/io24_winusb_vendor_profile_contract.py .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/io24_winusb_vendor_profile_contract.py
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/io24_winusb_vendor_profile_contract.py	2026-08-23 05:16:02.294968938 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/io24_winusb_vendor_profile_contract.py	2026-08-23 21:14:40.947322531 -0700
+@@ -15,9 +15,17 @@
+     root=pathlib.Path(ns.wine_source); dll=pathlib.Path(ns.vendor_dll)
+     required=[root/"include/winusb.h",root/"dlls/winusb/main.c",root/"dlls/winusb/winusb.spec",dll]
+     if any(not p.is_file() for p in required): print("HARNESS: missing vendor contract input",file=sys.stderr); return 2
+-    digest=hashlib.sha256(dll.read_bytes()).hexdigest(); pe=subprocess.run(["objdump","-p",str(dll)],check=True,text=True,capture_output=True).stdout
+-    policy_site=subprocess.run(["objdump","-d","-M","intel","--start-address=0x180084d50","--stop-address=0x180084dc0",str(dll)],check=True,text=True,capture_output=True).stdout
+-    initializer_site=subprocess.run(["objdump","-d","-M","intel","--start-address=0x180095e20","--stop-address=0x180095f80",str(dll)],check=True,text=True,capture_output=True).stdout
++    try:
++        digest=hashlib.sha256(dll.read_bytes()).hexdigest()
++        pe=subprocess.run(["objdump","-p",str(dll)],check=True,text=True,capture_output=True).stdout
++        policy_site=subprocess.run(["objdump","-d","-M","intel","--start-address=0x180084d50","--stop-address=0x180084dc0",str(dll)],check=True,text=True,capture_output=True).stdout
++        initializer_site=subprocess.run(["objdump","-d","-M","intel","--start-address=0x180095e20","--stop-address=0x180095f80",str(dll)],check=True,text=True,capture_output=True).stdout
++        public=subprocess.run([str(pathlib.Path(__file__).with_name("winusb_user_api_contract.sh")),str(root),"--vendor"],text=True,capture_output=True)
++    except (OSError,subprocess.CalledProcessError) as error:
++        print(f"HARNESS: vendor static/executable tool failure: {error}",file=sys.stderr); return 2
++    if public.returncode not in (0,1):
++        print(public.stdout,end=""); print(public.stderr,end="",file=sys.stderr)
++        print(f"HARNESS: public vendor sequence exited {public.returncode}",file=sys.stderr); return 2
+     found=tuple(sorted(set(re.findall(r"WinUsb_[A-Za-z]+",pe))))
+     sources="\n".join(p.read_text(errors="replace") for p in [root/"dlls/winusb/main.c",root/"dlls/winusb/io.c"] if p.exists())
+     callable_count=sum(bool(re.search(r"\b"+re.escape(name)+r"\s*\(",sources)) for name in EXPECTED_IMPORTS)
+@@ -27,7 +35,9 @@
+     if "180084d50" not in policy_site: failures.append("policy get callsite")
+     if "180095e20" not in initializer_site: failures.append("initializer callsite")
+     if callable_count!=14: failures.append(f"vendor callable count {callable_count}/14")
++    if public.returncode: failures.append("synthetic fourteen-operation sequence")
+     if sum(len(v) for v in EXPECTED_POLICY_SEQUENCE.values())!=9: failures.append("policy fixture")
+-    print(f"CP33 vendor RED: hash={'OK' if digest==EXPECTED_HASH else 'BAD'} imports={len(found)}/14 policy-callsite=0x180084d50 initializer=0x180095e20 callable={callable_count}/14 policy-pairs=9 failures={'; '.join(failures) or 'none'}")
++    print(public.stdout,end="")
++    print(f"CP33 vendor RED: hash={'OK' if digest==EXPECTED_HASH else 'BAD'} imports={len(found)}/14 policy-callsite=0x180084d50 initializer=0x180095e20 static-definitions={callable_count}/14 synthetic-sequence={'RED' if public.returncode else 'PASS'} policy-pairs=9 failures={'; '.join(failures) or 'none'}")
+     return 1 if failures else 0
+ if __name__=="__main__": raise SystemExit(main())
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_contract.c	2026-08-23 05:16:02.288000065 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_contract.c	2026-08-23 21:14:40.941545159 -0700
+@@ -1,14 +1,60 @@
+-/* Hardware-free CP33 lower URB semantic contract. */
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
++/* Executed CP33 lower contract using actual unixlib.c and fake libusb. */
++#define main io24_retained_pipe_main
++#include "wineusb_pipe_observe_contract.c"
++#undef main
++
+ #define GUARD_BYTE 0xa5
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
+-static char *read_file(const char *p){FILE*f=fopen(p,"rb");long n;char*s;if(!f||fseek(f,0,SEEK_END)||(n=ftell(f))<0||fseek(f,0,SEEK_SET))return NULL;s=malloc((size_t)n+1);if(!s)return NULL;counts.allocations++;if(fread(s,1,(size_t)n,f)!=(size_t)n)return NULL;s[n]=0;fclose(f);return s;}
+-int main(int argc,char**argv){char p[4096],*s;unsigned char g[43];if(argc<2||argc>3)return 2;snprintf(p,sizeof(p),"%s/dlls/wineusb.sys/unixlib.c",argv[1]);if(!(s=read_file(p)))return 2;memset(g,GUARD_BYTE,sizeof(g));
+-IO24_CHECK(strstr(s,"libusb_claim_interface")); IO24_CHECK(strstr(s,"libusb_release_interface")); IO24_CHECK(!strstr(s,"libusb_detach_kernel_driver")); IO24_CHECK(!strstr(s,"libusb_set_auto_detach_kernel_driver")); IO24_CHECK(!strstr(s,"libusb_set_configuration"));
+-IO24_CHECK(strstr(s,"libusb_set_interface_alt_setting")); IO24_CHECK(strstr(s,"libusb_control_transfer")); IO24_CHECK(strstr(s,"libusb_cancel_transfer")); IO24_CHECK(strstr(s,"pipe")&&strstr(s,"generation")); IO24_CHECK(strstr(s,"libusb_bulk_transfer")||strstr(s,"libusb_fill_bulk_transfer"));
+-IO24_CHECK(strstr(s,"libusb_clear_halt") && strstr(s,"STATUS_UNSUCCESSFUL"));
+-IO24_CHECK(g[0]==GUARD_BYTE&&g[42]==GUARD_BYTE);free(s);counts.frees++;IO24_CHECK(counts.allocations==counts.frees);printf("CP33 lower RED: select-interface/control/cancel/function-claims missing; reset backend error is unconditionally reported success; failures=%u\n",counts.failures);return counts.failures?1:0;}
++struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,close; };
++struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; };
++const struct io24_fake_counts *io24_fake_libusb_counts(void);
++const struct io24_fake_record *io24_fake_libusb_record(void);
++void io24_fake_libusb_set_claim_result(int);
++void io24_fake_libusb_set_alternate_result(int);
++int io24_fake_libusb_complete(enum libusb_transfer_status,const unsigned char*,size_t,int);
++
++struct io24_function_device
++{
++    struct list entry; libusb_device_handle *handle; void *parent; unsigned int refcount;
++    bool function; uint8_t function_interface_count; uint16_t configuration_length;
++    uint8_t function_root; unsigned char function_interfaces[32];
++};
++
++static void check_forbidden(void)
++{
++    const struct io24_fake_counts *c=io24_fake_libusb_counts();
++    IO24_CHECK(c->detach==0&&c->auto_detach==0&&c->set_configuration==0);
++}
++static void group_claims(void)
++{
++    struct fixture f; struct _URB_SELECT_CONFIGURATION *r; const struct io24_fake_counts*c;
++    reset_fixture(&f,URB_FUNCTION_SELECT_CONFIGURATION); r=&f.urb.UrbSelectConfiguration;
++    r->Hdr.Length=sizeof(*r);r->Interface.Length=sizeof(r->Interface);r->Interface.InterfaceNumber=5;r->Interface.AlternateSetting=0;r->Interface.NumberOfPipes=0;
++    IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->claim==1&&c->release==0);check_forbidden();
++}
++static void group_alternate(void)
++{
++    struct fixture f; struct _URB_SELECT_INTERFACE *r; const struct io24_fake_counts*c;
++    reset_fixture(&f,URB_FUNCTION_SELECT_INTERFACE);r=&f.urb.UrbSelectInterface;r->Hdr.Length=sizeof(*r);r->Interface.Length=sizeof(r->Interface);r->Interface.InterfaceNumber=5;r->Interface.AlternateSetting=1;r->Interface.NumberOfPipes=2;r->Interface.Pipes[0].EndpointAddress=0x81;r->Interface.Pipes[0].PipeType=UsbdPipeTypeBulk;r->Interface.Pipes[1].EndpointAddress=0x01;r->Interface.Pipes[1].PipeType=UsbdPipeTypeBulk;
++    IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->set_alternate==1);IO24_CHECK(io24_fake_libusb_record()->interface_number==5&&io24_fake_libusb_record()->alternate==1);check_forbidden();
++}
++static void group_control_descriptor(void)
++{
++    struct io24_function_device device; IRP irp; IO_STACK_LOCATION stack; URB urb; unsigned char guarded[34]; struct usb_submit_urb_params params; const struct io24_fake_counts*c;
++    memset(&device,0,sizeof(device));memset(&irp,0,sizeof(irp));memset(&stack,0,sizeof(stack));memset(&urb,0,sizeof(urb));memset(guarded,GUARD_BYTE,sizeof(guarded));memset(&params,0,sizeof(params));
++    device.handle=(void*)(uintptr_t)0x12340000;device.refcount=1;device.function=true;device.function_interface_count=1;device.function_root=5;device.function_interfaces[5/8]|=1u<<(5%8);
++    irp.Tail.Overlay.CurrentStackLocation=&stack;stack.Parameters.Others.Argument1=&urb;urb.UrbControlVendorClassRequest.Hdr.Function=URB_FUNCTION_VENDOR_INTERFACE;urb.UrbControlVendorClassRequest.Hdr.Length=sizeof(urb.UrbControlVendorClassRequest);urb.UrbControlVendorClassRequest.TransferFlags=USBD_TRANSFER_DIRECTION_IN;urb.UrbControlVendorClassRequest.TransferBufferLength=32;urb.UrbControlVendorClassRequest.Request=1;urb.UrbControlVendorClassRequest.Index=4;params.device=(struct unix_device*)&device;params.irp=&irp;params.transfer_buffer=guarded+1;io24_fake_libusb_reset();
++    IO24_CHECK(unix_calls[unix_usb_submit_urb](&params)==STATUS_INVALID_PARAMETER);c=io24_fake_libusb_counts();IO24_CHECK(c->control==0);IO24_CHECK(guarded[0]==GUARD_BYTE&&guarded[33]==GUARD_BYTE);check_forbidden();if(io24_fake_libusb_has_pending())io24_fake_libusb_discard_pending();
++}
++static void group_sync_pipes(void)
++{
++    struct fixture f;struct _URB_PIPE_REQUEST*r;const struct io24_fake_counts*c;reset_fixture(&f,URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL);r=&f.urb.UrbPipeRequest;r->PipeHandle=make_pipe_handle(0x81,UsbdPipeTypeBulk);io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);IO24_CHECK(submit_fixture(&f)==STATUS_UNSUCCESSFUL);c=io24_fake_libusb_counts();IO24_CHECK(c->clear_halt==1&&io24_fake_libusb_record()->endpoint==0x81);check_forbidden();
++}
++static void group_transfer_lifetime(void)
++{
++    struct fixture f;struct _URB_BULK_OR_INTERRUPT_TRANSFER*r;struct usb_cancel_transfer_params cancel;struct usb_event event;struct usb_main_loop_params loop={.event=&event};const struct io24_fake_counts*c;reset_fixture(&f,URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER);r=&f.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=make_pipe_handle(0x81,UsbdPipeTypeBulk);r->TransferBufferLength=32;r->TransferBuffer=f.buffer;IO24_CHECK(submit_fixture(&f)==STATUS_PENDING);cancel.transfer=f.irp.Tail.Overlay.DriverContext[0];IO24_CHECK(cancel.transfer!=NULL);IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->cancel==1);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_CANCELLED,NULL,0,0)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.type==USB_EVENT_TRANSFER_COMPLETE&&event.u.completed_irp==&f.irp);counts.completions++;IO24_CHECK(f.irp.Tail.Overlay.DriverContext[0]==NULL);check_forbidden();
++}
++static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--claims"))group_claims();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();if(!strcmp(m,"--red")||!strcmp(m,"--sync-pipes"))group_sync_pipes();if(!strcmp(m,"--red")||!strcmp(m,"--transfer-lifetime"))group_transfer_lifetime();}
++int main(int argc,char**argv){void*module;char*retained_argv[3];if(argc!=3)return 2;retained_argv[0]=argv[0];retained_argv[1]=argv[1];retained_argv[2]=NULL;if(io24_retained_pipe_main(2,retained_argv)){fprintf(stderr,"HARNESS: retained pipe execution baseline failed\n");return 2;}module=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!module){fprintf(stderr,"HARNESS: dlopen actual unixlib: %s\n",dlerror());return 2;}unix_calls=dlsym(module,"__wine_unix_call_funcs");if(!unix_calls){fprintf(stderr,"HARNESS: dlsym actual unix calls: %s\n",dlerror());return 2;}run(argv[2]);dlclose(module);printf("CP33 lower executed mode=%s completions=%u failures=%u\n",argv[2],counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_contract.sh	2026-08-23 05:16:02.289051741 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_contract.sh	2026-08-23 21:14:40.942748601 -0700
+@@ -1,13 +1,13 @@
+ #!/usr/bin/env bash
+-set -euo pipefail
++set -uo pipefail
+ if (( $# < 3 || $# > 4 )); then echo 'usage: tests/wineusb_winusb_urb_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 build_root=$2 libusb_include=$3 mode=${4:---red}
+ case "$mode" in --red|--claims|--alternate|--control-descriptor|--sync-pipes|--transfer-lifetime) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+ readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) ntdll="$build_root/dlls/ntdll/ntdll.so"
+-for input in "$source_root/dlls/wineusb.sys/unixlib.c" "$source_root/dlls/wineusb.sys/unixlib.h" "$libusb_include/libusb.h" "$ntdll" "$test_dir/wineusb_winusb_urb_contract.c" "$test_dir/wineusb_winusb_urb_fake_libusb.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
+-build_dir=$(mktemp -d -p /tmp io24-wineusb-winusb-urb.XXXXXX); trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
+-cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -I"$libusb_include" -Wl,-soname,libusb-1.0.so.0 "$test_dir/wineusb_winusb_urb_fake_libusb.c" -o "$build_dir/libusb-1.0.so.0"
+-cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -DWINE_UNIX_LIB -D__WINESRC__ -I"$build_root/include" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" -fPIC -c "$source_root/dlls/wineusb.sys/unixlib.c" -o "$build_dir/unixlib.o"
+-cc -shared -Wl,-Bsymbolic -Wl,-z,defs "$build_dir/unixlib.o" "$ntdll" -L"$build_dir" -Wl,-l:libusb-1.0.so.0 -lpthread -o "$build_dir/wineusb-contract.so"
+-cc -std=c11 -Wall -Wextra -Werror "$test_dir/wineusb_winusb_urb_contract.c" -o "$build_dir/contract"
+-"$build_dir/contract" "$source_root" "$mode"
++for input in "$source_root/dlls/wineusb.sys/unixlib.c" "$source_root/dlls/wineusb.sys/unixlib.h" "$libusb_include/libusb.h" "$ntdll" "$test_dir/wineusb_winusb_urb_contract.c" "$test_dir/wineusb_winusb_urb_fake_libusb.c" "$test_dir/wineusb_pipe_observe_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
++build_dir=$(mktemp -d -p /tmp io24-wineusb-winusb-urb.XXXXXX)||{ echo 'HARNESS: mktemp failed' >&2;exit 2;};trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
++if ! cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -I"$libusb_include" -Wl,-soname,libusb-1.0.so.0 "$test_dir/wineusb_winusb_urb_fake_libusb.c" -o "$build_dir/libusb-1.0.so.0";then echo 'HARNESS: compiling fake libusb failed' >&2;exit 2;fi
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -DWINE_UNIX_LIB -D__WINESRC__ -I"$build_root/include" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" -fPIC -c "$source_root/dlls/wineusb.sys/unixlib.c" -o "$build_dir/unixlib.o";then echo 'HARNESS: compiling actual unixlib.c failed' >&2;exit 2;fi
++if ! cc -shared -Wl,-Bsymbolic -Wl,-z,defs "$build_dir/unixlib.o" "$ntdll" -L"$build_dir" -Wl,-l:libusb-1.0.so.0 -lpthread -o "$build_dir/wineusb-contract.so";then echo 'HARNESS: linking actual unixlib failed' >&2;exit 2;fi
++if ! cc -std=c11 -Wall -Wextra -Werror -DWINE_UNIX_LIB -D__WINESRC__ -I"$test_dir" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" "$test_dir/wineusb_winusb_urb_contract.c" -L"$build_dir" -Wl,--no-as-needed -Wl,-rpath,"$build_dir" -Wl,-l:libusb-1.0.so.0 -ldl -o "$build_dir/contract";then echo 'HARNESS: compiling lower execution contract failed' >&2;exit 2;fi
++LD_LIBRARY_PATH="$build_dir:$(dirname -- "$ntdll")" "$build_dir/contract" "$build_dir/wineusb-contract.so" "$mode";code=$?;((code==0||code==1))||{ echo "HARNESS: lower contract exited $code" >&2;exit 2;};exit "$code"
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_fake_libusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_fake_libusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-23 05:16:02.290594683 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-23 21:14:40.943919985 -0700
+@@ -1,31 +1,40 @@
+-/* Complete hardware-free libusb boundary for CP33 contracts. */
++/* Resettable, queryable, hardware-free libusb ABI boundary. */
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <libusb.h>
++
+ struct io24_fake_counts { unsigned claim, release, detach, auto_detach, set_configuration, set_alternate, control, bulk, interrupt, cancel, clear_halt, transfer_free, close; };
++struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; };
+ static struct io24_fake_counts counts;
+-static const unsigned char mi05[] = {9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0};
+-const struct io24_fake_counts *io24_fake_libusb_counts(void) { return &counts; }
+-const unsigned char *io24_fake_mi05(size_t *size) { *size=sizeof(mi05); return mi05; }
+-int libusb_init(libusb_context **ctx){ if(ctx)*ctx=(void*)1; return 0; }
+-void libusb_exit(libusb_context *ctx){ (void)ctx; }
+-int libusb_hotplug_register_callback(libusb_context *ctx, int e, int f, int v, int p, int c, libusb_hotplug_callback_fn cb, void *u, libusb_hotplug_callback_handle *h){(void)ctx;(void)e;(void)f;(void)v;(void)p;(void)c;(void)cb;(void)u;if(h)*h=1;return 0;}
+-void libusb_hotplug_deregister_callback(libusb_context *c,libusb_hotplug_callback_handle h){(void)c;(void)h;}
+-int libusb_handle_events(libusb_context *c){(void)c;return 0;} void libusb_interrupt_event_handler(libusb_context *c){(void)c;}
+-uint8_t libusb_get_bus_number(libusb_device *d){(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device *d){(void)d;return 1;}
+-int libusb_get_device_descriptor(libusb_device *d,struct libusb_device_descriptor *x){(void)d;memset(x,0,sizeof(*x));return 0;}
+-int libusb_get_device_speed(libusb_device *d){(void)d;return LIBUSB_SPEED_HIGH;}
+-int libusb_open(libusb_device *d,libusb_device_handle **h){(void)d;if(h)*h=(void*)1;return 0;} libusb_device *libusb_get_device(libusb_device_handle *h){(void)h;return (void*)1;}
+-void libusb_close(libusb_device_handle *h){(void)h;counts.close++;}
+-int libusb_get_active_config_descriptor(libusb_device *d,struct libusb_config_descriptor **c){(void)d;(void)c;return LIBUSB_ERROR_NOT_FOUND;}
+-void libusb_free_config_descriptor(struct libusb_config_descriptor *c){free(c);}
+-int libusb_get_active_interface_association_descriptors(libusb_device *d,struct libusb_interface_association_descriptor_array **a){(void)d;(void)a;return LIBUSB_ERROR_NOT_SUPPORTED;}
+-void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array *a){free(a);}
+-int libusb_claim_interface(libusb_device_handle *h,int i){(void)h;(void)i;counts.claim++;return 0;} int libusb_release_interface(libusb_device_handle *h,int i){(void)h;(void)i;counts.release++;return 0;}
+-int libusb_detach_kernel_driver(libusb_device_handle *h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle *h,int e){(void)h;(void)e;counts.auto_detach++;return 0;}
+-int libusb_set_configuration(libusb_device_handle *h,int c){(void)h;(void)c;counts.set_configuration++;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle *h,int i,int a){(void)h;(void)i;(void)a;counts.set_alternate++;return 0;}
+-int libusb_control_transfer(libusb_device_handle *h,uint8_t r,uint8_t q,uint16_t v,uint16_t i,unsigned char *d,uint16_t l,unsigned int t){(void)h;(void)r;(void)q;(void)v;(void)i;(void)d;(void)t;counts.control++;return l;}
+-int libusb_bulk_transfer(libusb_device_handle *h,unsigned char e,unsigned char *d,int l,int *x,unsigned int t){(void)h;(void)e;(void)d;(void)t;counts.bulk++;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle *h,unsigned char e,unsigned char *d,int l,int *x,unsigned int t){(void)h;(void)e;(void)d;(void)t;counts.interrupt++;if(x)*x=l;return 0;}
+-struct libusb_transfer *libusb_alloc_transfer(int iso){size_t n=sizeof(struct libusb_transfer)+(size_t)iso*sizeof(struct libusb_iso_packet_descriptor);return calloc(1,n);} void libusb_free_transfer(struct libusb_transfer *t){counts.transfer_free++;free(t);}
+-int libusb_submit_transfer(struct libusb_transfer *t){(void)t;return 0;} int libusb_cancel_transfer(struct libusb_transfer *t){(void)t;counts.cancel++;return 0;} int libusb_clear_halt(libusb_device_handle *h,unsigned char e){(void)h;(void)e;counts.clear_halt++;return 0;}
++static struct io24_fake_record record;
++static struct libusb_transfer *pending;
++static int submit_result,clear_halt_result,claim_result,alternate_result,control_result;
++static unsigned int alloc_count;
++static const unsigned char mi05[]={9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0};
++
++void io24_fake_libusb_reset(void){if(pending){libusb_free_transfer(pending);pending=NULL;}memset(&counts,0,sizeof(counts));memset(&record,0,sizeof(record));alloc_count=0;submit_result=0;clear_halt_result=0;claim_result=0;alternate_result=0;control_result=0;}
++const struct io24_fake_counts *io24_fake_libusb_counts(void){return &counts;}
++const struct io24_fake_record *io24_fake_libusb_record(void){return &record;}
++const unsigned char *io24_fake_mi05(size_t*size){*size=sizeof(mi05);return mi05;}
++void io24_fake_libusb_set_submit_result(int r){submit_result=r;} void io24_fake_libusb_set_clear_halt_result(int r){clear_halt_result=r;}
++void io24_fake_libusb_set_claim_result(int r){claim_result=r;} void io24_fake_libusb_set_alternate_result(int r){alternate_result=r;} void io24_fake_libusb_set_control_result(int r){control_result=r;}
++int io24_fake_libusb_has_pending(void){return pending!=NULL;} int io24_fake_libusb_pending_type(void){return pending?pending->type:-1;} int io24_fake_libusb_pending_endpoint(void){return pending?pending->endpoint:-1;} int io24_fake_libusb_pending_length(void){return pending?pending->length:-1;} int io24_fake_libusb_pending_flags(void){return pending?pending->flags:-1;}
++unsigned int io24_fake_libusb_alloc_count(void){return alloc_count;} unsigned int io24_fake_libusb_free_count(void){return counts.transfer_free;} unsigned int io24_fake_libusb_buffer_free_count(void){return 0;} unsigned int io24_fake_libusb_submit_count(void){return counts.bulk+counts.interrupt+counts.control;} unsigned int io24_fake_libusb_cancel_count(void){return counts.cancel;} unsigned int io24_fake_libusb_clear_halt_count(void){return counts.clear_halt;} unsigned char io24_fake_libusb_clear_halt_endpoint(void){return record.endpoint;}
++int io24_fake_libusb_get_setup(unsigned char setup[LIBUSB_CONTROL_SETUP_SIZE]){if(!pending||pending->type!=LIBUSB_TRANSFER_TYPE_CONTROL)return -1;memcpy(setup,pending->buffer,LIBUSB_CONTROL_SETUP_SIZE);return 0;}
++int io24_fake_libusb_complete(enum libusb_transfer_status status,const unsigned char*data,size_t data_length,int actual_length){struct libusb_transfer*t=pending;size_t cap;if(!t)return -1;pending=NULL;cap=t->length>(int)LIBUSB_CONTROL_SETUP_SIZE?(size_t)t->length-LIBUSB_CONTROL_SETUP_SIZE:(size_t)t->length;if(data&&data_length){if(data_length>cap)data_length=cap;memcpy(t->type==LIBUSB_TRANSFER_TYPE_CONTROL?libusb_control_transfer_get_data(t):t->buffer,data,data_length);}t->status=status;t->actual_length=actual_length;t->callback(t);if(t->flags&LIBUSB_TRANSFER_FREE_TRANSFER)libusb_free_transfer(t);return 0;}
++int io24_fake_libusb_discard_pending(void){struct libusb_transfer*t=pending;if(!t)return -1;pending=NULL;libusb_free_transfer(t);return 0;}
++
++struct libusb_transfer *libusb_alloc_transfer(int iso){size_t n;struct libusb_transfer*t;if(iso<0)return NULL;n=sizeof(struct libusb_transfer)+(size_t)iso*sizeof(struct libusb_iso_packet_descriptor);t=calloc(1,n);if(t)alloc_count++;return t;}
++void libusb_free_transfer(struct libusb_transfer*t){if(!t)return;if(t->flags&LIBUSB_TRANSFER_FREE_BUFFER)free(t->buffer);counts.transfer_free++;free(t);}
++int libusb_submit_transfer(struct libusb_transfer*t){if(submit_result<0)return submit_result;if(pending)return LIBUSB_ERROR_BUSY;pending=t;record.endpoint=t->endpoint;record.type=t->type;record.length=t->length;if(t->type==LIBUSB_TRANSFER_TYPE_BULK)counts.bulk++;else if(t->type==LIBUSB_TRANSFER_TYPE_INTERRUPT)counts.interrupt++;else if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL)counts.control++;return 0;}
++int libusb_cancel_transfer(struct libusb_transfer*t){counts.cancel++;return t==pending?0:LIBUSB_ERROR_NOT_FOUND;}
++int libusb_clear_halt(libusb_device_handle*h,unsigned char e){(void)h;counts.clear_halt++;record.endpoint=e;return clear_halt_result;}
++int libusb_init(libusb_context**c){if(c)*c=(void*)(uintptr_t)0x1000;return 0;} void libusb_exit(libusb_context*c){(void)c;}
++int libusb_hotplug_register_callback(libusb_context*c,int e,int f,int v,int p,int k,libusb_hotplug_callback_fn cb,void*u,libusb_hotplug_callback_handle*h){(void)c;(void)e;(void)f;(void)v;(void)p;(void)k;(void)cb;(void)u;if(h)*h=1;return 0;} void libusb_hotplug_deregister_callback(libusb_context*c,libusb_hotplug_callback_handle h){(void)c;(void)h;} int libusb_handle_events(libusb_context*c){(void)c;return 0;} void libusb_interrupt_event_handler(libusb_context*c){(void)c;}
++uint8_t libusb_get_bus_number(libusb_device*d){(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device*d){(void)d;return 1;} int libusb_get_device_speed(libusb_device*d){(void)d;return LIBUSB_SPEED_HIGH;}
++int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){(void)h;counts.close++;}
++int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){(void)d;if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){free(c);} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){free(a);}
++int libusb_claim_interface(libusb_device_handle*h,int i){(void)h;counts.claim++;record.interface_number=i;return claim_result;} int libusb_release_interface(libusb_device_handle*h,int i){(void)h;counts.release++;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
++int libusb_control_transfer(libusb_device_handle*h,uint8_t rt,uint8_t r,uint16_t v,uint16_t i,unsigned char*d,uint16_t l,unsigned int t){(void)h;(void)d;(void)t;counts.control++;record.request_type=rt;record.request=r;record.value=v;record.index=i;record.length=l;return control_result<0?control_result:l;} int libusb_bulk_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.bulk++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.interrupt++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;}
+ const char *libusb_strerror(int e){(void)e;return "io24 fake libusb";}
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_function_io_contract.c	2026-08-23 05:16:02.285788319 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_function_io_contract.c	2026-08-23 21:14:40.939234658 -0700
+@@ -1,41 +1,60 @@
+-/* Hardware-free CP33 generic-function-driver contract. */
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
++/* Executed CP33 contract: actual winusb.sys main.c inside the retained fake WDM. */
++#include <stdint.h>
++#define main io24_retained_cp32_main
++#include "winusb_function_binding_contract.c"
++#undef main
++
+ #define GUARD_BYTE 0xa5
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
+-static const unsigned char mi05_configuration[] = {
++
++#define IO24_CTL_CODE(type,function,method,access) (((type)<<16)|((access)<<14)|((function)<<2)|(method))
++#define IO24_IOCTL_INITIALIZE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x800,2,0)
++#define IO24_IOCTL_SET_ALTERNATE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x803,0,0)
++#define IO24_IOCTL_SET_POLICY IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x805,0,0)
++#define IO24_IOCTL_READ_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x808,2,0)
++
++static const unsigned char mi05_configuration[] =
++{
+     9,2,41,0,1,1,0,0x80,0xfa, 9,4,5,0,0,0xff,0,0,6,
+     9,4,5,1,2,0xff,0,0,6, 7,5,0x81,2,0,2,0, 7,5,0x01,2,0,2,0
+ };
+-static char *read_file(const char *path)
++struct request { uint32_t version,size,session,interface_index,generation,value; unsigned char descriptor[sizeof(mi05_configuration)]; };
++struct guarded_request { unsigned char before[16]; struct request request; unsigned char after[16]; };
++
++static NTSTATUS dispatch_request(PDRIVER_OBJECT driver,PDEVICE_OBJECT fdo,UCHAR major,ULONG code,
++        struct guarded_request *guarded)
+ {
+-    FILE *f = fopen(path, "rb"); long n; char *p;
+-    if (!f || fseek(f,0,SEEK_END) || (n=ftell(f))<0 || fseek(f,0,SEEK_SET)) return NULL;
+-    if (!(p=malloc((size_t)n+1))) return NULL;
+-    counts.allocations++;
+-    if (fread(p,1,(size_t)n,f)!=(size_t)n) return NULL;
+-    p[n]=0;
+-    fclose(f);
+-    return p;
++    IRP irp; IO_STACK_LOCATION stack[2];
++    memset(&irp,0,sizeof(irp)); memset(stack,0,sizeof(stack));
++    stack[1].MajorFunction=major;
++    stack[1].Parameters.DeviceIoControl.IoControlCode=code;
++    stack[1].Parameters.DeviceIoControl.InputBufferLength=sizeof(guarded->request);
++    stack[1].Parameters.DeviceIoControl.OutputBufferLength=sizeof(guarded->request);
++    irp.AssociatedIrp.SystemBuffer=&guarded->request;
++    irp.Tail.Overlay.CurrentStackLocation=&stack[1];
++    counts.submits++;
++    driver->MajorFunction[major](fdo,&irp);
++    counts.completions++;
++    IO24_CHECK(guarded->before[0]==GUARD_BYTE&&guarded->after[15]==GUARD_BYTE);
++    return irp.IoStatus.Status;
+ }
+-int main(int argc, char **argv)
++
++static void setup(DRIVER_OBJECT*d,DRIVER_EXTENSION*e,DEVICE_OBJECT*p,struct guarded_request*g)
+ {
+-    char path[4096], *source; unsigned char guarded[43];
+-    if (argc != 2) return 2;
+-    snprintf(path,sizeof(path),"%s/dlls/winusb.sys/main.c",argv[1]);
+-    if (!(source=read_file(path))) { fputs("HARNESS: missing function-driver source\n",stderr); return 2; }
+-    memset(guarded,GUARD_BYTE,sizeof(guarded)); memcpy(guarded+1,mi05_configuration,sizeof(mi05_configuration));
+-    IO24_CHECK(guarded[0]==GUARD_BYTE && guarded[sizeof(guarded)-1]==GUARD_BYTE);
+-    IO24_CHECK(mi05_configuration[13]==0 && mi05_configuration[22]==2);
+-    IO24_CHECK(mi05_configuration[29]==0x81 && mi05_configuration[31]==0x00);
+-    IO24_CHECK(strstr(source,"driver_create") && !strstr(source,"MajorFunction[IRP_MJ_CREATE] = driver_unsupported"));
+-    IO24_CHECK(strstr(source,"driver_device_control") && !strstr(source,"MajorFunction[IRP_MJ_DEVICE_CONTROL] = driver_unsupported"));
+-    IO24_CHECK(strstr(source,"IRP_MJ_CLEANUP"));
+-    IO24_CHECK(strstr(source,"IOCTL") && strstr(source,"select") && strstr(source,"control"));
+-    free(source); counts.frees++; IO24_CHECK(counts.allocations==counts.frees);
+-    printf("CP33 function-driver RED: create/device-control/session/select/control absent failures=%u\n",counts.failures);
+-    return counts.failures ? 1 : 0;
++    unsigned int previous_failures=counts.failures;
++    memset(&counts,0,sizeof(counts)); counts.failures=previous_failures; memset(g,GUARD_BYTE,sizeof(*g));
++    g->request.version=1; g->request.size=sizeof(g->request); g->request.interface_index=5;
++    memcpy(g->request.descriptor,mi05_configuration,sizeof(mi05_configuration));
++    reset(); initialize(d,e,p); IO24_CHECK(NT_SUCCESS(add(d,p)));
++    IO24_CHECK(NT_SUCCESS(dispatch(d,last_fdo,IRP_MJ_PNP,IRP_MN_START_DEVICE)));
+ }
++static void teardown(DRIVER_OBJECT*d){ if(last_fdo)dispatch(d,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE); }
++static void group_lifecycle(void){DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;struct guarded_request g;setup(&d,&e,&p,&g);IO24_CHECK(dispatch_request(&d,last_fdo,IRP_MJ_CREATE,0,&g)==STATUS_SUCCESS);IO24_CHECK(d.MajorFunction[IRP_MJ_CLEANUP]!=NULL);teardown(&d);}
++static void group_session(void){DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;struct guarded_request g;setup(&d,&e,&p,&g);IO24_CHECK(dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_INITIALIZE,&g)==STATUS_SUCCESS);IO24_CHECK(g.request.descriptor[13]==0&&g.request.descriptor[22]==2);teardown(&d);}
++static void group_alternate(void){DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;struct guarded_request g;setup(&d,&e,&p,&g);g.request.value=1;IO24_CHECK(dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g)==STATUS_SUCCESS);IO24_CHECK(g.request.descriptor[29]==0x81&&g.request.descriptor[36]==0x01&&g.request.descriptor[31]==0&&g.request.descriptor[32]==2);teardown(&d);}
++static void group_policy(void){DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;struct guarded_request g;setup(&d,&e,&p,&g);g.request.value=7;IO24_CHECK(dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g)==STATUS_SUCCESS);teardown(&d);}
++static void group_transfer(void){DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;struct guarded_request g;setup(&d,&e,&p,&g);IO24_CHECK(dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g)==STATUS_PENDING);IO24_CHECK(lower_calls>0);teardown(&d);}
++static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();}
++int main(int argc,char**argv){unsigned int retained;if(argc!=2)return 2;retained=io24_retained_cp32_main();if(retained){fprintf(stderr,"HARNESS: retained fake-WDM baseline failed\n");return 2;}run(argv[1]);printf("CP33 function executed mode=%s dispatches=%u completions=%u failures=%u\n",argv[1],counts.submits,counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_function_io_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_function_io_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_function_io_contract.sh	2026-08-23 05:16:02.286925900 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_function_io_contract.sh	2026-08-23 21:14:40.940482658 -0700
+@@ -1,14 +1,13 @@
+ #!/usr/bin/env bash
+-set -euo pipefail
++set -uo pipefail
+ if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 mode=${2:---red}
+-[[ "$mode" == --red || "$mode" == --session || "$mode" == --io ]] || { echo "usage: unsupported MODE: $mode" >&2; exit 2; }
++case "$mode" in --red|--lifecycle|--session|--alternate|--policy|--transfer) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+ readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+-for input in "$source_root/dlls/winusb.sys/main.c" "$source_root/dlls/wineusb.sys/winusb_busif.h" "$test_dir/winusb_function_io_contract.c"; do
+-    [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }
+-done
+-build_dir=$(mktemp -d -p /tmp io24-winusb-function-io.XXXXXX)
++for input in "$source_root/dlls/winusb.sys/main.c" "$source_root/dlls/wineusb.sys/winusb_busif.h" "$test_dir/winusb_function_io_contract.c" "$test_dir/winusb_function_binding_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
++build_dir=$(mktemp -d -p /tmp io24-winusb-function-io.XXXXXX) || { echo 'HARNESS: mktemp failed' >&2; exit 2; }
+ trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
+-cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ -I"$source_root/include" -I"$source_root/dlls/winusb.sys" -I"$source_root/dlls/wineusb.sys" -c "$source_root/dlls/winusb.sys/main.c" -o "$build_dir/main.o"
+-cc -std=c11 -Wall -Wextra -Werror "$test_dir/winusb_function_io_contract.c" -o "$build_dir/contract"
+-"$build_dir/contract" "$source_root"
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -D__WINESRC__ -I"$test_dir" -I"$source_root/include" -I"$source_root/dlls/winusb.sys" -I"$source_root/dlls/wineusb.sys" "$test_dir/winusb_function_io_contract.c" -o "$build_dir/contract"; then echo 'HARNESS: compiling actual winusb.sys fake-WDM contract failed' >&2; exit 2; fi
++"$build_dir/contract" "$mode"; code=$?
++(( code == 0 || code == 1 )) || { echo "HARNESS: function contract exited $code" >&2; exit 2; }
++exit "$code"
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_overlapped_cancel_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_overlapped_cancel_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_overlapped_cancel_contract.c	2026-08-23 05:16:02.291905472 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_overlapped_cancel_contract.c	2026-08-23 21:14:40.945187821 -0700
+@@ -1,12 +1,80 @@
+-/* Hardware-free CP33 cancellation/teardown semantic contract. */
++/* Executed cancellation contract for actual wineusb.c and unixlib.c paths. */
++#include <dlfcn.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include "ntstatus.h"
++#include "windef.h"
++#include "winternl.h"
++#include "ddk/wdm.h"
++#include "ddk/usb.h"
++#include "wine/debug.h"
++#undef WINE_DEFAULT_DEBUG_CHANNEL
++#undef TRACE
++#undef WARN
++#undef ERR
++#undef FIXME
++#define WINE_DEFAULT_DEBUG_CHANNEL(name)
++#define TRACE(...) ((void)0)
++#define WARN(...) ((void)0)
++#define ERR(...) ((void)0)
++#define FIXME(...) ((void)0)
++#undef DEVICE_TYPE
++#include "wineusb.c"
++
+ #define GUARD_BYTE 0xa5
+-struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
++struct io24_counts { unsigned int allocations,frees,submits,cancels,releases,completions,failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
+-static char *read_file(const char*p){FILE*f=fopen(p,"rb");long n;char*s;if(!f||fseek(f,0,SEEK_END)||(n=ftell(f))<0||fseek(f,0,SEEK_SET))return NULL;s=malloc((size_t)n+1);if(!s)return NULL;counts.allocations++;if(fread(s,1,(size_t)n,f)!=(size_t)n)return NULL;s[n]=0;fclose(f);return s;}
+-int main(int argc,char**argv){char p[4096],*u,*k;unsigned char g[66];if(argc<2||argc>3)return 2;snprintf(p,sizeof(p),"%s/dlls/wineusb.sys/unixlib.c",argv[1]);u=read_file(p);snprintf(p,sizeof(p),"%s/dlls/wineusb.sys/wineusb.c",argv[1]);k=read_file(p);if(!u||!k)return 2;memset(g,GUARD_BYTE,sizeof(g));
+-IO24_CHECK(strstr(u,"libusb_cancel_transfer")); IO24_CHECK(strstr(u,"transfer_release")||strstr(u,"release_transfer")); IO24_CHECK(strstr(k,"cancel")||strstr(k,"Cancel")); IO24_CHECK(strstr(k,"IRP_MJ_CLEANUP")); IO24_CHECK(strstr(k,"URB_FUNCTION_ABORT_PIPE")&&strstr(k,"PipeHandle")); IO24_CHECK(strstr(k,"surprise")&&strstr(k,"pending")); IO24_CHECK(strstr(k,"STATUS_CANCELLED")); IO24_CHECK(strstr(k,"IoSetCancelRoutine")); IO24_CHECK(strstr(k,"remove_pending_irps")&&strstr(k,"unix_usb_cancel_transfer"));
+-IO24_CHECK(g[0]==GUARD_BYTE&&g[65]==GUARD_BYTE);free(u);free(k);counts.frees+=2;IO24_CHECK(counts.allocations==counts.frees);printf("CP33 cancel RED: lower/upper cancel absent; abort is all-pipe; removal completes pending IRPs without physical cancel; failures=%u\n",counts.failures);return counts.failures?1:0;}
++typedef NTSTATUS (*io24_unix_entry_t)(void *);
++static const io24_unix_entry_t *real_unix_calls;
++static char order[128];
++
++unixlib_handle_t __wine_unixlib_handle=1;
++static NTSTATUS WINAPI fake_dispatch(unixlib_handle_t h,unsigned int code,void*args)
++{
++    (void)h;
++    if(code==unix_usb_cancel_transfer){strcat(order,"cancel,");counts.cancels++;}
++    if(code==unix_usb_submit_urb){struct usb_submit_urb_params*p=args;counts.submits++;p->irp->Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x7000;return STATUS_PENDING;}
++    if(code==unix_usb_destroy_device)counts.releases++;
++    return real_unix_calls?real_unix_calls[code](args):STATUS_SUCCESS;
++}
++NTSTATUS (WINAPI *__wine_unix_call_dispatcher)(unixlib_handle_t,unsigned int,void*)=fake_dispatch;
++NTSTATUS WINAPI __wine_init_unix_call(void){return STATUS_SUCCESS;}
++
++void WINAPI EnterCriticalSection(CRITICAL_SECTION*c){(void)c;} void WINAPI LeaveCriticalSection(CRITICAL_SECTION*c){(void)c;}
++HANDLE WINAPI CreateThread(SECURITY_ATTRIBUTES*a,SIZE_T s,LPTHREAD_START_ROUTINE f,void*p,DWORD flags,DWORD*id){(void)a;(void)s;(void)f;(void)p;(void)flags;if(id)*id=1;return (HANDLE)(uintptr_t)1;}
++DWORD WINAPI WaitForSingleObject(HANDLE h,DWORD t){(void)h;(void)t;return 0;} BOOL WINAPI CloseHandle(HANDLE h){(void)h;return TRUE;}
++PVOID WINAPI ExAllocatePool(POOL_TYPE t,SIZE_T n){(void)t;counts.allocations++;return calloc(1,n);} VOID WINAPI ExFreePool(PVOID p){if(p){counts.frees++;free(p);}}
++VOID WINAPI IoCompleteRequest(PIRP irp,UCHAR b){(void)irp;(void)b;strcat(order,"complete,");counts.completions++;}
++VOID WINAPI IoDeleteDevice(PDEVICE_OBJECT d){(void)d;} VOID WINAPI IoDetachDevice(PDEVICE_OBJECT d){(void)d;} VOID WINAPI IoInvalidateDeviceRelations(PDEVICE_OBJECT d,DEVICE_RELATION_TYPE t){(void)d;(void)t;}
++PDEVICE_OBJECT WINAPI IoAttachDeviceToDeviceStack(PDEVICE_OBJECT a,PDEVICE_OBJECT b){(void)a;return b;} NTSTATUS WINAPI IoCallDriver(PDEVICE_OBJECT d,PIRP i){(void)d;return i->IoStatus.Status;}
++NTSTATUS WINAPI IoCreateDevice(PDRIVER_OBJECT d,ULONG e,PUNICODE_STRING n,DEVICE_TYPE t,ULONG c,BOOLEAN x,PDEVICE_OBJECT*out){(void)n;(void)t;(void)c;(void)x;*out=calloc(1,sizeof(**out));if(!*out)return STATUS_NO_MEMORY;(*out)->DriverObject=d;(*out)->DeviceExtension=calloc(1,e?e:1);return STATUS_SUCCESS;}
++PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDL m,KPROCESSOR_MODE a,MEMORY_CACHING_TYPE c,PVOID p,ULONG b,MM_PAGE_PRIORITY q){(void)a;(void)c;(void)p;(void)b;(void)q;return m?(void *)m->StartVa:NULL;}
++void FASTCALL ObfReferenceObject(void*o){(void)o;} BOOL WINAPI IsBadStringPtrW(LPCWSTR s,UINT_PTR n){(void)s;(void)n;return FALSE;}
++VOID WINAPI RtlInitUnicodeString(PUNICODE_STRING s,PCWSTR p){s->Buffer=(WCHAR*)p;s->Length=0;s->MaximumLength=0;}
++int _vsnwprintf(WCHAR*b,size_t n,const WCHAR*f,va_list a){(void)b;(void)n;(void)f;(void)a;return 0;}
++bool wineusb_ms_os_10_build_pnp_ids(const char a[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],const char b[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],struct wineusb_ms_os_10_pnp_ids*i){(void)a;(void)b;(void)i;return false;}
++NTSTATUS wineusb_ms_os_10_get_device_interface_guid(const struct wineusb_ms_os_10_metadata_source*c,GUID*g){(void)c;(void)g;return STATUS_NOT_SUPPORTED;}
++NTSTATUS wineusb_query_ms_os_10_metadata_interface(const GUID*g,USHORT s,USHORT v,INTERFACE*i,void*c,const struct wineusb_ms_os_10_metadata_routines*r){(void)g;(void)s;(void)v;(void)i;(void)c;(void)r;return STATUS_NOT_SUPPORTED;}
++NTSTATUS wineusb_query_usbdi_interface(const GUID*g,USHORT s,USHORT v,INTERFACE*i,void*c,const struct wineusb_usbdi_routines*r){(void)g;(void)s;(void)v;(void)i;(void)c;(void)r;return STATUS_NOT_SUPPORTED;}
++
++struct pending_fixture { IRP irp; IO_STACK_LOCATION stack; URB urb; unsigned char guarded[34]; };
++static void prepare_device(struct usb_device*d,DEVICE_OBJECT*o)
++{memset(d,0,sizeof(*d));memset(o,0,sizeof(*o));o->DeviceExtension=d;d->device_obj=o;d->unix_device=(void*)(uintptr_t)0x12340000;InitializeListHead(&d->irp_list);list_init(&d->entry);list_add_tail(&device_list,&d->entry);}
++static void group_lower(void)
++{
++    struct usb_device d;DEVICE_OBJECT o;struct pending_fixture a,second,abort;prepare_device(&d,&o);memset(&a,0,sizeof(a));memset(&second,0,sizeof(second));memset(&abort,0,sizeof(abort));
++    a.irp.Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x5081;second.irp.Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x5001;InsertTailList(&d.irp_list,&a.irp.Tail.Overlay.ListEntry);InsertTailList(&d.irp_list,&second.irp.Tail.Overlay.ListEntry);abort.irp.Tail.Overlay.CurrentStackLocation=&abort.stack;abort.stack.Parameters.Others.Argument1=&abort.urb;abort.urb.UrbPipeRequest.Hdr.Function=URB_FUNCTION_ABORT_PIPE;abort.urb.UrbPipeRequest.PipeHandle=(HANDLE)(uintptr_t)0x281;counts.cancels=0;order[0]=0;IO24_CHECK(usb_submit_urb(&d,&abort.irp)==STATUS_SUCCESS);IO24_CHECK(counts.cancels==1);IO24_CHECK(!strcmp(order,"cancel,"));list_remove(&d.entry);
++}
++static void group_upper(void)
++{
++    struct usb_device d;DEVICE_OBJECT o;struct pending_fixture f;prepare_device(&d,&o);memset(&f,0,sizeof(f));memset(f.guarded,GUARD_BYTE,sizeof(f.guarded));f.irp.Tail.Overlay.CurrentStackLocation=&f.stack;f.stack.Parameters.DeviceIoControl.IoControlCode=IOCTL_INTERNAL_USB_SUBMIT_URB;f.stack.Parameters.Others.Argument1=&f.urb;f.urb.UrbBulkOrInterruptTransfer.Hdr.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;f.urb.UrbBulkOrInterruptTransfer.PipeHandle=(HANDLE)(uintptr_t)0x281;f.urb.UrbBulkOrInterruptTransfer.TransferBufferLength=32;f.urb.UrbBulkOrInterruptTransfer.TransferBuffer=f.guarded+1;IO24_CHECK(driver_internal_ioctl(&o,&f.irp)==STATUS_PENDING);IO24_CHECK(f.irp.CancelRoutine!=NULL);IO24_CHECK(f.guarded[0]==GUARD_BYTE&&f.guarded[33]==GUARD_BYTE);list_remove(&d.entry);
++}
++static void group_teardown(void)
++{
++    struct usb_device d;DEVICE_OBJECT o;struct pending_fixture f;IRP pnp;IO_STACK_LOCATION stack;prepare_device(&d,&o);memset(&f,0,sizeof(f));f.irp.Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x5081;InsertTailList(&d.irp_list,&f.irp.Tail.Overlay.ListEntry);memset(&pnp,0,sizeof(pnp));memset(&stack,0,sizeof(stack));pnp.Tail.Overlay.CurrentStackLocation=&stack;stack.MinorFunction=IRP_MN_SURPRISE_REMOVAL;order[0]=0;counts.cancels=counts.completions=0;IO24_CHECK(pdo_pnp(&o,&pnp)==STATUS_SUCCESS);IO24_CHECK(counts.cancels==1&&counts.completions>=2);IO24_CHECK(!strncmp(order,"cancel,complete,",16));
++}
++static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lower"))group_lower();if(!strcmp(m,"--red")||!strcmp(m,"--upper"))group_upper();if(!strcmp(m,"--red")||!strcmp(m,"--teardown"))group_teardown();}
++int main(int argc,char**argv){void*module;if(argc!=3)return 2;module=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!module){fprintf(stderr,"HARNESS: dlopen actual unixlib: %s\n",dlerror());return 2;}real_unix_calls=dlsym(module,"__wine_unix_call_funcs");if(!real_unix_calls){fprintf(stderr,"HARNESS: dlsym actual unix calls: %s\n",dlerror());return 2;}if(real_unix_calls[unix_usb_init](NULL)!=STATUS_SUCCESS){fprintf(stderr,"HARNESS: actual unix init failed\n");return 2;}run(argv[2]);real_unix_calls[unix_usb_exit](NULL);dlclose(module);printf("CP33 cancel executed mode=%s cancels=%u completions=%u failures=%u\n",argv[2],counts.cancels,counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_overlapped_cancel_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_overlapped_cancel_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_overlapped_cancel_contract.sh	2026-08-23 05:16:02.293132730 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_overlapped_cancel_contract.sh	2026-08-23 21:14:40.946275046 -0700
+@@ -1,13 +1,11 @@
+ #!/usr/bin/env bash
+-set -euo pipefail
++set -uo pipefail
+ if (( $# < 3 || $# > 4 )); then echo 'usage: tests/winusb_overlapped_cancel_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE]' >&2; exit 2; fi
+-readonly source_root=$1 build_root=$2 libusb_include=$3 mode=${4:---red}
+-case "$mode" in --red|--lower|--upper|--teardown) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+-readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) ntdll="$build_root/dlls/ntdll/ntdll.so"
+-for input in "$source_root/dlls/wineusb.sys/unixlib.c" "$source_root/dlls/wineusb.sys/wineusb.c" "$libusb_include/libusb.h" "$ntdll" "$test_dir/winusb_overlapped_cancel_contract.c" "$test_dir/wineusb_winusb_urb_fake_libusb.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
+-build_dir=$(mktemp -d -p /tmp io24-winusb-overlapped-cancel.XXXXXX); trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
+-cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -I"$libusb_include" -Wl,-soname,libusb-1.0.so.0 "$test_dir/wineusb_winusb_urb_fake_libusb.c" -o "$build_dir/libusb-1.0.so.0"
+-cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -DWINE_UNIX_LIB -D__WINESRC__ -I"$build_root/include" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" -fPIC -c "$source_root/dlls/wineusb.sys/unixlib.c" -o "$build_dir/unixlib.o"
+-cc -shared -Wl,-Bsymbolic -Wl,-z,defs "$build_dir/unixlib.o" "$ntdll" -L"$build_dir" -Wl,-l:libusb-1.0.so.0 -lpthread -o "$build_dir/wineusb-cancel.so"
+-cc -std=c11 -Wall -Wextra -Werror "$test_dir/winusb_overlapped_cancel_contract.c" -o "$build_dir/contract"
+-"$build_dir/contract" "$source_root" "$mode"
++readonly source_root=$1 build_root=$2 libusb_include=$3 mode=${4:---red};case "$mode" in --red|--lower|--upper|--teardown) ;;*)echo "usage: unsupported MODE: $mode" >&2;exit 2;;esac
++readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")"&&pwd) ntdll="$build_root/dlls/ntdll/ntdll.so";for i in "$source_root/dlls/wineusb.sys/unixlib.c" "$source_root/dlls/wineusb.sys/wineusb.c" "$libusb_include/libusb.h" "$ntdll" "$test_dir/winusb_overlapped_cancel_contract.c" "$test_dir/wineusb_winusb_urb_fake_libusb.c";do [[ -f "$i" ]]||{ echo "HARNESS: missing input: $i" >&2;exit 2;};done
++build_dir=$(mktemp -d -p /tmp io24-winusb-overlapped-cancel.XXXXXX)||{ echo 'HARNESS: mktemp failed' >&2;exit 2;};trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
++if ! cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -I"$libusb_include" -Wl,-soname,libusb-1.0.so.0 "$test_dir/wineusb_winusb_urb_fake_libusb.c" -o "$build_dir/libusb-1.0.so.0";then echo 'HARNESS: compiling cancel fake libusb failed' >&2;exit 2;fi
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -DWINE_UNIX_LIB -D__WINESRC__ -I"$build_root/include" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" -fPIC -c "$source_root/dlls/wineusb.sys/unixlib.c" -o "$build_dir/unixlib.o";then echo 'HARNESS: compiling actual cancel unixlib failed' >&2;exit 2;fi
++if ! cc -shared -Wl,-Bsymbolic -Wl,-z,defs "$build_dir/unixlib.o" "$ntdll" -L"$build_dir" -Wl,-l:libusb-1.0.so.0 -lpthread -o "$build_dir/wineusb-contract.so";then echo 'HARNESS: linking actual cancel unixlib failed' >&2;exit 2;fi
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-format -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -fshort-wchar -D__WINESRC__ -I"$build_root/include" -I"$test_dir" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" "$test_dir/winusb_overlapped_cancel_contract.c" -L"$build_dir" -Wl,--no-as-needed -Wl,-rpath,"$build_dir" -Wl,-l:libusb-1.0.so.0 -ldl -o "$build_dir/contract";then echo 'HARNESS: compiling actual wineusb.c cancellation harness failed' >&2;exit 2;fi
++LD_LIBRARY_PATH="$build_dir:$(dirname -- "$ntdll")" "$build_dir/contract" "$build_dir/wineusb-contract.so" "$mode";code=$?;((code==0||code==1))||{ echo "HARNESS: cancel contract exited $code" >&2;exit 2;};exit "$code"
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_user_api_contract.c	2026-08-23 05:16:02.283358597 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_user_api_contract.c	2026-08-23 21:14:40.936547570 -0700
+@@ -1,57 +1,126 @@
+-/* Hardware-free CP33 public WinUSB surface contract. */
++/* Executed host contract for the actual winusb.dll production module. */
++#include <dlfcn.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include "windef.h"
++#include "winbase.h"
++#include "winusb.h"
++#include "wine/debug.h"
+ 
+ #define GUARD_BYTE 0xa5
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
+ 
+-static const char *const imports[] = {
+-    "WinUsb_AbortPipe", "WinUsb_ControlTransfer", "WinUsb_Free",
+-    "WinUsb_GetAssociatedInterface", "WinUsb_GetDescriptor",
+-    "WinUsb_GetOverlappedResult", "WinUsb_GetPipePolicy", "WinUsb_Initialize",
+-    "WinUsb_QueryDeviceInformation", "WinUsb_ReadPipe", "WinUsb_ResetPipe",
+-    "WinUsb_SetCurrentAlternateSetting", "WinUsb_SetPipePolicy", "WinUsb_WritePipe"
++struct io24_fake_win32
++{
++    DWORD last_error; BOOL ioctl_result, overlapped_result; DWORD ioctl_error, bytes;
++    DWORD codes[64], in_lengths[64], out_lengths[64]; void *overlapped[64];
++    unsigned int code_count, duplicates, closes;
+ };
+-
+-static char *read_file(const char *path)
++static struct io24_fake_win32 fake;
++enum vendor_operation
+ {
+-    FILE *file; long size; char *data;
+-    if (!(file = fopen(path, "rb"))) return NULL;
+-    if (fseek(file, 0, SEEK_END) || (size = ftell(file)) < 0 || fseek(file, 0, SEEK_SET)) { fclose(file); return NULL; }
+-    if (!(data = malloc((size_t)size + 1))) { fclose(file); return NULL; }
+-    counts.allocations++;
+-    if (fread(data, 1, (size_t)size, file) != (size_t)size) { free(data); counts.frees++; fclose(file); return NULL; }
+-    data[size] = 0; fclose(file); return data;
+-}
++    VENDOR_INITIALIZE, VENDOR_QUERY, VENDOR_DESCRIPTOR, VENDOR_GET_POLICY,
++    VENDOR_SET_POLICY, VENDOR_SET_ALT, VENDOR_CONTROL, VENDOR_READ,
++    VENDOR_WRITE, VENDOR_OVERLAPPED, VENDOR_ABORT, VENDOR_RESET,
++    VENDOR_ASSOCIATED, VENDOR_FREE
++};
++struct vendor_call { enum vendor_operation operation; uintptr_t argument[5]; BOOL result; };
++static struct vendor_call vendor_calls[32];
++static unsigned int vendor_call_count;
++int __cdecl __wine_dbg_header(enum __wine_debug_class c,struct __wine_debug_channel*d,const char*f){(void)c;(void)d;(void)f;return -1;}
++int __cdecl __wine_dbg_output(const char*s){(void)s;return 0;}
++const char *__cdecl __wine_dbg_strdup(const char*s){return s;}
++static void fake_reset(void) { memset(&fake,0,sizeof(fake)); memset(&counts,0,sizeof(counts)); fake.ioctl_result=TRUE; fake.overlapped_result=TRUE; fake.bytes=4; }
++
++LPVOID WINAPI HeapAlloc(HANDLE h,DWORD f,SIZE_T n){void*p;(void)h;(void)f;p=calloc(1,n?n:1);if(p)counts.allocations++;return p;}
++BOOL WINAPI HeapFree(HANDLE h,DWORD f,LPVOID p){(void)h;(void)f;if(p){free(p);counts.frees++;}return TRUE;}
++BOOL WINAPI CloseHandle(HANDLE h){(void)h;fake.closes++;counts.releases++;return TRUE;}
++BOOL WINAPI DuplicateHandle(HANDLE a,HANDLE source,HANDLE b,HANDLE *target,DWORD c,BOOL d,DWORD e)
++{(void)a;(void)b;(void)c;(void)d;(void)e;fake.duplicates++;if(target)*target=(HANDLE)((uintptr_t)source+0x100);return TRUE;}
++BOOL WINAPI DeviceIoControl(HANDLE d,DWORD code,void*in,DWORD il,void*out,DWORD ol,DWORD*bytes,OVERLAPPED*ov)
++{unsigned int s=fake.code_count++;(void)d;(void)in;if(s<64){fake.codes[s]=code;fake.in_lengths[s]=il;fake.out_lengths[s]=ol;fake.overlapped[s]=ov;}counts.submits++;if(out&&ol)memset(out,0x3c,ol);if(bytes)*bytes=fake.bytes;if(!fake.ioctl_result)fake.last_error=fake.ioctl_error;return fake.ioctl_result;}
++BOOL WINAPI GetOverlappedResult(HANDLE h,OVERLAPPED*ov,DWORD*b,BOOL w){(void)h;(void)ov;(void)w;counts.completions++;if(b)*b=fake.bytes;return fake.overlapped_result;}
++
++typedef BOOL (WINAPI *fn_abort)(WINUSB_INTERFACE_HANDLE,UCHAR);
++typedef BOOL (WINAPI *fn_control)(WINUSB_INTERFACE_HANDLE,void*,UCHAR*,ULONG,ULONG*,OVERLAPPED*);
++typedef BOOL (WINAPI *fn_free)(WINUSB_INTERFACE_HANDLE);
++typedef BOOL (WINAPI *fn_associated)(WINUSB_INTERFACE_HANDLE,UCHAR,PWINUSB_INTERFACE_HANDLE);
++typedef BOOL (WINAPI *fn_descriptor)(WINUSB_INTERFACE_HANDLE,UCHAR,UCHAR,USHORT,UCHAR*,ULONG,ULONG*);
++typedef BOOL (WINAPI *fn_overlapped)(WINUSB_INTERFACE_HANDLE,OVERLAPPED*,ULONG*,BOOL);
++typedef BOOL (WINAPI *fn_get_policy)(WINUSB_INTERFACE_HANDLE,UCHAR,ULONG,ULONG*,void*);
++typedef BOOL (WINAPI *fn_initialize)(HANDLE,PWINUSB_INTERFACE_HANDLE);
++typedef BOOL (WINAPI *fn_query)(WINUSB_INTERFACE_HANDLE,ULONG,ULONG*,void*);
++typedef BOOL (WINAPI *fn_pipe_io)(WINUSB_INTERFACE_HANDLE,UCHAR,UCHAR*,ULONG,ULONG*,OVERLAPPED*);
++typedef BOOL (WINAPI *fn_reset)(WINUSB_INTERFACE_HANDLE,UCHAR);
++typedef BOOL (WINAPI *fn_alt)(WINUSB_INTERFACE_HANDLE,UCHAR);
++typedef BOOL (WINAPI *fn_set_policy)(WINUSB_INTERFACE_HANDLE,UCHAR,ULONG,ULONG,void*);
++struct functions { fn_abort abort_pipe; fn_control control; fn_free free_handle; fn_associated associated; fn_descriptor descriptor; fn_overlapped overlapped; fn_get_policy get_policy; fn_initialize initialize; fn_query query; fn_pipe_io read_pipe; fn_reset reset_pipe; fn_alt set_alt; fn_set_policy set_policy; fn_pipe_io write_pipe; };
++
++static void *feature_symbol(void*m,const char*n){(void)n;return dlsym(m,n);}
++#define LOAD(field,name) *(void **)&f->field=feature_symbol(module,name)
++static void load_functions(void*module,struct functions*f)
++{memset(f,0,sizeof(*f));LOAD(abort_pipe,"WinUsb_AbortPipe");LOAD(control,"WinUsb_ControlTransfer");LOAD(free_handle,"WinUsb_Free");LOAD(associated,"WinUsb_GetAssociatedInterface");LOAD(descriptor,"WinUsb_GetDescriptor");LOAD(overlapped,"WinUsb_GetOverlappedResult");LOAD(get_policy,"WinUsb_GetPipePolicy");LOAD(initialize,"WinUsb_Initialize");LOAD(query,"WinUsb_QueryDeviceInformation");LOAD(read_pipe,"WinUsb_ReadPipe");LOAD(reset_pipe,"WinUsb_ResetPipe");LOAD(set_alt,"WinUsb_SetCurrentAlternateSetting");LOAD(set_policy,"WinUsb_SetPipePolicy");LOAD(write_pipe,"WinUsb_WritePipe");}
+ 
+-int main(int argc, char **argv)
++static void test_initialize(const struct functions*f){WINUSB_INTERFACE_HANDLE h=NULL;unsigned int before=counts.failures;fake_reset();counts.failures=before;if(f->initialize)IO24_CHECK(f->initialize((HANDLE)(uintptr_t)0x1110,&h)&&h);IO24_CHECK(counts.submits>=1);}
++static void test_handles(const struct functions*f){WINUSB_INTERFACE_HANDLE a=NULL;unsigned int before=counts.failures;fake_reset();counts.failures=before;if(f->associated)IO24_CHECK(f->associated((void*)0x2200,0,&a)&&a);if(f->free_handle){IO24_CHECK(f->free_handle(a));IO24_CHECK(f->free_handle((void*)0x2200));}IO24_CHECK(counts.releases>=1);}
++static void test_descriptors(const struct functions*f){unsigned char g[34];ULONG n=0,s=0,sl=sizeof(s);unsigned int before=counts.failures;fake_reset();counts.failures=before;memset(g,GUARD_BYTE,sizeof(g));if(f->descriptor)IO24_CHECK(f->descriptor((void*)0x2200,1,0,0,g+1,32,&n));if(f->query)IO24_CHECK(f->query((void*)0x2200,1,&sl,&s));IO24_CHECK(g[0]==GUARD_BYTE&&g[33]==GUARD_BYTE);IO24_CHECK(counts.submits==2);}
++static void test_policy(const struct functions*f){static const struct{UCHAR pipe,policy;ULONG length,value;}q[]={{0,3,0,0},{0,9,0,0},{1,1,0,0},{0x81,2,0,0},{0x81,4,0,0},{0x81,5,0,0},{0x81,6,0,0},{0x81,7,1,1},{0x81,8,4,0x10000}};unsigned int i,before=counts.failures;ULONG n=4,v=0;fake_reset();counts.failures=before;for(i=0;i<9;i++){if(q[i].policy==8){if(f->get_policy)IO24_CHECK(f->get_policy((void*)0x2200,q[i].pipe,q[i].policy,&n,&v));}else if(f->set_policy)IO24_CHECK(f->set_policy((void*)0x2200,q[i].pipe,q[i].policy,q[i].length,(void*)&q[i].value));}if(f->set_alt)IO24_CHECK(f->set_alt((void*)0x2200,1));IO24_CHECK(counts.submits==10);}
++static void test_transfer(const struct functions*f){unsigned char g[34];ULONG n=0;OVERLAPPED ov={0};struct{UCHAR type,request;USHORT value,index,length;}setup={0x41,1,2,5,32};unsigned int before=counts.failures;fake_reset();counts.failures=before;memset(g,GUARD_BYTE,sizeof(g));if(f->control)IO24_CHECK(f->control((void*)0x2200,&setup,g+1,32,&n,NULL));if(f->read_pipe)IO24_CHECK(f->read_pipe((void*)0x2200,0x81,g+1,32,&n,&ov));if(f->write_pipe)IO24_CHECK(f->write_pipe((void*)0x2200,1,g+1,32,&n,NULL));if(f->overlapped)IO24_CHECK(f->overlapped((void*)0x2200,&ov,&n,TRUE));IO24_CHECK(g[0]==GUARD_BYTE&&g[33]==GUARD_BYTE);IO24_CHECK(counts.submits==3&&counts.completions==1);}
++static void test_cancel(const struct functions*f){unsigned int before=counts.failures;fake_reset();counts.failures=before;if(f->abort_pipe)IO24_CHECK(f->abort_pipe((void*)0x2200,0x81));if(f->reset_pipe)IO24_CHECK(f->reset_pipe((void*)0x2200,0x81));IO24_CHECK(counts.submits==2);}
++static void test_vendor_sequence(const struct functions*f)
+ {
+-    char path[4096], *header, *main_source, *io_source = NULL, *spec;
+-    unsigned char guarded[18]; unsigned int prototypes = 0, definitions = 0, exports = 0, i;
+-    if (argc != 2) return 2;
+-    memset(guarded, GUARD_BYTE, sizeof(guarded));
+-    snprintf(path, sizeof(path), "%s/include/winusb.h", argv[1]); header = read_file(path);
+-    snprintf(path, sizeof(path), "%s/dlls/winusb/main.c", argv[1]); main_source = read_file(path);
+-    snprintf(path, sizeof(path), "%s/dlls/winusb/io.c", argv[1]); io_source = read_file(path);
+-    snprintf(path, sizeof(path), "%s/dlls/winusb/winusb.spec", argv[1]); spec = read_file(path);
+-    if (!header || !main_source || !spec) { fputs("HARNESS: missing public production input\n", stderr); return 2; }
+-    for (i = 0; i < sizeof(imports) / sizeof(imports[0]); ++i)
++    WINUSB_INTERFACE_HANDLE root=NULL,associated=NULL;unsigned char g[34];ULONG n=0,v=0,vl=sizeof(v);OVERLAPPED ov={0};BOOL ok;
++    struct{UCHAR type,request;USHORT value,index,length;}setup={0x41,1,2,5,32};
++    static const struct{UCHAR pipe,policy;ULONG length,value;}q[]={{0,3,0,0},{0,9,0,0},{1,1,0,0},{0x81,2,0,0},{0x81,4,0,0},{0x81,5,0,0},{0x81,6,0,0},{0x81,7,1,1}};
++    static const enum vendor_operation expected[] =
+     {
+-        char definition[128], export_name[128];
+-        if (strstr(header, imports[i])) prototypes++;
+-        snprintf(definition, sizeof(definition), "WINAPI %s(", imports[i]);
+-        if (strstr(main_source, definition) || (io_source && strstr(io_source, definition))) definitions++;
+-        snprintf(export_name, sizeof(export_name), "stdcall %s(", imports[i]);
+-        if (strstr(spec, export_name)) exports++;
+-    }
+-    for (i = 0; i < sizeof(guarded); ++i) IO24_CHECK(guarded[i] == GUARD_BYTE);
+-    IO24_CHECK(prototypes == 14); IO24_CHECK(definitions == 14); IO24_CHECK(exports == 14);
+-    free(header); free(main_source); free(io_source); free(spec); counts.frees += 3 + !!io_source;
+-    IO24_CHECK(counts.allocations == counts.frees);
+-    printf("CP33 public RED: prototypes=%u/14 definitions=%u/14 callable-exports=%u/14 failures=%u\n",
+-            prototypes, definitions, exports, counts.failures);
+-    return counts.failures ? 1 : 0;
++        VENDOR_INITIALIZE,VENDOR_QUERY,VENDOR_DESCRIPTOR,VENDOR_DESCRIPTOR,VENDOR_GET_POLICY,
++        VENDOR_SET_POLICY,VENDOR_SET_POLICY,VENDOR_SET_POLICY,VENDOR_SET_POLICY,
++        VENDOR_SET_POLICY,VENDOR_SET_POLICY,VENDOR_SET_POLICY,VENDOR_SET_POLICY,VENDOR_SET_ALT,
++        VENDOR_CONTROL,VENDOR_CONTROL,VENDOR_READ,VENDOR_READ,VENDOR_WRITE,VENDOR_WRITE,
++        VENDOR_OVERLAPPED,VENDOR_ABORT,VENDOR_RESET,VENDOR_ASSOCIATED,VENDOR_FREE,VENDOR_FREE
++    };
++    unsigned int i,before=counts.failures;
++#define VENDOR_RECORD(op_value,result_value,a0,a1,a2,a3,a4) do { \
++    struct vendor_call *call=&vendor_calls[vendor_call_count++]; \
++    call->operation=(op_value);call->result=(result_value);call->argument[0]=(uintptr_t)(a0); \
++    call->argument[1]=(uintptr_t)(a1);call->argument[2]=(uintptr_t)(a2); \
++    call->argument[3]=(uintptr_t)(a3);call->argument[4]=(uintptr_t)(a4); \
++} while (0)
++    fake_reset();counts.failures=before;vendor_call_count=0;memset(vendor_calls,0,sizeof(vendor_calls));memset(g,GUARD_BYTE,sizeof(g));
++    ok=f->initialize&&f->initialize((HANDLE)(uintptr_t)0x1110,&root);VENDOR_RECORD(VENDOR_INITIALIZE,ok,0x1110,0,0,0,0);IO24_CHECK(ok&&root);
++    ok=f->query&&f->query(root,1,&vl,&v);VENDOR_RECORD(VENDOR_QUERY,ok,root,1,sizeof(v),v,0);IO24_CHECK(ok);
++    ok=f->descriptor&&f->descriptor(root,1,0,0,g+1,32,&n);VENDOR_RECORD(VENDOR_DESCRIPTOR,ok,root,1,0,0,32);IO24_CHECK(ok);
++    ok=f->descriptor&&f->descriptor(root,3,1,0x409,g+1,32,&n);VENDOR_RECORD(VENDOR_DESCRIPTOR,ok,root,3,1,0x409,32);IO24_CHECK(ok);
++    vl=sizeof(v);ok=f->get_policy&&f->get_policy(root,0x81,8,&vl,&v);VENDOR_RECORD(VENDOR_GET_POLICY,ok,root,0x81,8,vl,v);IO24_CHECK(ok);
++    for(i=0;i<sizeof(q)/sizeof(q[0]);i++){ok=f->set_policy&&f->set_policy(root,q[i].pipe,q[i].policy,q[i].length,(void*)&q[i].value);VENDOR_RECORD(VENDOR_SET_POLICY,ok,root,q[i].pipe,q[i].policy,q[i].length,q[i].value);IO24_CHECK(ok);}
++    ok=f->set_alt&&f->set_alt(root,1);VENDOR_RECORD(VENDOR_SET_ALT,ok,root,1,0,0,0);IO24_CHECK(ok);
++    ok=f->control&&f->control(root,&setup,g+1,32,&n,NULL);VENDOR_RECORD(VENDOR_CONTROL,ok,root,0x41010002,5,32,0);IO24_CHECK(ok);
++    ok=f->control&&f->control(root,&setup,g+1,32,&n,&ov);VENDOR_RECORD(VENDOR_CONTROL,ok,root,0x41010002,5,32,&ov);IO24_CHECK(ok);
++    ok=f->read_pipe&&f->read_pipe(root,0x81,g+1,32,&n,NULL);VENDOR_RECORD(VENDOR_READ,ok,root,0x81,32,0,0);IO24_CHECK(ok);
++    ok=f->read_pipe&&f->read_pipe(root,0x81,g+1,32,&n,&ov);VENDOR_RECORD(VENDOR_READ,ok,root,0x81,32,&ov,0);IO24_CHECK(ok);
++    ok=f->write_pipe&&f->write_pipe(root,1,g+1,32,&n,NULL);VENDOR_RECORD(VENDOR_WRITE,ok,root,1,32,0,0);IO24_CHECK(ok);
++    ok=f->write_pipe&&f->write_pipe(root,1,g+1,32,&n,&ov);VENDOR_RECORD(VENDOR_WRITE,ok,root,1,32,&ov,0);IO24_CHECK(ok);
++    ok=f->overlapped&&f->overlapped(root,&ov,&n,TRUE);VENDOR_RECORD(VENDOR_OVERLAPPED,ok,root,&ov,TRUE,n,0);IO24_CHECK(ok);
++    ok=f->abort_pipe&&f->abort_pipe(root,0x81);VENDOR_RECORD(VENDOR_ABORT,ok,root,0x81,0,0,0);IO24_CHECK(ok);
++    ok=f->reset_pipe&&f->reset_pipe(root,0x81);VENDOR_RECORD(VENDOR_RESET,ok,root,0x81,0,0,0);IO24_CHECK(ok);
++    ok=f->associated&&f->associated(root,0,&associated);VENDOR_RECORD(VENDOR_ASSOCIATED,ok,root,0,associated,0,0);IO24_CHECK(ok&&associated&&associated!=root);
++    ok=f->free_handle&&f->free_handle(associated);VENDOR_RECORD(VENDOR_FREE,ok,associated,0,0,0,0);IO24_CHECK(ok);
++    ok=f->free_handle&&f->free_handle(root);VENDOR_RECORD(VENDOR_FREE,ok,root,0,0,0,0);IO24_CHECK(ok);
++    IO24_CHECK(vendor_call_count==sizeof(expected)/sizeof(expected[0]));
++    for(i=0;i<vendor_call_count&&i<sizeof(expected)/sizeof(expected[0]);i++)IO24_CHECK(vendor_calls[i].operation==expected[i]&&vendor_calls[i].result);
++    for(i=0;i<sizeof(q)/sizeof(q[0]);i++)IO24_CHECK(vendor_calls[5+i].argument[1]==q[i].pipe&&vendor_calls[5+i].argument[2]==q[i].policy&&vendor_calls[5+i].argument[3]==q[i].length&&vendor_calls[5+i].argument[4]==q[i].value);
++    IO24_CHECK(vendor_calls[2].argument[1]==1&&vendor_calls[2].argument[2]==0&&vendor_calls[2].argument[3]==0&&vendor_calls[2].argument[4]==32);
++    IO24_CHECK(vendor_calls[3].argument[1]==3&&vendor_calls[3].argument[2]==1&&vendor_calls[3].argument[3]==0x409&&vendor_calls[3].argument[4]==32);
++    IO24_CHECK(vendor_calls[14].argument[1]==0x41010002&&vendor_calls[14].argument[2]==5&&vendor_calls[14].argument[3]==32&&vendor_calls[14].argument[4]==0);
++    IO24_CHECK(vendor_calls[15].argument[4]==(uintptr_t)&ov&&vendor_calls[17].argument[3]==(uintptr_t)&ov&&vendor_calls[19].argument[3]==(uintptr_t)&ov);
++    IO24_CHECK(vendor_calls[24].argument[0]==(uintptr_t)associated&&vendor_calls[25].argument[0]==(uintptr_t)root);
++    IO24_CHECK(g[0]==GUARD_BYTE&&g[33]==GUARD_BYTE);IO24_CHECK(counts.submits>=19);IO24_CHECK(counts.completions==1);IO24_CHECK(counts.releases>=1);
++#undef VENDOR_RECORD
+ }
++static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
++int main(int argc,char**argv){void*m;struct functions f;if(argc!=3)return 2;m=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s submits=%u releases=%u completions=%u failures=%u\n",argv[2],counts.submits,counts.releases,counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_user_api_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_user_api_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-head/tests/winusb_user_api_contract.sh	2026-08-23 05:16:02.284657024 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-1-head/tests/winusb_user_api_contract.sh	2026-08-23 21:14:40.937922263 -0700
+@@ -1,14 +1,15 @@
+ #!/usr/bin/env bash
+-set -euo pipefail
++set -uo pipefail
+ if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 mode=${2:---red}
+-[[ "$mode" == --red || "$mode" == --api ]] || { echo "usage: unsupported MODE: $mode" >&2; exit 2; }
++case "$mode" in --red|--initialize|--handles|--descriptors|--policy|--transfer|--cancel|--vendor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+ readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+-for input in "$source_root/include/winusb.h" "$source_root/dlls/winusb/main.c" "$source_root/dlls/winusb/winusb.spec" "$test_dir/winusb_user_api_contract.c"; do
+-    [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }
+-done
+-build_dir=$(mktemp -d -p /tmp io24-winusb-user-api.XXXXXX)
++for input in "$source_root/include/winusb.h" "$source_root/dlls/winusb/main.c" "$source_root/dlls/winusb/winusb.spec" "$test_dir/winusb_user_api_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
++build_dir=$(mktemp -d -p /tmp io24-winusb-user-api.XXXXXX) || { echo 'HARNESS: mktemp failed' >&2; exit 2; }
+ trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
+-cc -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -c "$source_root/dlls/winusb/main.c" -o "$build_dir/main.o"
+-cc -std=c11 -Wall -Wextra -Werror "$test_dir/winusb_user_api_contract.c" -o "$build_dir/contract"
+-"$build_dir/contract" "$source_root"
++sources=("$source_root/dlls/winusb/main.c"); [[ ! -f "$source_root/dlls/winusb/io.c" ]] || sources+=("$source_root/dlls/winusb/io.c")
++if ! cc -std=c11 -Wall -Wextra -Werror -fPIC -shared -D__WINESRC__ -I"$source_root/include" "${sources[@]}" -o "$build_dir/winusb-production.so"; then echo 'HARNESS: compiling/linking actual winusb production module failed' >&2; exit 2; fi
++if ! cc -std=c11 -Wall -Wextra -Werror -rdynamic -D__WINESRC__ -I"$source_root/include" "$test_dir/winusb_user_api_contract.c" -ldl -o "$build_dir/contract"; then echo 'HARNESS: compiling public host contract failed' >&2; exit 2; fi
++"$build_dir/contract" "$build_dir/winusb-production.so" "$mode"; code=$?
++(( code == 0 || code == 1 )) || { echo "HARNESS: public contract exited $code" >&2; exit 2; }
++exit "$code"

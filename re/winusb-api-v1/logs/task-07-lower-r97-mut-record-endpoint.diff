@@ -1,0 +1,11 @@
+--- .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 07:49:10.184288452 -0700
++++ /tmp/io24-r97-fourmuts.KaxhMg/record-endpoint/dlls/wineusb.sys/unixlib.c	2026-08-24 08:19:26.901987143 -0700
+@@ -1060,7 +1060,7 @@
+                         case LIBUSB_TRANSFER_TYPE_INTERRUPT: type = UsbdPipeTypeInterrupt; break;
+                         default: continue;
+                     }
+-                    if (endpoint->bEndpointAddress == pipe->endpoint && type == pipe->type) { found = true; break; }
++                    if (type == pipe->type) { found = true; break; }
+                 }
+             }
+         libusb_free_config_descriptor(config);

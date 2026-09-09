@@ -1,0 +1,204 @@
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/ntoskrnl.o /run/io24-source/dlls/ntoskrnl.exe/tests/ntoskrnl.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/testlist.o dlls/ntoskrnl.exe/tests/testlist.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/driver.o /run/io24-source/dlls/ntoskrnl.exe/tests/driver.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --implib -o dlls/ntoskrnl.exe/libntoskrnl.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+tools/winebuild/winebuild -w --implib -o dlls/hal/libhal.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/hal/hal.spec
+tools/winebuild/winebuild -w --implib -o dlls/fltmgr.sys/libfltmgr.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/fltmgr.sys/fltmgr.sys.spec
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/driver.dll.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -s -nodefaultlibs -nostartfiles -Wl,--subsystem,native -shared \
+  dlls/ntoskrnl.exe/tests/driver.o libs/winecrt0/libwinecrt0.a dlls/ntoskrnl.exe/libntoskrnl.a \
+  dlls/hal/libhal.a dlls/fltmgr.sys/libfltmgr.a libs/winecrt0/libwinecrt0.a 
+echo "driver.dll TESTDLL \"dlls/ntoskrnl.exe/tests/driver.dll.so\"" | tools/wrc/wrc -u -o dlls/ntoskrnl.exe/tests/driver.dll.so.res
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/driver2.o /run/io24-source/dlls/ntoskrnl.exe/tests/driver2.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/driver2.dll.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -s -nodefaultlibs -nostartfiles -Wl,--subsystem,native -shared \
+  dlls/ntoskrnl.exe/tests/driver2.o libs/winecrt0/libwinecrt0.a dlls/ntoskrnl.exe/libntoskrnl.a \
+  dlls/hal/libhal.a libs/winecrt0/libwinecrt0.a 
+echo "driver2.dll TESTDLL \"dlls/ntoskrnl.exe/tests/driver2.dll.so\"" | tools/wrc/wrc -u -o dlls/ntoskrnl.exe/tests/driver2.dll.so.res
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/driver3.o /run/io24-source/dlls/ntoskrnl.exe/tests/driver3.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/driver3.dll.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -s -nodefaultlibs -nostartfiles -Wl,--subsystem,native -shared \
+  dlls/ntoskrnl.exe/tests/driver3.o libs/winecrt0/libwinecrt0.a dlls/ntoskrnl.exe/libntoskrnl.a \
+  dlls/hal/libhal.a libs/winecrt0/libwinecrt0.a 
+echo "driver3.dll TESTDLL \"dlls/ntoskrnl.exe/tests/driver3.dll.so\"" | tools/wrc/wrc -u -o dlls/ntoskrnl.exe/tests/driver3.dll.so.res
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/driver_netio.o /run/io24-source/dlls/ntoskrnl.exe/tests/driver_netio.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --implib -o dlls/netio.sys/libnetio.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/netio.sys/netio.sys.spec
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/driver_netio.dll.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -s -nodefaultlibs -nostartfiles -Wl,--subsystem,native -shared \
+  dlls/ntoskrnl.exe/tests/driver_netio.o libs/winecrt0/libwinecrt0.a dlls/ntoskrnl.exe/libntoskrnl.a \
+  dlls/hal/libhal.a dlls/netio.sys/libnetio.a libs/winecrt0/libwinecrt0.a 
+echo "driver_netio.dll TESTDLL \"dlls/ntoskrnl.exe/tests/driver_netio.dll.so\"" | tools/wrc/wrc -u -o dlls/ntoskrnl.exe/tests/driver_netio.dll.so.res
+gcc -m64 -c -o dlls/ntoskrnl.exe/tests/driver_pnp.o /run/io24-source/dlls/ntoskrnl.exe/tests/driver_pnp.c -Idlls/ntoskrnl.exe/tests \
+  -I/run/io24-source/dlls/ntoskrnl.exe/tests -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/driver_pnp.dll.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -s -nodefaultlibs -nostartfiles -Wl,--subsystem,native -shared \
+  dlls/ntoskrnl.exe/tests/driver_pnp.o libs/winecrt0/libwinecrt0.a dlls/ntoskrnl.exe/libntoskrnl.a \
+  dlls/hal/libhal.a libs/winecrt0/libwinecrt0.a 
+echo "driver_pnp.dll TESTDLL \"dlls/ntoskrnl.exe/tests/driver_pnp.dll.so\"" | tools/wrc/wrc -u -o dlls/ntoskrnl.exe/tests/driver_pnp.dll.so.res
+tools/winebuild/winebuild -w --implib -o dlls/advapi32/libadvapi32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/advapi32/advapi32.spec
+tools/winebuild/winebuild -w --implib -o dlls/cfgmgr32/libcfgmgr32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/cfgmgr32/cfgmgr32.spec
+tools/winebuild/winebuild -w --implib -o dlls/crypt32/libcrypt32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/crypt32/crypt32.spec
+tools/winebuild/winebuild -w --implib -o dlls/newdev/libnewdev.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/newdev/newdev.spec
+tools/winebuild/winebuild -w --implib -o dlls/setupapi/libsetupapi.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/setupapi/setupapi.spec
+tools/winebuild/winebuild -w --implib -o dlls/user32/libuser32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/user32/user32.spec
+tools/winebuild/winebuild -w --implib -o dlls/wintrust/libwintrust.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/wintrust/wintrust.spec
+gcc -m64 -c -o dlls/ws2_32/inaddr.o /run/io24-source/dlls/ws2_32/inaddr.c -Idlls/ws2_32 -I/run/io24-source/dlls/ws2_32 \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ \
+  -D_WS2_32_ -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --implib -o dlls/ws2_32/libws2_32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/ws2_32/ws2_32.spec dlls/ws2_32/inaddr.o
+tools/winebuild/winebuild -w --implib -o dlls/hid/libhid.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/hid/hid.spec
+gcc -m64 -c -o dlls/msvcrt/crt_gccmain.o /run/io24-source/dlls/msvcrt/crt_gccmain.c -Idlls/msvcrt \
+  -I/run/io24-source/dlls/msvcrt -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -D_CRTIMP= -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/crt_main.o /run/io24-source/dlls/msvcrt/crt_main.c -Idlls/msvcrt -I/run/io24-source/dlls/msvcrt \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 \
+  -D__WINESRC__ -D_CRTIMP= -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/crt_winmain.o /run/io24-source/dlls/msvcrt/crt_winmain.c -Idlls/msvcrt \
+  -I/run/io24-source/dlls/msvcrt -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -D_CRTIMP= -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/crt_wmain.o /run/io24-source/dlls/msvcrt/crt_wmain.c -Idlls/msvcrt \
+  -I/run/io24-source/dlls/msvcrt -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -D_CRTIMP= -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/crt_wwinmain.o /run/io24-source/dlls/msvcrt/crt_wwinmain.c -Idlls/msvcrt \
+  -I/run/io24-source/dlls/msvcrt -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -D_CRTIMP= -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/iob.o /run/io24-source/dlls/msvcrt/iob.c -Idlls/msvcrt -I/run/io24-source/dlls/msvcrt \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 \
+  -D__WINESRC__ -D_CRTIMP= -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/mathf.o /run/io24-source/dlls/msvcrt/mathf.c -Idlls/msvcrt -I/run/io24-source/dlls/msvcrt \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 \
+  -D__WINESRC__ -D_CRTIMP= -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/onexit.o /run/io24-source/dlls/msvcrt/onexit.c -Idlls/msvcrt -I/run/io24-source/dlls/msvcrt \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 \
+  -D__WINESRC__ -D_CRTIMP= -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/msvcrt/sincos.o /run/io24-source/dlls/msvcrt/sincos.c -Idlls/msvcrt -I/run/io24-source/dlls/msvcrt \
+  -Iinclude -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 \
+  -D__WINESRC__ -D_CRTIMP= -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar \
+  -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --implib -o dlls/msvcrt/libmsvcrt.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/msvcrt/msvcrt.spec dlls/msvcrt/crt_gccmain.o dlls/msvcrt/crt_main.o \
+  dlls/msvcrt/crt_winmain.o dlls/msvcrt/crt_wmain.o dlls/msvcrt/crt_wwinmain.o dlls/msvcrt/iob.o \
+  dlls/msvcrt/mathf.o dlls/msvcrt/onexit.o dlls/msvcrt/sincos.o
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/tests/ntoskrnl.exe_test.exe.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables dlls/ntoskrnl.exe/tests/ntoskrnl.o dlls/ntoskrnl.exe/tests/testlist.o \
+  dlls/ntoskrnl.exe/tests/driver.dll.so.res dlls/ntoskrnl.exe/tests/driver2.dll.so.res \
+  dlls/ntoskrnl.exe/tests/driver3.dll.so.res dlls/ntoskrnl.exe/tests/driver_netio.dll.so.res \
+  dlls/ntoskrnl.exe/tests/driver_pnp.dll.so.res dlls/advapi32/libadvapi32.a \
+  dlls/cfgmgr32/libcfgmgr32.a dlls/crypt32/libcrypt32.a dlls/newdev/libnewdev.a \
+  dlls/setupapi/libsetupapi.a dlls/user32/libuser32.a dlls/wintrust/libwintrust.a \
+  dlls/ws2_32/libws2_32.a dlls/hid/libhid.a libs/winecrt0/libwinecrt0.a dlls/msvcrt/libmsvcrt.a \
+  dlls/kernel32/libkernel32.a dlls/ntdll/libntdll.a 

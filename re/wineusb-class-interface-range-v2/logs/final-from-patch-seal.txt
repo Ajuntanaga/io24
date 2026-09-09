@@ -1,0 +1,14 @@
+timestamp=2026-08-21T02:56:27-07:00
+phase=CP11_FINAL_FROM_PATCH_SEAL
+isolation=Bubblewrap user/pid/net/ipc/uts/cgroup namespaces, all capabilities dropped, private dev, empty host home/sys/run/tmp, project read-only
+limits=1 GiB virtual memory, 120 CPU seconds, 120 wall seconds
+source=fresh temporary copy of pre-class-IN baseline plus v2 patch with fuzz zero
+build=fresh unixlib compile and link in temporary containment
+exit=0
+
+patching file dlls/wineusb.sys/unixlib.h
+patching file dlls/wineusb.sys/wineusb.c
+patching file dlls/wineusb.sys/unixlib.c
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed

@@ -1,0 +1,605 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 01:05:45.017011491 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 01:30:16.848825236 -0700
+@@ -268,6 +268,7 @@
+     struct winusb_file *file;
+     KIRQL device_irql, file_irql;
+     LONG outstanding;
++    BOOL signal_after_unlock = FALSE;
+ 
+     if (!file_object) return complete_irp(irp, STATUS_SUCCESS);
+ 
+@@ -289,20 +290,35 @@
+         file->state = WINUSB_FILE_CLOSING;
+     outstanding = file->outstanding;
+     file_object->FsContext = NULL;
+-    RemoveEntryList(&file->device_entry);
+-    InitializeListHead(&file->device_entry);
+-    --device->file_count;
+-    if (!device->file_count)
+-        KeSetEvent(&device->removal_event, IO_NO_INCREMENT, FALSE);
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
+ 
+     if (outstanding)
+         KeWaitForSingleObject(&file->zero_outstanding, Executive,
+                 KernelMode, FALSE, NULL);
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    RemoveEntryList(&file->device_entry);
++    InitializeListHead(&file->device_entry);
++    KeReleaseSpinLock(&device->lock, device_irql);
++
+     if (file->snapshot) ExFreePool(file->snapshot);
+     if (file->interfaces) ExFreePool(file->interfaces);
+     ExFreePool(file);
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    --device->file_count;
++    if (!device->file_count)
++    {
++        if (device->state == WINUSB_DEVICE_SURPRISE_REMOVED ||
++                device->state == WINUSB_DEVICE_REMOVED)
++            signal_after_unlock = TRUE;
++        else
++            KeSetEvent(&device->removal_event, IO_NO_INCREMENT, FALSE);
++    }
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (signal_after_unlock)
++        KeSetEvent(&device->removal_event, IO_NO_INCREMENT, FALSE);
+     return complete_irp(irp, STATUS_SUCCESS);
+ }
+ 
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/re/winusb-api-v1/logs/task-03-lifecycle.sha256 .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/re/winusb-api-v1/logs/task-03-lifecycle.sha256	2026-08-24 01:08:12.948452437 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256	2026-08-24 01:35:37.625087784 -0700
+@@ -1,8 +1,9 @@
+ 695f900f6b31316dbdf331d4e478b19d573fccd0ec3cbaa61d6be3dfe3fdb74f  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+ 70d0c6a96429ae3538ea5820a152e8bfdc4c2e0f77621e74645c804359a75962  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.c
+ 7c4499d74cce20b3eef6f2567272adc7e9faf84c071a7ccd2723178463b9688f  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+-b754410011cf5cd97b034e4b2dbbdd6e3d1eddf2c38f02ea5fb089ac03c7f6e2  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
++a4d745f63cda8ee4444a0a2231121a08dfa2bffbc0860bc9d52ab4b30c00497c  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+ 910d10cc0dbf1c447cd93e71ba139851e13bf64ea4c6df73aabb27783b4902d4  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+-5a1874d44d3a8d5daa505c8c8ada0aad52f50304595f04f8fe55afdcedad404e  tests/wineusb_winusb_busif_contract.c
+-20d57e41f6967ab8c4e52354aeebd4eca7b48c3f02a90a2a516e05d28d7cdbcb  tests/winusb_function_io_contract.c
+-4aca11cab67e8bedfe94591f3d4deb44f03de7adee7c4d6088d1dd84bb78c202  tests/winusb_function_binding_contract.c
++376d26ed11f3440bf6db973efeccf436b654e9c1e5f8938af8e5b1696c3b4bab  tests/wineusb_winusb_busif_contract.c
++ddc1f5f58c8f9e2d0526ba27f43b2a74216728bda133ca3da604b4cb683c06c4  tests/wineusb_winusb_busif_contract.sh
++13b968a92d4d555c2627760eaa8f03ae01cba9efa6ec69250df3eecbef048a2b  tests/winusb_function_io_contract.c
++34cd44382d9a09ad900765a1ada3d4c67ff8ed680a9920036c062a7c7c628c93  tests/winusb_function_binding_contract.c
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/wineusb_winusb_busif_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/wineusb_winusb_busif_contract.c	2026-08-24 00:58:13.191881082 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.c	2026-08-24 01:31:44.954073360 -0700
+@@ -4,8 +4,23 @@
+ #include <string.h>
+ 
+ #include "winusb_busif.h"
++#include "wine/debug.h"
+ 
+-static unsigned int failures, references, dereferences, speed_calls;
++#undef WINE_DEFAULT_DEBUG_CHANNEL
++#undef TRACE
++#undef WARN
++#undef ERR
++#undef FIXME
++#define WINE_DEFAULT_DEBUG_CHANNEL(name)
++#define TRACE(...) ((void)0)
++#define WARN(...) ((void)0)
++#define ERR(...) ((void)0)
++#define FIXME(...) ((void)0)
++#undef DEVICE_TYPE
++#include "wineusb.c"
++
++static unsigned int failures, references, dereferences;
++static void *expected_callback_context = (void *)0x12345678;
+ 
+ #define CHECK(condition, ...) do { if (!(condition)) { \
+     fprintf(stderr, "FAIL %s:%u: ", __func__, __LINE__); \
+@@ -13,13 +28,13 @@
+ 
+ static void WINAPI reference(void *context)
+ {
+-    CHECK(context == (void *)0x12345678, "unexpected context %p", context);
++    CHECK(context == expected_callback_context, "unexpected context %p", context);
+     ++references;
+ }
+ 
+ static void WINAPI dereference(void *context)
+ {
+-    CHECK(context == (void *)0x12345678, "unexpected context %p", context);
++    CHECK(context == expected_callback_context, "unexpected context %p", context);
+     ++dereferences;
+ }
+ 
+@@ -130,15 +145,6 @@
+     expected_get_device_speed GetDeviceSpeed;
+ };
+ 
+-static NTSTATUS WINAPI get_speed(void *context, UCHAR *speed)
+-{
+-    CHECK(context == (void *)0x12345678, "unexpected speed context %p", context);
+-    ++speed_calls;
+-    if (!speed) return STATUS_INVALID_PARAMETER;
+-    *speed = 0x03;
+-    return STATUS_SUCCESS;
+-}
+-
+ static const struct wineusb_ms_os_10_metadata_routines routines =
+ {
+     .InterfaceReference = reference,
+@@ -148,7 +154,7 @@
+ 
+ static const struct expected_metadata_routines_v2 routines_v2 =
+ {
+-    reference, dereference, getter, get_speed,
++    reference, dereference, getter, wineusb_metadata_get_speed,
+ };
+ 
+ struct guarded_interface
+@@ -160,7 +166,7 @@
+ static void reset(struct guarded_interface *guarded)
+ {
+     memset(guarded, 0xa5, sizeof(*guarded));
+-    references = dereferences = speed_calls = 0;
++    references = dereferences = 0;
+ }
+ 
+ static void test_query_rejections(void)
+@@ -232,14 +238,14 @@
+ 
+     memset(&guarded, 0xa5, sizeof(guarded));
+     before = guarded;
+-    references = dereferences = speed_calls = 0;
++    references = dereferences = 0;
+     status = wineusb_query_ms_os_10_metadata_interface(&metadata_guid, size, version,
+             (INTERFACE *)&guarded.interface, (void *)0x12345678,
+             (const struct wineusb_ms_os_10_metadata_routines *)&routines_v2);
+     CHECK(status == STATUS_NOT_SUPPORTED, "%s returned %#lx", name, (long)status);
+     CHECK(!memcmp(&guarded, &before, sizeof(guarded)), "%s changed output", name);
+-    CHECK(!references && !dereferences && !speed_calls,
+-            "%s changed callback balance %u/%u/%u", name, references, dereferences, speed_calls);
++    CHECK(!references && !dereferences,
++            "%s changed callback balance %u/%u", name, references, dereferences);
+ }
+ 
+ static void test_v2_query_and_speed_balance(void)
+@@ -249,6 +255,7 @@
+         struct expected_metadata_interface_v2 interface;
+         unsigned char guard[16];
+     } guarded;
++    struct usb_device device;
+     unsigned char expected_guard[sizeof(guarded.guard)];
+     UCHAR speed = 0xa5;
+     NTSTATUS status;
+@@ -259,40 +266,64 @@
+             "v1-size v2");
+     check_v2_rejection(sizeof(guarded.interface), 3, "unsupported v2-sized version");
+ 
++    memset(&device, 0, sizeof(device));
++    expected_callback_context = &device.winusb_metadata;
+     memset(&guarded, 0xa5, sizeof(guarded));
+     memset(expected_guard, 0xa5, sizeof(expected_guard));
+-    references = dereferences = speed_calls = 0;
++    references = dereferences = 0;
+     status = wineusb_query_ms_os_10_metadata_interface(&metadata_guid,
+             sizeof(guarded.interface), 2, (INTERFACE *)&guarded.interface,
+-            (void *)0x12345678,
++            &device.winusb_metadata,
+             (const struct wineusb_ms_os_10_metadata_routines *)&routines_v2);
+     CHECK(status == STATUS_SUCCESS, "v2 query returned %#lx", (long)status);
+     CHECK(guarded.interface.Size == sizeof(guarded.interface), "v2 wrong size %#x",
+             guarded.interface.Size);
+     CHECK(guarded.interface.Version == 2, "v2 wrong version %u", guarded.interface.Version);
+-    CHECK(guarded.interface.BusContext == (void *)0x12345678, "v2 wrong context");
++    CHECK(guarded.interface.BusContext == &device.winusb_metadata, "v2 wrong context");
+     CHECK(guarded.interface.InterfaceReference == reference, "v2 wrong reference routine");
+     CHECK(guarded.interface.InterfaceDereference == dereference, "v2 wrong dereference routine");
+     CHECK(guarded.interface.GetDeviceInterfaceGuid == getter, "v2 wrong GUID getter");
+-    CHECK(guarded.interface.GetDeviceSpeed == get_speed, "v2 wrong speed getter");
++    CHECK(guarded.interface.GetDeviceSpeed == wineusb_metadata_get_speed,
++            "v2 did not return actual lower speed getter");
+     CHECK(!memcmp(guarded.guard, expected_guard, sizeof(guarded.guard)),
+             "v2 success overwrote guard bytes");
+-    CHECK(references == 1 && !dereferences && !speed_calls,
+-            "v2 query callback balance %u/%u/%u", references, dereferences, speed_calls);
+-    if (status == STATUS_SUCCESS && guarded.interface.GetDeviceSpeed == get_speed &&
++    CHECK(references == 1 && !dereferences,
++            "v2 query callback balance %u/%u", references, dereferences);
++    if (status == STATUS_SUCCESS && guarded.interface.GetDeviceSpeed == wineusb_metadata_get_speed &&
+             guarded.interface.InterfaceDereference == dereference)
+     {
++        device.high_speed = FALSE;
+         status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
+-        CHECK(status == STATUS_SUCCESS && speed == 0x03, "v2 speed returned %#lx/%#x",
++        CHECK(status == STATUS_SUCCESS && speed == LowSpeed, "v2 low speed returned %#lx/%#x",
+                 (long)status, speed);
+-        CHECK(references == 1 && !dereferences && speed_calls == 1,
+-                "v2 speed changed reference balance %u/%u/%u", references, dereferences, speed_calls);
++        device.high_speed = TRUE;
++        speed = 0xa5;
++        status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++        CHECK(status == STATUS_SUCCESS && speed == HighSpeed, "v2 high speed returned %#lx/%#x",
++                (long)status, speed);
++        device.removed = TRUE;
++        speed = 0xa5;
++        status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++        CHECK(status == STATUS_DEVICE_NOT_CONNECTED && speed == 0xa5,
++                "v2 removed speed returned %#lx/%#x", (long)status, speed);
++        device.removed = FALSE;
++        device.winusb_metadata.removed = TRUE;
++        speed = 0x5a;
++        status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++        CHECK(status == STATUS_DEVICE_NOT_CONNECTED && speed == 0x5a,
++                "v2 removed metadata returned %#lx/%#x", (long)status, speed);
++        CHECK(references == 1 && !dereferences,
++                "v2 speed changed reference balance %u/%u", references, dereferences);
+         guarded.interface.InterfaceDereference(guarded.interface.BusContext);
+-        CHECK(references == 1 && dereferences == 1 && speed_calls == 1,
+-                "v2 consumer did not balance reference %u/%u/%u", references, dereferences, speed_calls);
++        CHECK(references == 1 && dereferences == 1,
++                "v2 consumer did not balance reference %u/%u", references, dereferences);
+     }
++    expected_callback_context = (void *)0x12345678;
+ }
+ 
++void WINAPI EnterCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
++void WINAPI LeaveCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
++
+ static void test_query_success_and_balance(void)
+ {
+     struct guarded_interface guarded;
+@@ -316,6 +347,50 @@
+     CHECK(references == 1 && dereferences == 1, "consumer did not balance reference");
+ }
+ 
++static void test_actual_lower_speed_callback(void)
++{
++    struct
++    {
++        struct wineusb_ms_os_10_metadata_interface_v2 interface;
++        UCHAR guard[16];
++    } guarded;
++    struct usb_device device;
++    UCHAR speed;
++    NTSTATUS status;
++
++    memset(&device, 0, sizeof(device));
++    memset(&guarded, 0xa5, sizeof(guarded));
++    status = wineusb_query_ms_os_10_metadata_interface(&metadata_guid,
++            sizeof(guarded.interface), WINEUSB_MS_OS_10_METADATA_VERSION_2,
++            (INTERFACE *)&guarded.interface, &device.winusb_metadata,
++            &winusb_metadata_routines);
++    CHECK(status == STATUS_SUCCESS, "actual lower v2 query returned %#lx", (long)status);
++    CHECK(guarded.interface.BusContext == &device.winusb_metadata,
++            "actual lower v2 changed metadata-source context");
++    CHECK(guarded.interface.GetDeviceSpeed == wineusb_metadata_get_speed,
++            "actual lower v2 did not expose its real speed callback");
++    CHECK(!memcmp(guarded.guard, (UCHAR[16]){[0 ... 15] = 0xa5}, sizeof(guarded.guard)),
++            "actual lower v2 query overwrote guard");
++
++    device.high_speed = FALSE; speed = 0xa5;
++    status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++    CHECK(status == STATUS_SUCCESS && speed == LowSpeed,
++            "actual lower low speed returned %#lx/%#x", (long)status, speed);
++    device.high_speed = TRUE; speed = 0xa5;
++    status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++    CHECK(status == STATUS_SUCCESS && speed == HighSpeed,
++            "actual lower high speed returned %#lx/%#x", (long)status, speed);
++    device.removed = TRUE; speed = 0xa5;
++    status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++    CHECK(status == STATUS_DEVICE_NOT_CONNECTED && speed == 0xa5,
++            "actual lower removed speed returned %#lx/%#x", (long)status, speed);
++    device.removed = FALSE; device.winusb_metadata.removed = TRUE; speed = 0x5a;
++    status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
++    CHECK(status == STATUS_DEVICE_NOT_CONNECTED && speed == 0x5a,
++            "actual lower removed metadata returned %#lx/%#x", (long)status, speed);
++    guarded.interface.InterfaceDereference(guarded.interface.BusContext);
++}
++
+ static void check_getter(const struct wineusb_ms_os_10_metadata_source *metadata, int expected_success,
+         const char *name)
+ {
+@@ -370,6 +445,7 @@
+     test_query_rejections();
+     test_query_success_and_balance();
+     test_v2_query_and_speed_balance();
++    test_actual_lower_speed_callback();
+     test_metadata_validation();
+     if (failures) { fprintf(stderr, "%u WineUSB metadata bus-interface check(s) failed\n", failures); return 1; }
+     puts("WineUSB WinUSB metadata bus-interface contract: pass");
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/wineusb_winusb_busif_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/wineusb_winusb_busif_contract.sh	2026-08-23 02:59:05.294070107 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.sh	2026-08-24 01:35:25.224193611 -0700
+@@ -10,15 +10,25 @@
+ readonly io24_source_dir="$io24_wine_source/dlls/wineusb.sys"
+ readonly io24_test_source="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/wineusb_winusb_busif_contract.c"
+ 
+-for io24_required in "$io24_test_source" "$io24_source_dir/winusb_busif.h" "$io24_source_dir/winusb_busif.c"; do
+-    [[ -f "$io24_required" ]] || { echo "FAIL: missing WineUSB WinUSB metadata bus-interface contract input: $io24_required" >&2; exit 1; }
++for io24_required in "$io24_test_source" "$io24_source_dir/winusb_busif.h" "$io24_source_dir/winusb_busif.c" "$io24_source_dir/wineusb.c"; do
++    [[ -f "$io24_required" ]] || { echo "HARNESS: missing WineUSB WinUSB metadata bus-interface contract input: $io24_required" >&2; exit 2; }
+ done
+ 
+-io24_build_dir=$(mktemp -d -p /tmp io24-wineusb-winusb-busif.XXXXXX)
++io24_build_dir=$(mktemp -d -p /tmp io24-wineusb-winusb-busif.XXXXXX) || { echo "HARNESS: mktemp failed" >&2; exit 2; }
+ trap 'rm -rf -- "$io24_build_dir"' EXIT INT TERM
+ 
+-cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter \
++if ! cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable \
++    -Wno-implicit-function-declaration \
++    -ffunction-sections -fdata-sections -fshort-wchar -D__WINESRC__ \
+     -I"$io24_wine_source/include" -I"$io24_source_dir" \
+     "$io24_test_source" "$io24_source_dir/winusb_busif.c" \
+-    -o "$io24_build_dir/wineusb_winusb_busif_contract"
++    -Wl,--gc-sections -o "$io24_build_dir/wineusb_winusb_busif_contract"; then
++    echo "HARNESS: compiling actual wineusb.c metadata bus-interface contract failed" >&2
++    exit 2
++fi
++set +e
+ "$io24_build_dir/wineusb_winusb_busif_contract"
++io24_code=$?
++set -e
++(( io24_code == 0 || io24_code == 1 )) || { echo "HARNESS: metadata contract exited $io24_code" >&2; exit 2; }
++exit "$io24_code"
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/winusb_function_binding_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/winusb_function_binding_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/winusb_function_binding_contract.c	2026-08-24 01:06:36.641467419 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/winusb_function_binding_contract.c	2026-08-24 01:26:53.725560606 -0700
+@@ -34,6 +34,9 @@
+ static PKEVENT synchronous_event;
+ static PIO_STATUS_BLOCK synchronous_iosb;
+ static BOOLEAN registration_returns_partial_link;
++typedef void (*wait_hook_t)(void *object);
++static wait_hook_t wait_hook;
++static unsigned int wait_failures;
+ static char trace[512];
+ 
+ static const GUID expected_interface_guid =
+@@ -78,6 +81,7 @@
+ VOID WINAPI IoDeleteDevice(PDEVICE_OBJECT object)
+ {
+     RECORD("delete"); deletes++;
++    if (last_fdo == object) last_fdo = NULL;
+     if (object->DriverObject && object->DriverObject->DeviceObject == object)
+         object->DriverObject->DeviceObject = object->NextDevice;
+     free(object->DeviceExtension); free(object);
+@@ -127,18 +131,42 @@
+     (void)device; lower_calls++;
+     if (stack->MajorFunction == IRP_MJ_PNP && stack->MinorFunction == IRP_MN_QUERY_INTERFACE)
+     {
+-        struct wineusb_ms_os_10_metadata_interface_v2 *iface = (void *)stack->Parameters.QueryInterface.Interface;
+         RECORD("query");
+         CHECK(IsEqualGUID(stack->Parameters.QueryInterface.InterfaceType, &expected_metadata_guid), "wrong metadata query GUID");
+-        CHECK(stack->Parameters.QueryInterface.Size == sizeof(*iface), "wrong metadata query size %u", stack->Parameters.QueryInterface.Size);
+-        CHECK(stack->Parameters.QueryInterface.Version == WINEUSB_MS_OS_10_METADATA_VERSION_2,
+-                "wrong metadata query version %u", stack->Parameters.QueryInterface.Version);
+-        if (NT_SUCCESS(query_status))
++        if (stack->Parameters.QueryInterface.Version == WINEUSB_MS_OS_10_METADATA_VERSION_1)
+         {
+-            iface->Size = query_returned_size; iface->Version = query_returned_version; iface->BusContext = current_pdo;
+-            iface->InterfaceReference = metadata_ref; iface->InterfaceDereference = metadata_deref;
+-            iface->GetDeviceInterfaceGuid = query_omits_getter ? NULL : get_guid;
+-            iface->GetDeviceSpeed = query_omits_speed ? NULL : get_speed; metadata_ref(current_pdo);
++            struct wineusb_ms_os_10_metadata_interface_v1 *iface =
++                    (void *)stack->Parameters.QueryInterface.Interface;
++
++            CHECK(stack->Parameters.QueryInterface.Size == sizeof(*iface),
++                    "wrong v1 metadata query size %u", stack->Parameters.QueryInterface.Size);
++            if (NT_SUCCESS(query_status))
++            {
++                iface->Size = sizeof(*iface); iface->Version = WINEUSB_MS_OS_10_METADATA_VERSION_1;
++                iface->BusContext = current_pdo; iface->InterfaceReference = metadata_ref;
++                iface->InterfaceDereference = metadata_deref;
++                iface->GetDeviceInterfaceGuid = query_omits_getter ? NULL : get_guid;
++                metadata_ref(current_pdo);
++            }
++        }
++        else
++        {
++            struct wineusb_ms_os_10_metadata_interface_v2 *iface =
++                    (void *)stack->Parameters.QueryInterface.Interface;
++
++            CHECK(stack->Parameters.QueryInterface.Version == WINEUSB_MS_OS_10_METADATA_VERSION_2,
++                    "wrong metadata query version %u", stack->Parameters.QueryInterface.Version);
++            CHECK(stack->Parameters.QueryInterface.Size == sizeof(*iface),
++                    "wrong v2 metadata query size %u", stack->Parameters.QueryInterface.Size);
++            if (NT_SUCCESS(query_status))
++            {
++                iface->Size = query_returned_size; iface->Version = query_returned_version;
++                iface->BusContext = current_pdo; iface->InterfaceReference = metadata_ref;
++                iface->InterfaceDereference = metadata_deref;
++                iface->GetDeviceInterfaceGuid = query_omits_getter ? NULL : get_guid;
++                iface->GetDeviceSpeed = query_omits_speed ? NULL : get_speed;
++                metadata_ref(current_pdo);
++            }
+         }
+         irp->IoStatus.Status = query_status; return query_status;
+     }
+@@ -177,7 +205,17 @@
+ { (void)increment; (void)wait; event->Header.SignalState = 1; return 0; }
+ NTSTATUS WINAPI KeWaitForSingleObject(void *object, KWAIT_REASON reason, KPROCESSOR_MODE mode,
+         BOOLEAN alertable, LARGE_INTEGER *timeout)
+-{ (void)reason; (void)mode; (void)alertable; (void)timeout; CHECK(((PKEVENT)object)->Header.SignalState, "synchronous request was not completed"); return STATUS_SUCCESS; }
++{
++    (void)reason; (void)mode; (void)alertable; (void)timeout;
++    if (!((PKEVENT)object)->Header.SignalState && wait_hook) wait_hook(object);
++    if (!((PKEVENT)object)->Header.SignalState)
++    {
++        CHECK(FALSE, "synchronous request was not completed");
++        wait_failures++;
++        return STATUS_UNSUCCESSFUL;
++    }
++    return STATUS_SUCCESS;
++}
+ 
+ static void reset(void)
+ {
+@@ -187,7 +225,7 @@
+     query_returned_size = sizeof(struct wineusb_ms_os_10_metadata_interface_v2);
+     query_returned_version = WINEUSB_MS_OS_10_METADATA_VERSION_2; query_returned_speed = HighSpeed;
+     last_fdo = NULL; synchronous_event = NULL; synchronous_iosb = NULL; registration_returns_partial_link = FALSE;
+-    query_omits_getter = query_omits_speed = FALSE; trace[0] = 0;
++    query_omits_getter = query_omits_speed = FALSE; wait_hook = NULL; wait_failures = 0; trace[0] = 0;
+ }
+ static NTSTATUS add(PDRIVER_OBJECT driver, PDEVICE_OBJECT pdo)
+ { current_pdo = pdo; return driver->DriverExtension->AddDevice(driver, pdo); }
+@@ -207,6 +245,37 @@
+ }
+ static struct winusb_device *extension(void) { return last_fdo ? last_fdo->DeviceExtension : NULL; }
+ 
++static void test_retained_v1_query_success(void)
++{
++    struct { struct wineusb_ms_os_10_metadata_interface_v1 interface; UCHAR guard[16]; } guarded;
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    IRP irp; IO_STACK_LOCATION stack; GUID guid;
++
++    reset(); initialize(&driver, &extension, &pdo); current_pdo = &pdo;
++    memset(&guarded, 0xa5, sizeof(guarded)); memset(&irp, 0, sizeof(irp)); memset(&stack, 0, sizeof(stack));
++    stack.MajorFunction = IRP_MJ_PNP; stack.MinorFunction = IRP_MN_QUERY_INTERFACE;
++    stack.Parameters.QueryInterface.InterfaceType = &expected_metadata_guid;
++    stack.Parameters.QueryInterface.Size = sizeof(guarded.interface);
++    stack.Parameters.QueryInterface.Version = WINEUSB_MS_OS_10_METADATA_VERSION_1;
++    stack.Parameters.QueryInterface.Interface = (INTERFACE *)&guarded.interface;
++    irp.Tail.Overlay.CurrentStackLocation = &stack;
++
++    CHECK(lower_dispatch(&pdo, &irp) == STATUS_SUCCESS, "retained v1 query failed");
++    CHECK(guarded.interface.Size == sizeof(guarded.interface) &&
++            guarded.interface.Version == WINEUSB_MS_OS_10_METADATA_VERSION_1,
++            "retained v1 size/version %u/%u", guarded.interface.Size, guarded.interface.Version);
++    CHECK(guarded.interface.BusContext == &pdo && guarded.interface.InterfaceReference == metadata_ref &&
++            guarded.interface.InterfaceDereference == metadata_deref &&
++            guarded.interface.GetDeviceInterfaceGuid == get_guid, "retained v1 layout mismatch");
++    CHECK(references == 1 && dereferences == 0, "retained v1 reference balance %u/%u", references, dereferences);
++    CHECK(NT_SUCCESS(guarded.interface.GetDeviceInterfaceGuid(guarded.interface.BusContext, &guid)) &&
++            IsEqualGUID(&guid, &expected_interface_guid), "retained v1 getter failed");
++    guarded.interface.InterfaceDereference(guarded.interface.BusContext);
++    CHECK(references == 1 && dereferences == 1, "retained v1 dereference balance %u/%u", references, dereferences);
++    CHECK(!memcmp(guarded.guard, (UCHAR[16]){[0 ... 15] = 0xa5}, sizeof(guarded.guard)),
++            "retained v1 query overwrote guard");
++}
++
+ static void test_add_start_stop_restart_remove(void)
+ {
+     DRIVER_OBJECT driver; DRIVER_EXTENSION ext; DEVICE_OBJECT pdo; struct winusb_device *dev; NTSTATUS status;
+@@ -280,7 +349,7 @@
+ }
+ int main(void)
+ {
+-    test_add_start_stop_restart_remove(); test_add_failures_are_balanced(); test_start_surprise_and_failed_disable_retry(); test_informational_distinct_and_no_io(); test_remove_before_start_and_failed_start_cleanup();
++    test_retained_v1_query_success(); test_add_start_stop_restart_remove(); test_add_failures_are_balanced(); test_start_surprise_and_failed_disable_retry(); test_informational_distinct_and_no_io(); test_remove_before_start_and_failed_start_cleanup();
+     if (failures) { fprintf(stderr, "%u CP32 function-binding checks failed\n", failures); return 1; }
+     puts("CP32 winusb function-binding lifecycle checks passed"); return 0;
+ }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-base/tests/winusb_function_io_contract.c	2026-08-24 01:06:36.641467419 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/winusb_function_io_contract.c	2026-08-24 01:30:49.813543920 -0700
+@@ -92,7 +92,19 @@
+     setup_added(d,e,p,g,file);
+     IO24_CHECK(NT_SUCCESS(dispatch(d,last_fdo,IRP_MJ_PNP,IRP_MN_START_DEVICE)));
+ }
+-static void teardown(DRIVER_OBJECT*d){ if(last_fdo)dispatch(d,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE); }
++static void teardown(DRIVER_OBJECT*d,struct guarded_request*g,FILE_OBJECT*file)
++{
++    struct dispatch_effect effect;
++    if(last_fdo&&file&&file->FsContext)
++    {
++        effect=dispatch_request(d,last_fdo,IRP_MJ_CLEANUP,0,g,file);IO24_CHECK(effect.status==STATUS_SUCCESS);
++        effect=dispatch_request(d,last_fdo,IRP_MJ_CLOSE,0,g,file);IO24_CHECK(effect.status==STATUS_SUCCESS);
++        IO24_CHECK(file->FsContext==NULL);
++    }
++    if(last_fdo)IO24_CHECK(NT_SUCCESS(dispatch(d,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE)));
++    IO24_CHECK(wait_failures==0);
++    IO24_CHECK(pool_allocations==pool_frees);
++}
+ static BOOL create_file(PDRIVER_OBJECT d,struct guarded_request *g,FILE_OBJECT *file)
+ {
+     struct dispatch_effect effect=dispatch_request(d,last_fdo,IRP_MJ_CREATE,0,g,file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);IO24_CHECK(file->FsContext!=NULL);return effect.status==STATUS_SUCCESS&&file->FsContext!=NULL;
+@@ -127,6 +139,48 @@
+     IO24_CHECK(context->snapshot==NULL&&context->snapshot_size==0);
+     IO24_CHECK(context->interfaces==NULL&&context->interface_count==0);
+ }
++
++struct lifecycle_wait_schedule
++{
++    DRIVER_OBJECT *driver;
++    struct guarded_request *guarded;
++    FILE_OBJECT *file;
++    struct winusb_device *device;
++    struct expected_winusb_file *context;
++    unsigned int frees_before;
++    unsigned int removal_waits;
++    unsigned int drain_waits;
++};
++static struct lifecycle_wait_schedule lifecycle_wait;
++
++static void lifecycle_wait_hook(void *object)
++{
++    struct dispatch_effect effect;
++
++    if(object==&lifecycle_wait.device->removal_event)
++    {
++        lifecycle_wait.removal_waits++;
++        IO24_CHECK(lifecycle_wait.file->FsContext==lifecycle_wait.context);
++        IO24_CHECK(lifecycle_wait.device->file_count==1);
++        IO24_CHECK(!lifecycle_wait.device->removal_event.Header.SignalState);
++        effect=dispatch_request(lifecycle_wait.driver,last_fdo,IRP_MJ_CLOSE,0,
++                lifecycle_wait.guarded,lifecycle_wait.file);
++        IO24_CHECK(effect.status==STATUS_SUCCESS&&lifecycle_wait.file->FsContext==NULL);
++        IO24_CHECK(pool_frees==lifecycle_wait.frees_before+1);
++        IO24_CHECK(lifecycle_wait.device->file_count==0);
++        IO24_CHECK(lifecycle_wait.device->removal_event.Header.SignalState);
++    }
++    else if(object==&lifecycle_wait.context->zero_outstanding)
++    {
++        lifecycle_wait.drain_waits++;
++        IO24_CHECK(lifecycle_wait.device->file_count==1);
++        IO24_CHECK(!lifecycle_wait.device->removal_event.Header.SignalState);
++        IO24_CHECK(pool_frees==lifecycle_wait.frees_before);
++        lifecycle_wait.context->outstanding=0;
++        KeSetEvent(&lifecycle_wait.context->zero_outstanding,IO_NO_INCREMENT,FALSE);
++    }
++    else IO24_CHECK(FALSE);
++}
+ static BOOL initialize_session(PDRIVER_OBJECT d,struct guarded_request *g,FILE_OBJECT *file)
+ {
+     struct request before=g->request;struct dispatch_effect effect=dispatch_request(d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_INITIALIZE,g,file);
+@@ -167,6 +221,8 @@
+     IO24_CHECK(device->file_count==2);
+ 
+     IO24_CHECK(d.MajorFunction[IRP_MJ_CLEANUP]!=NULL);
++    ((struct expected_winusb_file *)second_context)->outstanding=1;
++    KeClearEvent(&((struct expected_winusb_file *)second_context)->zero_outstanding);
+     if(d.MajorFunction[IRP_MJ_CLEANUP])
+     {
+         second_state=((struct expected_winusb_file *)second_context)->state;
+@@ -205,18 +261,22 @@
+         effect=dispatch_request(&d,last_fdo,IRP_MJ_CLEANUP,0,&g,&second);
+         IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(second.FsContext==second_context);
+     }
+-    effect=dispatch_request(&d,last_fdo,IRP_MJ_CLOSE,0,&g,&second);
+-    IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(second.FsContext==NULL);IO24_CHECK(pool_frees==2);
+-    IO24_CHECK(device->file_count==0&&device->removal_event.Header.SignalState);
+-    teardown(&d);
++    memset(&lifecycle_wait,0,sizeof(lifecycle_wait));
++    lifecycle_wait.driver=&d;lifecycle_wait.guarded=&g;lifecycle_wait.file=&second;
++    lifecycle_wait.device=device;lifecycle_wait.context=second_context;lifecycle_wait.frees_before=pool_frees;
++    wait_hook=lifecycle_wait_hook;
++    IO24_CHECK(NT_SUCCESS(dispatch(&d,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE)));
++    IO24_CHECK(lifecycle_wait.removal_waits==1&&lifecycle_wait.drain_waits==1);
++    IO24_CHECK(wait_failures==0&&second.FsContext==NULL&&pool_frees==2);
++    wait_hook=NULL;
+ }
+ static void group_session(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;setup(&d,&e,&p,&g,&file);create_file(&d,&g,&file);initialize_session(&d,&g,&file);teardown(&d);}
++{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;setup(&d,&e,&p,&g,&file);create_file(&d,&g,&file);initialize_session(&d,&g,&file);teardown(&d,&g,&file);}
+ static void group_alternate(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;uint32_t generation;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=1;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_ALTERNATE);teardown(&d);return;}generation=g.request.generation;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before+1);IO24_CHECK(g.request.generation==generation+1);teardown(&d);}
++{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;uint32_t generation;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=1;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_ALTERNATE);teardown(&d,&g,&file);return;}generation=g.request.generation;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before+1);IO24_CHECK(g.request.generation==generation+1);teardown(&d,&g,&file);}
+ static void group_policy(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=7;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_POLICY);teardown(&d);return;}effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);teardown(&d);}
++{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=7;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_POLICY);teardown(&d,&g,&file);return;}effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);teardown(&d,&g,&file);}
+ static void group_transfer(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_READ_PIPE);teardown(&d);return;}g.request.value=1;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1);effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g,&file);IO24_CHECK(effect.status==STATUS_PENDING);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before);teardown(&d);}
++{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_READ_PIPE);teardown(&d,&g,&file);return;}g.request.value=1;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1);effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g,&file);IO24_CHECK(effect.status==STATUS_PENDING);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before);teardown(&d,&g,&file);}
+ static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();}
+ int main(int argc,char**argv){unsigned int retained;if(argc!=2)return 2;retained=io24_retained_cp32_main();if(retained){fprintf(stderr,"HARNESS: retained fake-WDM baseline failed\n");return 2;}run(argv[1]);printf("CP33 function executed mode=%s dispatches=%u mode-ioctls=%u last-ioctl=%#lx last-status=%#lx failures=%u\n",argv[1],counts.submits,mode_ioctls,(unsigned long)last_ioctl,(unsigned long)last_status,counts.failures);return counts.failures?1:0;}
+

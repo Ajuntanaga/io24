@@ -1,0 +1,19 @@
+COMMAND: tests/winusb_user_api_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+CP33 public RED: prototypes=1/14 definitions=1/14 callable-exports=1/14 failures=3
+EXIT: 1
+
+COMMAND: tests/winusb_function_io_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+CP33 function-driver RED: create/device-control/session/select/control absent failures=4
+EXIT: 1
+
+COMMAND: tests/wineusb_winusb_urb_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+CP33 lower RED: select-interface/control/cancel/function-claims missing; reset backend error is unconditionally reported success; failures=5
+EXIT: 1
+
+COMMAND: tests/winusb_overlapped_cancel_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+CP33 cancel RED: lower/upper cancel absent; abort is all-pipe; removal completes pending IRPs without physical cancel; failures=5
+EXIT: 1
+
+COMMAND: python3 tests/io24_winusb_vendor_profile_contract.py --wine-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source --vendor-dll /home/ajuntanaga/Documents/Universal\ Control/hwaccess/dspusbdevice.dll
+CP33 vendor RED: hash=OK imports=14/14 policy-callsite=0x180084d50 initializer=0x180095e20 callable=1/14 policy-pairs=9 failures=vendor callable count 1/14
+EXIT: 1

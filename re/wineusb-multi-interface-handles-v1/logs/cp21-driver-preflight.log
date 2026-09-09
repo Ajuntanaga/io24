@@ -1,0 +1,16 @@
+2026-08-22T10:26:46-07:00
+battery=58% status=Charging
+cp20_seal=ceb829b32832d6615a00a501bc5d5c0b967c25a2fa2d7aeae57b3f578841acfb
+908d9c900c0f4e9bb0cb2c2b68b2d1af478a6295eb4019de2dc321f65ecc02f5  tests/uc_wine_sandbox.sh
+88efc2f8b56724f4a36e82de97715d26d988960ea86d8ae92e62082b2286fba9  tests/uc_wine_sandbox_multi_interface_handles_v1_selector_contract.sh
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  re/wineusb-multi-interface-handles-v1/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.sys.so
+96f5a63a76d5f0e9a73425717d81e17d1fd6883c7a909508e703897a22fe4039  re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.so
+clone=inode=6684797 mode=700 owner=1000:1000 mtime=2026-08-19 19:42:51.259415326 -0700
+active_units=none
+candidate_processes=none
+protected_prefix inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+DRIVER_PREFLIGHT=PASS

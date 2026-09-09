@@ -1,0 +1,29 @@
+{
+  "status": "STAGE_FAILED",
+  "failed_stage": "baseline",
+  "battery_percent": 11,
+  "device": {
+    "serial": "AB7C22200355",
+    "bcd_device": "0128"
+  },
+  "baseline": {
+    "channel_linked": false,
+    "flags_word": 417,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 25.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 1,
+    "voicefx_assigned_physical_input": 2
+  },
+  "error": "StageError: processing chain 1 slot 0 is outside physical Channel-2 slot family",
+  "record_write_attempted": false,
+  "failure_channel2_bypass": "NOT_REQUIRED",
+  "direct_voicefx_parameter_write": true,
+  "slot_zero_targeted": false,
+  "audio_capture": false,
+  "power_cycle": false
+}

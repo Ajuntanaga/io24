@@ -1,0 +1,869 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 06:19:04.110698316 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 06:42:10.248310715 -0700
+@@ -242,6 +242,7 @@
+     memset(file, 0, sizeof(*file));
+     file->file_object = file_object;
+     KeInitializeSpinLock(&file->lock);
++    ExInitializeFastMutex(&file->session_mutex);
+     file->state = WINUSB_FILE_UNINITIALIZED;
+     file->references = 1;
+     KeInitializeEvent(&file->zero_outstanding, NotificationEvent, TRUE);
+@@ -291,6 +292,17 @@
+         KeReleaseSpinLock(&device->lock, device_irql);
+         return complete_irp(irp, STATUS_INVALID_DEVICE_STATE);
+     }
++    KeReleaseSpinLock(&device->lock, device_irql);
++
++    ExAcquireFastMutex(&file->session_mutex);
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    if (file_object->FsContext != file ||
++            !file_is_linked(device, file, file_object))
++    {
++        KeReleaseSpinLock(&device->lock, device_irql);
++        ExReleaseFastMutex(&file->session_mutex);
++        return complete_irp(irp, STATUS_INVALID_DEVICE_STATE);
++    }
+ 
+     KeAcquireSpinLock(&file->lock, &file_irql);
+     if (file->state != WINUSB_FILE_REMOVED && file->state < WINUSB_FILE_RELEASING)
+@@ -301,6 +313,7 @@
+         file->state = WINUSB_FILE_CLOSING;
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
++    ExReleaseFastMutex(&file->session_mutex);
+ 
+     return complete_irp(irp, STATUS_SUCCESS);
+ }
+@@ -329,6 +342,17 @@
+         KeReleaseSpinLock(&device->lock, device_irql);
+         return complete_irp(irp, STATUS_INVALID_DEVICE_STATE);
+     }
++    KeReleaseSpinLock(&device->lock, device_irql);
++
++    ExAcquireFastMutex(&file->session_mutex);
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    if (file_object->FsContext != file ||
++            !file_is_linked(device, file, file_object))
++    {
++        KeReleaseSpinLock(&device->lock, device_irql);
++        ExReleaseFastMutex(&file->session_mutex);
++        return complete_irp(irp, STATUS_INVALID_DEVICE_STATE);
++    }
+ 
+     KeAcquireSpinLock(&file->lock, &file_irql);
+     if (file->state != WINUSB_FILE_REMOVED)
+@@ -337,6 +361,7 @@
+     file_object->FsContext = NULL;
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
++    ExReleaseFastMutex(&file->session_mutex);
+ 
+     if (outstanding)
+         KeWaitForSingleObject(&file->zero_outstanding, Executive,
+@@ -388,6 +413,7 @@
+     if (!NT_SUCCESS(status = acquire_file_for_io(device, file_object, &file)))
+         return complete_irp(irp, status);
+ 
++    ExAcquireFastMutex(&file->session_mutex);
+     if (code == IOCTL_WINE_WINUSB_INITIALIZE)
+         status = winusb_session_initialize(device, file, request, input_length,
+                 irp->MdlAddress, output_length, &information);
+@@ -396,6 +422,7 @@
+     else
+         status = winusb_session_release(device, file, request, input_length,
+                 &information);
++    ExReleaseFastMutex(&file->session_mutex);
+     release_file_from_io(file);
+     return complete_irp_with_information(irp, status, information);
+ }
+@@ -433,9 +460,11 @@
+                 if (!NT_SUCCESS(status)) return complete_irp(irp, status);
+                 device->enabled = TRUE;
+             }
++            ExAcquireFastMutex(&device->finalization_mutex);
+             KeAcquireSpinLock(&device->lock, &irql);
+             device->state = WINUSB_DEVICE_STARTED;
+             KeReleaseSpinLock(&device->lock, irql);
++            ExReleaseFastMutex(&device->finalization_mutex);
+             return complete_irp(irp, STATUS_SUCCESS);
+         }
+ 
+@@ -443,6 +472,9 @@
+         {
+             KIRQL irql;
+ 
++            /* Keep lower STOP and the visible state transition indivisible
++             * from a session's SELECT/COMMIT/publication sequence. */
++            ExAcquireFastMutex(&device->finalization_mutex);
+             status = forward_irp_synchronously(device, irp);
+             if (NT_SUCCESS(status))
+             {
+@@ -450,6 +482,7 @@
+                 device->state = WINUSB_DEVICE_STOPPED;
+                 KeReleaseSpinLock(&device->lock, irql);
+             }
++            ExReleaseFastMutex(&device->finalization_mutex);
+             return complete_irp(irp, status);
+         }
+ 
+@@ -457,10 +490,12 @@
+         {
+             KIRQL irql;
+ 
++            ExAcquireFastMutex(&device->finalization_mutex);
+             KeAcquireSpinLock(&device->lock, &irql);
+             device->state = WINUSB_DEVICE_SURPRISE_REMOVED;
+             mark_files_removed(device);
+             KeReleaseSpinLock(&device->lock, irql);
++            ExReleaseFastMutex(&device->finalization_mutex);
+             disable_interface(device, "surprise removal");
+             status = forward_irp_synchronously(device, irp);
+             return complete_irp(irp, status);
+@@ -470,17 +505,26 @@
+         {
+             KIRQL irql;
+ 
++            ExAcquireFastMutex(&device->finalization_mutex);
+             KeAcquireSpinLock(&device->lock, &irql);
+             device->state = WINUSB_DEVICE_REMOVED;
+             mark_files_removed(device);
+             if (!device->file_count)
+                 KeSetEvent(&device->removal_event, IO_NO_INCREMENT, FALSE);
+             KeReleaseSpinLock(&device->lock, irql);
++            /* CLOSE may wait for an in-flight per-file session operation.
++             * Do not hold the device finalization mutex across that drain. */
++            ExReleaseFastMutex(&device->finalization_mutex);
+             KeWaitForSingleObject(&device->removal_event, Executive,
+                     KernelMode, FALSE, NULL);
++
++            ExAcquireFastMutex(&device->finalization_mutex);
++            winusb_session_recover_claim_transaction(device);
+             disable_interface(device, "removal");
+             device->enabled = FALSE;
+             status = forward_irp_synchronously(device, irp);
++            winusb_session_claim_child_removed(device);
++            ExReleaseFastMutex(&device->finalization_mutex);
+             IoDetachDevice(device->lower_device);
+             if (device->symbolic_link.Buffer)
+                 RtlFreeUnicodeString(&device->symbolic_link);
+@@ -525,6 +569,7 @@
+     device->interface_guid = interface_guid;
+     device->state = WINUSB_DEVICE_ADDED;
+     KeInitializeSpinLock(&device->lock);
++    ExInitializeFastMutex(&device->finalization_mutex);
+     InitializeListHead(&device->files);
+     KeInitializeEvent(&device->removal_event, NotificationEvent, TRUE);
+     device->metadata_interface_version = metadata_version;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 06:10:01.783621309 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 06:42:10.248495726 -0700
+@@ -608,6 +608,44 @@
+     session_counter = 0;
+ }
+ 
++/* The lower layer keeps ownership of a failed finalization transaction.  R80
++ * relies on the transport contract that an error did not consume its token. */
++NTSTATUS winusb_session_recover_claim_transaction(struct winusb_device *device)
++{
++    NTSTATUS status;
++    void *snapshot;
++    struct winusb_interface_state *interfaces;
++
++    if (!device->claim_transaction) return STATUS_SUCCESS;
++    status = finalize_claim_transaction(device, device->claim_transaction,
++            WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
++    if (!NT_SUCCESS(status)) return status;
++
++    snapshot = device->claim_snapshot;
++    interfaces = device->claim_interfaces;
++    device->claim_transaction = NULL;
++    device->claim_snapshot = NULL;
++    device->claim_interfaces = NULL;
++    if (interfaces) ExFreePool(interfaces);
++    if (snapshot) ExFreePool(snapshot);
++    return STATUS_SUCCESS;
++}
++
++/* Called after REMOVE synchronously destroys the lower child.  That teardown
++ * releases a still-pending lower journal, so the retained upper ownership can
++ * now be discarded even when the one final rollback submission failed. */
++void winusb_session_claim_child_removed(struct winusb_device *device)
++{
++    void *snapshot = device->claim_snapshot;
++    struct winusb_interface_state *interfaces = device->claim_interfaces;
++
++    device->claim_transaction = NULL;
++    device->claim_snapshot = NULL;
++    device->claim_interfaces = NULL;
++    if (interfaces) ExFreePool(interfaces);
++    if (snapshot) ExFreePool(snapshot);
++}
++
+ NTSTATUS winusb_session_initialize(struct winusb_device *device,
+         struct winusb_file *file, const struct wine_winusb_request *request,
+         ULONG input_length, MDL *mdl, ULONG output_length,
+@@ -627,7 +665,7 @@
+     USBD_CONFIGURATION_HANDLE claim_transaction = NULL;
+     NTSTATUS status = STATUS_INVALID_PARAMETER;
+     KIRQL device_irql, file_irql;
+-    BOOL reserved = FALSE, committed = FALSE;
++    BOOL reserved = FALSE, committed = FALSE, finalization_locked = FALSE;
+ 
+     *information = 0;
+     if (!request || input_length != sizeof(*request) ||
+@@ -659,6 +697,20 @@
+     KeReleaseSpinLock(&device->lock, device_irql);
+     if (!NT_SUCCESS(status)) return status;
+ 
++    /* Serializes recovery, SELECT, and finalization for this lower child. */
++    ExAcquireFastMutex(&device->finalization_mutex);
++    finalization_locked = TRUE;
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_INITIALIZING)
++        status = STATUS_INVALID_DEVICE_STATE;
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (!NT_SUCCESS(status)) goto done;
++    if (!NT_SUCCESS(status = winusb_session_recover_claim_transaction(device)))
++        goto done;
++
+     if (!(device_descriptor = ExAllocatePool(NonPagedPool,
+             sizeof(*device_descriptor))))
+     {
+@@ -778,11 +830,7 @@
+         goto done;
+     }
+     if (!NT_SUCCESS(status = submit_urb(device, (URB *)select))) goto done;
+-    if (!(claim_transaction = select->ConfigurationHandle))
+-    {
+-        status = STATUS_UNSUCCESSFUL;
+-        goto done;
+-    }
++    claim_transaction = select->ConfigurationHandle;
+ 
+     cookie = allocate_session_cookie();
+     KeAcquireSpinLock(&device->lock, &device_irql);
+@@ -791,59 +839,72 @@
+             file->state != WINUSB_FILE_INITIALIZING || file->session ||
+             file->snapshot || file->interfaces)
+         status = STATUS_INVALID_DEVICE_STATE;
+-    else
+-    {
+-        ((struct wine_winusb_snapshot *)snapshot)->session = cookie;
+-        file->snapshot = snapshot;
+-        file->snapshot_size = parsed.total_size;
+-        file->interfaces = interfaces;
+-        file->interface_count = parsed.interface_count;
+-        file->session = cookie;
+-        file->state = WINUSB_FILE_INITIALIZED;
+-        committed = TRUE;
+-        status = STATUS_SUCCESS;
+-    }
++    else status = STATUS_SUCCESS;
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
+ 
+-    if (!committed)
++    if (!NT_SUCCESS(status))
+     {
+-        NTSTATUS rollback_status = finalize_claim_transaction(device,
+-                claim_transaction, WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
++        NTSTATUS rollback_status = STATUS_SUCCESS;
+ 
+-        claim_transaction = NULL;
++        if (claim_transaction)
++            rollback_status = finalize_claim_transaction(device, claim_transaction,
++                    WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
+         if (!NT_SUCCESS(rollback_status)) status = rollback_status;
++        if (!NT_SUCCESS(rollback_status))
++        {
++            device->claim_transaction = claim_transaction;
++            device->claim_snapshot = snapshot;
++            device->claim_interfaces = interfaces;
++            claim_transaction = NULL;
++            snapshot = NULL;
++            interfaces = NULL;
++        }
+         goto done;
+     }
+ 
+-    status = finalize_claim_transaction(device, claim_transaction,
+-            WINEUSB_CLAIM_TRANSACTION_COMMIT);
+-    if (!NT_SUCCESS(status))
++    if (claim_transaction && !NT_SUCCESS(status = finalize_claim_transaction(device,
++            claim_transaction, WINEUSB_CLAIM_TRANSACTION_COMMIT)))
+     {
+-        KIRQL undo_device_irql, undo_file_irql;
+-
+-        finalize_claim_transaction(device, claim_transaction,
+-                WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
++        NTSTATUS rollback_status = finalize_claim_transaction(device,
++                claim_transaction, WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
+ 
+-        KeAcquireSpinLock(&device->lock, &undo_device_irql);
+-        KeAcquireSpinLock(&file->lock, &undo_file_irql);
+-        if (file->snapshot == snapshot && file->interfaces == interfaces &&
+-                file->session == cookie)
++        if (!NT_SUCCESS(rollback_status))
+         {
+-            file->state = WINUSB_FILE_UNINITIALIZED;
+-            file->session = 0;
+-            file->snapshot = NULL;
+-            file->snapshot_size = 0;
+-            file->interfaces = NULL;
+-            file->interface_count = 0;
+-            committed = FALSE;
++            device->claim_transaction = claim_transaction;
++            device->claim_snapshot = snapshot;
++            device->claim_interfaces = interfaces;
++            claim_transaction = NULL;
++            snapshot = NULL;
++            interfaces = NULL;
++            status = rollback_status;
+         }
+-        KeReleaseSpinLock(&file->lock, undo_file_irql);
+-        KeReleaseSpinLock(&device->lock, undo_device_irql);
+-        claim_transaction = NULL;
+         goto done;
+     }
+     claim_transaction = NULL;
++
++    /* Do not expose a usable file session until the lower COMMIT succeeded. */
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_INITIALIZING || file->session ||
++            file->snapshot || file->interfaces)
++        status = STATUS_INVALID_DEVICE_STATE;
++    else
++    {
++        ((struct wine_winusb_snapshot *)snapshot)->session = cookie;
++        file->snapshot = snapshot;
++        file->snapshot_size = parsed.total_size;
++        file->interfaces = interfaces;
++        file->interface_count = parsed.interface_count;
++        file->session = cookie;
++        file->state = WINUSB_FILE_INITIALIZED;
++        committed = TRUE;
++        status = STATUS_SUCCESS;
++    }
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (!committed) goto done;
+     memcpy(output, snapshot, parsed.total_size);
+     *information = parsed.total_size;
+     status = STATUS_SUCCESS;
+@@ -856,6 +917,7 @@
+     if (configuration_header) ExFreePool(configuration_header);
+     if (device_descriptor) ExFreePool(device_descriptor);
+     if (reserved && !committed) restore_uninitialized(device, file);
++    if (finalization_locked) ExReleaseFastMutex(&device->finalization_mutex);
+     return status;
+ }
+ 
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 06:19:04.110785827 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 06:42:10.248614527 -0700
+@@ -48,6 +48,7 @@
+     LIST_ENTRY device_entry;
+     FILE_OBJECT *file_object;
+     KSPIN_LOCK lock;
++    FAST_MUTEX session_mutex;
+     enum winusb_file_state state;
+     UINT64 session;
+     LONG references;
+@@ -70,11 +71,15 @@
+     BOOL enabled;
+     enum winusb_device_state state;
+     KSPIN_LOCK lock;
++    FAST_MUTEX finalization_mutex;
+     LIST_ENTRY files;
+     ULONG file_count;
+     KEVENT removal_event;
+     USHORT metadata_interface_version;
+     UCHAR speed;
++    USBD_CONFIGURATION_HANDLE claim_transaction;
++    void *claim_snapshot;
++    struct winusb_interface_state *claim_interfaces;
+ };
+ 
+ void winusb_session_driver_init(void);
+@@ -85,5 +90,7 @@
+ NTSTATUS winusb_session_release(struct winusb_device *device,
+         struct winusb_file *file, const struct wine_winusb_request *request,
+         ULONG input_length, ULONG_PTR *information);
++NTSTATUS winusb_session_recover_claim_transaction(struct winusb_device *device);
++void winusb_session_claim_child_removed(struct winusb_device *device);
+ 
+ #endif /* __WINE_WINUSB_PRIVATE_H */
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/wineusb_winusb_urb_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/wineusb_winusb_urb_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/wineusb_winusb_urb_contract.c	2026-08-24 06:10:01.783712732 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/wineusb_winusb_urb_contract.c	2026-08-24 06:42:10.248711816 -0700
+@@ -179,6 +179,55 @@
+     IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
+     check_forbidden();
+ 
++    /* A nonempty explicit rollback releases only its journal in reverse order.
++     * A later partial extension must preserve the earlier committed claim. */
++    io24_fake_libusb_reset();
++    {
++        static const unsigned char scope[]={2,5,7}, committed[]={2};
++        static const unsigned char extension[]={5,7}, all[]={2,5,7};
++
++        initialize_function_device(&device,NULL,scope,ARRAY_SIZE(scope));
++        select=build_select(buffer,committed,ARRAY_SIZE(committed));
++        IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==1&&
++                io24_fake_libusb_claim_at(0)==2&&io24_fake_libusb_counts()->release==0);
++
++        select=build_select(buffer,extension,ARRAY_SIZE(extension));
++        IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_ROLLBACK,&finalize)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==3&&
++                io24_fake_libusb_claim_at(1)==5&&io24_fake_libusb_claim_at(2)==7);
++        IO24_CHECK(io24_fake_libusb_counts()->release==2&&
++                io24_fake_libusb_release_at(0)==7&&io24_fake_libusb_release_at(1)==5);
++
++        select=build_select(buffer,committed,ARRAY_SIZE(committed));
++        IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==3&&
++                io24_fake_libusb_counts()->release==2);
++
++        io24_fake_libusb_set_claim_failure(5,LIBUSB_ERROR_IO);
++        select=build_select(buffer,all,ARRAY_SIZE(all));
++        IO24_CHECK(submit_request(&device,select)==STATUS_UNSUCCESSFUL);
++        IO24_CHECK(select->Hdr.Status==USBD_STATUS_REQUEST_FAILED);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==5&&
++                io24_fake_libusb_claim_at(3)==5&&io24_fake_libusb_claim_at(4)==7);
++        IO24_CHECK(io24_fake_libusb_counts()->release==3&&
++                io24_fake_libusb_release_at(2)==5);
++
++        select=build_select(buffer,committed,ARRAY_SIZE(committed));
++        IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==5&&
++                io24_fake_libusb_counts()->release==3);
++        check_forbidden();
++    }
++
+     io24_fake_libusb_reset();
+     {
+         struct io24_function_device *parent=calloc(1,sizeof(*parent));
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/winusb_function_binding_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/winusb_function_binding_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/winusb_function_binding_contract.c	2026-08-24 06:24:37.419567140 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/winusb_function_binding_contract.c	2026-08-24 06:42:10.249181641 -0700
+@@ -2,6 +2,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <threads.h>
+ 
+ #include "ntstatus.h"
+ #include "windef.h"
+@@ -66,6 +67,29 @@
+ /* main.c is deliberately included: this is the production driver, not a copy. */
+ #include "main.c"
+ 
++/* Passive-mutex fake used by the actual main/session translation units. */
++void FASTCALL ExAcquireFastMutex(FAST_MUTEX *mutex)
++{
++    LONG expected;
++
++    for (;;)
++    {
++        expected = FM_LOCK_BIT;
++        if (__atomic_compare_exchange_n(&mutex->Count, &expected, 0, FALSE,
++                __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
++            break;
++        mutex->Contention++;
++        thrd_yield();
++    }
++    mutex->Owner = (PKTHREAD)(UINT_PTR)1;
++}
++
++void FASTCALL ExReleaseFastMutex(FAST_MUTEX *mutex)
++{
++    mutex->Owner = NULL;
++    __atomic_store_n(&mutex->Count, FM_LOCK_BIT, __ATOMIC_RELEASE);
++}
++
+ NTSTATUS WINAPI IoCreateDevice(PDRIVER_OBJECT driver, ULONG extension, UNICODE_STRING *name,
+         DEVICE_TYPE type, ULONG characteristics, BOOLEAN exclusive, PDEVICE_OBJECT *out)
+ {
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-base/tests/winusb_function_io_contract.c	2026-08-24 06:10:01.783878257 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-round-1-head/tests/winusb_function_io_contract.c	2026-08-24 06:42:10.248985036 -0700
+@@ -1,5 +1,7 @@
+ /* Executed CP33 contract: actual winusb.sys main.c inside the retained fake WDM. */
+ #include <stdint.h>
++#include <stdatomic.h>
++#include <threads.h>
+ #define main io24_retained_cp32_main
+ #define ExAllocatePool io24_retained_ExAllocatePool
+ #define IoCallDriver io24_retained_IoCallDriver
+@@ -91,6 +93,9 @@
+ static unsigned int finalize_calls, finalize_commit_calls, finalize_rollback_calls;
+ static BOOL mutate_after_select, rollback_saw_unpublished;
+ static BOOL lower_claim_pending, lower_claim_committed, lower_selected_state;
++static BOOL select_returns_transaction;
++static NTSTATUS commit_failure_status, rollback_failure_status;
++static unsigned int rollback_failures_remaining;
+ static unsigned char *active_initialize_output;
+ static USBD_CONFIGURATION_HANDLE lower_transaction_token;
+ static unsigned int urb_builds, fail_urb_build;
+@@ -100,6 +105,8 @@
+ static USBD_PIPE_TYPE expected_select_type;
+ static USHORT expected_select_packet_size;
+ static FILE_OBJECT *active_session_file;
++static void (*commit_reentrant_hook)(void);
++static BOOL concurrent_session_allowed;
+ 
+ #define IO24_URB_FUNCTION_CLAIM_TRANSACTION 0x002f
+ #define IO24_CLAIM_TRANSACTION_COMMIT 1
+@@ -136,6 +143,11 @@
+     finalize_calls = finalize_commit_calls = finalize_rollback_calls = 0;
+     mutate_after_select = rollback_saw_unpublished = FALSE;
+     lower_claim_pending = lower_claim_committed = lower_selected_state = FALSE;
++    select_returns_transaction = TRUE;
++    commit_failure_status = rollback_failure_status = STATUS_SUCCESS;
++    rollback_failures_remaining = 0;
++    commit_reentrant_hook = NULL;
++    concurrent_session_allowed = FALSE;
+     lower_transaction_token = (void *)(UINT_PTR)0x13570001;
+     builder_allocations = builder_frees = 0;
+     expected_select_pipes = 0;
+@@ -189,14 +201,28 @@
+     ULONG actual = 0;
+ 
+     (void)device;
++    /* main.c's synchronous PnP forwarding is not a session URB. */
++    if (!active_session_file &&
++            next->Parameters.DeviceIoControl.IoControlCode != IOCTL_INTERNAL_USB_SUBMIT_URB)
++    {
++        irp->IoStatus.Status = STATUS_SUCCESS;
++        if (irp == &synchronous_irp)
++        {
++            if (synchronous_iosb) *synchronous_iosb = irp->IoStatus;
++            if (synchronous_event) synchronous_event->Header.SignalState = 1;
++        }
++        return STATUS_SUCCESS;
++    }
+     lower_calls++;
+-    IO24_CHECK(active_session_file != NULL && active_session_file->FsContext != NULL);
+-    if (active_session_file && active_session_file->FsContext)
++    if (!active_session_file)
++        IO24_CHECK(urb && urb->UrbHeader.Function == IO24_URB_FUNCTION_CLAIM_TRANSACTION);
++    else if (active_session_file->FsContext)
+     {
+         const struct winusb_file *file = active_session_file->FsContext;
+         IO24_CHECK(file->outstanding == 1);
+         IO24_CHECK(!file->zero_outstanding.Header.SignalState);
+     }
++    else IO24_CHECK(FALSE);
+     IO24_CHECK(next->MajorFunction == IRP_MJ_INTERNAL_DEVICE_CONTROL);
+     IO24_CHECK(next->Parameters.DeviceIoControl.IoControlCode == IOCTL_INTERNAL_USB_SUBMIT_URB);
+     IO24_CHECK(urb == allocation->urb);
+@@ -274,7 +300,14 @@
+         if (NT_SUCCESS(status) && select_writes_urb_status &&
+                 select_urb_status == USBD_STATUS_SUCCESS)
+         {
+-            request->ConfigurationHandle = lower_transaction_token;
++            if (lower_claim_pending)
++            {
++                request->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                status = STATUS_INVALID_DEVICE_STATE;
++                goto done;
++            }
++            request->ConfigurationHandle = select_returns_transaction ?
++                    lower_transaction_token : NULL;
+             lower_claim_pending = TRUE;
+             lower_selected_state = TRUE;
+             if (mutate_after_select && active_session_file && active_session_file->FsContext)
+@@ -295,6 +328,13 @@
+         if (request->Operation == IO24_CLAIM_TRANSACTION_COMMIT)
+         {
+             finalize_commit_calls++;
++            if (commit_reentrant_hook) commit_reentrant_hook();
++            if (!NT_SUCCESS(commit_failure_status))
++            {
++                request->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                status = commit_failure_status;
++                goto done;
++            }
+             lower_claim_committed = TRUE;
+         }
+         else if (request->Operation == IO24_CLAIM_TRANSACTION_ROLLBACK)
+@@ -303,13 +343,23 @@
+                     active_session_file->FsContext : NULL;
+ 
+             finalize_rollback_calls++;
+-            IO24_CHECK(file != NULL);
+-            IO24_CHECK(file && file->session == 0 && file->snapshot == NULL &&
+-                    file->interfaces == NULL);
++            /* REMOVE can perform the terminal recovery after CLOSE has freed
++             * the file; retained ownership is device-scoped in that case. */
++            if (active_session_file)
++                IO24_CHECK(file && file->session == 0 && file->snapshot == NULL &&
++                        file->interfaces == NULL);
++            else IO24_CHECK(active_initialize_output == NULL);
+             rollback_saw_unpublished = active_initialize_output != NULL;
+             for (i = 0; active_initialize_output && i < 211; ++i)
+                 if (active_initialize_output[i] != GUARD_BYTE)
+                     rollback_saw_unpublished = FALSE;
++            if (rollback_failures_remaining)
++            {
++                rollback_failures_remaining--;
++                request->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                status = rollback_failure_status;
++                goto done;
++            }
+             lower_claim_committed = FALSE;
+             lower_selected_state = FALSE;
+         }
+@@ -395,6 +445,7 @@
+         PVOID system_buffer, PVOID mapped_address, FILE_OBJECT *file)
+ {
+     struct wine_winusb_request before = input->request;
++    unsigned int builders_before = builder_allocations - builder_frees;
+     IRP irp;
+     IO_STACK_LOCATION stack[2];
+     MDL mdl;
+@@ -425,8 +476,8 @@
+     driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
+     active_session_file = NULL;
+     active_initialize_output = NULL;
+-    IO24_CHECK(builder_allocations == builder_frees);
+-    if (file && file->FsContext)
++    IO24_CHECK(builder_allocations - builder_frees == builders_before);
++    if (file && file->FsContext && !concurrent_session_allowed)
+     {
+         const struct winusb_file *context = file->FsContext;
+         IO24_CHECK(context->outstanding == 0);
+@@ -481,6 +532,7 @@
+     LIST_ENTRY device_entry;
+     FILE_OBJECT *file_object;
+     KSPIN_LOCK lock;
++    FAST_MUTEX session_mutex;
+     int state;
+     UINT64 session;
+     LONG references;
+@@ -624,6 +676,68 @@
+             (PVOID)(UINT_PTR)1, file);
+ }
+ 
++struct reentrant_release_schedule
++{
++    DRIVER_OBJECT *driver;
++    FILE_OBJECT *file;
++    struct guarded_initialize input;
++    struct guarded_snapshot output;
++    thrd_t thread;
++    atomic_int entered;
++    atomic_int completed;
++    NTSTATUS status;
++    ULONG_PTR information;
++    BOOL launched;
++};
++static struct reentrant_release_schedule reentrant_release;
++
++static int reentrant_release_thread(void *argument)
++{
++    struct reentrant_release_schedule *schedule = argument;
++    IRP irp;
++    IO_STACK_LOCATION stack[2];
++
++    memset(&irp, 0, sizeof(irp));
++    memset(stack, 0, sizeof(stack));
++    stack[1].MajorFunction = IRP_MJ_DEVICE_CONTROL;
++    stack[1].FileObject = schedule->file;
++    stack[1].Parameters.DeviceIoControl.IoControlCode = IOCTL_WINE_WINUSB_RELEASE;
++    stack[1].Parameters.DeviceIoControl.InputBufferLength = sizeof(schedule->input.request);
++    irp.AssociatedIrp.SystemBuffer = &schedule->input.request;
++    irp.Tail.Overlay.CurrentStackLocation = &stack[1];
++    atomic_store(&schedule->entered, 1);
++    schedule->driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](last_fdo, &irp);
++    schedule->status = irp.IoStatus.Status;
++    schedule->information = irp.IoStatus.Information;
++    atomic_store(&schedule->completed, 1);
++    return 0;
++}
++
++static void begin_reentrant_release(void)
++{
++    struct winusb_file *context = reentrant_release.file->FsContext;
++    unsigned int attempts = 0;
++
++    reentrant_release.launched = thrd_create(&reentrant_release.thread,
++            reentrant_release_thread, &reentrant_release) == thrd_success;
++    IO24_CHECK(reentrant_release.launched);
++    while (reentrant_release.launched && !atomic_load(&reentrant_release.entered))
++        thrd_yield();
++    while (reentrant_release.launched && context->outstanding < 2 &&
++            !atomic_load(&reentrant_release.completed) && attempts++ < 1000000)
++        thrd_yield();
++    IO24_CHECK(reentrant_release.launched &&
++            (context->outstanding == 2 || atomic_load(&reentrant_release.completed)));
++}
++
++static void reset_attempt_counters(void)
++{
++    descriptor_reads = select_calls = urb_builds = fail_urb_build = 0;
++    finalize_calls = finalize_commit_calls = finalize_rollback_calls = 0;
++    builder_allocations = builder_frees = 0;
++    mutate_after_select = rollback_saw_unpublished = FALSE;
++}
++
+ static void expect_malformed_configuration(PDRIVER_OBJECT driver, FILE_OBJECT *file,
+         const unsigned char *configuration, ULONG length,
+         ULONG header_actual, ULONG body_actual, unsigned int expected_reads)
+@@ -1064,6 +1178,8 @@
+     struct guarded_initialize input; struct guarded_snapshot output, before;
+     struct dispatch_effect effect;
+     struct winusb_file *context;
++    unsigned int allocations_before, frees_before;
++    int thread_result;
+ 
+     setup(&driver,&extension,&pdo,&retained,&file);
+     IO24_CHECK(create_file(&driver,&retained,&file));
+@@ -1095,6 +1211,110 @@
+     IO24_CHECK(context->state==WINUSB_FILE_INITIALIZED&&context->session!=0&&
+             context->snapshot!=NULL&&context->interfaces!=NULL);
+     teardown(&driver,&retained,&file);
++
++    /* A legacy non-function SELECT has no claim transaction to finalize. */
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();
++    select_returns_transaction=FALSE;session_allocation_calls=0;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.information==211);
++    IO24_CHECK(effect.lower_after==effect.lower_before+4&&select_calls==1);
++    IO24_CHECK(finalize_calls==0&&finalize_commit_calls==0&&finalize_rollback_calls==0);
++    context=file.FsContext;
++    IO24_CHECK(context->state==WINUSB_FILE_INITIALIZED&&context->session!=0&&
++            context->snapshot!=NULL&&context->interfaces!=NULL);
++    lower_claim_pending=FALSE;lower_selected_state=FALSE;
++    teardown(&driver,&retained,&file);
++
++    /* Failed COMMIT plus failed ROLLBACK retains the exact device transaction. */
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    context=file.FsContext;
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();before=output;
++    commit_failure_status=STATUS_UNSUCCESSFUL;
++    rollback_failure_status=STATUS_DEVICE_BUSY;rollback_failures_remaining=1;
++    allocations_before=pool_allocations;frees_before=pool_frees;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_DEVICE_BUSY&&effect.information==0);
++    IO24_CHECK(effect.lower_after==effect.lower_before+6&&finalize_commit_calls==1&&
++            finalize_rollback_calls==1&&lower_claim_pending&&!lower_claim_committed);
++    IO24_CHECK(context->state==WINUSB_FILE_UNINITIALIZED&&context->session==0&&
++            context->snapshot==NULL&&context->interfaces==NULL);
++    IO24_CHECK(!memcmp(&output,&before,sizeof(output)));
++    IO24_CHECK(pool_allocations-allocations_before==(pool_frees-frees_before)+2);
++
++    /* Each later initialize retries once before any SELECT and never spins. */
++    reset_initialize_buffers(&input,&output);before=output;reset_attempt_counters();
++    commit_failure_status=STATUS_SUCCESS;rollback_failure_status=STATUS_DEVICE_BUSY;
++    rollback_failures_remaining=1;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_DEVICE_BUSY&&effect.information==0);
++    IO24_CHECK(effect.lower_after==effect.lower_before+1&&descriptor_reads==0&&
++            select_calls==0&&finalize_commit_calls==0&&finalize_rollback_calls==1);
++    IO24_CHECK(lower_claim_pending&&!memcmp(&output,&before,sizeof(output)));
++    IO24_CHECK(pool_allocations-allocations_before==(pool_frees-frees_before)+2);
++
++    reset_initialize_buffers(&input,&output);reset_attempt_counters();
++    rollback_failures_remaining=0;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.information==211);
++    IO24_CHECK(effect.lower_after==effect.lower_before+6&&descriptor_reads==3&&
++            select_calls==1&&finalize_commit_calls==1&&finalize_rollback_calls==1);
++    IO24_CHECK(!lower_claim_pending&&lower_claim_committed);
++    teardown(&driver,&retained,&file);
++
++    /* REMOVE gets one final rollback try; synchronous lower teardown is terminal. */
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();before=output;
++    commit_failure_status=STATUS_UNSUCCESSFUL;
++    rollback_failure_status=STATUS_DEVICE_BUSY;rollback_failures_remaining=2;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_DEVICE_BUSY&&effect.information==0&&
++            finalize_commit_calls==1&&finalize_rollback_calls==1&&lower_claim_pending);
++    IO24_CHECK(((struct winusb_device *)last_fdo->DeviceExtension)->claim_transaction ==
++            lower_transaction_token);
++    IO24_CHECK(!memcmp(&output,&before,sizeof(output)));
++    effect=dispatch_request(&driver,last_fdo,IRP_MJ_CLEANUP,0,&retained,&file);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&file.FsContext!=NULL);
++    effect=dispatch_request(&driver,last_fdo,IRP_MJ_CLOSE,0,&retained,&file);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&file.FsContext==NULL);
++    IO24_CHECK(((struct winusb_device *)last_fdo->DeviceExtension)->claim_transaction ==
++            lower_transaction_token);
++    IO24_CHECK(NT_SUCCESS(dispatch(&driver,last_fdo,IRP_MJ_PNP,IRP_MN_REMOVE_DEVICE)));
++    IO24_CHECK(finalize_rollback_calls==2);
++    IO24_CHECK(rollback_failures_remaining==0);
++    IO24_CHECK(pool_allocations==pool_frees);
++
++    /* A real same-file RELEASE overlaps COMMIT and can run only after copy-out. */
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();
++    memset(&reentrant_release,0,sizeof(reentrant_release));
++    reentrant_release.driver=&driver;reentrant_release.file=&file;
++    reset_initialize_buffers(&reentrant_release.input,&reentrant_release.output);
++    reentrant_release.input.request.session=1;
++    concurrent_session_allowed=TRUE;commit_reentrant_hook=begin_reentrant_release;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(reentrant_release.launched);
++    if(reentrant_release.launched)
++        IO24_CHECK(thrd_join(reentrant_release.thread,&thread_result)==thrd_success&&
++                thread_result==0);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.information==211);
++    IO24_CHECK(finalize_commit_calls==1&&finalize_rollback_calls==0);
++    IO24_CHECK(atomic_load(&reentrant_release.completed)&&
++            reentrant_release.status==STATUS_SUCCESS&&reentrant_release.information==0);
++    IO24_CHECK(((struct wine_winusb_snapshot *)output.bytes)->session==1);
++    check_file_uninitialized(&file);
++    concurrent_session_allowed=FALSE;
++    teardown(&driver,&retained,&file);
+ }
+ 
+ static void group_initialize(void)
+@@ -1134,6 +1354,8 @@
+     context->outstanding=1;KeClearEvent(&context->zero_outstanding);
+     IO24_CHECK(NT_SUCCESS(dispatch(&driver,last_fdo,IRP_MJ_PNP,
+             IRP_MN_SURPRISE_REMOVAL)));
++    IO24_CHECK(device->claim_transaction == NULL &&
++            device->claim_snapshot == NULL && device->claim_interfaces == NULL);
+     effect=dispatch_request(&driver,last_fdo,IRP_MJ_CLEANUP,0,&guarded,&file);
+     IO24_CHECK(effect.status==STATUS_SUCCESS&&file.FsContext==context);
+     memset(&lifecycle_wait,0,sizeof(lifecycle_wait));
+@@ -1141,9 +1363,11 @@
+     lifecycle_wait.file=&file;lifecycle_wait.device=device;
+     lifecycle_wait.context=context;lifecycle_wait.frees_before=pool_frees;
+     lifecycle_wait.expected_close_frees=3;wait_hook=lifecycle_wait_hook;
++    IO24_CHECK(context->outstanding == 1 && !context->zero_outstanding.Header.SignalState);
+     IO24_CHECK(NT_SUCCESS(dispatch(&driver,last_fdo,IRP_MJ_PNP,
+             IRP_MN_REMOVE_DEVICE)));
+-    IO24_CHECK(lifecycle_wait.removal_waits==1&&lifecycle_wait.drain_waits==1);
++    IO24_CHECK(lifecycle_wait.removal_waits==1);
++    IO24_CHECK(lifecycle_wait.drain_waits==1);
+     IO24_CHECK(wait_failures==0&&file.FsContext==NULL);
+     IO24_CHECK(pool_frees==lifecycle_wait.frees_before+3);
+     IO24_CHECK(pool_allocations==pool_frees);wait_hook=NULL;

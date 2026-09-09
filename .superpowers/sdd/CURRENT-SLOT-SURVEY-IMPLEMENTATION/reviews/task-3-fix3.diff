@@ -1,0 +1,53 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:27:36.786958991 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:29:38.374942820 -0700
+@@ -1,2 +1,2 @@
+-12410ae2b6692cee6b2b03651f249227cdec65f7a392a7acd70cdb8839f6f73e  re/cp34_current_slot_survey.py
+-c88f59d17c93ac8e78138cd6745277e8aa5bc1633feac309322ccdfc4f2dc077  tests/test_cp34_current_slot_survey.py
++1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
++7ee2c148553ac398f1c13bb8d9936d99206b985d980bcfc4f01887e52aec6280  tests/test_cp34_current_slot_survey.py
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/re/cp34_current_slot_survey.py	2026-08-29 03:27:36.786742272 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/re/cp34_current_slot_survey.py	2026-08-29 03:29:38.374706686 -0700
+@@ -551,8 +551,12 @@
+ 
+ 
+ def _is_finite_numeric(value):
+-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+-            and math.isfinite(value))
++    if not isinstance(value, (int, float)) or isinstance(value, bool):
++        return False
++    try:
++        return math.isfinite(value)
++    except (OverflowError, TypeError, ValueError):
++        return False
+ 
+ 
+ def _state_type_reasons(state, prefix):
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-before/tests/test_cp34_current_slot_survey.py	2026-08-29 03:27:36.786835790 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix3-after/tests/test_cp34_current_slot_survey.py	2026-08-29 03:29:38.374814521 -0700
+@@ -580,7 +580,11 @@
+                 ab, lambda value: value["active"][0].pop("echo_delta_db"),
+             )
+             self._mutate_json(
+-                ab, lambda value: value["active"][1].update(late_delta_db="bad"),
++                ab,
++                lambda value: value["active"][1].update(
++                    echo_ratio_db=10 ** 1000,
++                    late_delta_db="bad",
++                ),
+             )
+             _refresh_evidence_manifest(run_dir)
+             malformed_completed, malformed_result = self._result(run_dir)
+@@ -619,6 +623,10 @@
+             "ab_metric_late_delta_db_must_be_finite_numeric:active:2",
+             malformed_result["reasons"],
+         )
++        self.assertIn(
++            "ab_metric_echo_ratio_db_must_be_finite_numeric:active:2",
++            malformed_result["reasons"],
++        )
+ 
+     def test_bypassed_first_restores_with_inconclusive_outcome(self):
+         with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,110 @@
+--- origin/r136-head/winusb_function_io_contract.c
++++ case/tests/winusb_function_io_contract.c
+@@ -3455,6 +3455,7 @@
+                 STATUS_INVALID_DEVICE_STATE);
+         IO24_CHECK(lower_calls == lower_before);
+         io24_last_completed_irp = NULL; io24_completed_irp_count = 0;
++        r136_mutant_completion_arm = TRUE;
+         control_completion_allocation_begin();
+         IO24_CHECK(complete_pending_task9_irp());
+         control_completion_allocation_end();
+@@ -3466,6 +3467,7 @@
+         control_pool_check_pointer(pending_urbs[0], sizeof(URB), 1);
+         control_pool_check_pointer(pending_contexts[1], pending_context_sizes[1], 1);
+         control_pool_check_pointer(pending_urbs[1], sizeof(URB), 1);
++        IO24_CHECK(r136_mutant_helper_calls == 2 && r136_mutant_helper_frees == 2);
+         control_pool_check_complete(4, 4);
+         control_pool_end();
+         control_expected_irp = NULL; control_returns_pending = FALSE;
+--- origin/production/main.c
++++ case/dlls/winusb.sys/main.c
+@@ -31,6 +31,21 @@
+ static const GUID metadata_interface =
+         WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT;
+ 
++unsigned int r136_mutant_helper_calls, r136_mutant_helper_frees;
++BOOL r136_mutant_completion_arm;
++
++PVOID WINAPI r136_mutant_main_allocate(SIZE_T size)
++{
++    ++r136_mutant_helper_calls;
++    return ExAllocatePool(NonPagedPool, size);
++}
++
++VOID WINAPI r136_mutant_main_free(PVOID pointer)
++{
++    if (pointer) ++r136_mutant_helper_frees;
++    ExFreePool(pointer);
++}
++
+ static NTSTATUS WINAPI set_event_completion(DEVICE_OBJECT *device, IRP *irp,
+         void *context)
+ {
+--- origin/production/transfer.c
++++ case/dlls/winusb.sys/transfer.c
+@@ -25,6 +25,9 @@
+ #include "winusb_private.h"
+ 
+ void WINAPI ObReferenceObject(void *object);
++PVOID WINAPI r136_mutant_main_allocate(SIZE_T size);
++VOID WINAPI r136_mutant_main_free(PVOID pointer);
++extern BOOL r136_mutant_completion_arm;
+ 
+ struct winusb_transfer
+ {
+@@ -56,11 +59,34 @@
+         void *context)
+ {
+     struct winusb_transfer *transfer = context;
++    struct winusb_transfer *original_transfer = transfer;
++    struct winusb_transfer *replacement_transfer;
++    URB *replacement_urb;
++    BOOL replaced = FALSE;
+     struct winusb_file *file = transfer->file;
+     NTSTATUS status = irp->IoStatus.Status;
+     ULONG transferred = 0;
+     KIRQL irql;
+ 
++    if (r136_mutant_completion_arm)
++    {
++        replacement_transfer = r136_mutant_main_allocate(sizeof(*transfer));
++        replacement_urb = r136_mutant_main_allocate(sizeof(*transfer->urb));
++        r136_mutant_completion_arm = FALSE;
++        if (!replacement_transfer || !replacement_urb)
++        {
++            r136_mutant_main_free(replacement_urb);
++            r136_mutant_main_free(replacement_transfer);
++            return STATUS_INSUFFICIENT_RESOURCES;
++        }
++        memcpy(replacement_transfer, original_transfer, sizeof(*original_transfer));
++        memcpy(replacement_urb, original_transfer->urb, sizeof(*original_transfer->urb));
++        replacement_transfer->urb = replacement_urb;
++        transfer = replacement_transfer;
++        file = transfer->file;
++        replaced = TRUE;
++    }
++
+     (void)device;
+     if (NT_SUCCESS(status))
+     {
+@@ -84,8 +110,18 @@
+     InitializeListHead(&transfer->entry);
+     KeReleaseSpinLock(&file->lock, irql);
+     winusb_release_file_from_io(file);
+-    ExFreePool(transfer->urb);
+-    ExFreePool(transfer);
++    if (replaced)
++    {
++        r136_mutant_main_free(transfer->urb);
++        r136_mutant_main_free(transfer);
++        ExFreePool(original_transfer->urb);
++        ExFreePool(original_transfer);
++    }
++    else
++    {
++        ExFreePool(transfer->urb);
++        ExFreePool(transfer);
++    }
+     ObDereferenceObject(file->file_object);
+     return STATUS_SUCCESS;
+ }

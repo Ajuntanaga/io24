@@ -1,0 +1,5 @@
+7e834be04eafd5e9a3fcd4f1c34e574e453de39692181ba271340e5588cbc7d6  CP8_STAGED_OFFLINE.md
+ad34e9c113f5f3ebd65cf455db127bc24c20a25700a47706b198607819e42fca  ../MANIFEST.md
+d5cbdf21f773488523c16bec90af8d83f9c7a9464afc39dceefdea16e399edbc  ../x86_64-unix/wineusb.so
+404a07ffccb44e4fc34dd5b42df0aef8e96eb44ad2878ffc417f7a75e409abaa  ../x86_64-unix/wineusb.sys.so
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  ../x86_64-windows/wineusb.sys

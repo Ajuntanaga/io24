@@ -1,0 +1,17 @@
+0bc1e63b49f0ee839a5236adbbef7fbfd3cfd920e589d4706688dfa312798fc5  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+87ffe326022144f45313bb734b487633bd7c0766f4c74eb7c60a56f4f04c2e5c  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+c577190120f193d51d93aa7fb224b1f63ffafe75314cbd037d61757924af6d6a  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+f118747b7cce73967519d6192896fded8279c31b483e4be24d18ea6f55879f64  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+9f9ed03b0af32f223f1c77b9f8f8ed0a341f4c61401a60dd9a40be6a5d3b0402  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+aed7eb71709f9aabf126030c1f8f6b3bfd2cc0be84530fc52ad68c20e1083a0e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in
+211dfebb91d009c858101730781d452b9c51d05f66ebe52486a70993bf720e28  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c
+7443e37451478fd3102d4d3381342fb3fe54c8ce8fd9f63967ee903a6367a1bb  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+5b9df910e1e1bac6587048e2af337197e8e3933c1ad9582ca699e62991fc0bfe  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+750324b45b25c18adb463c3cb58f0fc16095c045087706b6c6f0faecbf616074  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_pipe_observe_contract.c
+f98c28fee7fb27fdce380069770607f2568810ca51456c4a5694215a9a767b86  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_pipe_observe_fake_libusb.c
+1ab7456c87ca7f835120059bd780afbb2f3caca017491b1c92a7d36963f9f847  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_winusb_busif_contract.c
+89e109b56fc0aa55a3945c202fc2146b5d18a8cd4255f44d3f4a493cce987aec  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_winusb_urb_contract.c
+d2e0d300209199307010edd44704586e741b987ce629dffd925771b85633fec6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_winusb_urb_fake_libusb.c
+6e77c16ca86b929058de191733636e68194fdb534be942d20d8b841c2fd08a26  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/winusb_function_io_contract.c
+b5e7ff7db6d0d2962fee1555b59cacd89b002a96190732e1266bd27c0278dfc6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/winusb_user_api_contract.c
+781989250735120f7f4eb60d347c13d18541be652d6c07f97ec98ecfc87f6a4b  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/winusb_user_api_contract.sh

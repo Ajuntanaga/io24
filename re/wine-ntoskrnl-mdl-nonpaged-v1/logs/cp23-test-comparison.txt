@@ -1,0 +1,32 @@
+CP23 matching-pair contract comparison
+
+test_a_exit=13
+test_b_exit=13
+suite_assertions_a=26476
+suite_assertions_b=26476
+suite_failures_a=13
+suite_failures_b=13
+new_mdl_assertion_failures_a=0
+new_mdl_assertion_failures_b=0
+driver_subtest_failures_a=12
+driver_subtest_failures_b=12
+driver_netio_failures_a=1
+driver_netio_failures_b=1
+driver_pnp_failures_a=0
+driver_pnp_failures_b=0
+
+raw_test_a_sha256=a60b0ebc65f4e68fed836cde33f417208cd529b939b4fb496f35465f3d95a6c7
+raw_test_b_sha256=099ed8dab8fb71d20dc8ccbe43589ec05fca17d75171f798adad5e35fce1fb28
+normalized_test_a_sha256=5f998d45f04a5c623d0696885111f99b21d97fa8dd85d78db15123b3f3f563c3
+normalized_test_b_sha256=5f998d45f04a5c623d0696885111f99b21d97fa8dd85d78db15123b3f3f563c3
+normalized_diff_status=0
+
+Normalization changes only ephemeral evidence fields:
+- dri<hex>.tmp temporary driver names
+- Wine process prefixes at the start of test-summary lines
+- Unexpected thread_id values
+
+Both tests used a fresh ephemeral prefix, a matching candidate fake PE and
+Unix builtin, private /dev, empty /sys, private home/tmp/run, and unshared
+networking. Exit 13 is the established unrelated Wine baseline, not a new MDL
+failure.

@@ -1,0 +1,162 @@
+--- origin/r135/winusb_function_io_contract.c
++++ case/tests/winusb_function_io_contract.c
+@@ -3371,6 +3371,7 @@
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
+                 control_pending_irp == &pending_irps[0] && control_pending_count == 1);
+         control_urb_status = USBD_STATUS_TIMEOUT;
++        r136_mutant_admission_arm = TRUE;
+         effect = begin_pending_control(&d, last_fdo, &pending_controls[1], &file,
+                 &pending_irps[1], pending_stacks[1], &pending_mdls[1]);
+         pending_contexts[1] = pending_stacks[1][0].Context;
+@@ -3395,6 +3396,7 @@
+                 pending_stacks[0][0].Parameters.Others.Argument1 == pending_urbs[0]);
+         IO24_CHECK(pending_stacks[1][0].Context == pending_contexts[1] &&
+                 pending_stacks[1][0].Parameters.Others.Argument1 == pending_urbs[1]);
++        IO24_CHECK(r136_mutant_helper_calls == 2);
+         control_pool_pause_allocations();
+         control_urb_status = USBD_STATUS_SUCCESS;
+         expected_alternate_interface = 5; expected_alternate_setting = 0;
+@@ -3438,6 +3440,7 @@
+         control_pool_check_pointer(pending_urbs[0], sizeof(URB), 1);
+         control_pool_check_pointer(pending_contexts[1], pending_context_sizes[1], 1);
+         control_pool_check_pointer(pending_urbs[1], sizeof(URB), 1);
++        IO24_CHECK(r136_mutant_helper_frees == 2);
+         control_pool_check_complete(4, 4);
+         control_pool_end();
+         control_expected_irp = NULL; control_returns_pending = FALSE;
+--- origin/production/main.c
++++ case/dlls/winusb.sys/main.c
+@@ -31,6 +31,22 @@
+ static const GUID metadata_interface =
+         WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT;
+ 
++unsigned int r136_mutant_helper_calls;
++unsigned int r136_mutant_helper_frees;
++BOOL r136_mutant_admission_arm;
++
++PVOID WINAPI r136_mutant_main_allocate(SIZE_T size)
++{
++    ++r136_mutant_helper_calls;
++    return ExAllocatePool(NonPagedPool, size);
++}
++
++VOID WINAPI r136_mutant_main_free(PVOID pointer)
++{
++    if (pointer) ++r136_mutant_helper_frees;
++    ExFreePool(pointer);
++}
++
+ static NTSTATUS WINAPI set_event_completion(DEVICE_OBJECT *device, IRP *irp,
+         void *context)
+ {
+--- origin/production/transfer.c
++++ case/dlls/winusb.sys/transfer.c
+@@ -25,6 +25,9 @@
+ #include "winusb_private.h"
+ 
+ void WINAPI ObReferenceObject(void *object);
++PVOID WINAPI r136_mutant_main_allocate(SIZE_T size);
++VOID WINAPI r136_mutant_main_free(PVOID pointer);
++extern BOOL r136_mutant_admission_arm;
+ 
+ struct winusb_transfer
+ {
+@@ -34,6 +37,15 @@
+     ULONG requested;
+ };
+ 
++struct r136_mutant_pair
++{
++    struct winusb_transfer *original;
++    struct winusb_transfer *replacement;
++    URB *replacement_urb;
++};
++static struct r136_mutant_pair r136_mutant_pairs[2];
++static unsigned int r136_mutant_pair_count;
++
+ static NTSTATUS map_usbd_status(USBD_STATUS status)
+ {
+     switch (status)
+@@ -56,11 +68,28 @@
+         void *context)
+ {
+     struct winusb_transfer *transfer = context;
++    struct winusb_transfer *original_transfer = transfer;
++    BOOL replaced = FALSE;
+     struct winusb_file *file = transfer->file;
+     NTSTATUS status = irp->IoStatus.Status;
+     ULONG transferred = 0;
+     KIRQL irql;
+ 
++    for (unsigned int i = 0; i < r136_mutant_pair_count; ++i)
++        if (r136_mutant_pairs[i].original == original_transfer)
++        {
++            memcpy(r136_mutant_pairs[i].replacement, original_transfer,
++                    sizeof(*original_transfer));
++            memcpy(r136_mutant_pairs[i].replacement_urb, original_transfer->urb,
++                    sizeof(*original_transfer->urb));
++            r136_mutant_pairs[i].replacement->urb = r136_mutant_pairs[i].replacement_urb;
++            transfer = r136_mutant_pairs[i].replacement;
++            r136_mutant_pairs[i].original = NULL;
++            replaced = TRUE;
++            break;
++        }
++    file = transfer->file;
++
+     (void)device;
+     if (NT_SUCCESS(status))
+     {
+@@ -84,8 +113,18 @@
+     InitializeListHead(&transfer->entry);
+     KeReleaseSpinLock(&file->lock, irql);
+     winusb_release_file_from_io(file);
+-    ExFreePool(transfer->urb);
+-    ExFreePool(transfer);
++    if (replaced)
++    {
++        r136_mutant_main_free(transfer->urb);
++        r136_mutant_main_free(transfer);
++        ExFreePool(original_transfer->urb);
++        ExFreePool(original_transfer);
++    }
++    else
++    {
++        ExFreePool(transfer->urb);
++        ExFreePool(transfer);
++    }
+     ObDereferenceObject(file->file_object);
+     return STATUS_SUCCESS;
+ }
+@@ -193,6 +232,32 @@
+     transfer->urb = urb;
+     transfer->requested = length;
+ 
++    if (r136_mutant_admission_arm)
++    {
++        struct r136_mutant_pair *pair;
++
++        if (r136_mutant_pair_count == ARRAY_SIZE(r136_mutant_pairs))
++        {
++            ExFreePool(urb);
++            ExFreePool(transfer);
++            return STATUS_INSUFFICIENT_RESOURCES;
++        }
++        pair = &r136_mutant_pairs[r136_mutant_pair_count];
++        pair->replacement = r136_mutant_main_allocate(sizeof(*transfer));
++        pair->replacement_urb = r136_mutant_main_allocate(sizeof(*urb));
++        if (!pair->replacement || !pair->replacement_urb)
++        {
++            r136_mutant_main_free(pair->replacement_urb);
++            r136_mutant_main_free(pair->replacement);
++            ExFreePool(urb);
++            ExFreePool(transfer);
++            return STATUS_INSUFFICIENT_RESOURCES;
++        }
++        pair->original = transfer;
++        ++r136_mutant_pair_count;
++        r136_mutant_admission_arm = FALSE;
++    }
++
+     if (code == IOCTL_WINE_WINUSB_GET_DESCRIPTOR)
+     {
+         const struct wine_winusb_descriptor_request *request = (const void *)header;

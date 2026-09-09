@@ -1,0 +1,807 @@
+gcc -m64 -c -o dlls/wineusb.sys/usbdi.o /run/io24-source/dlls/wineusb.sys/usbdi.c -Idlls/wineusb.sys \
+  -I/run/io24-source/dlls/wineusb.sys -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/wineusb.sys/wineusb.o /run/io24-source/dlls/wineusb.sys/wineusb.c -Idlls/wineusb.sys \
+  -I/run/io24-source/dlls/wineusb.sys -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/genres.o /run/io24-source/tools/wrc/genres.c -Itools/wrc -I/run/io24-source/tools/wrc \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/newstruc.o /run/io24-source/tools/wrc/newstruc.c -Itools/wrc -I/run/io24-source/tools/wrc \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/po.o /run/io24-source/tools/wrc/po.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/utils.o /run/io24-source/tools/wrc/utils.c -Itools/wrc -I/run/io24-source/tools/wrc \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/wpp.o /run/io24-source/tools/wrc/wpp.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/wrc/wrc.o /run/io24-source/tools/wrc/wrc.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DBINDIR="\"/usr/local/bin\"" -DDATADIR="\"/usr/local/share\"" \
+  -DINCLUDEDIR="\"/usr/local/include\"" -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/flex -otools/wrc/parser.yy.c /run/io24-source/tools/wrc/parser.l
+/run/io24-tools/usr/bin/bison -o tools/wrc/parser.tab.$$.c --defines=tools/wrc/parser.tab.h /run/io24-source/tools/wrc/parser.y && rm -f tools/wrc/parser.tab.$$.c
+/run/io24-source/tools/wrc/parser.y: warning: 5 shift/reduce conflicts [-Wconflicts-sr]
+/run/io24-source/tools/wrc/parser.y: note: rerun with option '-Wcounterexamples' to generate conflict counterexamples
+gcc -m64 -c -o tools/wrc/parser.yy.o tools/wrc/parser.yy.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/bison -o tools/wrc/parser.tab.c /run/io24-source/tools/wrc/parser.y
+/run/io24-source/tools/wrc/parser.y: warning: 5 shift/reduce conflicts [-Wconflicts-sr]
+/run/io24-source/tools/wrc/parser.y: note: rerun with option '-Wcounterexamples' to generate conflict counterexamples
+gcc -m64 -c -o tools/wrc/parser.tab.o tools/wrc/parser.tab.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/flex -otools/wrc/ppl.yy.c /run/io24-source/tools/wrc/ppl.l
+/run/io24-tools/usr/bin/bison -o tools/wrc/ppy.tab.$$.c --defines=tools/wrc/ppy.tab.h /run/io24-source/tools/wrc/ppy.y && rm -f tools/wrc/ppy.tab.$$.c
+gcc -m64 -c -o tools/wrc/ppl.yy.o tools/wrc/ppl.yy.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/bison -o tools/wrc/ppy.tab.c /run/io24-source/tools/wrc/ppy.y
+gcc -m64 -c -o tools/wrc/ppy.tab.o tools/wrc/ppy.tab.c -Itools/wrc -I/run/io24-source/tools/wrc -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o tools/wrc/wrc tools/wrc/genres.o tools/wrc/newstruc.o tools/wrc/po.o tools/wrc/utils.o \
+  tools/wrc/wpp.o tools/wrc/wrc.o tools/wrc/parser.yy.o tools/wrc/parser.tab.o tools/wrc/ppl.yy.o \
+  tools/wrc/ppy.tab.o 
+rm -f nls/locale.nls && ln -s /run/io24-source/nls/locale.nls nls/locale.nls
+tools/wrc/wrc -u -o dlls/wineusb.sys/wineusb.res --nostdinc -Idlls/wineusb.sys -I/run/io24-source/dlls/wineusb.sys -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ \
+  /run/io24-source/dlls/wineusb.sys/wineusb.rc
+gcc -m64 -c -o tools/winebuild/import.o /run/io24-source/tools/winebuild/import.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/main.o /run/io24-source/tools/winebuild/main.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/parser.o /run/io24-source/tools/winebuild/parser.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/relay.o /run/io24-source/tools/winebuild/relay.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/res16.o /run/io24-source/tools/winebuild/res16.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/res32.o /run/io24-source/tools/winebuild/res32.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/spec16.o /run/io24-source/tools/winebuild/spec16.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/spec32.o /run/io24-source/tools/winebuild/spec32.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/winebuild/utils.o /run/io24-source/tools/winebuild/utils.c -Itools/winebuild \
+  -I/run/io24-source/tools/winebuild -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o tools/winebuild/winebuild tools/winebuild/import.o tools/winebuild/main.o tools/winebuild/parser.o \
+  tools/winebuild/relay.o tools/winebuild/res16.o tools/winebuild/res32.o tools/winebuild/spec16.o \
+  tools/winebuild/spec32.o tools/winebuild/utils.o 
+tools/winebuild/winebuild -w --implib -o dlls/ntoskrnl.exe/libntoskrnl.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+gcc -m64 -c -o libs/winecrt0/arm64ec.o /run/io24-source/libs/winecrt0/arm64ec.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/crt_dllmain.o /run/io24-source/libs/winecrt0/crt_dllmain.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/crt_fltused.o /run/io24-source/libs/winecrt0/crt_fltused.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/debug.o /run/io24-source/libs/winecrt0/debug.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/delay_load.o /run/io24-source/libs/winecrt0/delay_load.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/bison -o tools/widl/parser.tab.$$.c --defines=tools/widl/parser.tab.h /run/io24-source/tools/widl/parser.y && rm -f tools/widl/parser.tab.$$.c
+gcc -m64 -c -o tools/widl/attribute.o /run/io24-source/tools/widl/attribute.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/client.o /run/io24-source/tools/widl/client.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/expr.o /run/io24-source/tools/widl/expr.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/hash.o /run/io24-source/tools/widl/hash.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/header.o /run/io24-source/tools/widl/header.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/metadata.o /run/io24-source/tools/widl/metadata.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/proxy.o /run/io24-source/tools/widl/proxy.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/register.o /run/io24-source/tools/widl/register.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/server.o /run/io24-source/tools/widl/server.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/typegen.o /run/io24-source/tools/widl/typegen.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/typelib.o /run/io24-source/tools/widl/typelib.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/typetree.o /run/io24-source/tools/widl/typetree.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/utils.o /run/io24-source/tools/widl/utils.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/widl.o /run/io24-source/tools/widl/widl.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DINCLUDEDIR="\"/usr/local/include\"" -DBINDIR="\"/usr/local/bin\"" -DLIBDIR="\"/usr/local/lib\"" -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/wpp.o /run/io24-source/tools/wrc/wpp.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/write_msft.o /run/io24-source/tools/widl/write_msft.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o tools/widl/write_sltg.o /run/io24-source/tools/widl/write_sltg.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/flex -otools/widl/parser.yy.c /run/io24-source/tools/widl/parser.l
+gcc -m64 -c -o tools/widl/parser.yy.o tools/widl/parser.yy.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/bison -o tools/widl/parser.tab.c /run/io24-source/tools/widl/parser.y
+gcc -m64 -c -o tools/widl/parser.tab.o tools/widl/parser.tab.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/flex -otools/widl/ppl.yy.c /run/io24-source/tools/wrc/ppl.l
+/run/io24-tools/usr/bin/bison -o tools/widl/ppy.tab.$$.c --defines=tools/widl/ppy.tab.h /run/io24-source/tools/wrc/ppy.y && rm -f tools/widl/ppy.tab.$$.c
+gcc -m64 -c -o tools/widl/ppl.yy.o tools/widl/ppl.yy.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-tools/usr/bin/bison -o tools/widl/ppy.tab.c /run/io24-source/tools/wrc/ppy.y
+gcc -m64 -c -o tools/widl/ppy.tab.o tools/widl/ppy.tab.c -Itools/widl -I/run/io24-source/tools/widl \
+  -I/run/io24-source/tools/wrc -Iinclude -I/run/io24-source/include -D__WINESRC__ -DWINE_UNIX_LIB \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o tools/widl/widl tools/widl/attribute.o tools/widl/client.o tools/widl/expr.o tools/widl/hash.o \
+  tools/widl/header.o tools/widl/metadata.o tools/widl/proxy.o tools/widl/register.o \
+  tools/widl/server.o tools/widl/typegen.o tools/widl/typelib.o tools/widl/typetree.o \
+  tools/widl/utils.o tools/widl/widl.o tools/widl/wpp.o tools/widl/write_msft.o \
+  tools/widl/write_sltg.o tools/widl/parser.yy.o tools/widl/parser.tab.o tools/widl/ppl.yy.o \
+  tools/widl/ppy.tab.o 
+tools/widl/widl -o include/wtypes.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/wtypes.idl
+tools/widl/widl -o include/wtypesbase.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/wtypesbase.idl
+tools/widl/widl -o include/oaidl.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/oaidl.idl
+tools/widl/widl -o include/objidl.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/objidl.idl
+tools/widl/widl -o include/unknwn.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/unknwn.idl
+tools/widl/widl -o include/oleidl.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/oleidl.idl
+tools/widl/widl -o include/objidlbase.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/objidlbase.idl
+tools/widl/widl -o include/urlmon.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/urlmon.idl
+tools/widl/widl -o include/servprov.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/servprov.idl
+tools/widl/widl -o include/msxml.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/msxml.idl
+tools/widl/widl -o include/propidl.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/propidl.idl
+gcc -m64 -c -o libs/winecrt0/dll_canunload.o /run/io24-source/libs/winecrt0/dll_canunload.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/dll_main.o /run/io24-source/libs/winecrt0/dll_main.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/widl/widl -o include/ocidl.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/ocidl.idl
+gcc -m64 -c -o libs/winecrt0/dll_register.o /run/io24-source/libs/winecrt0/dll_register.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/widl/widl -o include/shtypes.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/shtypes.idl
+gcc -m64 -c -o libs/winecrt0/dll_version.o /run/io24-source/libs/winecrt0/dll_version.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exception.o /run/io24-source/libs/winecrt0/exception.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exe16_entry.o /run/io24-source/libs/winecrt0/exe16_entry.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/gcc_ctors.o /run/io24-source/libs/winecrt0/gcc_ctors.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/widl/widl -o include/atliface.h -m64 --nostdinc -Ldlls/\* -Iinclude -I/run/io24-source/include -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ /run/io24-source/include/atliface.idl
+gcc -m64 -c -o libs/winecrt0/register.o /run/io24-source/libs/winecrt0/register.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/setjmp.o /run/io24-source/libs/winecrt0/setjmp.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/stub.o /run/io24-source/libs/winecrt0/stub.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/tls.o /run/io24-source/libs/winecrt0/tls.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/unix_lib.o /run/io24-source/libs/winecrt0/unix_lib.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/dll_entry.o /run/io24-source/libs/winecrt0/dll_entry.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/dll_soinit.o /run/io24-source/libs/winecrt0/dll_soinit.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exe_entry.o /run/io24-source/libs/winecrt0/exe_entry.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exe_main.o /run/io24-source/libs/winecrt0/exe_main.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exe_wentry.o /run/io24-source/libs/winecrt0/exe_wentry.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o libs/winecrt0/exe_wmain.o /run/io24-source/libs/winecrt0/exe_wmain.c -Ilibs/winecrt0 \
+  -I/run/io24-source/libs/winecrt0 -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --staticlib -o libs/winecrt0/libwinecrt0.a --cc-cmd="gcc -m64" -m64 libs/winecrt0/arm64ec.o \
+  libs/winecrt0/crt_dllmain.o libs/winecrt0/crt_fltused.o libs/winecrt0/debug.o \
+  libs/winecrt0/delay_load.o libs/winecrt0/dll_canunload.o libs/winecrt0/dll_main.o \
+  libs/winecrt0/dll_register.o libs/winecrt0/dll_version.o libs/winecrt0/exception.o \
+  libs/winecrt0/exe16_entry.o libs/winecrt0/gcc_ctors.o libs/winecrt0/register.o \
+  libs/winecrt0/setjmp.o libs/winecrt0/stub.o libs/winecrt0/tls.o libs/winecrt0/unix_lib.o \
+  libs/winecrt0/dll_entry.o libs/winecrt0/dll_soinit.o libs/winecrt0/exe_entry.o \
+  libs/winecrt0/exe_main.o libs/winecrt0/exe_wentry.o libs/winecrt0/exe_wmain.o
+gcc -m64 -c -o dlls/ucrtbase/atexit.o /run/io24-source/dlls/ucrtbase/atexit.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/crt_gccmain.o /run/io24-source/dlls/msvcrt/crt_gccmain.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/crt_main.o /run/io24-source/dlls/msvcrt/crt_main.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/crt_winmain.o /run/io24-source/dlls/msvcrt/crt_winmain.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/crt_wmain.o /run/io24-source/dlls/msvcrt/crt_wmain.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/crt_wwinmain.o /run/io24-source/dlls/msvcrt/crt_wwinmain.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/mathf.o /run/io24-source/dlls/msvcrt/mathf.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/printf.o /run/io24-source/dlls/ucrtbase/printf.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ucrtbase/sincos.o /run/io24-source/dlls/msvcrt/sincos.c -Idlls/ucrtbase \
+  -I/run/io24-source/dlls/ucrtbase -I/run/io24-source/dlls/msvcrt -Iinclude \
+  -I/run/io24-source/include -I/run/io24-source/include/msvcrt -D_UCRT -D__WINESRC__ -D_CRTIMP= \
+  -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC \
+  -fasynchronous-unwind-tables -D_WIN32 -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format \
+  -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winebuild/winebuild -w --implib -o dlls/ucrtbase/libucrtbase.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/ucrtbase/ucrtbase.spec dlls/ucrtbase/atexit.o dlls/ucrtbase/crt_gccmain.o \
+  dlls/ucrtbase/crt_main.o dlls/ucrtbase/crt_winmain.o dlls/ucrtbase/crt_wmain.o \
+  dlls/ucrtbase/crt_wwinmain.o dlls/ucrtbase/mathf.o dlls/ucrtbase/printf.o dlls/ucrtbase/sincos.o
+tools/winebuild/winebuild -w --implib -o dlls/kernel32/libkernel32.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/kernel32/kernel32.spec
+tools/winebuild/winebuild -w --implib -o dlls/ntdll/libntdll.a --cc-cmd="gcc -m64" -m64 --export \
+  /run/io24-source/dlls/ntdll/ntdll.spec
+gcc -m64 -c -o tools/winegcc/winegcc.o /run/io24-source/tools/winegcc/winegcc.c -Itools/winegcc \
+  -I/run/io24-source/tools/winegcc -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DINCLUDEDIR="\"/usr/local/include\"" -DBINDIR="\"/usr/local/bin\"" -DLIBDIR="\"/usr/local/lib\"" -DCC="\"gcc \
+  -m64\"" -DCPP="\"cpp\"" -DCXX="\"g++ -m64\"" -DLD="\"ld\"" -DWINE_UNIX_LIB -Wall -pipe \
+  -fcf-protection=none -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing \
+  -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op \
+  -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits \
+  -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o tools/winegcc/winegcc tools/winegcc/winegcc.o 
+tools/winegcc/winegcc -o dlls/wineusb.sys/wineusb.sys.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -shared -Wl,--subsystem,native dlls/wineusb.sys/usbdi.o \
+  dlls/wineusb.sys/wineusb.o dlls/wineusb.sys/wineusb.res dlls/ntoskrnl.exe/libntoskrnl.a \
+  libs/winecrt0/libwinecrt0.a dlls/ucrtbase/libucrtbase.a dlls/kernel32/libkernel32.a \
+  dlls/ntdll/libntdll.a 
+tools/winegcc/winegcc -o dlls/wineusb.sys/x86_64-windows/wineusb.sys --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -Wb,--fake-module -shared -Wl,--subsystem,native \
+  dlls/wineusb.sys/wineusb.res
+gcc -m64 -c -o dlls/wineusb.sys/unixlib.o /run/io24-source/dlls/wineusb.sys/unixlib.c -Idlls/wineusb.sys \
+  -I/run/io24-source/dlls/wineusb.sys -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -I/run/io24-tools/usr/include/libusb-1.0 -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/alpc.o /run/io24-source/dlls/ntdll/unix/alpc.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/cdrom.o /run/io24-source/dlls/ntdll/unix/cdrom.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/debug.o /run/io24-source/dlls/ntdll/unix/debug.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/env.o /run/io24-source/dlls/ntdll/unix/env.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/file.o /run/io24-source/dlls/ntdll/unix/file.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/loader.o /run/io24-source/dlls/ntdll/unix/loader.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DBINDIR=\"/usr/local/bin\" -DLIBDIR=\"/usr/local/lib\" -DDATADIR=\"/usr/local/share\" \
+  -DSYSTEMDLLPATH=\"\" -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/loadorder.o /run/io24-source/dlls/ntdll/unix/loadorder.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/process.o /run/io24-source/dlls/ntdll/unix/process.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/registry.o /run/io24-source/dlls/ntdll/unix/registry.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/security.o /run/io24-source/dlls/ntdll/unix/security.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/serial.o /run/io24-source/dlls/ntdll/unix/serial.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/server.o /run/io24-source/dlls/ntdll/unix/server.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/signal_arm.o /run/io24-source/dlls/ntdll/unix/signal_arm.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/signal_arm64.o /run/io24-source/dlls/ntdll/unix/signal_arm64.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/signal_i386.o /run/io24-source/dlls/ntdll/unix/signal_i386.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/signal_x86_64.o /run/io24-source/dlls/ntdll/unix/signal_x86_64.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/socket.o /run/io24-source/dlls/ntdll/unix/socket.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/sync.o /run/io24-source/dlls/ntdll/unix/sync.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/syscall.o /run/io24-source/dlls/ntdll/unix/syscall.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/system.o /run/io24-source/dlls/ntdll/unix/system.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/tape.o /run/io24-source/dlls/ntdll/unix/tape.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/thread.o /run/io24-source/dlls/ntdll/unix/thread.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll \
+  -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= \
+  -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden \
+  -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body \
+  -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/virtual.o /run/io24-source/dlls/ntdll/unix/virtual.c -Idlls/ntdll \
+  -I/run/io24-source/dlls/ntdll -Iinclude -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO \
+  -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -c -o dlls/ntdll/unix/version.o dlls/ntdll/unix/version.c -Idlls/ntdll -I/run/io24-source/dlls/ntdll -Iinclude \
+  -I/run/io24-source/include -D__WINESRC__ -DFAR= -DZ_SOLO -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI= \
+  -DWINE_UNIX_LIB -Wall -pipe -fcf-protection=none -fvisibility=hidden -fno-stack-protector \
+  -fno-strict-aliasing -Wdeclaration-after-statement -Wempty-body -Wignored-qualifiers -Winit-self \
+  -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith -Wshift-overflow=2 -Wstrict-prototypes \
+  -Wtype-limits -Wunused-but-set-parameter -Wvla -Wwrite-strings -Wno-misleading-indentation \
+  -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o dlls/ntdll/ntdll.so -shared -Wl,-Bsymbolic -Wl,-soname,ntdll.so -Wl,-z,defs dlls/ntdll/unix/alpc.o \
+  dlls/ntdll/unix/cdrom.o dlls/ntdll/unix/debug.o dlls/ntdll/unix/env.o dlls/ntdll/unix/file.o \
+  dlls/ntdll/unix/loader.o dlls/ntdll/unix/loadorder.o dlls/ntdll/unix/process.o \
+  dlls/ntdll/unix/registry.o dlls/ntdll/unix/security.o dlls/ntdll/unix/serial.o \
+  dlls/ntdll/unix/server.o dlls/ntdll/unix/signal_arm.o dlls/ntdll/unix/signal_arm64.o \
+  dlls/ntdll/unix/signal_i386.o dlls/ntdll/unix/signal_x86_64.o dlls/ntdll/unix/socket.o \
+  dlls/ntdll/unix/sync.o dlls/ntdll/unix/syscall.o dlls/ntdll/unix/system.o dlls/ntdll/unix/tape.o \
+  dlls/ntdll/unix/thread.o dlls/ntdll/unix/virtual.o dlls/ntdll/unix/version.o 
+gcc -m64 -o dlls/wineusb.sys/wineusb.so -shared -Wl,-Bsymbolic -Wl,-soname,wineusb.so -Wl,-z,defs dlls/wineusb.sys/unixlib.o \
+  dlls/ntdll/ntdll.so /usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0 

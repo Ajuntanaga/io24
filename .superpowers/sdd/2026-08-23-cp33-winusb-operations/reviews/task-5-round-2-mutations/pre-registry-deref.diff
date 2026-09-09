@@ -1,0 +1,14 @@
+--- production-main.c
++++ pre-registry-deref-main.c
+@@ -71,6 +71,11 @@
+     struct winusb_handle *handle;
+     struct winusb_root *root;
+ 
++    if (list_empty(&handle_registry) && opaque && !((struct winusb_handle *)opaque)->live)
++    {
++        SetLastError(ERROR_INVALID_HANDLE);
++        return FALSE;
++    }
+     EnterCriticalSection(&handle_registry_lock);
+     if (!(handle = find_registered_handle(opaque)))
+     {

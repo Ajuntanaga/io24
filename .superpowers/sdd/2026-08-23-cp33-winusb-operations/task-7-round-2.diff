@@ -1,0 +1,277 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 09:54:49.487724043 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 10:15:57.259376449 -0700
+@@ -1488,12 +1488,13 @@
+ 
+             /* Form a complete future table before claiming anything.  Tokens
+              * are published only by COMMIT for a function child. */
+-            if (!(table = calloc(1, sizeof(*table))))
++            if (!(table = params->device->function ?
++                    copy_pipe_table(params->device) : calloc(1, sizeof(*table))))
+             {
+                 req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
+                 return STATUS_NO_MEMORY;
+             }
+-            if (params->device->pipe_table)
++            if (!params->device->function && params->device->pipe_table)
+                 table->next_generation = params->device->pipe_table->next_generation;
+             generation = table->next_generation ? table->next_generation : 1;
+             if (generation > WINEUSB_PIPE_TOKEN_GENERATION_MAX || pipe_count > WINEUSB_PIPE_TOKEN_SLOTS)
+@@ -1504,6 +1505,26 @@
+              * ConfigurationHandle or PipeHandle referring to freed staging. */
+             cursor = (unsigned char *)&req->Interface;
+             end = (unsigned char *)req + req->Hdr.Length;
++            if (params->device->function)
++            {
++                /* A function SELECT_CONFIGURATION may extend an existing
++                 * committed claim set.  Preserve every committed record not
++                 * named by this transaction, and retire only the interfaces
++                 * whose replacement records are staged below. */
++                while (cursor < end)
++                {
++                    USBD_INTERFACE_INFORMATION *interface = (void *)cursor;
++                    unsigned int slot;
++
++                    for (slot = 0; slot < WINEUSB_PIPE_TOKEN_SLOTS; ++slot)
++                        if (table->records[slot].current &&
++                                table->records[slot].interface_number ==
++                                interface->InterfaceNumber)
++                            table->records[slot].current = false;
++                    cursor += interface->Length;
++                }
++                cursor = (unsigned char *)&req->Interface;
++            }
+             pipe_count = 0;
+             while (cursor < end)
+             {
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 09:54:49.487366174 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 10:15:57.853986862 -0700
+@@ -1002,7 +1002,7 @@
+     const UCHAR *memory;
+     struct wine_winusb_interface_snapshot interface_record;
+     struct wine_winusb_alternate_snapshot alternate_record;
+-    struct _URB_SELECT_INTERFACE *select;
++    struct _URB_SELECT_INTERFACE *select = NULL;
+     struct winusb_pipe_state *pipes = NULL, *old_pipes = NULL;
+     SIZE_T size, interface_size, i, pipes_size;
+     KIRQL device_irql, file_irql;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/tests/wineusb_winusb_urb_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_winusb_urb_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/tests/wineusb_winusb_urb_contract.c	2026-08-24 09:54:49.488477984 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/wineusb_winusb_urb_contract.c	2026-08-24 10:15:59.614974016 -0700
+@@ -201,6 +201,35 @@
+     cursor+=interface->Length; select->Hdr.Length=cursor; return select;
+ }
+ 
++static struct _URB_SELECT_CONFIGURATION *build_claim_pipe_select(
++        unsigned char buffer[256], unsigned char interface_number)
++{
++    struct _URB_SELECT_CONFIGURATION *select=(void *)buffer;
++    USBD_INTERFACE_INFORMATION *interface=&select->Interface;
++    unsigned int pipes=interface_number==5?2:1;
++
++    memset(buffer,0,256); select->Hdr.Function=URB_FUNCTION_SELECT_CONFIGURATION;
++    interface->Length=offsetof(USBD_INTERFACE_INFORMATION,Pipes)+
++            pipes*sizeof(USBD_PIPE_INFORMATION);
++    select->Hdr.Length=offsetof(struct _URB_SELECT_CONFIGURATION,Interface)+
++            interface->Length;
++    interface->InterfaceNumber=interface_number;
++    interface->AlternateSetting=interface_number==5?1:0;
++    interface->Class=interface_number==5?0xff:0;
++    interface->Protocol=interface_number==5?6:0;
++    interface->NumberOfPipes=pipes;
++    interface->Pipes[0].EndpointAddress=interface_number==5?0x81:0x82;
++    interface->Pipes[0].PipeType=UsbdPipeTypeBulk;
++    interface->Pipes[0].MaximumPacketSize=512;
++    if(pipes==2)
++    {
++        interface->Pipes[1].EndpointAddress=0x01;
++        interface->Pipes[1].PipeType=UsbdPipeTypeBulk;
++        interface->Pipes[1].MaximumPacketSize=512;
++    }
++    return select;
++}
++
+ static NTSTATUS finalize_claim(struct io24_function_device *device,
+         USBD_CONFIGURATION_HANDLE token, ULONG operation,
+         struct io24_claim_transaction_request *request)
+@@ -478,6 +507,44 @@
+                 io24_fake_libusb_counts()->claim==0);
+         device.pipe_table=NULL;
+     }
++
++    /* A partial claim extension stages from the committed pipe table.  The
++     * second transaction replaces only MI05, so MI07's committed claim and
++     * production-issued descriptor-backed token must remain usable. */
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
++    io24_fake_libusb_enable_extended_active_descriptor(1);
++    {
++        static const unsigned char scope[]={5,7};
++        struct io24_function_device extension_device;
++        struct io24_claim_transaction_request extension_finalize;
++        struct _URB_PIPE_REQUEST pipe;
++        HANDLE token7;
++        unsigned int clear_before;
++
++        initialize_function_device(&extension_device,NULL,scope,ARRAY_SIZE(scope));
++        select=build_claim_pipe_select(buffer,7);
++        IO24_CHECK(submit_request(&extension_device,select)==STATUS_SUCCESS);
++        token7=select->Interface.Pipes[0].PipeHandle;
++        IO24_CHECK(token7!=NULL);
++        IO24_CHECK(finalize_claim(&extension_device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&extension_finalize)==STATUS_SUCCESS);
++        IO24_CHECK((extension_device.claimed_interfaces[7/8]&(1u<<(7%8)))!=0);
++
++        memset(&pipe,0,sizeof(pipe)); pipe.Hdr.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
++        pipe.PipeHandle=token7; clear_before=io24_fake_libusb_counts()->clear_halt;
++        IO24_CHECK(submit_request(&extension_device,&pipe)==STATUS_SUCCESS);
++
++        select=build_claim_pipe_select(buffer,5);
++        IO24_CHECK(submit_request(&extension_device,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(&extension_device,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&extension_finalize)==STATUS_SUCCESS);
++        IO24_CHECK((extension_device.claimed_interfaces[7/8]&(1u<<(7%8)))!=0&&
++                (extension_device.claimed_interfaces[5/8]&(1u<<(5%8)))!=0);
++        pipe.PipeHandle=token7;
++        IO24_CHECK(submit_request(&extension_device,&pipe)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->clear_halt==clear_before+2);
++        free(extension_device.pipe_table); extension_device.pipe_table=NULL;
++    }
+     audit_pipe_table_reclamation();
+ }
+ static void group_alternate(void)
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-base/tests/winusb_function_io_contract.c	2026-08-24 09:54:49.488356808 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-round-2-head/tests/winusb_function_io_contract.c	2026-08-24 10:15:59.996971229 -0700
+@@ -4,9 +4,11 @@
+ #include <threads.h>
+ #define main io24_retained_cp32_main
+ #define ExAllocatePool io24_retained_ExAllocatePool
++#define ExFreePool io24_retained_ExFreePool
+ #define IoCallDriver io24_retained_IoCallDriver
+ #include "winusb_function_binding_contract.c"
+ #undef IoCallDriver
++#undef ExFreePool
+ #undef ExAllocatePool
+ #undef main
+ #include "wine/winusb.h"
+@@ -47,6 +49,8 @@
+ static struct io24_counts counts;
+ static ULONG last_ioctl;static NTSTATUS last_status;static unsigned int mode_ioctls;
+ static unsigned int session_allocation_calls, session_fail_allocation;
++static void *session_pool_allocations[2048];
++static unsigned int unknown_pool_frees;
+ #define IO24_CHECK(expr) do { if (!(expr)) { \
+     fprintf(stderr, "FAIL %s:%u: %s\n", __func__, __LINE__, #expr); \
+     ++counts.failures; \
+@@ -54,11 +58,55 @@
+ 
+ PVOID WINAPI ExAllocatePool(POOL_TYPE type, SIZE_T size)
+ {
++    void *pointer;
++    unsigned int i;
++
+     (void)type;
+     session_allocation_calls++;
+     if (session_fail_allocation == session_allocation_calls) return NULL;
++    if (!(pointer = calloc(1, size))) return NULL;
++    for (i = 0; i < ARRAY_SIZE(session_pool_allocations); ++i)
++        if (!session_pool_allocations[i] || session_pool_allocations[i] == pointer)
++        {
++            session_pool_allocations[i] = pointer;
++            break;
++        }
++    if (i == ARRAY_SIZE(session_pool_allocations))
++    {
++        fputs("HARNESS: session pool allocation audit exhausted\n", stderr);
++        free(pointer);
++        exit(2);
++    }
+     pool_allocations++;
+-    return calloc(1, size);
++    return pointer;
++}
++
++VOID WINAPI ExFreePool(PVOID pointer)
++{
++    unsigned int i;
++
++    if (!pointer) return;
++    for (i = 0; i < ARRAY_SIZE(session_pool_allocations); ++i)
++        if (session_pool_allocations[i] == pointer)
++        {
++            session_pool_allocations[i] = NULL;
++            pool_frees++;
++            free(pointer);
++            return;
++    }
++    ++unknown_pool_frees;
++    ++counts.failures;
++    fprintf(stderr, "FAIL ExFreePool: rejected unknown session pointer %p\n", pointer);
++}
++
++__attribute__((noinline)) static void poison_alternate_stack(void)
++{
++    volatile uintptr_t poison[128];
++    unsigned int i;
++
++    for (i = 0; i < ARRAY_SIZE(poison); ++i)
++        poison[i] = (uintptr_t)0xa5 * (~(uintptr_t)0 / 0xff);
++    atomic_signal_fence(memory_order_seq_cst);
+ }
+ 
+ #define IO24_CTL_CODE(type,function,method,access) (((type)<<16)|((access)<<14)|((function)<<2)|(method))
+@@ -1537,10 +1585,13 @@
+     struct guarded_request g; struct { UCHAR before[16]; struct wine_winusb_alternate_request request; UCHAR after[16]; } input;
+     IRP irp; IO_STACK_LOCATION stack[2]; MDL guarded_mdl; struct dispatch_effect effect; struct winusb_file *context;
+     struct guarded_initialize initialize; struct guarded_snapshot output;
+-    unsigned int i, lower_before, allocations_before, frees_before;
++    unsigned int i, lower_before, allocations_before, frees_before, unknown_frees_before;
+     ULONG input_length, output_length;
++    ULONG_PTR information;
+     PMDL mdl_address;
+     HANDLE first_handle;
++    NTSTATUS status;
++    struct winusb_device *device;
+     struct winusb_interface_state before;
+ #define DISPATCH_ALTERNATE() do { \
+     memset(&irp,0,sizeof(irp)); memset(stack,0,sizeof(stack)); \
+@@ -1554,10 +1605,37 @@
+ 
+     setup(&d,&e,&p,&g,&file); if (!create_file(&d,&g,&file) || !initialize_session(&d,&g,&file)) { teardown(&d,&g,&file); return; }
+     memset(&input,GUARD_BYTE,sizeof(input)); memset(&input.request,0,sizeof(input.request));
+-    context=file.FsContext; input.request.request.size=sizeof(input.request); input.request.request.version=WINE_WINUSB_ABI_VERSION;
++    context=file.FsContext; device=last_fdo->DeviceExtension;
++    input.request.request.size=sizeof(input.request); input.request.request.version=WINE_WINUSB_ABI_VERSION;
+     input.request.request.session=context->session; input.request.request.interface_index=0; input.request.alternate_setting=1;
+     input_length=sizeof(input.request);output_length=0;mdl_address=NULL;memset(&guarded_mdl,0,sizeof(guarded_mdl));
+     before=context->interfaces[0]; lower_before=lower_calls;
++
++    /* Exercise the real session translation unit with a deterministic dirty
++     * stack.  Every early exit must own only initialized pointers: invalid
++     * state, unknown alternate, and first allocation failure may free none. */
++    unknown_frees_before=unknown_pool_frees; information=(ULONG_PTR)0xdeadbeef;
++    poison_alternate_stack();
++    status=winusb_session_set_alternate(device,context,&input.request,
++            sizeof(input.request),&information);
++    IO24_CHECK(status==STATUS_INVALID_DEVICE_STATE&&information==0&&
++            unknown_pool_frees==unknown_frees_before);
++    context->outstanding=1; KeClearEvent(&context->zero_outstanding);
++    input.request.alternate_setting=2; information=(ULONG_PTR)0xdeadbeef;
++    poison_alternate_stack();
++    status=winusb_session_set_alternate(device,context,&input.request,
++            sizeof(input.request),&information);
++    IO24_CHECK(status==STATUS_INVALID_PARAMETER&&information==0&&
++            unknown_pool_frees==unknown_frees_before);
++    input.request.alternate_setting=1;
++    session_fail_allocation=session_allocation_calls+1;
++    poison_alternate_stack();
++    status=winusb_session_set_alternate(device,context,&input.request,
++            sizeof(input.request),&information);
++    IO24_CHECK(status==STATUS_NO_MEMORY&&unknown_pool_frees==unknown_frees_before);
++    session_fail_allocation=0; context->outstanding=0;
++    KeSetEvent(&context->zero_outstanding,IO_NO_INCREMENT,FALSE);
++
+     input_length=sizeof(input.request)-1; DISPATCH_ALTERNATE();
+     IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
+     input_length=sizeof(input.request)+1; DISPATCH_ALTERNATE();

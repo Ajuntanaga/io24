@@ -1,0 +1,11 @@
+--- .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 07:49:10.184288452 -0700
++++ /tmp/io24-r97-fourmuts.KaxhMg/global-target-retirement/dlls/wineusb.sys/unixlib.c	2026-08-24 08:19:26.173992454 -0700
+@@ -1275,7 +1275,7 @@
+             /* Replacing an alternate retires only this interface's current
+              * records.  Allocate every replacement before touching libusb. */
+             for (i = 0; i < WINEUSB_PIPE_TOKEN_SLOTS; ++i)
+-                if (table->records[i].current && table->records[i].interface_number == interface->InterfaceNumber)
++                if (table->records[i].current)
+                     table->records[i].current = false;
+             generation = table->next_generation ? table->next_generation : 1;
+             if (generation > WINEUSB_PIPE_TOKEN_GENERATION_MAX)

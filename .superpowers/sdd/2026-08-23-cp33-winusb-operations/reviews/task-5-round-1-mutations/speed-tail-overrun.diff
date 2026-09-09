@@ -1,0 +1,13 @@
+--- production-main.c
++++ speed-tail-overrun-main.c
+@@ -599,8 +599,8 @@
+         return fail_after_release(&acquired, ERROR_INSUFFICIENT_BUFFER);
+     }
+ 
+-    *(UCHAR *)buffer = acquired.root->snapshot->speed >= HighSpeed ? 0x03 : 0x01;
+-    *buffer_length = 1;
++    memset(buffer, acquired.root->snapshot->speed >= HighSpeed ? 0x03 : 0x01, capacity);
++    *buffer_length = capacity;
+     release_handle(&acquired);
+     return TRUE;
+ }

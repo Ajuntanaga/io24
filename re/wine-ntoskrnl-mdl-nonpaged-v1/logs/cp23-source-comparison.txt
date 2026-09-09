@@ -1,0 +1,32 @@
+CP23 source comparison
+timestamp=2026-08-22T14:02:47-07:00
+
+Pinned inputs reverified:
+5046f36dae210b198ea69792774d4401feed975d465eca6c251c9394400ec272  wine-11.15.tar.xz
+567cc43f6ba58b01938d78e5e5f4929a9d508077d905142ce69eed1d3a04badb  wine-11.15-ntddi.patch
+c31efc412240b5047578f1dbb41e9443fa972444202c2bf75294bb31c5454ccd  wine-11.15-exprocessorfeature.patch
+ccbf6d0cff8b9f59cecfb6f18497705ff81599b3796d1b5f6185a6bba43c309b  wine-11.15-ntoskrnl-mdl-nonpaged-v1.patch
+
+source_a=.io24-build/wine-ntoskrnl-mdl-nonpaged-v1/repro-source-a
+source_b=.io24-build/wine-ntoskrnl-mdl-nonpaged-v1/repro-source-b
+regular_files_a=12443
+regular_files_b=12443
+directories_a=1377
+directories_b=1377
+symlinks_a=0
+symlinks_b=0
+orig_or_rej_a=0
+orig_or_rej_b=0
+full_diff_status=0
+content_tree_sha256_a=86445f46b96e4160d604a5a5ef1d609384c6f100d647f6d489b9d0a8a5a1806b
+content_tree_sha256_b=86445f46b96e4160d604a5a5ef1d609384c6f100d647f6d489b9d0a8a5a1806b
+metadata_tree_sha256_a=1f2739429822d81a76c2b28d44a446c970c0860c4982f2e755fb2565b54b8127
+metadata_tree_sha256_b=1f2739429822d81a76c2b28d44a446c970c0860c4982f2e755fb2565b54b8127
+ntoskrnl_c_sha256_a=a57ddec201ef4bb63cb40acc2c0c9234aaee456a9d702b8df0003e25fdd35270
+ntoskrnl_c_sha256_b=a57ddec201ef4bb63cb40acc2c0c9234aaee456a9d702b8df0003e25fdd35270
+driver_c_sha256_a=59fd265facb501774c9b8bd62a0b37f0e0f5bc913390f6ea458dfd639d195d34
+driver_c_sha256_b=59fd265facb501774c9b8bd62a0b37f0e0f5bc913390f6ea458dfd639d195d34
+
+The development source also contains the unrelated CP21 WineUSB patch chain,
+so a whole-tree comparison to it is intentionally not required. Both changed
+kernel files and all three ntoskrnl outputs match CP22 exactly.

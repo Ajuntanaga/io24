@@ -1,0 +1,415 @@
+"
+                },
+                "name": "Large"
+            }
+        ]
+    }
+]
+<?xml version="1.0" encoding="utf-8"?>
+<uc:ComponentModel	xmlns:uc="http://www.presonus.com/xml/uc" 
+					xmlns:xi="http://www.w3.org/2003/XInclude"
+					namespace="Presonus:Jackson"
+					localization="JACKSON">
+
+	<!-- XML Includes -->
+	<xi:include href="fatchannel.xml">
+		<xi:fallback>
+			<xi:include href="../plugins/fatchannel.xml" />
+		</xi:fallback>
+	</xi:include>
+	<xi:include href="fatchannelxt.xml">
+		<xi:fallback>
+			<xi:include href="../plugins/fatchannelxt.xml" />
+		</xi:fallback>
+	</xi:include>
+	<xi:include href="voicefx.xml">
+		<xi:fallback>
+			<xi:include href="../plugins/voicefx.xml" />
+		</xi:fallback>
+	</xi:include>
+
+	<uc:Definitions>
+		<uc:StringList id="EmptyParamList">
+			<uc:String text="" />
+		</uc:StringList>
+
+		<uc:StringList id="PrePostList">
+			<uc:String text="Pre" />
+			<uc:String text="Post" />
+		</uc:StringList>
+
+		<uc:StringList id="MicPatternList">
+			<uc:String text="Omni" />
+			<uc:String text="Cardioid" />
+			<uc:String text="Figure-8" />
+		</uc:StringList>
+
+		<uc:StringList id="MuteModeList">
+			<uc:String text="Phones" />
+			<uc:String text="Mic" />
+		</uc:StringList>
+
+		<uc:StringList id="HP_source">
+			<uc:String text="Main" />			<!-- main/ch1 -->
+			<uc:String text="Stream Mix A" /> 	<!-- aux/ch1 -->
+			<uc:String text="Stream Mix B" />	<!-- aux/ch2 -->
+		</uc:StringList>
+        
+        <uc:StringList id="OutputDelayBusList">
+            <uc:String text="None" />
+            <uc:String text="USB 1/2" />
+            <uc:String text="USB 3/4" />
+            <uc:String text="USB 5/6" />
+			<uc:String text="USB 7/8" /> <!-- Marlon -->
+        </uc:StringList>
+	</uc:Definitions>
+
+	<uc:Parameters>
+		<uc:ParamList id="Global">
+			<uc:Param id="phonesSrc" name="Phones Source" type="list" def="0" units="HP_source" flags="storable" />
+			<uc:Param id="phonesMute" name="Headphones Muted" type="toggle" def="0" />
+			<uc:Param id="monitorBlend" name="Monitor Blend" type="float" min="-1" max="1" def="0" flags="bipolar" /> <!-- used in GUI -->
+
+			<!-- no phones output level -->
+
+			<uc:Param id="aux1_mirror_main" name="Mirror Main to Mix 1" type="toggle" def="0" flags="storable" />
+			<uc:Param id="aux2_mirror_main" name="Mirror Main to Mix 2" type="toggle" def="0" flags="storable" />
+            
+            <uc:Param id="outputDelay" name="Output Delay" type="float" min="0.0" max="0.5" mid="0.25" def="0.0" units="time" flags="storable" /> <!-- also stored on device -->
+            <uc:Param id="outputDelayBus" name="Output Delay Bus" type="list" units="OutputDelayBusList" def="0" flags="storable mutable" /> <!-- also stored on device -->
+			
+			<uc:Param id="phonesVolume" name="Phones Volume" type="float" min="-96" mid="-10" max="0" def="-30" curve="exp" units="gain" />
+			
+			<uc:Param id="presetButtonMode" name="Preset Mode" type="int" min="0" max="2" def="2" flags="storable mutable" />
+		
+			<uc:Param id="auxMuteMode" name="Aux Mute Mode" type="toggle" def="0" flags="storable" />
+		</uc:ParamList>
+				
+		<!-- Taryll -->
+		<uc:ParamList id="DynMicrophoneGlobal" inherit="Global" starttag="20">
+			<uc:Param id="muteButtonMode" name="Mute Mode" type="list" units="MuteModeList" def="1" flags="storable" /> <!-- Frontpanel button mute mode -->
+		</uc:ParamList>
+		
+		<!-- Tito -->
+		<uc:ParamList id="MicrophoneGlobal" inherit="DynMicrophoneGlobal" starttag="25">
+			<uc:Param id="micPattern" name="Mic" type="list" units="MicPatternList" def="1" flags="storable" />
+		</uc:ParamList>
+				
+		<!-- Michael, Marlon, ... -->
+		<uc:ParamList id="DesktopGlobal" inherit="Global" starttag="30">
+			<uc:Param id="mainOutVolume" name="Main Output Volume" type="float" min="-96" mid="-10" max="0" def="-30" curve="exp" units="gain" />
+			<uc:Param id="enableChannelAssign" name="Enable Processing Channel Assignment" type="toggle" def="0"/>
+		</uc:ParamList>
+
+		<uc:ParamList id="Diagnostics" starttag="60">
+			<uc:Param id="queryDebugMessages" name="Query Debug Messages" type="toggle" />
+		</uc:ParamList>
+		
+		<uc:ParamList id="ChannelPresets" starttag="80">
+			<uc:Param id="preset" name="Preset Titles" type="list" def="8" units="EmptyParamList" flags="mutable" />
+			<uc:Param id="matchesPresetFile" name="Matches Preset File" type="toggle" flags="readonly" />
+		</uc:ParamList>
+		
+		<uc:ParamList id="PresetCache" starttag="90">
+			<uc:Param id="cacheTitle1" name="Preset Title 1" type="string" flags="reaadonly" />
+			<uc:Param id="cacheTitle2" name="Preset Title 2" type="string" flags="reaadonly" />
+			<uc:Param id="cacheModified1" name="Cache 1 modified" type="toggle" flags="readonly" />
+			<uc:Param id="cacheModified2" name="Cache 2 modified" type="toggle" flags="readonly" />
+			<uc:Param id="activeCache" name="Active Preset Cache" type="int" min="0" max="1" def="0" flags="readonly" />
+		</uc:ParamList>
+
+		<uc:ParamList id="Channel" starttag="100">
+			<uc:Param id="chnum" name="Number" type="string" />	
+			<uc:Param id="name" name="Name" type="string" />
+			<uc:Param id="username" name="User Name" type="string" flags="storable" />
+			<uc:Param id="select" name="Select" type="toggle" flags="linkable" />
+			<uc:Param id="mute" name="Mute" type="toggle" flags="storable linkable" />
+			<uc:Param id="hardwareMute" name="Hardware Mute Button" type="toggle" def="0" />
+			<uc:Param id="volume" name="Volume" type="float" min="-96" max="10" def="-96" curve="fader" units="gain" flags="storable linkable" />
+			<uc:Param id="monitorBlend" name="Monitor Blend Factor" type="float" min="0" max="1" def="0.5" flags="readonly" /> <!-- used to calculate levels -->
+
+			<uc:Param id="clip" name="Clip" type="toggle" flags="readonly linkable" />
+
+			<uc:Param id="link" name="Link" type="toggle" flags="storable linkable" />
+			<uc:Param id="linkmaster" name="link master" type="toggle" flags="storable" />
+
+			<uc:Param id="preset_name" name="Preset Name" type="string" flags="storable" />
+		</uc:ParamList>
+
+		<uc:ParamList id="InputChannel" starttag="120" inherit="Channel">
+			<uc:Param id="solo" name="Solo" type="toggle" flags="storable linkable" />
+
+			<uc:Param id="lr" name="Monitor Assign" type="toggle" def="1" flags="storable linkable" />
+			<uc:Param id="assign_aux1" name="Assign Mix A" type="toggle" def="1" flags="storable linkable" />
+			<uc:Param id="assign_aux2" name="Assign Mix B" type="toggle" def="1" flags="storable linkable" />
+
+			<!-- mix levels -->
+			<uc:Param id="aux1" name="Mix A Level" type="float" min="-96" max="10" def="-96" curve="fader" units="gain" flags="storable linkable" />
+			<uc:Param id="aux2" name="Mix B Level" type="float" min="-96" max="10" def="-96" curve="fader" units="gain" flags="storable linkable" />
+		</uc:ParamList>
+
+		<uc:ParamList id="AnalogInputChannel" starttag="140" inherit="InputChannel">
+			<uc:Param id="autogain" name="Automatic Preamp Gain" type="toggle" def="0" flags="linkable" />
+			<uc:Param id="autogainmode" name="Automatic Preamp Gain Mode" type="int" min="0" max="1" def="0" flags="linkable" />
+			<uc:Param id="preampgain" name="Preamp Gain" type="float" min="0" max="60" def="0" curve="linear" units="gain.0" flags="storable mutable" />
+
+			<!-- pan - main/monitor and aux/usb -->
+			<uc:Param id="pan" name="Pan" type="float" min="0" max="1" def="0.5" units="pan.100" flags="storable bipolar" />
+			<uc:Param id="stereopan" name="Stereo Width" type="float" min="0" max="1" def="1" units="percent" flags="storable linkable" />
+
+			<uc:Param id="FXA" name="Reverb Level" type="float" min="-96" max="10" def="-96" curve="fader" units="gain" flags="storable linkable" />
+
+			<uc:Param id="dawpostdsp" name="DAW Send Post DSP" type="list" def="1" units="PrePostList" flags="storable linkable" /> <!-- available as input control in S1 -->
+
+			<!-- processing & preset slots -->
+			<uc:Param id="bypassDSP" name="Bypass" type="toggle" />
+			<uc:Param id="dspAmount" name="DSP Amount" type="float" min="0.00001" max="1" def="1" units="percent" flags="storable linkable"/> <!-- min > 0 -->
+			<uc:Param id="processingChannel" name="Assigned Processing Channel" type="int" min="-1" max="1" def="-1" flags="storable" />
+			<uc:Param id="activePresetSlotIndex" name="Active Preset Slot" type="int" min="0" max="3" flags="mutable" />
+			<uc:Param id="presetHotKey" name="Hot Key" type="toggle" />
+			<uc:Param id="presetHotKeyTitle" name="Hot Key Title" type="string" flags="readonly" />
+			<uc:Param id="presetSlotTitle1" name="Preset Slot 1" type="string" flags="readonly" />
+			<uc:Param id="presetSlotTitle2" name="Preset Slot 2" type="string" flags="readonly" />
+			<uc:Param id="presetSlotTitle3" name="Preset Slot 3" type="string" flags="readonly" />
+			<uc:Param id="presetSlotTitle4" name="Preset Slot 4" type="string" flags="readonly" />
+		</uc:ParamList>
+
+		<uc:ParamList id="MicLineInputChannel" starttag="160" inherit="AnalogInputChannel">
+			<uc:Param id="48v" name="48V" type="toggle" flags="storable" />  <!-- also stored on device -->
+		</uc:ParamList>
+		
+		<uc:ParamList id="StereoLineInput" starttag="165" inherit="AnalogInputChannel">
+			<uc:Param id="trim" name="Level Trim" type="float" min="-12" max="12" def="0" curve="linear" units="gain.0" flags="storable" />
+		</uc:ParamList>
+				
+		<uc:ParamList id="OutputChannel" starttag="300" inherit="Channel">
+			<uc:Param id="mono" name="Mono" type="toggle" flags="storable" />
+		</uc:ParamList>
+
+		<uc:ParamList id="InsertFXSelector" starttag="450">
+			<uc:Param id="fxmodel" name="FX Model" type="list" units="EmptyParamList" flags="mutable linkable" />
+		</uc:ParamList>
+		
+		<uc:ParamList id="ChannelDCA" starttag="500">
+			<uc:Param id="master" name="Master Volume" type="float" min="-96" max="10" def="0" curve="fader" units="gain" flags="storable linkable" />
+			<!-- internal elastic values -->
+			<uc:Param id="volume" name="Volume Offset" type="float" min="-106" max="106" def="0" flags="storable private" />
+			<uc:Param id="aux1" name="Aux 1 Offset" type="float" min="-106" max="106" def="0" flags="storable private" />
+			<uc:Param id="aux2" name="Aux 2 Offset" type="float" min="-106" max="106" def="0" flags="storable private" />
+		</uc:ParamList>
+	</uc:Parameters>
+
+	<uc:Templates>
+		<uc:Template id="VocalReverb">
+			<uc:Component id="reverb" paramlist="VocalReverb" classname="VocalReverbComponent" />
+		</uc:Template>
+
+		<uc:Template id="MicInputDSP">
+			<uc:Component id="opt"			paramlist="EQCompSelector"		classname="EQCompSelectorComponent" /> <!-- opt components first! -->
+			<uc:Component id="filter"		paramlist="HiPass"				classname="FilterComponent" classdata="HPFDefs" />
+			<uc:Component id="gate"			paramlist="Gate" 				classname="GateComponent" classdata="GateDefs" />
+			<uc:Component id="comp"			flags="mutable" />				<!-- Compressor model can change! -->
+			<uc:Component id="eq"			flags="mutable" />				<!-- EQ model can change! -->
+			<uc:Component id="limit"		paramlist="Limiter"				classname="LimiterComponent" />
+			<uc:Component id="voicefxopt"	paramlist="InsertFXSelector"	classname="InsertFXSelectorComponent" /> <!-- opt components first! -->
+			<uc:Component id="voicefx"		flags="mutable" />				<!-- Voice FX model can change! -->
+			<uc:Component id="presets"		paramlist="ChannelPresets"		classname="ChannelPresetComponent" />
+			<uc:Component id="cache"		paramlist="PresetCache"			classname="PresetCacheComponent" />
+		</uc:Template>
+		
+		<uc:Template id="StereoLineInputDSP">
+			<uc:Component id="opt"			paramlist="EQCompSelector"		classname="EQCompSelectorComponent" /> <!-- opt components first! -->
+			<uc:Component id="filter"		paramlist="HiPass"				classname="FilterComponent" classdata="HPFDefs" />
+			<uc:Component id="gate"			paramlist="Gate" 				classname="GateComponent" classdata="GateDefs" />
+			<uc:Component id="comp"			flags="mutable" />				<!-- Compressor model can change! -->
+			<uc:Component id="eq"			flags="mutable" />				<!-- EQ model can change! -->
+			<uc:Component id="limit"		paramlist="Limiter"				classname="LimiterComponent" />			
+			<uc:Component id="cache"		paramlist="PresetCache"			classname="PresetCacheComponent" />
+		</uc:Template>
+
+		<!-- ******************************************************************************************** -->
+		<!-- Tito Microphone 1x2 (6x6) -->
+		<!-- ******************************************************************************************** -->
+
+		<uc:Template id="Tito" flags="public">
+			<uc:Component id="diagnostics" paramlist="Diagnostics" classname="JacksonDiagnosticsComponent" />
+			<uc:Component id="global" paramlist="MicrophoneGlobal" classname="JacksonGlobalComponent" />
+			<uc:Component id="presets" classname="JacksonPresetComponent" />
+
+			<!-- Mic Input Channel (Capsule) -->
+			<uc:Component id="line" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="AnalogInputChannel" template="MicInputDSP" classname="JacksonMicrophoneChannelComponent" />
+			</uc:Component>
+
+			<!-- 3 Stereo USB Returns -->
+			<uc:Component id="return" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="3">
+					<uc:Component id="ch$i" paramlist="InputChannel" classname="JacksonDigitalInputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- FX Return (Reverb) -->
+			<uc:Component id="fxreturn" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="InputChannel" classname="JacksonFXReturnComponent" />
+			</uc:Component>
+
+			<!-- 2 Stereo Send Mixes -->
+			<uc:Component id="aux" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="2">
+					<uc:Component id="ch$i" paramlist="OutputChannel" classname="JacksonDigitalOutputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- Monitor Mix -->
+			<uc:Component id="main" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="OutputChannel" classname="JacksonMonitorOutputComponent" />
+			</uc:Component>
+
+			<!-- Reverb -->
+			<uc:Component id="fx">
+				<uc:Component id="ch1" classname="JacksonReverbComponent" template="VocalReverb" />
+			</uc:Component>
+		</uc:Template>
+		
+		<!-- ******************************************************************************************** -->
+		<!-- Taryll Microphone 1x2 (6x6) -->
+		<!-- ******************************************************************************************** -->
+
+		<uc:Template id="Taryll" flags="public">
+			<uc:Component id="diagnostics" paramlist="Diagnostics" classname="JacksonDiagnosticsComponent" />
+			<uc:Component id="global" paramlist="DynMicrophoneGlobal" classname="JacksonGlobalComponent" />
+			<uc:Component id="presets" classname="JacksonPresetComponent" />
+
+			<!-- Mic Input Channel (Capsule) -->
+			<uc:Component id="line" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="AnalogInputChannel" template="MicInputDSP" classname="JacksonMicrophoneChannelComponent" />
+			</uc:Component>
+
+			<!-- 3 Stereo USB Returns -->
+			<uc:Component id="return" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="3">
+					<uc:Component id="ch$i" paramlist="InputChannel" classname="JacksonDigitalInputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- FX Return (Reverb) -->
+			<uc:Component id="fxreturn" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="InputChannel" classname="JacksonFXReturnComponent" />
+			</uc:Component>
+
+			<!-- 2 Stereo Send Mixes -->
+			<uc:Component id="aux" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="2">
+					<uc:Component id="ch$i" paramlist="OutputChannel" classname="JacksonDigitalOutputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- Monitor Mix -->
+			<uc:Component id="main" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="OutputChannel" classname="JacksonMonitorOutputComponent" />
+			</uc:Component>
+
+			<!-- Reverb -->
+			<uc:Component id="fx">
+				<uc:Component id="ch1" classname="JacksonReverbComponent" template="VocalReverb" />
+			</uc:Component>
+		</uc:Template>
+
+		<!-- ******************************************************************************************** -->
+		<!-- Michael 2x4 (6x6) -->
+		<!-- ******************************************************************************************** -->
+
+		<uc:Template id="Michael" flags="public">
+			<uc:Component id="diagnostics" paramlist="Diagnostics" classname="JacksonDiagnosticsComponent" />
+			<uc:Component id="global" paramlist="DesktopGlobal" classname="JacksonGlobalComponent" />
+			<uc:Component id="presets" classname="JacksonPresetComponent" />
+
+			<!-- 2 Mic/Line Input Channels -->
+			<uc:Component id="line" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="2">
+					<uc:Component id="ch$i" paramlist="MicLineInputChannel" template="MicInputDSP" classname="JacksonDesktopMicLineChannelComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- 3 Stereo USB Returns -->
+			<uc:Component id="return" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="3">
+					<uc:Component id="ch$i" paramlist="InputChannel" classname="JacksonDigitalInputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- FX Return (Reverb) -->
+			<uc:Component id="fxreturn" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="InputChannel" classname="JacksonFXReturnComponent" />
+			</uc:Component>
+
+			<!-- 2 Stereo Send Mixes -->
+			<uc:Component id="aux" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="2">
+					<uc:Component id="ch$i" paramlist="OutputChannel" classname="JacksonDigitalOutputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- Monitor Mix -->
+			<uc:Component id="main" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="OutputChannel" classname="JacksonMonitorOutputComponent" />
+			</uc:Component>
+
+			<!-- Reverb -->
+			<uc:Component id="fx">
+				<uc:Component id="ch1" classname="JacksonReverbComponent" template="VocalReverb" />
+			</uc:Component>
+		</uc:Template>
+		
+		<!-- ******************************************************************************************** -->
+		<!-- Marlon 4x4 (6x6) -->
+		<!-- ******************************************************************************************** -->
+
+		<uc:Template id="Marlon" flags="public">
+			<uc:Component id="diagnostics" paramlist="Diagnostics" classname="JacksonDiagnosticsComponent" />
+			<uc:Component id="global" paramlist="DesktopGlobal" classname="JacksonGlobalComponent" />
+			<uc:Component id="presets" classname="JacksonPresetComponent" />
+			
+			<uc:Component id="line" classname="JacksonChannelGroupComponent">
+				<!-- XLR Mic/Line Input with 48V -->
+				<uc:Component id="ch1" paramlist="MicLineInputChannel" template="MicInputDSP" classname="JacksonDesktopMicLineChannelComponent" />
+				
+				<!-- TRRS Headset Input -->
+				<uc:Component id="ch2" paramlist="AnalogInputChannel" template="MicInputDSP" classname="JacksonHeadsetLineChannelComponent" />
+								
+				<!-- Stereo Analog Input -->
+				<uc:Component id="ch3" paramlist="StereoLineInput" template="StereoLineInputDSP" classname="JacksonStereoLineInputComponent" />						
+			</uc:Component>
+
+			<!-- 3 Stereo USB Returns -->
+			<uc:Component id="return" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="3">
+					<uc:Component id="ch$i" paramlist="InputChannel" classname="JacksonDigitalInputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- FX Return (Reverb) -->
+			<uc:Component id="fxreturn" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="InputChannel" classname="JacksonFXReturnComponent" />
+			</uc:Component>
+
+			<!-- 2 Stereo Send Mixes -->
+			<uc:Component id="aux" classname="JacksonChannelGroupComponent">
+				<uc:foreach id="$i" min="1" max="2">
+					<uc:Component id="ch$i" paramlist="OutputChannel" classname="JacksonDigitalOutputComponent" />
+				</uc:foreach>
+			</uc:Component>
+
+			<!-- Monitor Mix -->
+			<uc:Component id="main" classname="JacksonChannelGroupComponent">
+				<uc:Component id="ch1" paramlist="OutputChannel" classname="JacksonMonitorOutputComponent" />
+			</uc:Component>
+
+			<!-- Reverb -->
+			<uc:Component id="fx">
+				<uc:Component id="ch1" classname="JacksonReverbComponent" template="VocalReverb" />
+			</uc:Component>
+		</uc:Template>
+	</uc:Templates>
+
+</uc:ComponentModel>

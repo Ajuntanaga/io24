@@ -1,0 +1,7 @@
+content=identical
+metadata=identical
+files=5097 symlinks=41 directories=708 special=0
+source_system_reg_inode=8426326 target_system_reg_inode=6684800 independent_storage=yes
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt

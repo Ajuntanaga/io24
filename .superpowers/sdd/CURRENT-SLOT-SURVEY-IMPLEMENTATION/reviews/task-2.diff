@@ -1,0 +1,351 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 02:39:20.129478978 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 02:44:16.130034335 -0700
+@@ -1,2 +1,2 @@
+-5bfba253388cf67ec7f42bf3f6a7e95aff64c9e9486ca9b964e1f1a6add481a4  re/cp34_current_slot_survey.py
+-ee12d731611d485c5f8b8fb85d371045682972f16c4c9da7790fed477b901ebe  tests/test_cp34_current_slot_survey.py
++7feb313c5ddc39bdb326b5ede1d1ec78d221a60df306fd0d55eb36583ed7ee2c  re/cp34_current_slot_survey.py
++4fc9947c6bcab6d4dccc8b0d7963ba35f703ee14d399538d7ec3edd9159e2239  tests/test_cp34_current_slot_survey.py
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/re/cp34_current_slot_survey.py	2026-08-29 02:39:20.129229923 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/re/cp34_current_slot_survey.py	2026-08-29 02:44:16.129840455 -0700
+@@ -3,8 +3,10 @@
+ 
+ import hashlib
+ import json
++import math
+ import re
+ import sys
++import wave
+ from pathlib import PurePosixPath
+ 
+ 
+@@ -22,6 +24,148 @@
+ _EVIDENCE_PREFIX = ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/"
+ _STIMULUS_HASH = re.compile(r"[0-9a-f]{64}\Z")
+ 
++RATE = 48000
++CHANNELS = 6
++MIN_INPUT_PEAK_DB = -36.0
++MAX_INPUT_PEAK_DB = -12.0
++MAX_ANY_PEAK_DB = -3.0
++MIN_MAP_CORRELATION = 0.80
++MAX_LAG_SAMPLES = 12000
++MIX_CHANNELS = (3, 4)
++_IMPULSE_OFFSETS = (0, 33600, 67200, 100800, 134400)
++_IMPULSE_TOLERANCE_SAMPLES = 96
++_INT32_FULL_SCALE = (1 << 31) - 1
++_WINDOW_RADIUS = 8
++
++
++def _read_six_channel_wav(path):
++    """Return six signed-32-bit PCM channels, rejecting other WAV shapes."""
++    try:
++        with wave.open(path, "rb") as source:
++            if (source.getcomptype() != "NONE" or source.getsampwidth() != 4
++                    or source.getframerate() != RATE or source.getnchannels() != CHANNELS):
++                raise ValueError("wav_must_be_six_channel_s32_le_48khz_pcm")
++            frame_count = source.getnframes()
++            payload = source.readframes(frame_count)
++    except (OSError, EOFError, wave.Error) as exc:
++        raise ValueError("wav_unreadable_or_invalid") from exc
++    if len(payload) != frame_count * CHANNELS * 4:
++        raise ValueError("wav_payload_length_invalid")
++    samples = tuple(
++        int.from_bytes(payload[offset:offset + 4], "little", signed=True)
++        for offset in range(0, len(payload), 4)
++    )
++    return tuple(samples[channel::CHANNELS] for channel in range(CHANNELS))
++
++
++def _normalized_impulse_correlation(raw_input, candidate, arrivals, lag):
++    """Correlate 17-sample arrival windows at one non-negative candidate lag."""
++    dot = input_energy = candidate_energy = 0
++    for arrival in arrivals:
++        for offset in range(-_WINDOW_RADIUS, _WINDOW_RADIUS + 1):
++            input_index = arrival + offset
++            candidate_index = arrival + lag + offset
++            source_sample = raw_input[input_index] if 0 <= input_index < len(raw_input) else 0
++            candidate_sample = candidate[candidate_index] if 0 <= candidate_index < len(candidate) else 0
++            dot += source_sample * candidate_sample
++            input_energy += source_sample * source_sample
++            candidate_energy += candidate_sample * candidate_sample
++    if not input_energy or not candidate_energy:
++        return 0.0
++    return abs(dot) / math.sqrt(input_energy * candidate_energy)
++
++
++def _dbfs(peak):
++    return float("-inf") if not peak else 20.0 * math.log10(peak / _INT32_FULL_SCALE)
++
++
++def _arrival_samples(raw_input):
++    peak = max((abs(sample) for sample in raw_input), default=0)
++    if not peak:
++        return []
++    threshold = peak // 2
++    arrivals = []
++    index = 0
++    while index < len(raw_input):
++        if abs(raw_input[index]) < threshold:
++            index += 1
++            continue
++        start = index
++        while index < len(raw_input) and abs(raw_input[index]) >= threshold:
++            index += 1
++        arrivals.append(max(range(start, index), key=lambda item: abs(raw_input[item])))
++    return arrivals
++
++
++def _unavailable(raw_sha256, input_channel, reason, *, input_metrics=None, scores=None):
++    return {
++        "schema": "cp34-current-slot-map-v1",
++        "status": "UNAVAILABLE",
++        "raw_sha256": raw_sha256,
++        "input_metrics": input_metrics or {"input_channel": input_channel, "peak_dbfs": None, "arrivals": []},
++        "scores": scores or {str(channel): 0.0 for channel in MIX_CHANNELS},
++        "frozen_mix_channel": None,
++        "reasons": [reason],
++    }
++
++
++def analyze_map(path: str, input_channel: int) -> dict:
++    """Map a recorded input to the preplanned Mix A candidates, offline only."""
++    try:
++        raw = open(path, "rb").read()
++    except (OSError, TypeError, ValueError):
++        raw = b""
++    raw_sha256 = hashlib.sha256(raw).hexdigest()
++    if input_channel not in (1, 2):
++        return _unavailable(raw_sha256, input_channel, "input_channel_must_be_1_or_2")
++    try:
++        audio = _read_six_channel_wav(path)
++    except (TypeError, ValueError):
++        return _unavailable(raw_sha256, input_channel, "wav_must_be_six_channel_s32_le_48khz_pcm")
++    raw_input = audio[input_channel - 1]
++    input_peak = max((abs(sample) for sample in raw_input), default=0)
++    arrivals = _arrival_samples(raw_input)
++    input_metrics = {
++        "input_channel": input_channel,
++        "peak_dbfs": _dbfs(input_peak),
++        "arrivals": arrivals,
++    }
++    if not MIN_INPUT_PEAK_DB <= input_metrics["peak_dbfs"] <= MAX_INPUT_PEAK_DB:
++        return _unavailable(raw_sha256, input_channel, "input_peak_outside_safe_window", input_metrics=input_metrics)
++    any_peak = max(abs(sample) for channel in audio for sample in channel)
++    if _dbfs(any_peak) > MAX_ANY_PEAK_DB:
++        return _unavailable(raw_sha256, input_channel, "any_channel_above_minus_3_dbfs", input_metrics=input_metrics)
++    if len(arrivals) != len(_IMPULSE_OFFSETS):
++        return _unavailable(raw_sha256, input_channel, "input_must_contain_exactly_five_impulses", input_metrics=input_metrics)
++    relative_arrivals = tuple(arrival - arrivals[0] for arrival in arrivals)
++    if any(abs(actual - expected) > _IMPULSE_TOLERANCE_SAMPLES
++           for actual, expected in zip(relative_arrivals, _IMPULSE_OFFSETS)):
++        return _unavailable(raw_sha256, input_channel, "input_impulse_cadence_invalid", input_metrics=input_metrics)
++    scores = {}
++    for channel in MIX_CHANNELS:
++        candidate = audio[channel - 1]
++        scores[str(channel)] = max(
++            _normalized_impulse_correlation(raw_input, candidate, arrivals, lag)
++            for lag in range(MAX_LAG_SAMPLES + 1)
++        )
++    best_score = max(scores.values())
++    if best_score < MIN_MAP_CORRELATION:
++        return _unavailable(raw_sha256, input_channel, "no_usable_mix_a_channel", input_metrics=input_metrics, scores=scores)
++    rounded_scores = {channel: round(score, 6) for channel, score in scores.items()}
++    if rounded_scores["3"] == rounded_scores["4"]:
++        frozen_mix_channel = 3
++    else:
++        frozen_mix_channel = 3 if scores["3"] > scores["4"] else 4
++    return {
++        "schema": "cp34-current-slot-map-v1",
++        "status": "MAPPED",
++        "raw_sha256": raw_sha256,
++        "input_metrics": input_metrics,
++        "scores": scores,
++        "frozen_mix_channel": frozen_mix_channel,
++        "reasons": [],
++    }
++
+ 
+ def _contains_unrecorded(value):
+     if isinstance(value, str):
+@@ -145,12 +289,21 @@
+ 
+ def main(argv=None):
+     argv = sys.argv[1:] if argv is None else argv
+-    if len(argv) != 2 or argv[0] != "validate-plan":
+-        result = {"schema": "cp34-current-slot-survey-plan-validation-v1", "status": "INVALID", "plan_sha256": hashlib.sha256(b"").hexdigest(), "reasons": ["usage: validate-plan PLAN.json"], "candidates": []}
+-    else:
++    if len(argv) == 2 and argv[0] == "validate-plan":
+         result = validate_plan(argv[1])
++        print(json.dumps(result, sort_keys=True))
++        return 0 if result["status"] == "VALID" else 2
++    if len(argv) == 4 and argv[0] == "map-channel" and argv[2] == "--input-channel":
++        try:
++            input_channel = int(argv[3])
++        except ValueError:
++            input_channel = 0
++        result = analyze_map(argv[1], input_channel)
++        print(json.dumps(result, sort_keys=True))
++        return 0 if result["status"] == "MAPPED" else 2
++    result = {"schema": "cp34-current-slot-survey-plan-validation-v1", "status": "INVALID", "plan_sha256": hashlib.sha256(b"").hexdigest(), "reasons": ["usage: validate-plan PLAN.json | map-channel MAP.raw.wav --input-channel 1"], "candidates": []}
+     print(json.dumps(result, sort_keys=True))
+-    return 0 if result["status"] == "VALID" else 2
++    return 2
+ 
+ 
+ if __name__ == "__main__":
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-before/tests/test_cp34_current_slot_survey.py	2026-08-29 02:39:20.129320578 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-2-after/tests/test_cp34_current_slot_survey.py	2026-08-29 02:44:16.129918538 -0700
+@@ -3,6 +3,7 @@
+ import sys
+ import tempfile
+ import unittest
++import wave
+ from pathlib import Path
+ 
+ 
+@@ -10,6 +11,37 @@
+ CLI = ROOT / "re" / "cp34_current_slot_survey.py"
+ 
+ 
++def _write_six_channel_map_wav(
++    path,
++    *,
++    input_channel=1,
++    responses=None,
++    arrivals=(0, 33600, 67200, 100800, 134400),
++    input_amplitude=135000000,
++    noise_amplitude=31,
++):
++    """Write a hand-defined six-channel S32_LE map-analysis fixture."""
++    if responses is None:
++        responses = {3: (480, (0, 1, 2, 3, 4))}
++    frame_count = max(arrivals) + 13000
++    frames = [[noise_amplitude if (frame + channel) % 2 else -noise_amplitude
++               for channel in range(6)] for frame in range(frame_count)]
++    for arrival in arrivals:
++        frames[arrival][input_channel - 1] = input_amplitude
++    for channel, (lag, response_indices) in responses.items():
++        for index in response_indices:
++            frames[arrivals[index] + lag][channel - 1] = input_amplitude
++    with wave.open(str(path), "wb") as output:
++        output.setnchannels(6)
++        output.setsampwidth(4)
++        output.setframerate(48000)
++        output.setcomptype("NONE", "not compressed")
++        output.writeframes(b"".join(
++            int(sample).to_bytes(4, "little", signed=True)
++            for frame in frames for sample in frame
++        ))
++
++
+ def _valid_plan():
+     return {
+         "schema": "cp34-current-slot-survey-plan-v1",
+@@ -159,3 +191,104 @@
+         self._assert_invalid(plan, "battery_stop_percent_must_be_at_least_10")
+         plan = _valid_plan(); plan["prohibited_actions"].remove("wine")
+         self._assert_invalid(plan, "prohibited_actions_must_match_complete_set")
++
++
++class MappingAnalyzerTests(unittest.TestCase):
++    def _invoke_map(self, path, input_channel=1):
++        return subprocess.run(
++            [sys.executable, str(CLI), "map-channel", str(path),
++             "--input-channel", str(input_channel)],
++            text=True, capture_output=True, check=False,
++        )
++
++    def _assert_unavailable(self, path, reason, input_channel=1):
++        completed = self._invoke_map(path, input_channel)
++        self.assertEqual(completed.returncode, 2)
++        self.assertNotIn("Traceback", completed.stderr)
++        result = json.loads(completed.stdout)
++        self.assertEqual(result["status"], "UNAVAILABLE")
++        self.assertIn(reason, result["reasons"])
++
++    def test_selects_channel_3_for_correlated_five_impulse_fixture(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path)
++            completed = self._invoke_map(path)
++        self.assertEqual(completed.returncode, 0)
++        result = json.loads(completed.stdout)
++        self.assertEqual(result["status"], "MAPPED")
++        self.assertEqual(result["frozen_mix_channel"], 3)
++        self.assertEqual(len(result["input_metrics"]["arrivals"]), 5)
++        self.assertIn("3", result["scores"])
++        self.assertIn("4", result["scores"])
++
++    def test_selects_channel_4_when_its_score_is_higher(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path, responses={
++                3: (480, (0, 1, 2, 3)), 4: (760, (0, 1, 2, 3, 4)),
++            })
++            completed = self._invoke_map(path)
++        self.assertEqual(completed.returncode, 0)
++        result = json.loads(completed.stdout)
++        self.assertEqual(result["frozen_mix_channel"], 4)
++        self.assertGreater(result["scores"]["4"], result["scores"]["3"])
++
++    def test_equal_six_decimal_scores_choose_channel_3(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path, responses={
++                3: (480, (0, 1, 2, 3, 4)), 4: (760, (0, 1, 2, 3, 4)),
++            })
++            completed = self._invoke_map(path)
++        self.assertEqual(completed.returncode, 0)
++        result = json.loads(completed.stdout)
++        self.assertEqual(round(result["scores"]["3"], 6), round(result["scores"]["4"], 6))
++        self.assertEqual(result["frozen_mix_channel"], 3)
++
++    def test_no_usable_mix_a_channel_is_unavailable(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path, responses={
++                3: (480, (0,)), 4: (760, (1,)),
++            })
++            self._assert_unavailable(path, "no_usable_mix_a_channel")
++
++    def test_changed_impulse_cadence_is_unavailable(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(
++                path, arrivals=(0, 33697, 67200, 100800, 134400),
++            )
++            self._assert_unavailable(path, "input_impulse_cadence_invalid")
++
++    def test_any_channel_above_minus_3_dbfs_is_unavailable(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path)
++            with wave.open(str(path), "rb") as source:
++                params = source.getparams()
++                payload = bytearray(source.readframes(source.getnframes()))
++            payload[(130000 * 6 + 5) * 4:(130000 * 6 + 6) * 4] = (2000000000).to_bytes(
++                4, "little", signed=True,
++            )
++            with wave.open(str(path), "wb") as output:
++                output.setparams(params)
++                output.writeframes(payload)
++            self._assert_unavailable(path, "any_channel_above_minus_3_dbfs")
++
++    def test_input_peak_outside_safe_window_is_unavailable(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            _write_six_channel_map_wav(path, input_amplitude=3000000)
++            self._assert_unavailable(path, "input_peak_outside_safe_window")
++
++    def test_wrong_wav_format_is_unavailable_without_traceback(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "MAP.raw.wav"
++            with wave.open(str(path), "wb") as output:
++                output.setnchannels(2)
++                output.setsampwidth(2)
++                output.setframerate(48000)
++                output.writeframes(b"\0\0\0\0" * 16)
++            self._assert_unavailable(path, "wav_must_be_six_channel_s32_le_48khz_pcm")

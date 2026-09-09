@@ -1,0 +1,703 @@
+--- task-9-r132-base/tests/winusb_function_io_contract.c
++++ task-9-r132-head/tests/winusb_function_io_contract.c
+@@ -311,11 +311,16 @@
+ static PIRP control_pending_irp;
+ static IO_STACK_LOCATION *control_pending_stack;
+ static PDEVICE_OBJECT control_pending_device;
++static PIRP control_pending_next_irp;
++static IO_STACK_LOCATION *control_pending_next_stack;
++static PDEVICE_OBJECT control_pending_next_device;
++static unsigned int control_pending_count;
+ static unsigned int control_lower_completions, control_upper_completions;
+ static unsigned int control_duplicate_completion_attempts;
+ static BOOL control_lower_slot0_installed;
+ static unsigned int control_file_references, control_file_dereferences;
+ static LONG expected_session_urb_outstanding = 1;
++static LONG expected_task9_completion_outstanding = 1;
+ static unsigned int control_retirement_events, control_retirement_order[8];
+ static BOOL descriptor_unmapped_mdl;
+ enum { CONTROL_EVENT_UNLINK = 1, CONTROL_EVENT_FREE = 2, CONTROL_EVENT_DEREF = 3 };
+@@ -339,9 +344,9 @@
+         /* Completing the lower IRP may free a close-waiting file as soon as
+          * its I/O reference is released.  The upper record, URB, and object
+          * reference must therefore retire while that reference still pins it. */
+-        IO24_CHECK(file && file->outstanding == 1);
+-        IO24_CHECK(file && file->transfers.Flink == &file->transfers &&
+-                file->transfers.Blink == &file->transfers);
++        IO24_CHECK(file && file->outstanding == expected_task9_completion_outstanding);
++        IO24_CHECK(file && IsListEmpty(&file->transfers) ==
++                (expected_task9_completion_outstanding == 1));
+         control_retirement_order[control_retirement_events++] = CONTROL_EVENT_UNLINK;
+     }
+     if (control_retirement_events < ARRAY_SIZE(control_retirement_order))
+@@ -381,7 +386,8 @@
+ VOID WINAPI ObDereferenceObject(PVOID object)
+ {
+     IO24_CHECK(object == control_expected_file);
+-    IO24_CHECK(control_file_references == control_file_dereferences + 1);
++    IO24_CHECK(control_file_references == control_file_dereferences +
++            expected_task9_completion_outstanding);
+     if (control_retirement_observing)
+     {
+         const struct winusb_file *file = control_expected_file ?
+@@ -390,7 +396,7 @@
+         IO24_CHECK(control_retirement_order[0] == CONTROL_EVENT_UNLINK);
+         IO24_CHECK(control_retirement_order[1] == CONTROL_EVENT_FREE);
+         IO24_CHECK(control_retirement_order[2] == CONTROL_EVENT_FREE);
+-        IO24_CHECK(file && file->outstanding == 1);
++        IO24_CHECK(file && file->outstanding == expected_task9_completion_outstanding);
+         if (control_retirement_events < ARRAY_SIZE(control_retirement_order))
+             control_retirement_order[control_retirement_events++] = CONTROL_EVENT_DEREF;
+     }
+@@ -444,22 +450,23 @@
+ }
+ 
+ static void complete_task9_original_irp(PDEVICE_OBJECT device, PIRP irp,
+-        IO_STACK_LOCATION *stack)
++        IO_STACK_LOCATION *stack, LONG outstanding_before)
+ {
+     struct winusb_file *file = control_expected_file ?
+             control_expected_file->FsContext : NULL;
+     unsigned int completions_before = completes;
+     NTSTATUS completion_status;
+ 
++    expected_task9_completion_outstanding = outstanding_before;
+     IO24_CHECK(irp == control_expected_irp);
+-    IO24_CHECK(file != NULL && file->outstanding == 1);
++    IO24_CHECK(file != NULL && file->outstanding == outstanding_before);
+     IO24_CHECK(file && file->transfers.Flink != &file->transfers &&
+             file->transfers.Blink != &file->transfers);
+     IO24_CHECK(stack->CompletionRoutine != NULL);
+     IO24_CHECK(stack->Context != NULL); /* upper record/URB ownership only */
+     IO24_CHECK((stack->Control & (SL_INVOKE_ON_SUCCESS | SL_INVOKE_ON_ERROR | SL_INVOKE_ON_CANCEL)) ==
+             (SL_INVOKE_ON_SUCCESS | SL_INVOKE_ON_ERROR | SL_INVOKE_ON_CANCEL));
+-    IO24_CHECK(control_file_references == control_file_dereferences + 1);
++    IO24_CHECK(control_file_references == control_file_dereferences + outstanding_before);
+     /* Slot 0 belongs to the lower pending queue.  It is retired before upper
+      * completion, while unrelated lower slots stay byte-for-byte intact. */
+     if (control_lower_slot0_installed)
+@@ -483,26 +490,34 @@
+     /* The lower stack owns the sole terminal completion after upper returns. */
+     IoCompleteRequest(irp, IO_NO_INCREMENT);
+     IO24_CHECK(completes == completions_before + 1);
+-    IO24_CHECK(file->outstanding == 0 && file->zero_outstanding.Header.SignalState);
+-    IO24_CHECK(file->transfers.Flink == &file->transfers &&
+-            file->transfers.Blink == &file->transfers);
+-    IO24_CHECK(control_file_references == control_file_dereferences);
++    IO24_CHECK(file->outstanding == outstanding_before - 1);
++    IO24_CHECK(!!file->zero_outstanding.Header.SignalState == (outstanding_before == 1));
++    IO24_CHECK(IsListEmpty(&file->transfers) == (outstanding_before == 1));
++    IO24_CHECK(control_file_references == control_file_dereferences + outstanding_before - 1);
+ }
+ 
+ static BOOL complete_pending_task9_irp(void)
+ {
+     PIRP irp = control_pending_irp;
+     IO_STACK_LOCATION *stack = control_pending_stack;
++    PDEVICE_OBJECT device = control_pending_device;
++    unsigned int pending_before = control_pending_count;
+ 
+     if (!irp || !stack)
+     {
+         ++control_duplicate_completion_attempts;
+         return FALSE;
+     }
+-    control_pending_irp = NULL;
+-    control_pending_stack = NULL;
+-    complete_task9_original_irp(control_pending_device, irp, stack);
+-    control_pending_device = NULL;
++    control_pending_irp = control_pending_next_irp;
++    control_pending_stack = control_pending_next_stack;
++    control_pending_device = control_pending_next_device;
++    control_pending_next_irp = NULL;
++    control_pending_next_stack = NULL;
++    control_pending_next_device = NULL;
++    --control_pending_count;
++    control_expected_irp = irp;
++    control_lower_slot0_installed = TRUE;
++    complete_task9_original_irp(device, irp, stack, pending_before);
+     control_lower_slot0_installed = FALSE;
+     return TRUE;
+ }
+@@ -557,11 +572,16 @@
+     control_pending_irp = NULL;
+     control_pending_stack = NULL;
+     control_pending_device = NULL;
++    control_pending_next_irp = NULL;
++    control_pending_next_stack = NULL;
++    control_pending_next_device = NULL;
++    control_pending_count = 0;
+     control_lower_completions = control_upper_completions = 0;
+     control_duplicate_completion_attempts = 0;
+     control_lower_slot0_installed = FALSE;
+     control_file_references = control_file_dereferences = 0;
+     expected_session_urb_outstanding = 1;
++    expected_task9_completion_outstanding = 1;
+     poison_two_interface_state_allocation = FALSE;
+     poisoned_two_interface_state_allocations = 0;
+     control_retirement_observing = FALSE;
+@@ -640,7 +660,8 @@
+          * executable nested-IRP mutant, not an implementation detail. */
+         IO24_CHECK(irp == control_expected_irp && allocation == NULL);
+         IO24_CHECK(active_session_file == control_expected_file && file);
+-        IO24_CHECK(file->outstanding == 1 && !file->zero_outstanding.Header.SignalState);
++        IO24_CHECK(file->outstanding == (LONG)control_pending_count + 1 &&
++                !file->zero_outstanding.Header.SignalState);
+         IO24_CHECK(file->session_mutex.Owner == NULL);
+     }
+     else if (!active_session_file)
+@@ -914,12 +935,27 @@
+             irp->Tail.Overlay.DriverContext[0] = control_lower_slot0_sentinel;
+             control_lower_slot0_installed = TRUE;
+             irp->PendingReturned = TRUE;
+-            control_pending_irp = irp;
+-            control_pending_stack = next;
+-            control_pending_device = device;
++            if (!control_pending_count)
++            {
++                control_pending_irp = irp;
++                control_pending_stack = next;
++                control_pending_device = device;
++            }
++            else if (control_pending_count == 1)
++            {
++                control_pending_next_irp = irp;
++                control_pending_next_stack = next;
++                control_pending_next_device = device;
++            }
++            else
++            {
++                fputs("HARNESS: Task-9 pending fixture capacity exceeded\n", stderr);
++                exit(2);
++            }
++            ++control_pending_count;
+             return STATUS_PENDING;
+         }
+-        complete_task9_original_irp(device, irp, next);
++        complete_task9_original_irp(device, irp, next, 1);
+         return status;
+     }
+     IO24_CHECK(allocation != NULL);
+@@ -1025,7 +1061,7 @@
+     control_expected_mdl = attach_mdl ? &mdl : NULL;
+     control_expected_irp = &irp;
+     effect.dispatch_status = driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
+-    if (control_pending_irp == &irp)
++    if (control_pending_irp == &irp || control_pending_next_irp == &irp)
+     {
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING);
+         IO24_CHECK(complete_pending_task9_irp());
+@@ -1121,6 +1157,14 @@
+     return 0;
+ }
+ 
++/* A failed create/join cannot safely support any production claim.  In
++ * particular, post-failed-join shared-state access is a terminal harness bug. */
++static void control_thread_terminal(const char *operation)
++{
++    fprintf(stderr, "HARNESS: Task-9 mutex worker %s failed\n", operation);
++    exit(2);
++}
++
+ static struct dispatch_effect dispatch_descriptor(PDRIVER_OBJECT driver, PDEVICE_OBJECT fdo,
+         struct guarded_descriptor *guarded, ULONG input_length, ULONG output_length,
+         ULONG mdl_length, BOOL attach_mdl, FILE_OBJECT *file)
+@@ -1146,7 +1190,7 @@
+     effect.lower_before = lower_calls; effect.complete_before = completes; counts.submits++;
+     active_session_file = file; control_expected_mdl = attach_mdl ? &mdl : NULL; control_expected_irp = &irp;
+     effect.dispatch_status = driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
+-    if (control_pending_irp == &irp)
++    if (control_pending_irp == &irp || control_pending_next_irp == &irp)
+     {
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING);
+         IO24_CHECK(complete_pending_task9_irp());
+@@ -2922,14 +2966,20 @@
+         thrd_t worker; int worker_result; unsigned int lower_before = lower_calls, spins = 0;
+         int worker_created;
+         BOOL blocked_seen;
+-        CONTROL_SEED(); memset(&control_mutex_schedule, 0, sizeof(control_mutex_schedule));
++        CONTROL_SEED(); control_expected_length = 0;
++        memset(&control_mutex_schedule, 0, sizeof(control_mutex_schedule));
+         control_mutex_schedule.driver = &d; control_mutex_schedule.fdo = last_fdo;
+         control_mutex_schedule.file = &file; control_mutex_schedule.control = &control;
+         atomic_store_explicit(&io24_mutex_block_seen, FALSE, memory_order_release);
+         atomic_store_explicit(&io24_mutex_block_target, &mutex_file->session_mutex, memory_order_release);
+         ExAcquireFastMutex(&mutex_file->session_mutex);
+         worker_created = thrd_create(&worker, control_mutex_worker, &control_mutex_schedule) == thrd_success;
+-        IO24_CHECK(worker_created);
++        if (!worker_created)
++        {
++            ExReleaseFastMutex(&mutex_file->session_mutex);
++            atomic_store_explicit(&io24_mutex_block_target, NULL, memory_order_release);
++            control_thread_terminal("creation");
++        }
+         while (!atomic_load_explicit(&io24_mutex_block_seen, memory_order_acquire) && spins++ < 1000000)
+             thrd_yield();
+         blocked_seen = atomic_load_explicit(&io24_mutex_block_seen, memory_order_acquire);
+@@ -2937,7 +2987,9 @@
+         if (blocked_seen) mutex_file->state = WINUSB_FILE_UNINITIALIZED;
+         ExReleaseFastMutex(&mutex_file->session_mutex);
+         atomic_store_explicit(&io24_mutex_block_target, NULL, memory_order_release);
+-        if (worker_created) IO24_CHECK(thrd_join(worker, &worker_result) == thrd_success && worker_result == 0);
++        if (thrd_join(worker, &worker_result) != thrd_success)
++            control_thread_terminal("join");
++        if (worker_result != 0) control_thread_terminal("result");
+         IO24_CHECK(control_mutex_schedule.effect.status == STATUS_INVALID_DEVICE_STATE &&
+                 lower_calls == lower_before && !control_pending_irp);
+         if (control_pending_irp) complete_pending_task9_irp();
+@@ -2957,6 +3009,57 @@
+     IO24_CHECK(((struct winusb_file *)file.FsContext)->interfaces[0].alternate_setting == 1 &&
+             ((struct winusb_file *)file.FsContext)->interfaces[0].endpoint_count == 2);
+ 
++    /* Endpoint lookup must happen after acquisition of this exact session
++     * mutex.  Changing the real current pipe map while the worker is blocked
++     * catches a stale pre-lock endpoint lookup. */
++    {
++        struct winusb_file *mutex_file = file.FsContext;
++        struct winusb_interface_state *interface = &mutex_file->interfaces[0];
++        UCHAR original_endpoint = interface->pipes[0].endpoint;
++        thrd_t worker;
++        int worker_result;
++        unsigned int lower_before = lower_calls, spins = 0;
++        BOOL blocked_seen;
++
++        CONTROL_SEED();
++        control.request.setup[0] = 0x82;
++        control.request.setup[4] = original_endpoint;
++        memcpy(control_expected_setup, control.request.setup, sizeof(control_expected_setup));
++        control_expected_length = control_actual_length = 0;
++        control_returns_pending = FALSE;
++        memset(&control_mutex_schedule, 0, sizeof(control_mutex_schedule));
++        control_mutex_schedule.driver = &d;
++        control_mutex_schedule.fdo = last_fdo;
++        control_mutex_schedule.file = &file;
++        control_mutex_schedule.control = &control;
++        atomic_store_explicit(&io24_mutex_block_seen, FALSE, memory_order_release);
++        atomic_store_explicit(&io24_mutex_block_target, &mutex_file->session_mutex,
++                memory_order_release);
++        ExAcquireFastMutex(&mutex_file->session_mutex);
++        if (thrd_create(&worker, control_mutex_worker, &control_mutex_schedule) != thrd_success)
++        {
++            ExReleaseFastMutex(&mutex_file->session_mutex);
++            atomic_store_explicit(&io24_mutex_block_target, NULL, memory_order_release);
++            control_thread_terminal("creation");
++        }
++        while (!atomic_load_explicit(&io24_mutex_block_seen, memory_order_acquire) &&
++                spins++ < 1000000)
++            thrd_yield();
++        blocked_seen = atomic_load_explicit(&io24_mutex_block_seen, memory_order_acquire);
++        IO24_CHECK(blocked_seen);
++        if (blocked_seen) interface->pipes[0].endpoint = 0x84;
++        ExReleaseFastMutex(&mutex_file->session_mutex);
++        atomic_store_explicit(&io24_mutex_block_target, NULL, memory_order_release);
++        if (thrd_join(worker, &worker_result) != thrd_success)
++            control_thread_terminal("join");
++        if (worker_result != 0) control_thread_terminal("result");
++        IO24_CHECK(control_mutex_schedule.effect.status == STATUS_INVALID_PARAMETER &&
++                control_mutex_schedule.effect.information == 0 &&
++                lower_calls == lower_before && !control_pending_count);
++        interface->pipes[0].endpoint = original_endpoint;
++        control_expected_irp = NULL;
++    }
++
+     /* A real nonzero CONTROL_IN uses the current IN pipe (0x81), not merely a
+      * zero-length scope check.  The mapped direct MDL is the only data path;
+      * bytes past the reported completion stay guarded. */
+@@ -3149,12 +3252,15 @@
+     control.request.setup[5] = 0xab;
+     CONTROL_REJECT(IOCTL_WINE_WINUSB_CONTROL_IN, 40, 0, 0, FALSE);
+ 
+-    /* The caller-owned pending IRP keeps every WDM object live across two
+-     * real alternate calls.  A transfer on MI06 blocks only MI06. */
+-    {
+-        IRP pending_irp;
+-        IO_STACK_LOCATION pending_stack[2];
+-        MDL pending_mdl;
++    /* Two caller-owned generic controls on MI06 remain pending together.
++     * Root MI05 remains independent, while completing only one MI06 request
++     * must leave MI06 blocked.  This catches Boolean accounting masquerading
++     * as a real per-interface transfer count. */
++    {
++        struct guarded_control pending_controls[2];
++        IRP pending_irps[2];
++        IO_STACK_LOCATION pending_stacks[2][2];
++        MDL pending_mdls[2];
+         unsigned int lower_before;
+ 
+         CONTROL_SEED(); control.request.request.interface_index = 1;
+@@ -3162,15 +3268,23 @@
+         control.request.setup[5] = 0xab;
+         memcpy(control_expected_setup, control.request.setup, 8);
+         control_expected_setup[4] = 6;
++        pending_controls[0] = control;
++        pending_controls[1] = control;
+         control_returns_pending = TRUE;
+-        effect = begin_pending_control(&d, last_fdo, &control, &file,
+-                &pending_irp, pending_stack, &pending_mdl);
+-        IO24_CHECK(effect.dispatch_status == STATUS_PENDING && control_pending_irp == &pending_irp);
++        effect = begin_pending_control(&d, last_fdo, &pending_controls[0], &file,
++                &pending_irps[0], pending_stacks[0], &pending_mdls[0]);
++        IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
++                control_pending_irp == &pending_irps[0] && control_pending_count == 1);
++        effect = begin_pending_control(&d, last_fdo, &pending_controls[1], &file,
++                &pending_irps[1], pending_stacks[1], &pending_mdls[1]);
++        IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
++                control_pending_irp == &pending_irps[0] &&
++                control_pending_next_irp == &pending_irps[1] && control_pending_count == 2);
+         expected_alternate_interface = 5; expected_alternate_setting = 0;
+         expected_alternate_pipes = 0;
+-        expected_session_urb_outstanding = 2;
++        expected_session_urb_outstanding = 3;
+         IO24_CHECK(NT_SUCCESS(select_control_alternate_status(&d, last_fdo, &file, 0, 0)));
+-        expected_session_urb_outstanding = 1;
++        expected_session_urb_outstanding = 2;
+         expected_alternate_interface = 6; expected_alternate_setting = 1;
+         expected_alternate_pipes = 1; expected_alternate_endpoints[0] = 0x83;
+         expected_alternate_packets[0] = 64;
+@@ -3180,8 +3294,19 @@
+         IO24_CHECK(lower_calls == lower_before);
+         io24_last_completed_irp = NULL; io24_completed_irp_count = 0;
+         IO24_CHECK(complete_pending_task9_irp());
+-        IO24_CHECK(io24_completed_irp_count == 1 && io24_last_completed_irp == &pending_irp);
++        IO24_CHECK(io24_completed_irp_count == 1 &&
++                io24_last_completed_irp == &pending_irps[0] && control_pending_count == 1);
++        expected_session_urb_outstanding = 2;
++        lower_before = lower_calls;
++        IO24_CHECK(select_control_alternate_status(&d, last_fdo, &file, 1, 1) ==
++                STATUS_INVALID_DEVICE_STATE);
++        IO24_CHECK(lower_calls == lower_before);
++        io24_last_completed_irp = NULL; io24_completed_irp_count = 0;
++        IO24_CHECK(complete_pending_task9_irp());
++        IO24_CHECK(io24_completed_irp_count == 1 &&
++                io24_last_completed_irp == &pending_irps[1] && !control_pending_count);
+         control_expected_irp = NULL; control_returns_pending = FALSE;
++        expected_session_urb_outstanding = 1;
+         IO24_CHECK(NT_SUCCESS(select_control_alternate_status(&d, last_fdo, &file, 1, 1)));
+     }
+ 
+@@ -3233,6 +3358,8 @@
+             control_file_dereferences - object_dereferences_before); \
+     IO24_CHECK(control_file_references == control_file_dereferences); \
+     IO24_CHECK(!control_pending_irp && !control_pending_stack && !control_pending_device && \
++            !control_pending_next_irp && !control_pending_next_stack && \
++            !control_pending_next_device && !control_pending_count && \
+             !control_lower_slot0_installed); \
+ } while (0)
+ #define DESCRIPTOR_ACCEPT(expected, expected_information) do { \
+@@ -3284,6 +3411,8 @@
+             control_file_dereferences - object_dereferences_before); \
+     IO24_CHECK(control_file_references == control_file_dereferences); \
+     IO24_CHECK(!control_pending_irp && !control_pending_stack && !control_pending_device && \
++            !control_pending_next_irp && !control_pending_next_stack && \
++            !control_pending_next_device && !control_pending_count && \
+             !control_lower_slot0_installed); \
+     control_pool_check_complete((ordinal), (ordinal) - 1); \
+ } while (0)
+--- task-9-r132-base/tests/wineusb_winusb_busif_contract.c
++++ task-9-r132-head/tests/wineusb_winusb_busif_contract.c
+@@ -347,8 +347,42 @@
+     expected_callback_context = (void *)0x12345678;
+ }
+ 
+-void WINAPI EnterCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
+-void WINAPI LeaveCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
++static struct usb_device *critical_injection_device;
++static IRP *critical_injection_irp;
++static BOOL critical_injection_armed, critical_injection_active;
++static BOOL critical_injection_enter_seen, critical_injection_leave_seen;
++
++/* The one-shot entry exists only between entry to and exit from the exact
++ * production wineusb_cs.  This catches pre-lock list classification without
++ * relying on a source-text scan. */
++void WINAPI EnterCriticalSection(CRITICAL_SECTION *critical_section)
++{
++    if (critical_section == &wineusb_cs && critical_injection_armed)
++    {
++        CHECK(critical_injection_device && critical_injection_irp,
++                "locked-list injection was not fully configured");
++        if (critical_injection_device && critical_injection_irp)
++        {
++            InsertTailList(&critical_injection_device->irp_list,
++                    &critical_injection_irp->Tail.Overlay.ListEntry);
++            critical_injection_active = TRUE;
++        }
++        critical_injection_armed = FALSE;
++        critical_injection_enter_seen = TRUE;
++    }
++}
++
++void WINAPI LeaveCriticalSection(CRITICAL_SECTION *critical_section)
++{
++    if (critical_section == &wineusb_cs && critical_injection_active)
++    {
++        RemoveEntryList(&critical_injection_irp->Tail.Overlay.ListEntry);
++        critical_injection_irp->Tail.Overlay.ListEntry.Flink = NULL;
++        critical_injection_irp->Tail.Overlay.ListEntry.Blink = NULL;
++        critical_injection_active = FALSE;
++        critical_injection_leave_seen = TRUE;
++    }
++}
+ PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDL mdl, KPROCESSOR_MODE mode,
+         MEMORY_CACHING_TYPE cache, PVOID base, ULONG bugcheck, MM_PAGE_PRIORITY priority)
+ { (void)mdl; (void)mode; (void)cache; (void)base; (void)bugcheck; (void)priority; return NULL; }
+@@ -376,6 +410,13 @@
+     CHECK(status == STATUS_DEVICE_BUSY, "pending SELECT_INTERFACE returned %#lx", (long)status);
+     CHECK(urb.UrbHeader.Status == USBD_STATUS_REQUEST_FAILED, "pending request status %#x", urb.UrbHeader.Status);
+     CHECK(!lower_submit_calls, "pending SELECT_INTERFACE reached Unix %u times", lower_submit_calls);
++    CHECK(device.irp_list.Flink == &child.Tail.Overlay.ListEntry &&
++            device.irp_list.Blink == &child.Tail.Overlay.ListEntry &&
++            child.Tail.Overlay.ListEntry.Flink == &device.irp_list &&
++            child.Tail.Overlay.ListEntry.Blink == &device.irp_list,
++            "busy SELECT changed prior list order or membership");
++    CHECK(!request.Tail.Overlay.ListEntry.Flink && !request.Tail.Overlay.ListEntry.Blink,
++            "busy SELECT queued its own IRP");
+     RemoveEntryList(&child.Tail.Overlay.ListEntry);
+ }
+ 
+@@ -397,10 +438,23 @@
+         IO_STACK_LOCATION *stack, URB *urb, FILE_OBJECT *file)
+ {
+     memset(device, 0, sizeof(*device));
++    InitializeListHead(&device->irp_list);
++    memset(request, 0, sizeof(*request));
++    memset(stack, 0, sizeof(*stack));
++    memset(urb, 0, sizeof(*urb));
++    request->Tail.Overlay.CurrentStackLocation = stack;
++    request->Tail.Overlay.OriginalFileObject = file;
++    stack->Parameters.Others.Argument1 = urb;
++    urb->UrbControlTransfer.Hdr.Function = URB_FUNCTION_CONTROL_TRANSFER;
++    urb->UrbControlTransfer.Hdr.Length = sizeof(urb->UrbControlTransfer);
++}
++
++static void setup_control_irp(IRP *request, IO_STACK_LOCATION *stack, URB *urb,
++        FILE_OBJECT *file)
++{
+     memset(request, 0, sizeof(*request));
+     memset(stack, 0, sizeof(*stack));
+     memset(urb, 0, sizeof(*urb));
+-    InitializeListHead(&device->irp_list);
+     request->Tail.Overlay.CurrentStackLocation = stack;
+     request->Tail.Overlay.OriginalFileObject = file;
+     stack->Parameters.Others.Argument1 = urb;
+@@ -464,12 +518,28 @@
+     IO_STACK_LOCATION stack;
+     URB urb;
+     FILE_OBJECT file;
+-    unsigned int submits_before = lower_submit_calls;
++    IRP *before[8], *after[9];
++    LIST_ENTRY *entry;
++    unsigned int submits_before = lower_submit_calls, before_count = 0, after_count = 0;
++    unsigned int select_count = 0;
++    BOOL exact = TRUE;
+     NTSTATUS status;
+ 
++    for (entry = device->irp_list.Flink; entry != &device->irp_list && before_count < ARRAY_SIZE(before);
++            entry = entry->Flink)
++        before[before_count++] = CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry);
++    CHECK(entry == &device->irp_list, "%s prior list exceeded fixture bound", name);
+     memset(&file, 0, sizeof(file));
+     setup_select_interface_request(&select, &stack, &urb, &file, interface_number);
+     status = usb_submit_urb(device, &select);
++    for (entry = device->irp_list.Flink; entry != &device->irp_list && after_count < ARRAY_SIZE(after);
++            entry = entry->Flink)
++    {
++        after[after_count] = CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry);
++        if (after[after_count] == &select) ++select_count;
++        ++after_count;
++    }
++    CHECK(entry == &device->irp_list, "%s resulting list exceeded fixture bound", name);
+     if (expect_busy)
+     {
+         CHECK(status == STATUS_DEVICE_BUSY && lower_submit_calls == submits_before,
+@@ -477,6 +547,11 @@
+                 lower_submit_calls);
+         CHECK(urb.UrbHeader.Status == USBD_STATUS_REQUEST_FAILED,
+                 "%s target %u status %#x", name, interface_number, urb.UrbHeader.Status);
++        exact = after_count == before_count && select_count == 0;
++        for (unsigned int i = 0; exact && i < before_count; ++i)
++            exact = after[i] == before[i];
++        CHECK(exact, "%s busy target %u changed exact prior list order/membership",
++                name, interface_number);
+     }
+     else
+     {
+@@ -488,30 +563,34 @@
+                 "%s target %u did not reach Unix as select-interface", name, interface_number);
+         CHECK(select.IoStatus.Status == STATUS_PENDING,
+                 "%s target %u did not retain pending state", name, interface_number);
+-        CHECK(select.Tail.Overlay.ListEntry.Flink && select.Tail.Overlay.ListEntry.Blink,
+-                "%s target %u did not queue its caller-owned select", name, interface_number);
++        exact = after_count == before_count + 1 && select_count == 1;
++        for (unsigned int i = 0; exact && i < before_count; ++i)
++            exact = after[i] == before[i];
++        if (exact) exact = after[before_count] == &select;
++        CHECK(exact, "%s target %u did not append its SELECT exactly once after prior entries",
++                name, interface_number);
+     }
+-    remove_pending_test_irp(&select);
++    /* After recording the exact-membership result, retire only the SELECT this
++     * fixture owns when it appeared once.  This is safe local cleanup, not a
++     * cancellation or production teardown claim. */
++    if (select_count == 1) remove_pending_test_irp(&select);
+ }
+ 
+-static void setup_pending_scope_child(enum pending_scope_kind kind,
+-        struct usb_device *device, IRP *request, IO_STACK_LOCATION *stack, URB *urb,
+-        FILE_OBJECT *file, MDL *mdl, unsigned char *descriptor_buffer)
++static void setup_pending_scope_irp(enum pending_scope_kind kind, IRP *request,
++        IO_STACK_LOCATION *stack, URB *urb, FILE_OBJECT *file, MDL *mdl,
++        unsigned char *descriptor_buffer)
+ {
+     static const unsigned char device_setup[8] = {0x80, 0x00, 0, 0, 0, 0, 0, 0};
+     static const unsigned char interface_six_setup[8] = {0xa1, 0x01, 0, 0, 6, 0x5a, 0, 0};
+     static const unsigned char endpoint_setup[8] = {0x82, 0x00, 0, 0, 0x81, 0, 0, 0};
+     static const unsigned char other_setup[8] = {0x83, 0x00, 0, 0, 0, 0, 0, 0};
+ 
+-    setup_control_request(device, request, stack, urb, file);
+-    device->interface = TRUE;
+-    device->interface_index = 5;
++    setup_control_irp(request, stack, urb, file);
+     switch (kind)
+     {
+         case PENDING_SCOPE_DESCRIPTOR_ROOT:
+             urb->UrbControlDescriptorRequest.Hdr.Function = URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE;
+-            urb->UrbControlDescriptorRequest.Hdr.Length =
+-                    sizeof(urb->UrbControlDescriptorRequest);
++            urb->UrbControlDescriptorRequest.Hdr.Length = sizeof(urb->UrbControlDescriptorRequest);
+             urb->UrbControlDescriptorRequest.TransferBufferLength = 18;
+             urb->UrbControlDescriptorRequest.TransferBuffer = NULL;
+             urb->UrbControlDescriptorRequest.TransferBufferMDL = mdl;
+@@ -522,33 +601,111 @@
+             mdl->ByteCount = 18;
+             request->MdlAddress = mdl;
+             break;
+-
+         case PENDING_SCOPE_DEVICE_ROOT:
+             memcpy(urb->UrbControlTransfer.SetupPacket, device_setup, sizeof(device_setup));
+             break;
+-
+         case PENDING_SCOPE_INTERFACE_SIX:
+-            memcpy(urb->UrbControlTransfer.SetupPacket, interface_six_setup,
+-                    sizeof(interface_six_setup));
++            memcpy(urb->UrbControlTransfer.SetupPacket, interface_six_setup, sizeof(interface_six_setup));
+             break;
+-
+         case PENDING_SCOPE_ENDPOINT_CONSERVATIVE:
+             memcpy(urb->UrbControlTransfer.SetupPacket, endpoint_setup, sizeof(endpoint_setup));
+             break;
+-
+         case PENDING_SCOPE_OTHER_CONSERVATIVE:
+             memcpy(urb->UrbControlTransfer.SetupPacket, other_setup, sizeof(other_setup));
+             break;
+-
+         case PENDING_SCOPE_UNRELATED_CONSERVATIVE:
+-            urb->UrbBulkOrInterruptTransfer.Hdr.Function =
+-                    URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+-            urb->UrbBulkOrInterruptTransfer.Hdr.Length =
+-                    sizeof(urb->UrbBulkOrInterruptTransfer);
++            urb->UrbBulkOrInterruptTransfer.Hdr.Function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
++            urb->UrbBulkOrInterruptTransfer.Hdr.Length = sizeof(urb->UrbBulkOrInterruptTransfer);
+             break;
+     }
+ }
+ 
++static void setup_pending_scope_child(enum pending_scope_kind kind,
++        struct usb_device *device, IRP *request, IO_STACK_LOCATION *stack, URB *urb,
++        FILE_OBJECT *file, MDL *mdl, unsigned char *descriptor_buffer)
++{
++    setup_control_request(device, request, stack, urb, file);
++    device->interface = TRUE;
++    device->interface_index = 5;
++    setup_pending_scope_irp(kind, request, stack, urb, file, mdl, descriptor_buffer);
++}
++
++/* Put valid root-5 and interface-6 children in both orders.  In each schedule
++ * the later child conflicts with the selected target, catching a classifier
++ * that inspects only the first list entry. */
++static void run_complete_list_case(const char *name, enum pending_scope_kind first_kind,
++        enum pending_scope_kind second_kind, UCHAR target)
++{
++    struct usb_device device;
++    IRP children[2];
++    IO_STACK_LOCATION stacks[2];
++    URB urbs[2];
++    FILE_OBJECT files[2];
++    MDL mdls[2];
++    unsigned char descriptors[2][18];
++    NTSTATUS status;
++
++    memset(files, 0, sizeof(files));
++    memset(descriptors, 0xa5, sizeof(descriptors));
++    setup_pending_scope_child(first_kind, &device, &children[0], &stacks[0], &urbs[0],
++            &files[0], &mdls[0], descriptors[0]);
++    setup_pending_scope_irp(second_kind, &children[1], &stacks[1], &urbs[1],
++            &files[1], &mdls[1], descriptors[1]);
++    reset_lower_observation();
++    status = usb_submit_urb(&device, &children[0]);
++    CHECK(status == STATUS_PENDING, "%s first child returned %#lx", name, (long)status);
++    status = usb_submit_urb(&device, &children[1]);
++    CHECK(status == STATUS_PENDING && lower_submit_calls == 2,
++            "%s second child returned %#lx/%u", name, (long)status, lower_submit_calls);
++    CHECK(device.irp_list.Flink == &children[0].Tail.Overlay.ListEntry &&
++            children[0].Tail.Overlay.ListEntry.Flink == &children[1].Tail.Overlay.ListEntry &&
++            children[1].Tail.Overlay.ListEntry.Flink == &device.irp_list &&
++            device.irp_list.Blink == &children[1].Tail.Overlay.ListEntry &&
++            children[1].Tail.Overlay.ListEntry.Blink == &children[0].Tail.Overlay.ListEntry &&
++            children[0].Tail.Overlay.ListEntry.Blink == &device.irp_list,
++            "%s did not establish exact first/later child order", name);
++    check_pending_scope_select(name, &device, target, TRUE);
++    remove_pending_test_irp(&children[0]);
++    remove_pending_test_irp(&children[1]);
++    CHECK(IsListEmpty(&device.irp_list), "%s left caller-owned entries", name);
++}
++
++static void test_select_interface_complete_locked_list(void)
++{
++    struct usb_device device;
++    IRP conflict;
++    IO_STACK_LOCATION stack;
++    URB urb;
++    FILE_OBJECT file;
++    MDL mdl;
++    unsigned char descriptor[18];
++
++    run_complete_list_case("root then later interface-6 conflict",
++            PENDING_SCOPE_DEVICE_ROOT, PENDING_SCOPE_INTERFACE_SIX, 6);
++    run_complete_list_case("interface-6 then later root conflict",
++            PENDING_SCOPE_INTERFACE_SIX, PENDING_SCOPE_DEVICE_ROOT, 5);
++
++    /* The conflicting caller-owned root entry is visible only while the exact
++     * wineusb_cs is held.  Pre-lock classification therefore false-greens. */
++    memset(&file, 0, sizeof(file));
++    memset(descriptor, 0xa5, sizeof(descriptor));
++    setup_pending_scope_child(PENDING_SCOPE_DEVICE_ROOT, &device, &conflict, &stack,
++            &urb, &file, &mdl, descriptor);
++    reset_lower_observation();
++    critical_injection_device = &device;
++    critical_injection_irp = &conflict;
++    critical_injection_enter_seen = critical_injection_leave_seen = FALSE;
++    critical_injection_active = FALSE;
++    critical_injection_armed = TRUE;
++    check_pending_scope_select("wineusb_cs-scoped root conflict", &device, 5, TRUE);
++    CHECK(critical_injection_enter_seen && critical_injection_leave_seen &&
++            !critical_injection_armed && !critical_injection_active,
++            "locked-list injection did not span the exact critical section");
++    CHECK(IsListEmpty(&device.irp_list), "locked-list fixture retained an entry");
++    critical_injection_device = NULL;
++    critical_injection_irp = NULL;
++}
++
+ static void run_pending_scope_case(const char *name, enum pending_scope_kind kind,
+         BOOL root_busy, BOOL associated_busy)
+ {
+@@ -993,7 +1150,10 @@
+     test_actual_lower_speed_callback();
+     test_select_interface_pending_child();
+     if (!strcmp(argv[1], "--control-descriptor"))
++    {
+         test_select_interface_pending_scope_classification();
++        test_select_interface_complete_locked_list();
++    }
+     test_metadata_validation();
+     if (!strcmp(argv[1], "--control-descriptor")) test_control_descriptor_translation();
+     if (failures) { fprintf(stderr, "%u WineUSB metadata bus-interface check(s) failed\n", failures); return 1; }

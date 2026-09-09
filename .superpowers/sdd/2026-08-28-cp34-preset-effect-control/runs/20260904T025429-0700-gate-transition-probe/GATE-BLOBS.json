@@ -1,0 +1,48 @@
+{
+  "factory_record": {
+    "name": "Slap Echo",
+    "record_index": 4,
+    "record_wire_sha256": "a6c3294b62cfb3a46122a82c93514ea2aeb836280fb5d1e458707a78634f87eb"
+  },
+  "fields": {
+    "attack_s": 0.025,
+    "expander": true,
+    "fs_hz": 48000.0,
+    "keyfilter_hz": 730.000244,
+    "keylisten": false,
+    "range_db": -60.0,
+    "release_s": 0.7,
+    "threshold_db": -47.5
+  },
+  "schema": "cp34-factory-slap-gate-blobs-v1",
+  "wire_blobs": [
+    {
+      "bytes": 72,
+      "hex": "6574616748000000000000008d3ec23b4e52fd3f0000000006f77cbf8d3ec2bb6f12833a2b236d43cdcccc3c3333333fb1b17a3fffce7f3fa0410000000000000100000000000000",
+      "instance": 0,
+      "on": false,
+      "sha256": "4c4231f9a63267d6b42a7723099b538f53bdcb786ca72de2e9034705b1d2200c"
+    },
+    {
+      "bytes": 72,
+      "hex": "6574616748000000010000008d3ec23b4e52fd3f0000000006f77cbf8d3ec2bb6f12833a2b236d43cdcccc3c3333333fb1b17a3fffce7f3fa0410000000000000100000000000000",
+      "instance": 1,
+      "on": false,
+      "sha256": "028d515d874947adebc745078ea6f83b7b03764dc1013da588952ffe98bcdbac"
+    },
+    {
+      "bytes": 72,
+      "hex": "6574616748000000000000008d3ec23b4e52fd3f0000000006f77cbf8d3ec2bb6f12833a2b236d43cdcccc3c3333333fb1b17a3fffce7f3fa0410000010000000100000000000000",
+      "instance": 0,
+      "on": true,
+      "sha256": "e6efb8cf74415621a6160091ff06b1e0ef07a465eb03c2dc2863b053b83f73ee"
+    },
+    {
+      "bytes": 72,
+      "hex": "6574616748000000010000008d3ec23b4e52fd3f0000000006f77cbf8d3ec2bb6f12833a2b236d43cdcccc3c3333333fb1b17a3fffce7f3fa0410000010000000100000000000000",
+      "instance": 1,
+      "on": true,
+      "sha256": "ed052c4ac25cc0edb837d0a0c68c245869980e66a9a6a347888afc674f67c31a"
+    }
+  ]
+}

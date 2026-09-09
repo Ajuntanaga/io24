@@ -1,0 +1,22 @@
+CP23 artifact comparison
+
+Build A and build B are byte-identical and match CP22 development output:
+259d80fc4c68df9db3202f6aee7eb42e36bed11593480527f044decf84029c2e  x86_64-windows/ntoskrnl.exe  size=3584
+3c338b34e2f33f3d50772cbea3bd3654bbe9ccaf235b5c16081ed8e9cebd6026  ntoskrnl.exe.so                  size=1572656
+0c2c004c751c98c4ee389df4d9ddb5175cd4275d065da282fc9f7a002871d155  ntoskrnl.exe_test.exe.so         size=1420496
+
+fake_pe_cmp=0
+unix_builtin_cmp=0
+test_binary_cmp=0
+development_fake_pe_cmp_a=0
+development_fake_pe_cmp_b=0
+development_unix_builtin_cmp_a=0
+development_unix_builtin_cmp_b=0
+development_test_binary_cmp_a=0
+development_test_binary_cmp_b=0
+unix_builtin_build_id=662e3f85c5d166e4e004b59c8e27e48e2e184118
+undefined_dynamic_names=_ITM_deregisterTMCloneTable,_ITM_registerTMCloneTable,__cxa_finalize,__gmon_start__,dladdr1
+
+The CP22 prose counted six undefined dynamic symbols, but direct nm/objdump
+inspection shows five names. Because the candidate bytes and build ID match
+CP22 exactly, this is a documentation counting correction, not binary drift.

@@ -1,0 +1,4 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+command bash tests/wineusb_winusb_busif_contract.sh .io24-build/winusb-api-v1/dev-source
+WineUSB WinUSB metadata bus-interface contract: pass
+exit_code 0

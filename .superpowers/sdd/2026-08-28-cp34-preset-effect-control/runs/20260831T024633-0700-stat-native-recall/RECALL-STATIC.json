@@ -1,0 +1,315 @@
+{
+  "firmware": {
+    "code_slices": {
+      "application_router": {
+        "offset": "0x20754",
+        "sha256": "2b03f9ae7407c774bcd93c252b6833b3db299f7bf65de180376d280901508913",
+        "size": 60
+      },
+      "callback_bridge": {
+        "offset": "0x3163c",
+        "sha256": "4cc5dd6fae37fc54a1cf40d9726f807b774957aff61cbf36d58ca9e89bb5ecff",
+        "size": 56
+      },
+      "factory_bank_binder": {
+        "offset": "0x3066c",
+        "sha256": "b53ff9d91a43f6f095adb39f11dd95ab0faf9752eb6a0afecf86c9452d60e782",
+        "size": 72
+      },
+      "fragment_callback": {
+        "offset": "0x2f8ac",
+        "sha256": "5eff2a6ade387c5e4c4a2a46fd2fe640bf42e2a6d71082f681381bbc47a17f17",
+        "size": 88
+      },
+      "preset_table_binder": {
+        "offset": "0x3c9ee",
+        "sha256": "cae1994270c45081441276d225f7f10ac77403e223970094186ef5ee549b9bcd",
+        "size": 80
+      },
+      "slot_change_dispatch": {
+        "offset": "0x2f3e4",
+        "sha256": "f8890a0ecedcfb99226d9967bcbd2a17ba3d9efbb6cbcfc77dd1e2d3fe91d4a6",
+        "size": 56
+      },
+      "stat_recall": {
+        "offset": "0x2f0d0",
+        "sha256": "54498abfd4282dd20683120259929407f6618f90217ab98045270b39dd386352",
+        "size": 108
+      },
+      "stat_record_reader": {
+        "offset": "0x30be0",
+        "sha256": "32091a8693dae4a94c30e242f83e83cb68618605eb43dfd0ecb6c561afd644ee",
+        "size": 84
+      }
+    },
+    "factory_bank_size_tables": [
+      [
+        822,
+        814,
+        854,
+        697,
+        659,
+        850,
+        645,
+        846
+      ],
+      [
+        822,
+        814,
+        854,
+        697,
+        712,
+        731,
+        720,
+        537
+      ]
+    ],
+    "factory_records": [
+      {
+        "bank": 0,
+        "offset": "0x6a2b8",
+        "preset_name": "Broadcast",
+        "size": 822,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6a5f0",
+        "preset_name": "Vocal",
+        "size": 814,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6a920",
+        "preset_name": "Acoustic Guitar",
+        "size": 854,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6ac78",
+        "preset_name": "Electric Guitar",
+        "size": 697,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6af34",
+        "preset_name": "Vintage Channel",
+        "size": 659,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b1c8",
+        "preset_name": "Slap Echo",
+        "size": 850,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b51c",
+        "preset_name": "Detuned Vocal",
+        "size": 645,
+        "voicefx_classid": "{509018B0-0DE1-4D26-9DDF-D782476D3C98}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 0,
+        "offset": "0x6b7a4",
+        "preset_name": "Robot",
+        "size": 846,
+        "voicefx_classid": "{491FED97-6761-4FF6-91E1-E155891291AA}",
+        "voicefx_on": 1
+      },
+      {
+        "bank": 1,
+        "offset": "0x6baf4",
+        "preset_name": "Broadcast",
+        "size": 822,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6be2c",
+        "preset_name": "Vocal",
+        "size": 814,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c15c",
+        "preset_name": "Acoustic Guitar",
+        "size": 854,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c4b4",
+        "preset_name": "Electric Guitar",
+        "size": 697,
+        "voicefx_classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+        "voicefx_on": 0
+      },
+      {
+        "bank": 1,
+        "offset": "0x6c770",
+        "preset_name": "Bass Guitar",
+        "size": 712,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6ca38",
+        "preset_name": "Stereo Acoustic",
+        "size": 731,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6cd14",
+        "preset_name": "Stereo Piano",
+        "size": 720,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      },
+      {
+        "bank": 1,
+        "offset": "0x6cfe4",
+        "preset_name": "Stereo DJ",
+        "size": 537,
+        "voicefx_classid": null,
+        "voicefx_on": null
+      }
+    ],
+    "load_base": "0x60020000",
+    "sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "size": 1104448,
+    "stat_descriptor_lengths": [
+      1088,
+      1088,
+      1028,
+      1028
+    ],
+    "vtable_anchors": {
+      "application_router": {
+        "target_file_offset": "0x20790",
+        "thumb_pointer": "0x60040791",
+        "vtable_word_offset": "0x10be8c"
+      },
+      "manager_callback_bridge": {
+        "target_file_offset": "0x31674",
+        "thumb_pointer": "0x60051675",
+        "vtable_word_offset": "0x676d4"
+      },
+      "preset_stat_reader": {
+        "target_file_offset": "0x30be0",
+        "thumb_pointer": "0x60050be1",
+        "vtable_word_offset": "0x6751c"
+      },
+      "root_fragment_apply": {
+        "target_file_offset": "0x2f8ac",
+        "thumb_pointer": "0x6004f8ad",
+        "vtable_word_offset": "0x6d254"
+      },
+      "root_memp_ingress": {
+        "target_file_offset": "0x2f210",
+        "thumb_pointer": "0x6004f211",
+        "vtable_word_offset": "0x6d288"
+      },
+      "root_slot_change": {
+        "target_file_offset": "0x2f334",
+        "thumb_pointer": "0x6004f335",
+        "vtable_word_offset": "0x6d274"
+      },
+      "root_stat_recall": {
+        "target_file_offset": "0x2f0d0",
+        "thumb_pointer": "0x6004f0d1",
+        "vtable_word_offset": "0x6d260"
+      }
+    }
+  },
+  "schema": "cp34-preset-recall-static-v1",
+  "static_conclusions": {
+    "boundary": "static structure does not prove physical nonvolatile commit, power-cycle survival, or audible DSP output",
+    "stat_recall": "selected Stat 0..3 is read by the firmware preset component and forwarded through the native application callback/router",
+    "voicefx_on": "Voice FX activation intent is stored as voicefx.on in the same tagged preset record; three embedded active presets set it to 1"
+  },
+  "uc_4_7_2_module": {
+    "field_accesses": [
+      {
+        "access": "write",
+        "address": "0x1800290e7",
+        "instruction": "mov byte ptr [rcx + 0xe6], 0"
+      },
+      {
+        "access": "read",
+        "address": "0x18003bb38",
+        "instruction": "cmp byte ptr [rcx + r14 + 0xe6], 0"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c037",
+        "instruction": "mov byte ptr [r13 + 0xe6], r15b"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c20d",
+        "instruction": "mov byte ptr [r13 + 0xe6], al"
+      },
+      {
+        "access": "write",
+        "address": "0x18003c4e8",
+        "instruction": "mov byte ptr [r13 + 0xe6], r15b"
+      },
+      {
+        "access": "read",
+        "address": "0x180044e89",
+        "instruction": "movzx eax, byte ptr [rdx + 0xe6]"
+      }
+    ],
+    "field_literals": {
+      "record_child": "on",
+      "record_parent": "voicefx",
+      "serializer_label": "VoiceFxOn"
+    },
+    "image_base": "0x180000000",
+    "parser_anchors": {
+      "integer_or_real_equals_one": {
+        "address": "0x18003c2b6",
+        "bytes": "0fb742086683e07f6683f8017506488b4210eb116683f8027508f2480f2c4210eb03488bc34883f8010f8526ffffffe923ffffff"
+      },
+      "nested_on_name": {
+        "address": "0x18003c297",
+        "bytes": "488b424880386f750c8078016e750680780200740a"
+      },
+      "serializer_read": {
+        "address": "0x18003bb38",
+        "bytes": "4280bc31e6000000007440"
+      },
+      "voicefx_name_reference": {
+        "address": "0x18003c1a4",
+        "bytes": "4c8d3dbd973f00"
+      },
+      "voicefx_on_store": {
+        "address": "0x18003c20d",
+        "bytes": "418885e6000000"
+      }
+    },
+    "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+    "size": 4979672,
+    "voicefx_on_field_offset": "0xe6"
+  }
+}

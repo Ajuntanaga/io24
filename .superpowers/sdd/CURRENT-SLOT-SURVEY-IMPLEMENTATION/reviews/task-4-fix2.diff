@@ -1,0 +1,41 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:41:53.306501696 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:43:45.330928316 -0700
+@@ -1,6 +1,6 @@
+ 1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
+-e371c89d1fe9aa30114cee2085118aeb4bdd93fea05d6cf461ebe600e1b36aa2  tests/test_cp34_current_slot_survey.py
++3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
+ 8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-78983f3a33903d5cd896965f63b3a10913a455fecc028f94d873f63b2e9d4641  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+ 7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 03:41:53.306414883 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 03:43:45.330829071 -0700
+@@ -141,11 +141,13 @@
+ make the final retained-file seal and verify it:
+ 
+ ```text
+-(cd RUN && tmpdir=$(mktemp -d .sha256sums.XXXXXX) && trap 'rm -rf "$tmpdir"' EXIT && find . -type f ! -name SHA256SUMS ! -path "./$tmpdir/SHA256SUMS" -print0 | LC_ALL=C sort -z | xargs -0r sha256sum -- > "$tmpdir/SHA256SUMS" && ln "$tmpdir/SHA256SUMS" SHA256SUMS && sha256sum -c SHA256SUMS)
++(cd RUN && tmpdir=$(mktemp -d .sha256sums.XXXXXX) && trap 'rm -rf "$tmpdir"' EXIT && set -o pipefail && find . -type f ! -name SHA256SUMS ! -path "./$tmpdir/SHA256SUMS" -print0 | LC_ALL=C sort -z | xargs -0r sha256sum -- > "$tmpdir/SHA256SUMS" && ln "$tmpdir/SHA256SUMS" SHA256SUMS && sha256sum -c SHA256SUMS)
+ ```
+ 
+ The atomic `ln` fails if `SHA256SUMS` already exists; do not replace or remove
+ that file. The temporary manifest is excluded from its own NUL-safe enumeration.
++`set -o pipefail` makes a failed `find` or `sort` fail the `&&` chain, so neither
++`ln` nor verification can publish or accept a partial manifest.
+ This final SHA-256 command is an offline seal of retained files, not authority
+ for further operation.
+ 
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-before/tests/test_cp34_current_slot_survey.py	2026-08-29 03:41:53.306267098 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix2-after/tests/test_cp34_current_slot_survey.py	2026-08-29 03:43:45.330665362 -0700
+@@ -417,6 +417,7 @@
+         )
+         self.assertIn("A null signal is `INCONCLUSIVE`, never a negative.", procedure)
+         self.assertIn("-print0 | LC_ALL=C sort -z | xargs -0r sha256sum --", procedure)
++        self.assertIn("set -o pipefail && find", procedure)
+         self.assertIn('ln "$tmpdir/SHA256SUMS" SHA256SUMS', procedure)
+         self.assertNotIn("> SHA256SUMS", procedure)
+ 

@@ -1,0 +1,38 @@
+	Command being timed: "bwrap --die-with-parent --unshare-all --unshare-net --ro-bind /usr /usr --ro-bind /etc /etc --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/sbin /sbin --proc /proc --dev /dev --tmpfs /tmp --tmpfs /run --ro-bind /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont --chdir /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont --setenv HOME /tmp/io24-home --setenv LC_ALL C /usr/bin/timeout --signal=TERM --kill-after=10s 60s /bin/bash -eu -o pipefail -c 
+        source_root=.io24-build/wineusb-function-scope-v1/source-b
+        build_root=.io24-build/wineusb-function-scope-v1/build-b
+        builtin=$build_root/dlls/wineusb.sys/wineusb.sys.so
+        unixlib=$build_root/dlls/wineusb.sys/wineusb.so
+        header=.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+        tests/wineusb_function_scope_contract.sh "$source_root" "$build_root" "$unixlib" "$header"
+        tests/wineusb_immediate_submit_cleanup_contract.sh "$source_root" "$build_root" "$unixlib" "$header"
+        tests/wineusb_multi_interface_handles_contract.sh "$source_root" "$build_root" "$unixlib" "$header"
+        tests/wineusb_pipe_observe_contract.sh "$source_root" "$build_root" "$builtin" "$unixlib" "$header"
+        tests/wineusb_class_interface_range_contract.sh "$source_root" "$build_root" "$builtin" "$unixlib" "$header"
+        tests/wineusb_usbdi_contract.sh "$source_root"
+        python3 tests/io24_usbmon_class_in_evidence_contract.py
+        python3 tests/io24_usbmon_function_topology_contract.py
+        python3 tests/io24_usbmon_function_topology.py --require-io24-topology re/io24-passive-usbmon/passive-usbmon-range-v1-20260821T023641-0700/control-urbs.pcap
+      "
+	User time (seconds): 0.00
+	System time (seconds): 0.00
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.72
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2148
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 128
+	Voluntary context switches: 2
+	Involuntary context switches: 2
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

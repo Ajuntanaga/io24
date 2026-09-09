@@ -1,0 +1,286 @@
+--- a/tests/wineusb_winusb_urb_contract.c
++++ b/tests/wineusb_winusb_urb_contract.c
+@@ -10,7 +10,7 @@
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) { fprintf(stderr, "FAIL %s:%u: %s\n", __func__, __LINE__, #expr); ++counts.failures; } } while (0)
+-struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,control_buffer_alloc,control_buffer_free,control_free_buffer_flag,close; };
++struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,control_buffer_alloc,control_buffer_free,control_free_buffer_flag,close,api_calls; };
+ struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; unsigned int timeout; size_t payload_length; uint8_t payload[4096]; };
+ const struct io24_fake_counts *io24_fake_libusb_counts(void);
+ const struct io24_fake_record *io24_fake_libusb_record(void);
+@@ -964,6 +964,118 @@
+     IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0]==NULL); check_forbidden();
+ }
+ 
++static void add_range_scope_interfaces(struct io24_control_fixture *f)
++{
++    IO24_CHECK(f->device.function && f->device.function_interface_count == 1);
++    IO24_CHECK(f->device.function_interfaces[0] == (1u << 5));
++    f->device.function_interfaces[0] |= (1u << 0) | (1u << 1);
++    f->device.function_interface_count += 2;
++}
++
++static void make_nonfunction_device(struct io24_control_fixture *f)
++{
++    IO24_CHECK(f->device.function && f->device.function_interface_count == 1);
++    IO24_CHECK(f->device.function_root == 5);
++    IO24_CHECK(f->device.function_interfaces[0] == (1u << 5));
++    f->device.function = FALSE;
++    f->device.function_interface_count = 0;
++    f->device.function_root = 0;
++    memset(f->device.function_interfaces, 0,
++            sizeof(f->device.function_interfaces));
++}
++
++struct io24_backend_snapshot
++{
++    struct io24_fake_counts counts;
++    struct io24_fake_record record;
++    unsigned int alloc_count;
++    unsigned int alloc_attempts;
++    unsigned int submit_attempts;
++    int reported_actual_length;
++    BOOL pending;
++};
++
++static struct io24_backend_snapshot capture_control_backend(void)
++{
++    struct io24_backend_snapshot snapshot;
++
++    snapshot.counts = *io24_fake_libusb_counts();
++    snapshot.record = *io24_fake_libusb_record();
++    snapshot.alloc_count = io24_fake_libusb_alloc_count();
++    snapshot.alloc_attempts = io24_fake_libusb_alloc_attempts();
++    snapshot.submit_attempts = io24_fake_libusb_submit_attempts();
++    snapshot.reported_actual_length = io24_fake_libusb_reported_actual_length();
++    snapshot.pending = !!io24_fake_libusb_has_pending();
++    return snapshot;
++}
++
++static void expect_control_backend_unchanged(
++        const struct io24_backend_snapshot *before)
++{
++    IO24_CHECK(!memcmp(io24_fake_libusb_counts(), &before->counts,
++            sizeof(before->counts)));
++    IO24_CHECK(!memcmp(io24_fake_libusb_record(), &before->record,
++            sizeof(before->record)));
++    IO24_CHECK(io24_fake_libusb_alloc_count() == before->alloc_count);
++    IO24_CHECK(io24_fake_libusb_alloc_attempts() == before->alloc_attempts);
++    IO24_CHECK(io24_fake_libusb_submit_attempts() == before->submit_attempts);
++    IO24_CHECK(io24_fake_libusb_reported_actual_length() ==
++            before->reported_actual_length);
++    IO24_CHECK(!!io24_fake_libusb_has_pending() == before->pending);
++}
++
++static void expect_exact_range_success(struct io24_control_fixture *f,
++        const unsigned char *captured, size_t captured_length)
++{
++    struct io24_backend_snapshot backend = capture_control_backend();
++    size_t i;
++
++    f->urb.UrbHeader.Status = USBD_STATUS_NOT_ACCESSED;
++    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_SUCCESS);
++    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_SUCCESS &&
++            f->urb.UrbControlTransfer.TransferBufferLength == (ULONG)captured_length);
++    IO24_CHECK(!memcmp(f->storage + 1, captured, captured_length));
++    IO24_CHECK(f->storage[0] == GUARD_BYTE);
++    for (i = captured_length + 1; i < sizeof(f->storage); ++i)
++        IO24_CHECK(f->storage[i] == GUARD_BYTE);
++    expect_control_backend_unchanged(&backend);
++    IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0] == NULL);
++    check_forbidden();
++}
++
++static void expect_control_scope_reject(struct io24_control_fixture *f)
++{
++    struct io24_backend_snapshot backend = capture_control_backend();
++    unsigned char before[sizeof(f->storage)];
++    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
++
++    memcpy(before, f->storage, sizeof(before));
++    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_INVALID_PARAMETER);
++    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_INVALID_PARAMETER);
++    IO24_CHECK(f->urb.UrbControlTransfer.TransferBufferLength == length);
++    IO24_CHECK(!memcmp(f->storage, before, sizeof(f->storage)));
++    expect_control_backend_unchanged(&backend);
++    IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0] == NULL);
++    check_forbidden();
++}
++
++static void expect_control_generic_no_range(struct io24_control_fixture *f,
++        BOOL out)
++{
++    const unsigned char *setup = f->urb.UrbControlTransfer.SetupPacket;
++    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
++    unsigned char before[sizeof(f->storage)];
++    unsigned int i;
++
++    if (out) for (i = 0; i < length; ++i)
++        f->storage[1 + i] = (unsigned char)(0x30 + i);
++    memcpy(before, f->storage, sizeof(before));
++    expect_control_pending(f, setup[0], setup[1], setup[2] | (setup[3] << 8),
++            setup[4] | (setup[5] << 8), length, out);
++    IO24_CHECK(!memcmp(f->storage, before, sizeof(f->storage)));
++    discard_control_pending();
++}
++
+ /* The generic RANGE tuple is a response optimization, not an admission
+  * bypass.  Each malformed request below must be rejected before either the
+  * captured payload or the backend observes it. */
+@@ -1057,14 +1169,13 @@
+     /* Exact generic RANGE is the same shared synthetic answer as the legacy
+      * class-interface request: no allocation, submission, or pending IRP. */
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+-    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f.params)==STATUS_SUCCESS);
+-    IO24_CHECK(f.urb.UrbHeader.Status==USBD_STATUS_SUCCESS && f.urb.UrbControlTransfer.TransferBufferLength==sizeof(captured_range));
+-    IO24_CHECK(!memcmp(f.storage+1,captured_range,sizeof(captured_range)));
+-    for(i=sizeof(captured_range)+1;i<sizeof(f.storage);++i) IO24_CHECK(f.storage[i]==GUARD_BYTE);
+-    IO24_CHECK(io24_fake_libusb_alloc_count()==0 && io24_fake_libusb_free_count()==0 &&
+-            io24_fake_libusb_submit_attempts()==0 && !io24_fake_libusb_has_pending() &&
+-            f.irp.Tail.Overlay.DriverContext[0]==NULL);
+-    check_forbidden();
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    make_nonfunction_device(&f);
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
+     /* The RANGE fast path is reached only after generic URB admission.  The
+      * fixed tuple may never turn malformed headers or mismatched/undersized
+      * caller declarations into a synthetic response. */
+@@ -1093,31 +1204,67 @@
+         expect_exact_range_admission_reject(&f, sizeof(captured_range)-1, before);
+     }
+     expect_exact_range_null_buffer_reject();
+-    /* Every one-field RANGE miss must take ordinary generic routing and must
+-     * not write the captured answer before its natural completion.  Run the
+-     * interface-recipient predicate mutants without function scoping so the
+-     * RANGE predicate, rather than an unrelated low-wIndex scope rejection,
+-     * remains the only changed admission fact. */
++    /* Exercise the exact positive and every one-field RANGE miss under the
++     * same three device-scope classes: non-function, function/out-of-scope,
++     * and function/in-scope with the consistent {0,1,5} interface set.
++     * Out-of-scope interface misses reject without backend activity; all
++     * other misses route generically without synthesizing captured bytes. */
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,TRUE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, TRUE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, TRUE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],3,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_scope_reject(&f);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0101,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
++    expect_control_scope_reject(&f);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0501,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
++    expect_control_scope_reject(&f);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
++    make_nonfunction_device(&f);
++    expect_control_generic_no_range(&f, FALSE);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
+-    f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,255,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 3, 0xabcd, 0x81, 16);
+     expect_control_pending(&f, f.urb.UrbControlTransfer.SetupPacket[0], 3, 0xabcd, 0x81, 16, FALSE); io24_fake_libusb_discard_pending();
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT, 3, 0xabcd, 0x01, 16);
+--- a/tests/wineusb_winusb_urb_fake_libusb.c
++++ b/tests/wineusb_winusb_urb_fake_libusb.c
+@@ -8,9 +8,10 @@
+ #include <dlfcn.h>
+ #endif
+ 
+-struct io24_fake_counts { unsigned claim, release, detach, auto_detach, set_configuration, set_alternate, control, bulk, interrupt, cancel, clear_halt, transfer_free, control_buffer_alloc, control_buffer_free, control_free_buffer_flag, close; };
++struct io24_fake_counts { unsigned claim, release, detach, auto_detach, set_configuration, set_alternate, control, bulk, interrupt, cancel, clear_halt, transfer_free, control_buffer_alloc, control_buffer_free, control_free_buffer_flag, close, api_calls; };
+ struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; unsigned int timeout; size_t payload_length; uint8_t payload[4096]; };
+ static struct io24_fake_counts counts;
++#define IO24_FAKE_API_CALL() (++counts.api_calls)
+ static struct io24_fake_record record;
+ static int claim_journal[256], release_journal[256];
+ static int active_descriptor_enabled;
+@@ -208,20 +209,20 @@
+ int io24_fake_libusb_complete(enum libusb_transfer_status status,const unsigned char*data,size_t data_length,int actual_length){struct libusb_transfer*t=pending;size_t cap,copied,reported=actual_length>0?(size_t)actual_length:0;if(!t)return -1;pending=NULL;cap=(size_t)t->length;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL){unsigned char *buffer;size_t old_payload=cap>(size_t)LIBUSB_CONTROL_SETUP_SIZE?cap-LIBUSB_CONTROL_SETUP_SIZE:0;if(reported>old_payload){if(!(buffer=realloc(t->buffer,LIBUSB_CONTROL_SETUP_SIZE+reported)))return -1;t->buffer=buffer;memset(buffer+LIBUSB_CONTROL_SETUP_SIZE+old_payload,0xde,reported-old_payload);cap=LIBUSB_CONTROL_SETUP_SIZE+reported;}}copied=reported;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL)cap=cap>(size_t)LIBUSB_CONTROL_SETUP_SIZE?cap-LIBUSB_CONTROL_SETUP_SIZE:0;if(copied>cap)copied=cap;if(data&&copied>data_length)copied=data_length;if(data&&copied)memcpy(t->type==LIBUSB_TRANSFER_TYPE_CONTROL?libusb_control_transfer_get_data(t):t->buffer,data,copied);reported_actual_length=actual_length;t->status=status;t->actual_length=actual_length;t->callback(t);if(t->flags&LIBUSB_TRANSFER_FREE_TRANSFER)libusb_free_transfer(t);return 0;}
+ int io24_fake_libusb_discard_pending(void){struct libusb_transfer*t=pending;if(!t)return -1;pending=NULL;libusb_free_transfer(t);return 0;}
+ 
+-struct libusb_transfer *libusb_alloc_transfer(int iso){size_t n;struct libusb_transfer*t;if(iso<0)return NULL;if(++alloc_attempts==alloc_failure_call)return NULL;n=sizeof(struct libusb_transfer)+(size_t)iso*sizeof(struct libusb_iso_packet_descriptor);t=calloc(1,n);if(t)alloc_count++;return t;}
+-void libusb_free_transfer(struct libusb_transfer*t){if(!t)return;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL&&t->buffer){if(t->flags&LIBUSB_TRANSFER_FREE_BUFFER){++counts.control_free_buffer_flag;++counts.control_buffer_free;free(t->buffer);}}counts.transfer_free++;free(t);}
+-int libusb_submit_transfer(struct libusb_transfer*t){++submit_attempts;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL&&t->buffer)++counts.control_buffer_alloc;if(submit_result<0)return submit_result;if(pending)return LIBUSB_ERROR_BUSY;pending=t;record.endpoint=t->endpoint;record.type=t->type;record.length=t->length;record.timeout=t->timeout;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL){struct libusb_control_setup*setup;size_t length,allocation_payload=0;/* Never trust setup.wLength beyond the actual control allocation. */if(t->length>=(int)LIBUSB_CONTROL_SETUP_SIZE)allocation_payload=(size_t)t->length-LIBUSB_CONTROL_SETUP_SIZE;setup=libusb_control_transfer_get_setup(t);length=libusb_le16_to_cpu(setup->wLength);record.request_type=setup->bmRequestType;record.request=setup->bRequest;record.value=libusb_le16_to_cpu(setup->wValue);record.index=libusb_le16_to_cpu(setup->wIndex);record.payload_length=(setup->bmRequestType&LIBUSB_ENDPOINT_IN)?0:length;if(record.payload_length>allocation_payload)record.payload_length=allocation_payload;if(record.payload_length>sizeof(record.payload))record.payload_length=sizeof(record.payload);if(record.payload_length)memcpy(record.payload,libusb_control_transfer_get_data(t),record.payload_length);counts.control++;}else if(t->type==LIBUSB_TRANSFER_TYPE_BULK)counts.bulk++;else if(t->type==LIBUSB_TRANSFER_TYPE_INTERRUPT)counts.interrupt++;return 0;}
+-int libusb_cancel_transfer(struct libusb_transfer*t){counts.cancel++;return t==pending?0:LIBUSB_ERROR_NOT_FOUND;}
+-int libusb_clear_halt(libusb_device_handle*h,unsigned char e){(void)h;counts.clear_halt++;record.endpoint=e;return clear_halt_result;}
+-int libusb_init(libusb_context**c){if(c)*c=(void*)(uintptr_t)0x1000;return 0;} void libusb_exit(libusb_context*c){(void)c;}
+-int libusb_hotplug_register_callback(libusb_context*c,int e,int f,int v,int p,int k,libusb_hotplug_callback_fn cb,void*u,libusb_hotplug_callback_handle*h){(void)c;(void)e;(void)f;(void)v;(void)p;(void)k;(void)cb;(void)u;if(h)*h=1;return 0;} void libusb_hotplug_deregister_callback(libusb_context*c,libusb_hotplug_callback_handle h){(void)c;(void)h;} int libusb_handle_events(libusb_context*c){(void)c;return 0;} void libusb_interrupt_event_handler(libusb_context*c){(void)c;}
+-uint8_t libusb_get_bus_number(libusb_device*d){(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device*d){(void)d;return 1;} int libusb_get_device_speed(libusb_device*d){(void)d;return LIBUSB_SPEED_HIGH;}
+-int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){(void)h;counts.close++;
++struct libusb_transfer *libusb_alloc_transfer(int iso){IO24_FAKE_API_CALL();size_t n;struct libusb_transfer*t;if(iso<0)return NULL;if(++alloc_attempts==alloc_failure_call)return NULL;n=sizeof(struct libusb_transfer)+(size_t)iso*sizeof(struct libusb_iso_packet_descriptor);t=calloc(1,n);if(t)alloc_count++;return t;}
++void libusb_free_transfer(struct libusb_transfer*t){IO24_FAKE_API_CALL();if(!t)return;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL&&t->buffer){if(t->flags&LIBUSB_TRANSFER_FREE_BUFFER){++counts.control_free_buffer_flag;++counts.control_buffer_free;free(t->buffer);}}counts.transfer_free++;free(t);}
++int libusb_submit_transfer(struct libusb_transfer*t){IO24_FAKE_API_CALL();++submit_attempts;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL&&t->buffer)++counts.control_buffer_alloc;if(submit_result<0)return submit_result;if(pending)return LIBUSB_ERROR_BUSY;pending=t;record.endpoint=t->endpoint;record.type=t->type;record.length=t->length;record.timeout=t->timeout;if(t->type==LIBUSB_TRANSFER_TYPE_CONTROL){struct libusb_control_setup*setup;size_t length,allocation_payload=0;/* Never trust setup.wLength beyond the actual control allocation. */if(t->length>=(int)LIBUSB_CONTROL_SETUP_SIZE)allocation_payload=(size_t)t->length-LIBUSB_CONTROL_SETUP_SIZE;setup=libusb_control_transfer_get_setup(t);length=libusb_le16_to_cpu(setup->wLength);record.request_type=setup->bmRequestType;record.request=setup->bRequest;record.value=libusb_le16_to_cpu(setup->wValue);record.index=libusb_le16_to_cpu(setup->wIndex);record.payload_length=(setup->bmRequestType&LIBUSB_ENDPOINT_IN)?0:length;if(record.payload_length>allocation_payload)record.payload_length=allocation_payload;if(record.payload_length>sizeof(record.payload))record.payload_length=sizeof(record.payload);if(record.payload_length)memcpy(record.payload,libusb_control_transfer_get_data(t),record.payload_length);counts.control++;}else if(t->type==LIBUSB_TRANSFER_TYPE_BULK)counts.bulk++;else if(t->type==LIBUSB_TRANSFER_TYPE_INTERRUPT)counts.interrupt++;return 0;}
++int libusb_cancel_transfer(struct libusb_transfer*t){IO24_FAKE_API_CALL();counts.cancel++;return t==pending?0:LIBUSB_ERROR_NOT_FOUND;}
++int libusb_clear_halt(libusb_device_handle*h,unsigned char e){IO24_FAKE_API_CALL();(void)h;counts.clear_halt++;record.endpoint=e;return clear_halt_result;}
++int libusb_init(libusb_context**c){IO24_FAKE_API_CALL();if(c)*c=(void*)(uintptr_t)0x1000;return 0;} void libusb_exit(libusb_context*c){IO24_FAKE_API_CALL();(void)c;}
++int libusb_hotplug_register_callback(libusb_context*c,int e,int f,int v,int p,int k,libusb_hotplug_callback_fn cb,void*u,libusb_hotplug_callback_handle*h){IO24_FAKE_API_CALL();(void)c;(void)e;(void)f;(void)v;(void)p;(void)k;(void)cb;(void)u;if(h)*h=1;return 0;} void libusb_hotplug_deregister_callback(libusb_context*c,libusb_hotplug_callback_handle h){IO24_FAKE_API_CALL();(void)c;(void)h;} int libusb_handle_events(libusb_context*c){IO24_FAKE_API_CALL();(void)c;return 0;} void libusb_interrupt_event_handler(libusb_context*c){IO24_FAKE_API_CALL();(void)c;}
++uint8_t libusb_get_bus_number(libusb_device*d){IO24_FAKE_API_CALL();(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device*d){IO24_FAKE_API_CALL();(void)d;return 1;} int libusb_get_device_speed(libusb_device*d){IO24_FAKE_API_CALL();(void)d;return LIBUSB_SPEED_HIGH;}
++int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){IO24_FAKE_API_CALL();(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){IO24_FAKE_API_CALL();(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){IO24_FAKE_API_CALL();(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){IO24_FAKE_API_CALL();(void)h;counts.close++;
+ #ifdef IO24_PIPE_TABLE_ALLOC_AUDIT
+ io24_pipe_table_audit_note_close();
+ #endif
+ }
+-int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){(void)d;if(active_descriptor_enabled){if(c){if(interrupt_descriptor_enabled)*c=(struct libusb_config_descriptor*)&interrupt_config;else if(extended_descriptor_enabled)*c=(struct libusb_config_descriptor*)&extended_mi05_config;else *c=(struct libusb_config_descriptor*)&mi05_config;}return 0;}if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){(void)c;} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){free(a);}
+-int libusb_claim_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.claim;claim_journal[call-1]=i;record.interface_number=i;return claim_failure_call==call?claim_result:0;} int libusb_release_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.release;release_journal[call-1]=i;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
+-int libusb_control_transfer(libusb_device_handle*h,uint8_t rt,uint8_t r,uint16_t v,uint16_t i,unsigned char*d,uint16_t l,unsigned int t){(void)h;counts.control++;record.request_type=rt;record.request=r;record.value=v;record.index=i;record.length=l;record.timeout=t;record.payload_length=(rt&LIBUSB_ENDPOINT_IN)?0:l;if(record.payload_length>sizeof(record.payload))record.payload_length=sizeof(record.payload);if(record.payload_length&&d)memcpy(record.payload,d,record.payload_length);return control_result<0?control_result:l;} int libusb_bulk_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.bulk++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.interrupt++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;}
+-const char *libusb_strerror(int e){(void)e;return "io24 fake libusb";}
++int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){IO24_FAKE_API_CALL();(void)d;if(active_descriptor_enabled){if(c){if(interrupt_descriptor_enabled)*c=(struct libusb_config_descriptor*)&interrupt_config;else if(extended_descriptor_enabled)*c=(struct libusb_config_descriptor*)&extended_mi05_config;else *c=(struct libusb_config_descriptor*)&mi05_config;}return 0;}if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){IO24_FAKE_API_CALL();(void)c;} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){IO24_FAKE_API_CALL();(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){IO24_FAKE_API_CALL();free(a);}
++int libusb_claim_interface(libusb_device_handle*h,int i){IO24_FAKE_API_CALL();unsigned int call;(void)h;call=++counts.claim;claim_journal[call-1]=i;record.interface_number=i;return claim_failure_call==call?claim_result:0;} int libusb_release_interface(libusb_device_handle*h,int i){IO24_FAKE_API_CALL();unsigned int call;(void)h;call=++counts.release;release_journal[call-1]=i;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){IO24_FAKE_API_CALL();(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){IO24_FAKE_API_CALL();(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){IO24_FAKE_API_CALL();(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){IO24_FAKE_API_CALL();(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
++int libusb_control_transfer(libusb_device_handle*h,uint8_t rt,uint8_t r,uint16_t v,uint16_t i,unsigned char*d,uint16_t l,unsigned int t){IO24_FAKE_API_CALL();(void)h;counts.control++;record.request_type=rt;record.request=r;record.value=v;record.index=i;record.length=l;record.timeout=t;record.payload_length=(rt&LIBUSB_ENDPOINT_IN)?0:l;if(record.payload_length>sizeof(record.payload))record.payload_length=sizeof(record.payload);if(record.payload_length&&d)memcpy(record.payload,d,record.payload_length);return control_result<0?control_result:l;} int libusb_bulk_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){IO24_FAKE_API_CALL();(void)h;(void)d;(void)t;counts.bulk++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){IO24_FAKE_API_CALL();(void)h;(void)d;(void)t;counts.interrupt++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;}
++const char *libusb_strerror(int e){IO24_FAKE_API_CALL();(void)e;return "io24 fake libusb";}

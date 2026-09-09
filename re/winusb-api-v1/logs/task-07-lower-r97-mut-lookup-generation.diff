@@ -1,0 +1,11 @@
+--- .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 07:49:10.184288452 -0700
++++ /tmp/io24-r97-fourmuts.KaxhMg/lookup-generation/dlls/wineusb.sys/unixlib.c	2026-08-24 08:19:26.428990594 -0700
+@@ -1032,7 +1032,7 @@
+     uintptr_t value = (uintptr_t)handle; unsigned int slot = (value & 0x1ff) - 1;
+     uint32_t generation = value >> 9;
+     if (!(value & 0x1ff) || value > UINT32_MAX || slot >= WINEUSB_PIPE_TOKEN_SLOTS || !generation || !device->pipe_table ||
+-            !device->pipe_table->records[slot].current || device->pipe_table->records[slot].generation != generation) return NULL;
++            !device->pipe_table->records[slot].current) return NULL;
+     return &device->pipe_table->records[slot];
+ }
+ 

@@ -1,0 +1,9 @@
+4892847b7fd51f4c23c55bfdc9939f65f450e1bf23c0871db0e69bc415b3c2ed  ../../../AGENTS.md
+fa161bc01d34134afef105c7f4506c61b8ef50475e73cc200fc31ce2b27935d2  task-9-r148-holistic-adjudication-20260828T1522PDT.md
+275d7fb1e4b452bbea348331f131af2ebe91b41a97f97aaaed92570e616839f5  RESUME-20260828T1522PDT.md
+0f4e44b88d6b9d0bd1680f3965fe1f3d287a841ee53194b2311e911c8921d91a  RESUME.md
+3c6b77125c36f157ab8e25e4f212fc0869aed7b5b3112dec5f07f025038260d0  task-9-r148-source-bound.sha256
+eb3323df6df6fc40745e992263ada5ab2a83319e40851af55d58d2c46d359380  ../../../tests/winusb_function_io_contract.c
+7dfe09e4dbc0d3463a2c407791c91771326f0c0037d33dd804e64c82ee0b0afa  ../../../tests/wineusb_winusb_urb_contract.c
+c48fbe4c51e53089257c7892a30f8476873fcbfa863b7a9b6e3232189a652acb  ../../../tests/wineusb_winusb_urb_fake_libusb.c
+ba3172e6547a13311182ce57a128f8e42b46afa1ac83163837404960f57063c1  ../../../.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c

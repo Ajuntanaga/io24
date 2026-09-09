@@ -1,0 +1,126 @@
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (valid)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (no_string)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (bad_string)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (malformed_compat)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (truncated_compat)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (oversize_compat)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (malformed_properties)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (unrelated_property)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (mixed_ids)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (unknown_interface)
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+WineUSB Microsoft OS 1.0 contract: pass (malformed_second_function)
+WineUSB Microsoft OS 1.0 behavior matrix: pass
+WineUSB Microsoft OS 1.0 PnP ID contract: pass
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=0 root_interfaces=3 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=0 root_interfaces=3 physical_length=392 returned_length=218.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=3 root_interfaces=2 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=3 root_interfaces=2 physical_length=392 returned_length=133.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=5 root_interfaces=1 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=5 root_interfaces=1 physical_length=392 returned_length=41.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=6 root_interfaces=1 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=6 root_interfaces=1 physical_length=392 returned_length=27.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7fff57a30b90 reason=interface_out_of_scope interface_index=0 available=4 required=0 declared_pipes=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fff57a30b90 header_length=136 interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff57a30b90 scope=function root=3 interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff57a30b90 interface_index=1 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff57a30b90 interface_index=1 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fff57a30b90 interfaces=2 pipes=2.
+WineUSB function-scope contract: pass
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd5736c428 handle=0x282 endpoint=0x82 type=2 route=bulk length=32 buffer=0x7ffd5736c5d8.
+err:wineusb:usb_submit_urb Failed to submit bulk transfer: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffd5736c428 handle=0x282 endpoint=0x82 route=bulk length=32 buffer=0x7ffd5736c5d8 libusb_status=-6 returned_status=0xc0000001.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd5736c428 handle=0x182 endpoint=0x82 type=1 route=invalid length=32 buffer=0x7ffd5736c5d8.
+err:wineusb:usb_submit_urb Failed to submit GET_DESCRIPTOR transfer: io24 fake libusb
+err:wineusb:usb_submit_urb Failed to submit vendor-specific interface transfer: io24 fake libusb
+WineUSB immediate-submit cleanup contract: pass
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe0f9ea5c8 header_length=184 interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe0f9ea5c8 scope=all_interfaces root=0 interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe0f9ea5c8 interface_index=1 interface=2 pipe_index=0 endpoint=0x83 type=3 handle=0x383.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe0f9ea5c8 interface_index=2 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe0f9ea5c8 interface_index=2 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe0f9ea5c8 interfaces=3 pipes=3.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7ffe0f9ea5c8 reason=truncated_pipe_array interface_index=1 available=1 required=2 declared_pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_SAFETY event=transfer_reject reason=null_buffer irp=0x7ffe0f9ea5c8 handle=0x202 endpoint=0x2 type=2 route=bulk length=512.
+WineUSB multi-interface handle contract: pass
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffd1df588b8 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd1df588b8 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffd1df58a68.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffd1df588b8 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffd1df58a68 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd1df588b8 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffd1df58a68.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffd1df588b8 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffd1df58a68 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd1df588b8 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7ffd1df58a68.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffd1df588b8 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffd1df588b8 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffd1df588b8 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffd1df588b8 interfaces=1 pipes=1.
+WineUSB pipe-observe fake-libusb behavior: pass
+WineUSB pipe-observe plus bounded OS 1.0 reader contract: pass
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+io24 usbmon class-IN evidence contract: pass
+io24 usbmon function topology contract: pass
+io24 WinUSB readiness contract: pass (known RED and synthetic structural GREEN)
+WineUSB WinUSB metadata bus-interface contract: pass
+CP32 winusb function-binding lifecycle checks passed
+CP32 WinUSB function-binding INF contract: pass

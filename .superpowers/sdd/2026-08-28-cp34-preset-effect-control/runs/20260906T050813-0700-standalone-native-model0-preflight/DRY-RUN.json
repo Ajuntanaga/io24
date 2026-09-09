@@ -1,0 +1,29 @@
+{
+  "audio_capture": false,
+  "commands_if_executed": [
+    "bypass the Channel-1 preset family during staging",
+    "if needed, select the other Channel-1 slot before overwriting the active target",
+    "write native MemP/Stat(0)",
+    "route Voice FX processing chain to physical Input 1",
+    "set the unit to two visible preset blocks",
+    "select Stat(0) to produce a host-side recall/application edge",
+    "enable the Channel-1 preset family",
+    "read and verify the exposed selector/routing state"
+  ],
+  "memp_fragments": 1,
+  "memp_payload_sha256": [
+    "f0d7f0878f8d06cb5c3629ec452e4b688c2bb342a29975d1a26fbdf0d97e6a8c"
+  ],
+  "power_cycle": false,
+  "processing_input": 1,
+  "record_bytes": 1092,
+  "record_sha256": "da1b3e00463ed6e51139119611ef18ba8b8286d4db41f7d6dac7290e2f041c57",
+  "restoration_available": "EXACT_FIRMWARE_DEFAULT_ONLY",
+  "schema": "cp34-native-model0-slot-stage-v1",
+  "slot_content_backup_available": false,
+  "slot_index": 0,
+  "standalone_audibility": "REQUIRES_USER_LISTENING_AFTER_STAGE",
+  "standalone_preset_button": "CHANNEL_1",
+  "status": "OFFLINE_READY",
+  "stereo_link_change": false
+}

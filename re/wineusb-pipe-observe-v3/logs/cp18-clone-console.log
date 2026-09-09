@@ -1,0 +1,6 @@
+Running as unit: io24-sandbox-clone-pipe-observe-v3-20260821.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 45.935s
+             CPU time consumed: 4.559s
+                   Memory peak: 384.5M (swap: 0B)

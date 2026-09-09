@@ -1,0 +1,2 @@
+CP32 winusb function-binding lifecycle checks passed
+CP33 function executed mode=--lifecycle dispatches=12 mode-ioctls=0 last-ioctl=0 last-status=0 failures=0

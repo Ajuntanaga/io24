@@ -1,0 +1,20 @@
+--- production-main.c
++++ invalid-token-wrap-main.c
+@@ -39,7 +39,7 @@
+ };
+ static CRITICAL_SECTION handle_registry_lock = { &handle_registry_lock_debug, -1, 0, 0, 0, 0 };
+ static struct list handle_registry = LIST_INIT(handle_registry);
+-static ULONG_PTR next_handle_token = 1;
++static ULONG_PTR next_handle_token = ~(ULONG_PTR)0;
+ 
+ struct acquired_handle
+ {
+@@ -60,7 +60,7 @@
+ /* Called only with handle_registry_lock held.  Odd tokens cannot be heap addresses. */
+ static BOOL allocate_handle_token(struct winusb_handle *handle)
+ {
+-    if (!next_handle_token || next_handle_token == ~(ULONG_PTR)0) return FALSE;
++    if (!next_handle_token) return FALSE;
+     handle->token = (WINUSB_INTERFACE_HANDLE)next_handle_token;
+     next_handle_token += 2;
+     return TRUE;

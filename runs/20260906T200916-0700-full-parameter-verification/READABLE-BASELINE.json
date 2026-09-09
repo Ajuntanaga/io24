@@ -1,0 +1,36 @@
+{
+  "schema": "io24-full-parameter-readable-baseline-v1",
+  "timestamp": "2026-09-06T20:09:16-07:00",
+  "battery_percent": 30,
+  "battery_status": "Discharging",
+  "device": {
+    "vid": "194f",
+    "pid": "0422",
+    "serial": "AB7C22200355",
+    "bcd_device": "0128"
+  },
+  "jast": {
+    "sha256": "1a129121ade834ce76f6f2c2b373edb80cc526d919586bc5234fe265d009a6bd",
+    "reply_bytes": 2040,
+    "flags_word": 385,
+    "channel_linked": false,
+    "input1_preset_enabled": true,
+    "input2_preset_enabled": true,
+    "input1_slot_index": 0,
+    "input2_slot_index": 2,
+    "input1_gain_db": 35.0,
+    "input2_gain_db": 20.287769317626953,
+    "input1_processing_channel": 0,
+    "input2_processing_channel": 1,
+    "hp_volume": 0.5841094255447388,
+    "main_volume": 0.04999999701976776,
+    "monitor_mix": 0.0,
+    "input1_phantom": false,
+    "input2_phantom": false
+  },
+  "host_shadow": {
+    "bytes": 2,
+    "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "value": {}
+  }
+}

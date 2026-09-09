@@ -1,0 +1,57 @@
+{
+  "audio_capture": false,
+  "commands_if_executed": [
+    "read and validate the exposed baseline",
+    "set Assign Voice FX to Ch2",
+    "verify the firmware's active-slot-index swap",
+    "bypass the processing chain now serving physical Channel 2",
+    "if active, move physical Channel 2 from slot 3 to slot 2",
+    "write one complete UC tagged MemP/Stat(3) record",
+    "set the unit to two visible preset blocks",
+    "select slot 3 on physical Channel 2 and enable its assigned chain",
+    "read and verify exposed slot, enable, link, and assignment state"
+  ],
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "direct_voicefx_parameter_write": false,
+  "memp_fragments": 1,
+  "memp_payload_sha256": [
+    "e9154a66a7691ae8e415b891eab299310a3899df9b6cb2658ebb94d99ccf4306"
+  ],
+  "physical_commit": "UNPROVED",
+  "power_cycle": false,
+  "record": {
+    "bytes": 842,
+    "preset_name": "Reverb",
+    "sha256": "c85119953bef5fd41f83f4b60e207519e9d57c6bf174f9d8a8e7ce6a88ed65c4",
+    "voicefx": {
+      "__classid": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+      "lows": 0.06,
+      "mix": 0.295,
+      "on": 1,
+      "width": 0.405
+    },
+    "wire_prefix_hex": "7b"
+  },
+  "restoration_available": "NO_EXACT_CURRENT_SLOT_BODY",
+  "schema": "cp34-channel2-reverb-slot-stage-v1",
+  "slot_content_backup_available": false,
+  "slot_zero_targeted": false,
+  "standalone_audibility": "REQUIRES_USER_LISTENING_AFTER_STAGE",
+  "standalone_preset_button": "CHANNEL_2",
+  "status": "OFFLINE_READY",
+  "stereo_link_change": false,
+  "target_channel": 2,
+  "target_slot": 3,
+  "uc_voicefx_assignment": {
+    "assigned_physical_input": 2,
+    "firmware_slot_side_effect": "swap the two active slot indexes when assignment changes",
+    "label": "Ch2",
+    "property": "line/ch1/processingChannel",
+    "target_processing_chain_after_assignment": 1,
+    "value": 1,
+    "wire_control": "Pari/12 index 0"
+  }
+}

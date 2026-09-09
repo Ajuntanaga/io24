@@ -1,0 +1,41 @@
+CP32 clean artifact comparison
+IDENTICAL  Makefile
+910affad1133e2f2b7ac6da46ba19b18853f1093bf5a10acc46f605f50efcd3c  .io24-build/winusb-function-binding-v1/build-a/Makefile
+910affad1133e2f2b7ac6da46ba19b18853f1093bf5a10acc46f605f50efcd3c  .io24-build/winusb-function-binding-v1/build-b/Makefile
+IDENTICAL  config.status
+b314b873ef1da2819ccac382ea3476ee2d79e71f84efcafcf17c7fd7e05a0337  .io24-build/winusb-function-binding-v1/build-a/config.status
+b314b873ef1da2819ccac382ea3476ee2d79e71f84efcafcf17c7fd7e05a0337  .io24-build/winusb-function-binding-v1/build-b/config.status
+IDENTICAL  include/config.h
+55d4a0bad65eba0635fcb7d3fcea2ab1979ce3320a430f7d6b6e7fe853d55541  .io24-build/winusb-function-binding-v1/build-a/include/config.h
+55d4a0bad65eba0635fcb7d3fcea2ab1979ce3320a430f7d6b6e7fe853d55541  .io24-build/winusb-function-binding-v1/build-b/include/config.h
+IDENTICAL  cp32-configure.log
+f811f70f45eda802d7af6b909a5609b64f2db697727cf73b9bddfca0d8dac4ef  .io24-build/winusb-function-binding-v1/build-a/cp32-configure.log
+f811f70f45eda802d7af6b909a5609b64f2db697727cf73b9bddfca0d8dac4ef  .io24-build/winusb-function-binding-v1/build-b/cp32-configure.log
+IDENTICAL  cp32-build.log
+37c50872dec359b69b6bed9fb22663f06a5971266aa36acd2e93425c61e1cae2  .io24-build/winusb-function-binding-v1/build-a/cp32-build.log
+37c50872dec359b69b6bed9fb22663f06a5971266aa36acd2e93425c61e1cae2  .io24-build/winusb-function-binding-v1/build-b/cp32-build.log
+IDENTICAL  dlls/wineusb.sys/x86_64-windows/wineusb.sys
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/winusb-function-binding-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/winusb-function-binding-v1/build-b/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+IDENTICAL  dlls/wineusb.sys/wineusb.sys.so
+28617460085c0a2f8ae4782f3147bcad8a475a5b01daebba72b64380c118808e  .io24-build/winusb-function-binding-v1/build-a/dlls/wineusb.sys/wineusb.sys.so
+28617460085c0a2f8ae4782f3147bcad8a475a5b01daebba72b64380c118808e  .io24-build/winusb-function-binding-v1/build-b/dlls/wineusb.sys/wineusb.sys.so
+IDENTICAL  dlls/wineusb.sys/wineusb.so
+1edd11b0336a241c1ac8c667fb1d21db3bfac08b0ebdc8f672aa2931785490d9  .io24-build/winusb-function-binding-v1/build-a/dlls/wineusb.sys/wineusb.so
+1edd11b0336a241c1ac8c667fb1d21db3bfac08b0ebdc8f672aa2931785490d9  .io24-build/winusb-function-binding-v1/build-b/dlls/wineusb.sys/wineusb.so
+IDENTICAL  dlls/wineusb.sys/wineusb.res
+b4e48cfca26754279ece31bfd285bfd8ce248acac7ab0967fadfc1b70d57720c  .io24-build/winusb-function-binding-v1/build-a/dlls/wineusb.sys/wineusb.res
+b4e48cfca26754279ece31bfd285bfd8ce248acac7ab0967fadfc1b70d57720c  .io24-build/winusb-function-binding-v1/build-b/dlls/wineusb.sys/wineusb.res
+IDENTICAL  dlls/winusb.sys/x86_64-windows/winusb.sys
+bacee6355cda7eb6bb19a7c8f73d2b8babfc4a22d19b47c31cffc1985f7427eb  .io24-build/winusb-function-binding-v1/build-a/dlls/winusb.sys/x86_64-windows/winusb.sys
+bacee6355cda7eb6bb19a7c8f73d2b8babfc4a22d19b47c31cffc1985f7427eb  .io24-build/winusb-function-binding-v1/build-b/dlls/winusb.sys/x86_64-windows/winusb.sys
+IDENTICAL  dlls/winusb.sys/winusb.sys.so
+dd1f3f199999546ff64ea7c1daa1306fba0a5958f7c1102df3b49ebfca20be46  .io24-build/winusb-function-binding-v1/build-a/dlls/winusb.sys/winusb.sys.so
+dd1f3f199999546ff64ea7c1daa1306fba0a5958f7c1102df3b49ebfca20be46  .io24-build/winusb-function-binding-v1/build-b/dlls/winusb.sys/winusb.sys.so
+IDENTICAL  dlls/winusb.sys/winusb.res
+d63357cb4ce680b4ed6500ad30c235065c5c8ef9fbed28cd54af4c8acaa5f23f  .io24-build/winusb-function-binding-v1/build-a/dlls/winusb.sys/winusb.res
+d63357cb4ce680b4ed6500ad30c235065c5c8ef9fbed28cd54af4c8acaa5f23f  .io24-build/winusb-function-binding-v1/build-b/dlls/winusb.sys/winusb.res
+BUILD_IDS
+    Build ID: b4a791abfd282baa306eaae3fae91c3a199c6243
+    Build ID: fc1f9fb7f02492a67d4203fc9cea27bfd9b39a6b
+    Build ID: 5c192b2f7ac26224eff1afef26d1656886ae7248

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Launcher for the desktop entry.
+#
+# It exists because the project directory name contains a space and a pipe, and
+# a .desktop Exec= line cannot carry either safely — the shell that parses it
+# would split on the space and treat the pipe as a pipeline. Keeping the path in
+# one quoted place here is simpler and less fragile than escaping it there.
+#
+# APP_DIR is rewritten by install-desktop.sh at install time.
+APP_DIR="__APP_DIR__"
+
+# The app opens with or without the interface: offline it shows a banner and
+# host-side features (the multiband) work; plugging the device in attaches it
+# live. So the launcher no longer gates on lsusb or plays notification games.
+exec python3 "$APP_DIR/io24gtk.py" "$@"

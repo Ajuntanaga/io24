@@ -1,0 +1,11 @@
+--- frozen/unixlib.c
++++ mutant/omit-staged-free.c
+@@ -1634,7 +1634,7 @@
+                 transaction->pipe_table = NULL;
+             }
+             else release_claim_transaction(params->device, transaction);
+-            free(transaction->pipe_table);
++            /* R99 mutant: intentionally omit staged-table release. */
+             free(transaction);
+             req->Hdr.Status = USBD_STATUS_SUCCESS;
+             return STATUS_SUCCESS;

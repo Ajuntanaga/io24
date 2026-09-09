@@ -1,0 +1,8 @@
+6ba1b7093657f6192965ac41015ac85c1230c42f775ad6b8c797482ec7008a4e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/winusb_function_io_contract.c
+3661182111456453de9acd123f2b6af0c969c36c147ff3f1f16e025e120d6cec  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/wineusb_winusb_urb_contract.c
+8482de3efb6911f912f34a8ce203071f70b443db5c57b78792eda2b970b92e33  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/winusb_user_api_contract.c
+66fb49ec13928154dd4f8bdb0d2a97ff86aac30361c25cadaff46721b0e726cc  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/winusb_function_io_contract.sh
+a1bc5dd7d338a1f3b678a152a2c99cca274c832267d7459755edacc807f3cd75  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/winusb_user_api_contract.sh
+5efe8286dc665db90d2fec2e74d8aca5ac0527d7f6be27b92a5208bacfed57c9  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/wineusb_winusb_urb_fake_libusb.c
+5e0428554d711ec7b03461e0cd2c59422528c98471d7441511b53516d8de6c07  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/wineusb_winusb_busif_contract.c
+d3fbac5b716551ad3124ec0f12c685200729622c1c0d3af757986c859b4a3bfd  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-red-round-3-head/tests/wineusb_winusb_busif_contract.sh

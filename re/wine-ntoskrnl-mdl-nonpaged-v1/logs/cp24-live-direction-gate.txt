@@ -1,0 +1,27 @@
+The CP21 sealed live trace used the same staged PreSonus driver and WineUSB
+triplet as CP24. All eight prior bulk transfer mappings used handle 0x282,
+flags 0x3, and endpoint 0x82 (IN). No transfer mapping or rejection used
+handle 0x202 / endpoint 0x02 (OUT):
+
+transfer_map_total=8
+transfer_map_0x282_flags_0x3=8
+transfer_map_0x202=0
+transfer_reject_total=8
+transfer_reject_0x82=8
+transfer_reject_0x02=0
+
+The staged PaeDSPUSB.sys is byte-identical in the CP21 and CP24 clones:
+
+fcd8b46d5af756172cb740386f89373e4129d0baa7f6ecb1ff1a173aed49c7bb
+
+The active usbtap is observation-only and does not itself block endpoint OUT,
+but its CP24 and observation-v2 bytes are identical:
+
+dbce256b328b53866dd13dbe382c28b216a1baf64bdb47fc746b722375e86977
+
+The current harness differs from the frozen CP21 harness only in the staged
+kernel hash/path/bind and corrected help text. WineUSB, service behavior,
+isolation, timeout, and USB exposure are unchanged. Interfaces 0-4 remain
+kernel-bound and no claim/detach is permitted, so libusb endpoint operations
+remain fail-closed at the interface-claim boundary. This is inference from
+the sealed CP21 trace plus byte-identical inputs, not yet CP24 live evidence.

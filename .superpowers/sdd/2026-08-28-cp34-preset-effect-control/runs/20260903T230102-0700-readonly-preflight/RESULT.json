@@ -1,0 +1,40 @@
+{
+  "schema": "cp34-readonly-preflight-v1",
+  "observed_at": "2026-09-03T23:04:39-07:00",
+  "authorization": "read identity and host battery; claim USB interface 5 alternate 1; only GetP/JaSt reads",
+  "status": "PASS",
+  "battery_percent": 84,
+  "device": {
+    "serial": "AB7C22200355",
+    "bcd_device": "0128"
+  },
+  "interface": {
+    "number": 5,
+    "alternate_setting": 1
+  },
+  "jast_reads": [
+    {
+      "reply_bytes": 2040,
+      "sha256": "d3862c071142d1ff2c02931917779817b553977fc65ff97e896576d130b62039"
+    },
+    {
+      "reply_bytes": 2040,
+      "sha256": "d3862c071142d1ff2c02931917779817b553977fc65ff97e896576d130b62039"
+    }
+  ],
+  "readable_state": {
+    "input1_preset_enabled": true,
+    "input1_slot_index": 0,
+    "input2_preset_enabled": true,
+    "input2_slot_index": 2
+  },
+  "unresolved": [
+    "slot_title",
+    "stored_slot_record_content",
+    "device_resident_preset_match",
+    "physical_commit",
+    "front_panel_recall",
+    "audibility",
+    "restoration_baseline"
+  ]
+}

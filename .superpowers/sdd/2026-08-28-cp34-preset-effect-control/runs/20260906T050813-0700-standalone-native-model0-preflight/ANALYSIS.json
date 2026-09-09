@@ -1,0 +1,268 @@
+{
+  "correction": {
+    "json_archive_directly_native_stat_eligible": false,
+    "old_shared_tagged_record_model": "RETRACTED",
+    "remaining_boundary": "OTHER_NATIVE_COMPONENT_LEAVES_AND_PHYSICAL_OUTCOMES_UNPROVED"
+  },
+  "factory_library": {
+    "count": 16,
+    "first_prefix_hex": "7b690b70",
+    "first_preset_name": "Broadcast",
+    "first_raw_offset": "0x6a2b8",
+    "first_record_bytes": 822
+  },
+  "model0_private_reverb_candidates": {
+    "current_device_slot_contents_readable": false,
+    "device_io_performed": false,
+    "parameters": {
+      "enabled": true,
+      "lows": 0.06,
+      "mix": 0.295,
+      "width": 0.405
+    },
+    "physical_outcome": "UNOBSERVED",
+    "records": [
+      {
+        "candidate_bytes": 1092,
+        "candidate_file": "slot0-model0-private-reverb.stat",
+        "candidate_sha256": "da1b3e00463ed6e51139119611ef18ba8b8286d4db41f7d6dac7290e2f041c57",
+        "changed_top_level_component": 201,
+        "default_bytes": 1088,
+        "default_file": "slot0-firmware-default.stat",
+        "default_sha256": "1cf1d764c48be395c1e5af43d6c37cc0ced2aa27ba4408d2c112b9cf251f4df7",
+        "fat_channel_preserved_byte_for_byte": true,
+        "slot_index": 0,
+        "storage_role": "VOICEFX_COMPONENT_201_OWNER"
+      },
+      {
+        "candidate_bytes": 1092,
+        "candidate_file": "slot1-model0-private-reverb.stat",
+        "candidate_sha256": "b968619645be68441f23ff795745ab24570977213121fb4d6ed3fc3e48f3e564",
+        "changed_top_level_component": 201,
+        "default_bytes": 1088,
+        "default_file": "slot1-firmware-default.stat",
+        "default_sha256": "c3127999c9d4c249e642cf832acdac5f65789aea9240ae71fa282714fafe8800",
+        "fat_channel_preserved_byte_for_byte": true,
+        "slot_index": 1,
+        "storage_role": "VOICEFX_COMPONENT_201_OWNER"
+      }
+    ],
+    "restoration_basis": "EXACT_FIRMWARE_DEFAULT_NOT_CURRENT_DEVICE_CONTENT"
+  },
+  "native_stat": {
+    "end_raw_offset": "0x6a2b8",
+    "length_table_raw_offset": "0x691e0",
+    "lengths": [
+      1088,
+      1088,
+      1028,
+      1028
+    ],
+    "records": [
+      {
+        "bytes": 1088,
+        "channel_chunks": [
+          {
+            "bytes": 120,
+            "key": "filt"
+          },
+          {
+            "bytes": 128,
+            "key": "gate"
+          },
+          {
+            "bytes": 228,
+            "key": "comp"
+          },
+          {
+            "bytes": 432,
+            "key": "eq  "
+          },
+          {
+            "bytes": 28,
+            "key": "lim "
+          }
+        ],
+        "index": 0,
+        "raw_offset": "0x69230",
+        "sha256": "1cf1d764c48be395c1e5af43d6c37cc0ced2aa27ba4408d2c112b9cf251f4df7",
+        "top_chunks": [
+          {
+            "bytes": 1004,
+            "key_hex": "6f707420"
+          },
+          {
+            "bytes": 48,
+            "key_hex": "000000c9"
+          }
+        ],
+        "version": 2,
+        "voicefx": {
+          "bytes": 48,
+          "component_id": 201,
+          "model_key_hex": "00000005",
+          "parent_version": 6,
+          "selected_model": 5,
+          "state_bytes": 16,
+          "state_hex": "000000000000003fcdcccc3d5c8f423e"
+        }
+      },
+      {
+        "bytes": 1088,
+        "channel_chunks": [
+          {
+            "bytes": 120,
+            "key": "filt"
+          },
+          {
+            "bytes": 128,
+            "key": "gate"
+          },
+          {
+            "bytes": 228,
+            "key": "comp"
+          },
+          {
+            "bytes": 432,
+            "key": "eq  "
+          },
+          {
+            "bytes": 28,
+            "key": "lim "
+          }
+        ],
+        "index": 1,
+        "raw_offset": "0x69670",
+        "sha256": "c3127999c9d4c249e642cf832acdac5f65789aea9240ae71fa282714fafe8800",
+        "top_chunks": [
+          {
+            "bytes": 1004,
+            "key_hex": "6f707420"
+          },
+          {
+            "bytes": 48,
+            "key_hex": "000000c9"
+          }
+        ],
+        "version": 2,
+        "voicefx": {
+          "bytes": 48,
+          "component_id": 201,
+          "model_key_hex": "00000005",
+          "parent_version": 6,
+          "selected_model": 5,
+          "state_bytes": 16,
+          "state_hex": "000000000000003fcdcccc3d5c8f423e"
+        }
+      },
+      {
+        "bytes": 1028,
+        "channel_chunks": [
+          {
+            "bytes": 120,
+            "key": "filt"
+          },
+          {
+            "bytes": 128,
+            "key": "gate"
+          },
+          {
+            "bytes": 228,
+            "key": "comp"
+          },
+          {
+            "bytes": 432,
+            "key": "eq  "
+          },
+          {
+            "bytes": 28,
+            "key": "lim "
+          }
+        ],
+        "index": 2,
+        "raw_offset": "0x69ab0",
+        "sha256": "84201c25f28bbc2590e172ebc477392dcc2615c117bfcf565c6b4bd7453bd4be",
+        "top_chunks": [
+          {
+            "bytes": 1004,
+            "key_hex": "6f707420"
+          }
+        ],
+        "version": 2,
+        "voicefx": null
+      },
+      {
+        "bytes": 1028,
+        "channel_chunks": [
+          {
+            "bytes": 120,
+            "key": "filt"
+          },
+          {
+            "bytes": 128,
+            "key": "gate"
+          },
+          {
+            "bytes": 228,
+            "key": "comp"
+          },
+          {
+            "bytes": 432,
+            "key": "eq  "
+          },
+          {
+            "bytes": 28,
+            "key": "lim "
+          }
+        ],
+        "index": 3,
+        "raw_offset": "0x69eb4",
+        "sha256": "cbbe5eb743b058710efe85b0c6bd67deeed004a18c7499b7f01aef1b5727dd72",
+        "top_chunks": [
+          {
+            "bytes": 1004,
+            "key_hex": "6f707420"
+          }
+        ],
+        "version": 2,
+        "voicefx": null
+      }
+    ]
+  },
+  "source": {
+    "application_sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "firmware_version": "1.28",
+    "package_offset": "0x214e70",
+    "package_sha256": "790f668608448b7c9f244c360ad72e3c51f71b4e8a3d828eab0e08cd03b35de1",
+    "uc472_dll_sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
+  },
+  "startup_binding": {
+    "copy_table_entry_raw_offset": "0x310",
+    "factory_pointer_table_destination": "0x202b0e14",
+    "initializer_bytes": 2637,
+    "initializer_source": "0x60149c40",
+    "pointer_table_destination": "0x202b0e00",
+    "stat_pointer_table_destination": "0x202b0e04"
+  },
+  "status": "FIRMWARE128_STAT_DEFAULTS_NATIVE_V2_SEPARATE_FROM_TAGGED_LIBRARY",
+  "voicefx_native_bridge": {
+    "channel_strip_only_slot_indexes": [
+      2,
+      3
+    ],
+    "component_id": 201,
+    "default_selected_model": 5,
+    "model0_serializer_raw_offset": "0x53680",
+    "model0_state_bytes": 20,
+    "model0_state_source": "model+0x340",
+    "model5_matches_mapped_delay_state": true,
+    "model5_state_bytes": 16,
+    "model5_state_hex": "000000000000003fcdcccc3d5c8f423e",
+    "parent_version": 6,
+    "storage_owner_does_not_fix_runtime_input": true,
+    "voicefx_storage_slot_indexes": [
+      0,
+      1
+    ]
+  }
+}

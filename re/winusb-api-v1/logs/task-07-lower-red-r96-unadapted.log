@@ -1,0 +1,34 @@
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe1fc4e670 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe1fc4e670 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe1fc4e670 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe1fc4e670 interfaces=1 pipes=1.
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffe1fc4e670 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe1fc4e670 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe1fc4e670 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe1fc4e670 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe1fc4e670 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffe1fc4e670 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffe1fc4e820.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffe1fc4e670 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffe1fc4e820 libusb_status=0 returned_status=0x103.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe1fc4e670 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe1fc4e670 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe1fc4e670 interface_index=0 interface=5 pipe_index=0 endpoint=0x83 type=3 handle=0x383.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe1fc4e670 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffe1fc4e670 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffe1fc4e820.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffe1fc4e670 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffe1fc4e820 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffe1fc4e670 handle=0x7fffffff endpoint=0xff type=255 route=invalid length=16 buffer=0x7ffe1fc4e820.
+FAIL test_invalid_pipe_is_unchanged:193: invalid pipe returned 0xffffffff80000600
+FAIL test_invalid_pipe_is_unchanged:194: allocation count is 1
+FAIL test_invalid_pipe_is_unchanged:196: free count is 1
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe1fc4e670 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe1fc4e670 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe1fc4e670 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe1fc4e670 interfaces=1 pipes=1.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe1fc4e670 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe1fc4e670 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe1fc4e670 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe1fc4e670 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffe1fc4e670 handle=0x281 endpoint=0x81 type=2 libusb_status=0 returned_status=0.
+3 WineUSB pipe-observe contract check(s) failed
+HARNESS: retained pipe execution baseline failed
+HARNESS: lower contract exited 2

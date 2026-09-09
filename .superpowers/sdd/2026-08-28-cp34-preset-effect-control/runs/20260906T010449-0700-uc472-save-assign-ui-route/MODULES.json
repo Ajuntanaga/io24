@@ -1,0 +1,27 @@
+{
+  "extraction": "offline byte extraction from the already decompressed official UC 4.7.2.108537 installer payload; no vendor code executed",
+  "modules": {
+    "Plugins/studiolivepanel.dll": {
+      "sha256": "52e48cb1453b815abc4b55fd0232131e11115d1aceb2eb0ed899750db6c08dd8",
+      "size": 41828312
+    },
+    "PreSonusHardwareAccessService.exe": {
+      "sha256": "b8e97749f44a610aa621b3325303ce992096c7046cbb635694c115d3fcd8ee71",
+      "size": 456152
+    },
+    "Universal Control.exe": {
+      "sha256": "27f9fe550b466c9d783e3432d6663bb02af9aa001b23165985a56c96005e1a96",
+      "size": 22172120
+    },
+    "ucnet.dll": {
+      "sha256": "61aeda721584b7111a5ae5c296ac6ab824d0cd3d1f4306b9fcb8d796fdda32de",
+      "size": 209368
+    }
+  },
+  "predecessor": {
+    "checkpoint": "runs/20260906T001130-0700-uc472-official-reacquisition/CHECKPOINT.sha256",
+    "verification": "14/14 entries OK before shared handoff edits",
+    "dsp_sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+    "installer_sha256": "1b5ddd6fd3ad4b93529caf8e5933bcd52b13194bdfa62652292b46ddcd980b95"
+  }
+}

@@ -1,0 +1,5 @@
+path=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/checkpoints/live-read-ntoskrnl-mdl-nonpaged-v1-20260822T145019PDT
+inode=4063249
+mode=700
+owner=ajuntanaga:ajuntanaga
+created_mtime=2026-08-22 16:08:39.290747631 -0700

@@ -1,0 +1,14 @@
+CP31 patch-check record
+Date: 2026-08-23
+
+Base: sealed CP29 source clone
+Command shape: patch --batch --forward --fuzz=0 -p1
+Exit: 0
+Fuzz: 0
+Rejects/original backups: none
+
+Patch SHA-256:
+  d63c0b6727c6fa313153738aa0a33bfd5f0cc799e90012d92257eebb0a0ed6d4
+
+The separately patched tree and development source each contain 12,447
+regular files. diff -qr reports no difference and exits zero.

@@ -1,0 +1,35 @@
+{
+  "audibility": "UNPROVED",
+  "device": {
+    "serial": "AB7C22200355"
+  },
+  "effect_absence": "UNPROVED",
+  "observation": {
+    "input_source": "operator finger touching the free patch-cable end feeding Input 2",
+    "possible_transient_delay": {
+      "repeatable": false,
+      "report": "one possible delay-like moment shortly after the native host restart",
+      "status": "UNCONFIRMED_SINGLE_EVENT"
+    },
+    "report": "dry after the first native-host action",
+    "separate_repeat_about_173ms_heard": false
+  },
+  "post_observation_preflight": {
+    "battery_percent": 98,
+    "input1_preset_enabled": false,
+    "input1_slot_index": 0,
+    "input2_preset_enabled": true,
+    "input2_slot_index": 3,
+    "jast_payload_sha256": "e16d8477deac023b424816ed0e69cf4c124726bac4c0f73f431ec7bed4b36cd7",
+    "status": "PASS"
+  },
+  "native_host_followup": {
+    "host_action_execution": "CONFIRMED",
+    "physical_report_after_repeat": "no audible difference; dry",
+    "physical_repeat_status": "CONTROLLED_REPEAT_DRY",
+    "result_path": "HOST-ACTION-RESULT.json"
+  },
+  "schema": "cp34-physical-audibility-observation-v2",
+  "scope": "operator listening plus separately authorized native-host Channel-2 action; no host playback, capture, or Channel-1 operation",
+  "timestamp": "2026-09-04T00:19:18-07:00"
+}

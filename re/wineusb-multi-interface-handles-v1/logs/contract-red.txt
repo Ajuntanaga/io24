@@ -1,0 +1,10 @@
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffd6e9c3498 scope=first_interface interface=0 alternate=0 pipes=0.
+FAIL test_all_embedded_interfaces_receive_stable_pipe_handles:133: interface 2 handle is (nil)
+FAIL test_all_embedded_interfaces_receive_stable_pipe_handles:135: interface 4 OUT handle is (nil)
+FAIL test_all_embedded_interfaces_receive_stable_pipe_handles:137: interface 4 IN handle is (nil)
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffd6e9c3498 scope=first_interface interface=0 alternate=0 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffd6e9c3498 interface=0 pipe_index=0 endpoint=0x81 type=2 handle=0x74d9020c0281.
+FAIL test_malformed_later_interface_rejects_before_mutation:168: malformed request returned 0
+FAIL test_malformed_later_interface_rejects_before_mutation:169: malformed USBD status is 0
+FAIL test_malformed_later_interface_rejects_before_mutation:171: earlier interface was partially mutated to 0x74d9020c0281
+6 WineUSB multi-interface handle contract check(s) failed

@@ -1,0 +1,9 @@
+CP23_SHA256SUMS verified with status 0. The frozen 77-entry CP21 runtime
+SHA256SUMS verified with status 0. CP21_SHA256SUMS itself is hash-pinned by
+CP23, but applying it to today's active project correctly reports two changed
+paths: tests/uc_wine_sandbox.sh and
+tests/uc_wine_sandbox_multi_interface_handles_v1_selector_contract.sh. Both
+are intentional CP24 selector changes and are separately hash-pinned. The
+correct live preflight therefore verifies the immutable CP21 runtime and CP23
+snapshot chains, then verifies the CP24 active files directly; it does not
+misuse the historical CP21 external-reference list as a current-tree seal.

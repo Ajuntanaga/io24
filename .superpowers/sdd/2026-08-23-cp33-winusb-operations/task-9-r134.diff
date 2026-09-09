@@ -1,0 +1,74 @@
+--- r133-head/tests/winusb_function_io_contract.c
++++ r134-head/tests/winusb_function_io_contract.c
+@@ -82,8 +82,10 @@
+ static struct control_pool_allocation control_pool_allocations[4];
+ static BOOL control_pool_observing;
+ static BOOL control_pool_tracking_frees;
++static BOOL control_completion_allocation_observing;
+ static BOOL control_retirement_observing;
+ static unsigned int control_pool_attempts, control_pool_count;
++static unsigned int control_completion_allocation_attempts;
+ static unsigned int control_pool_fail_ordinal;
+ static void control_note_free(PVOID pointer);
+ #define IO24_CHECK(expr) do { if (!(expr)) { \
+@@ -97,6 +99,8 @@
+     unsigned int i;
+ 
+     (void)type;
++    if (control_completion_allocation_observing)
++        ++control_completion_allocation_attempts;
+     session_allocation_calls++;
+     if (session_fail_allocation == session_allocation_calls) return NULL;
+     if (control_pool_observing)
+@@ -197,6 +201,22 @@
+     control_pool_fail_ordinal = 0;
+ }
+ 
++/* This observer is deliberately independent of the admission allocation
++ * journal.  Its interval is only one pending completion, so intervening
++ * alternate-selection allocations cannot hide a completion-time clone. */
++static void control_completion_allocation_begin(void)
++{
++    IO24_CHECK(!control_completion_allocation_observing);
++    control_completion_allocation_attempts = 0;
++    control_completion_allocation_observing = TRUE;
++}
++
++static void control_completion_allocation_end(void)
++{
++    control_completion_allocation_observing = FALSE;
++    IO24_CHECK(control_completion_allocation_attempts == 0);
++}
++
+ static struct control_pool_allocation *control_pool_find(PVOID pointer)
+ {
+     for (unsigned int i = 0; i < control_pool_count; ++i)
+@@ -643,6 +663,8 @@
+     control_retirement_observing = FALSE;
+     control_retirement_events = 0;
+     control_pool_tracking_frees = FALSE;
++    control_completion_allocation_observing = FALSE;
++    control_completion_allocation_attempts = 0;
+     descriptor_unmapped_mdl = FALSE;
+     memset(control_retirement_order, 0, sizeof(control_retirement_order));
+     memset(builder_irps, 0, sizeof(builder_irps));
+@@ -3384,7 +3406,9 @@
+                 STATUS_INVALID_DEVICE_STATE);
+         IO24_CHECK(lower_calls == lower_before);
+         io24_last_completed_irp = NULL; io24_completed_irp_count = 0;
++        control_completion_allocation_begin();
+         IO24_CHECK(complete_pending_task9_irp());
++        control_completion_allocation_end();
+         IO24_CHECK(io24_completed_irp_count == 1 &&
+                 io24_last_completed_irp == &pending_irps[0] && control_pending_count == 1);
+         IO24_CHECK(pending_irps[0].IoStatus.Status == STATUS_SUCCESS &&
+@@ -3399,7 +3423,9 @@
+                 STATUS_INVALID_DEVICE_STATE);
+         IO24_CHECK(lower_calls == lower_before);
+         io24_last_completed_irp = NULL; io24_completed_irp_count = 0;
++        control_completion_allocation_begin();
+         IO24_CHECK(complete_pending_task9_irp());
++        control_completion_allocation_end();
+         IO24_CHECK(io24_completed_irp_count == 1 &&
+                 io24_last_completed_irp == &pending_irps[1] && !control_pending_count);
+         IO24_CHECK(pending_irps[1].IoStatus.Status == STATUS_IO_TIMEOUT &&

@@ -1,0 +1,10 @@
+4379acc317c3d0d7af4cb019a9545bb7a6eaa889533fc64e8c80bccf22a5d889  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T200005-0700-uc5-structured-state-serializer-comparison/SCOPE.md
+3b0d26c0edb4f34867b5a177a3aa1d6d74815fee00233f3615b22aefe4efcaef  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T200005-0700-uc5-structured-state-serializer-comparison/PROGRESS.md
+c9071a5c6af46b109bcc84fde9984145d19bad1c7e6239e82e88749a9f484883  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T200005-0700-uc5-structured-state-serializer-comparison/OBSIDIAN.md
+ffe90efc65fdefea39c7f9c54f4240bebc72a467152db5fcadb4a487cc5136a0  re/cp34_uc5_serializer_comparison.py
+a8a742961373148946954daee61699409a20bed25ca124fc2827b2b1eb519bde  tests/test_cp34_uc5_serializer_comparison.py
+8675c57273ea856909b673d58f780035b375c13af281de4a707486855833cf19  re/cp34_host_queue_inventory.py
+7d7671bda93cffcbae8485d2b215c163af8587950ca1694868ba3ff359876645  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+a074be78de681fc4f5962fc5471061be9cc136226ce19780d4b4eb490b620dd0  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+12259a9bf1f31ec2ea03da5c4de6ff80e5db8b1c108d1a632f1e0d14c5d48a11  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T183725-0700-uc472-host-source-retention-audit/CHECKPOINT.sha256
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll

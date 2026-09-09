@@ -1,0 +1,34 @@
+{
+  "battery_percent": 19,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "error": {
+    "message": "short read",
+    "type": "PreflightError"
+  },
+  "events": [
+    {
+      "action": "NO_WRITE_ALREADY_OFF",
+      "channel": 2,
+      "state": {
+        "channel_linked": false,
+        "flags_word": 393,
+        "input1_muted": true,
+        "input1_preset_enabled": true,
+        "input1_slot_index": 1,
+        "input2_muted": false,
+        "input2_preset_enabled": true,
+        "input2_slot_index": 2
+      }
+    },
+    {
+      "action": "MUTE_OFF_SENT",
+      "channel": 1,
+      "frame_bytes": 40
+    }
+  ],
+  "schema": "cp34-input-mute-restoration-v1",
+  "status": "RESTORATION_TRANSPORT_FAILED"
+}

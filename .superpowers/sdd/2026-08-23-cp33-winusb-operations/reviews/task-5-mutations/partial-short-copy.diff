@@ -1,0 +1,14 @@
+--- production-main.c
++++ partial-short-copy-main.c
+@@ -549,7 +549,11 @@
+     if (!cached_descriptor_region(acquired.root, type, &cached, &length))
+         return fail_after_release(&acquired, ERROR_BAD_DEVICE);
+     if (buffer_length < length)
++    {
++        memcpy(buffer, cached, buffer_length);
++        *transferred = buffer_length;
+         return fail_after_release(&acquired, ERROR_INSUFFICIENT_BUFFER);
++    }
+ 
+     memcpy(buffer, cached, length);
+     *transferred = length;

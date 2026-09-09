@@ -1,0 +1,51 @@
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb10 header_length=112 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb10 scope=all_interfaces root=0 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb10 interfaces=1 pipes=2.
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffc4217cb10 handle=0x201 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb10 header_length=112 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb10 scope=all_interfaces root=0 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb10 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4217cb10 handle=0x201 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffc4217ccc0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4217cb10 handle=0x201 endpoint=0x81 route=bulk length=32 buffer=0x7ffc4217ccc0 libusb_status=0 returned_status=0x103.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb10 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb10 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb10 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4217cb10 handle=0x201 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffc4217ccc0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4217cb10 handle=0x201 endpoint=0x83 route=interrupt length=32 buffer=0x7ffc4217ccc0 libusb_status=0 returned_status=0x103.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb10 header_length=112 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb10 scope=all_interfaces root=0 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb10 interfaces=1 pipes=2.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb10 header_length=112 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb10 scope=all_interfaces root=0 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb10 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffc4217cb10 handle=0x201 endpoint=0x81 type=2 libusb_status=0 returned_status=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217c960 header_length=64 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217c960 scope=function root=5 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217c960 interfaces=1 pipes=0.
+FAIL group_atomicity:579: submit_request(&device,r)==STATUS_INSUFFICIENT_RESOURCES
+FAIL group_atomicity:580: io24_fake_libusb_counts()->set_alternate==before
+FAIL group_atomicity:581: r->Interface.Pipes[0].PipeHandle==NULL&&r->Interface.Pipes[1].PipeHandle==NULL
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7ffc4217cb00 reason=active_descriptor_mismatch interface_index=0 available=0 required=0 declared_pipes=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217c8a0 header_length=160 interfaces=2 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217c8a0 scope=function root=5 interfaces=2 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217c8a0 interfaces=2 pipes=3.
+FAIL group_target_only:664: submit_request(&device,&pipe)==STATUS_SUCCESS
+FAIL group_target_only:666: io24_fake_libusb_counts()->clear_halt==before+1
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7ffc4217c8a0 reason=active_descriptor_mismatch interface_index=0 available=7 required=0 declared_pipes=0.
+FAIL group_target_only:675: submit_request(&device,&pipe)==STATUS_SUCCESS
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217c8a0 header_length=160 interfaces=2 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217c8a0 scope=function root=5 interfaces=2 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217c8a0 interfaces=2 pipes=3.
+FAIL group_target_only:684: submit_request(&device,&pipe)==STATUS_SUCCESS
+FAIL group_target_only:685: io24_fake_libusb_counts()->clear_halt==before+1
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4217cb20 header_length=112 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4217cb20 scope=all_interfaces root=0 interfaces=1 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4217cb20 interfaces=1 pipes=2.
+WineUSB pipe-observe fake-libusb behavior: pass
+CP33 lower executed mode=--alternate completions=0 failures=8
+
+COMMAND: tests/wineusb_winusb_urb_contract.sh /tmp/io24-r97-fourmuts.KaxhMg/global-target-retirement .io24-build/winusb-function-binding-v1/build-a .io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0 --alternate
+MODE: --alternate
+EXIT: 1
+failures=8

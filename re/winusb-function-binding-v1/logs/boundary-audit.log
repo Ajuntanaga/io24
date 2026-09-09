@@ -1,0 +1,45 @@
+CP32 no-transfer and scope boundary audit
+Date: 2026-08-23
+
+Production patch paths (12):
+configure
+configure.ac
+dlls/wineusb.sys/Makefile.in
+dlls/wineusb.sys/unixlib.h
+dlls/wineusb.sys/wineusb.c
+dlls/wineusb.sys/winusb_busif.c
+dlls/wineusb.sys/winusb_busif.h
+dlls/winusb.sys/Makefile.in
+dlls/winusb.sys/main.c
+dlls/winusb.sys/winusb.inf
+dlls/winusb.sys/winusb.rc
+loader/wine.inf.in
+
+Forbidden actionable symbols in added patch lines:
+NONE
+
+Forbidden actionable symbols in new function-driver module:
+NONE
+
+User-mode dlls/winusb tree versus sealed CP31:
+IDENTICAL
+
+New winusb.sys.so dynamic NEEDED entries:
+NONE
+
+New winusb.sys.so undefined dynamic symbols:
+                 w _ITM_deregisterTMCloneTable
+                 w _ITM_registerTMCloneTable
+                 w __cxa_finalize
+                 w __gmon_start__
+NO LIBUSB SYMBOL
+
+Embedded INF proof strings in clean fake PE:
+Class=USBDevice
+Wine WinUSB compatible function=device_section,USB\MS_COMP_WINUSB
+ServiceBinary="%12%\winusb.sys"
+
+WineUSB fake PE hashes (CP31 and both CP32 clean builds):
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/wineusb-ms-os-10-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/winusb-function-binding-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  .io24-build/winusb-function-binding-v1/build-b/dlls/wineusb.sys/x86_64-windows/wineusb.sys

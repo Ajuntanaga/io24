@@ -1,0 +1,32 @@
+{
+  "after": {
+    "channel_linked": false,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 0
+  },
+  "battery_percent": 20,
+  "before": {
+    "channel_linked": false,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 3,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 0
+  },
+  "channel1_preset_body_written": false,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "record_write_attempted": false,
+  "status": "RESTORED"
+}

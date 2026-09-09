@@ -1,0 +1,55 @@
+CP31 Microsoft OS 1.0 bounded-parser RED/GREEN record
+Date: 2026-08-22/23
+Scope: synthetic fake-libusb descriptors only; no live device descriptor was read
+
+Initial RED against the unchanged sealed CP29 Unix library:
+  scenario: valid
+  exit: 1 (expected)
+  descriptor requests observed: 0 (expected 7)
+  MI05 compatible ID: absent (expected WINUSB)
+  MI06 compatible ID: absent (expected WINUSB)
+  MI05/MI06 vendor code and GUID metadata: absent
+  total intended failures: 7
+
+The verbatim initial RED is retained in contract-red-contained.log.
+
+Additional test-first bounds found while the CP31 implementation existed:
+
+1. unknown_interface RED
+   A syntactically valid compatible-ID function section named interface 200,
+   which is not in the active configuration, caused one unnecessary extended-
+   properties request. The contract rejected that request. Properties are now
+   fetched only when metadata is attached to an actually emitted child.
+
+2. malformed_second_function RED
+   A valid MI05 section followed by a malformed second function section leaked
+   MI05's partially parsed compatible ID. The contract rejected that partial
+   result. Compatible-ID parsing is now atomic: any malformed function section
+   clears the entire 256-interface metadata table.
+
+Final GREEN behavior matrix:
+  valid
+  no_string
+  bad_string
+  malformed_compat
+  truncated_compat
+  oversize_compat
+  malformed_properties
+  unrelated_property
+  mixed_ids
+  unknown_interface
+  malformed_second_function
+
+All 11 scenarios pass against both independent clean builds.
+
+Bounded behavior exercised by the fake backend:
+  OS string:       0x80/0x06/0x03ee/0, exactly 18 bytes
+  compatible IDs: 0xc0/vendor/0/wIndex 4, 16-byte header then bounded body
+  properties:     0xc1/vendor/interface<<8/wIndex 5, 10-byte header then body
+  timeout:        1000 ms
+  maximum body:   4096 bytes
+
+The request bytes, lengths, order, and absence of extra requests are contract
+assertions. Vendor code 0xa5, WINUSB IDs, GUIDs, and malformed blobs are
+synthetic fixtures informed by the installed vendor-module model. They are not
+evidence that the physical io24 returned those descriptors.

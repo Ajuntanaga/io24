@@ -1,0 +1,65 @@
+phase=CP18_USB_HIDDEN_DRIVER_PREFLIGHT
+2026-08-21T05:32:52-07:00
+battery_status=Discharging battery_pct=48
+CP17_REPRODUCIBLE_BUILDS.md: OK
+CP17_MANIFEST_SNAPSHOT.md: OK
+../CP17_HARNESS_SNAPSHOT.sh: OK
+CP16_SHA256SUMS: OK
+../logs/cp17-artifact-comparison.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/source-a.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/source-a-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/source-b.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/source-b-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/source-comparison.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/configure-a.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/configure-a-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/configure-b.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/configure-b-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/build-a.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/build-a-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/build-b.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/build-b-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/contracts-a.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/contracts-a-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/contracts-b.log: OK
+../../../.io24-build/wineusb-pipe-observe-v3/logs/contracts-b-resource.txt: OK
+../../../.io24-build/wineusb-pipe-observe-v3/source-a/dlls/wineusb.sys/wineusb.c: OK
+../../../.io24-build/wineusb-pipe-observe-v3/source-a/dlls/wineusb.sys/unixlib.c: OK
+../../../.io24-build/wineusb-pipe-observe-v3/source-b/dlls/wineusb.sys/wineusb.c: OK
+../../../.io24-build/wineusb-pipe-observe-v3/source-b/dlls/wineusb.sys/unixlib.c: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-a/dlls/wineusb.sys/wineusb.sys.so: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-a/dlls/wineusb.sys/wineusb.so: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-b/dlls/wineusb.sys/x86_64-windows/wineusb.sys: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-b/dlls/wineusb.sys/wineusb.sys.so: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-b/dlls/wineusb.sys/wineusb.so: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-a/Makefile: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-b/Makefile: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-a/compile_commands.json: OK
+../../../.io24-build/wineusb-pipe-observe-v3/build-b/compile_commands.json: OK
+../../wine-11.15-wineusb-pipe-observe-v3.patch: OK
+/home/ajuntanaga/.cache/io24/builds/wine-11.15-usbdi/downloads/wine-11.15.tar.xz: OK
+active_artifact_hashes:
+3e41a3dd9c2205dfa1d53374a1f3533934829702b741fa416316b5cc39ef5b8e  tests/uc_wine_sandbox.sh
+97587106a3a8889102fd6a3d2d4912aff26aade5be64eb049844e06165d23c45  tests/uc_wine_sandbox_pipe_observe_v3_selector_contract.sh
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.sys.so
+90d060571d9f8a56aea8d91485802fe500920f741fb5787543a8c141ae104eb9  re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.so
+sandbox_stat=inode=6556444 mode=700 owner=1000:1000 mtime=2026-08-19 19:42:51.259415326 -0700
+clone_runtime_hashes:
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/user.reg
+5004f4fa876373edb647bad38247bd7b1aedf0689e1f1d581cf42d466044fb28  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/userdef.reg
+dbce256b328b53866dd13dbe382c28b216a1baf64bdb47fc746b722375e86977  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/usbtap.so
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/live-service-usb.txt
+source_baseline_hashes:
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+active_io24_units_begin
+
+active_io24_units_end
+candidate_processes_begin
+
+candidate_processes_end
+protected_prefix_stat=inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+PREFLIGHT=PASS

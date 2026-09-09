@@ -1,0 +1,12 @@
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/busif-focused.exit
+8c1afa94350476cb741ce26e760aff077d334cebb88862f30c6da0dc6b6759f9  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/busif-focused.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/busif-retained.exit
+018f5473ced85f8461de004ad416556c97a228eb7a24793ca2a956ef1ae21ff6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/busif-retained.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-asan-compile.exit
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-asan-compile.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-asan.exit
+b4bee0c346ecac0e87646a85dd7e0138aa967d27d9f985b52d5a89ff39a42d8f  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-asan.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-focused.exit
+b4bee0c346ecac0e87646a85dd7e0138aa967d27d9f985b52d5a89ff39a42d8f  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-focused.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-lifecycle.exit
+9242cc98cf6abfd796863b4b3a58f41b44905df787bdadc33d618464670054d6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r134-controller-logs/function-lifecycle.log

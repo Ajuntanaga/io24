@@ -1,0 +1,52 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 02:36:17.956510692 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 02:37:57.117305625 -0700
+@@ -1,2 +1,2 @@
+-3e1eb7ea4590bd7aa08e38b002494451e124d19954eade579819c08023ffab0e  re/cp34_current_slot_survey.py
+-cde3609bf53b9bab09ca96ca3eea3bd3e07761dad773eaf6abc5fc4b5011c2dc  tests/test_cp34_current_slot_survey.py
++5bfba253388cf67ec7f42bf3f6a7e95aff64c9e9486ca9b964e1f1a6add481a4  re/cp34_current_slot_survey.py
++ee12d731611d485c5f8b8fb85d371045682972f16c4c9da7790fed477b901ebe  tests/test_cp34_current_slot_survey.py
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/re/cp34_current_slot_survey.py	2026-08-29 02:36:17.956277421 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/re/cp34_current_slot_survey.py	2026-08-29 02:37:57.117093446 -0700
+@@ -48,10 +48,17 @@
+     if not isinstance(candidates, list) or len(candidates) != len(EXPECTED_CANDIDATES):
+         return ["candidates_must_be_exactly_current_slots"]
+     reasons = []
++    candidate_fields = frozenset({
++        "label", "channel", "numeric_slot", "physical_input", "connection",
++        "restore_connection", "actions",
++    })
++    action_fields = frozenset({"id", "kind", "press"})
+     for index, (candidate, expected) in enumerate(zip(candidates, EXPECTED_CANDIDATES), 1):
+         if not isinstance(candidate, dict) or any(candidate.get(key) != value for key, value in expected.items()):
+             reasons.append("candidate_%d_must_match_fixed_order" % index)
+             continue
++        if frozenset(candidate) != candidate_fields:
++            reasons.append("candidate_%d_has_unrecognized_fields" % index)
+         if not isinstance(candidate.get("connection"), str) or not candidate["connection"].strip():
+             reasons.append("candidate_%d_missing_connection" % index)
+         if not isinstance(candidate.get("restore_connection"), str) or not candidate["restore_connection"].strip():
+@@ -61,6 +68,8 @@
+             reasons.append("candidate_%d_requires_two_toggles" % index)
+             continue
+         for action_index, (action, action_id) in enumerate(zip(actions, ("T1", "T2")), 1):
++            if isinstance(action, dict) and frozenset(action) != action_fields:
++                reasons.append("candidate_%d_action_%d_has_unrecognized_fields" % (index, action_index))
+             if not isinstance(action, dict) or action.get("id") != action_id:
+                 reasons.append("candidate_%d_action_%d_id_invalid" % (index, action_index))
+             if not isinstance(action, dict) or action.get("kind") != "manual_preset_toggle":
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-before/tests/test_cp34_current_slot_survey.py	2026-08-29 02:36:17.956365561 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-1-fix1-after/tests/test_cp34_current_slot_survey.py	2026-08-29 02:37:57.117184519 -0700
+@@ -145,6 +145,10 @@
+         self._assert_invalid(plan, "candidate_1_action_1_must_be_long_press")
+         plan = _valid_plan(); plan["candidates"][0]["actions"][0]["kind"] = "mapped_write"
+         self._assert_invalid(plan, "candidate_1_action_1_must_be_manual_toggle")
++        plan = _valid_plan(); plan["candidates"][0]["slot_selection"] = "modeled-mutation"
++        self._assert_invalid(plan, "candidate_1_has_unrecognized_fields")
++        plan = _valid_plan(); plan["candidates"][0]["actions"][0]["mapped_write"] = "modeled-mutation"
++        self._assert_invalid(plan, "candidate_1_action_1_has_unrecognized_fields")
+ 
+     def test_rejects_unsafe_path_battery_floor_or_missing_prohibitions(self):
+         plan = _valid_plan(); plan["schema"] = "wrong"

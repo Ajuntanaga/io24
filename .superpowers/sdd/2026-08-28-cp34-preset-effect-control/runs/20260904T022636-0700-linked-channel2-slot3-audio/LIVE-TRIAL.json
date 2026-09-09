@@ -1,0 +1,79 @@
+{
+  "battery_percent": 94,
+  "capture": {
+    "bytes": 16128044,
+    "channels": 6,
+    "duration_seconds": 14,
+    "endpoint": "hw:CARD=R24,DEV=0",
+    "format": "S32_LE",
+    "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T022636-0700-linked-channel2-slot3-audio/linked-recall-passive.wav",
+    "rate_hz": 48000,
+    "returncode": 0,
+    "sha256": "e587d9a7cbf78312eabcb4b2b4ee5e2f806d88335d3c812dd4d7372b1120aa14",
+    "start_wall_time": "2026-09-04T02:27:06.466-07:00",
+    "stderr": ""
+  },
+  "device": {
+    "serial": "AB7C22200355"
+  },
+  "device_result": {
+    "audibility": "UNPROVED",
+    "baseline_state": {
+      "channel_linked": false,
+      "flags_word": 417,
+      "input1_gain_db": 37.0,
+      "input1_preset_enabled": false,
+      "input1_processing_channel": 0,
+      "input1_slot_index": 0,
+      "input2_gain_db": 1.0,
+      "input2_preset_enabled": true,
+      "input2_processing_channel": 1,
+      "input2_slot_index": 3
+    },
+    "channel1_unchanged": true,
+    "final_state": {
+      "channel_linked": false,
+      "flags_word": 417,
+      "input1_gain_db": 37.0,
+      "input1_preset_enabled": false,
+      "input1_processing_channel": 0,
+      "input1_slot_index": 0,
+      "input2_gain_db": 1.0,
+      "input2_preset_enabled": true,
+      "input2_processing_channel": 1,
+      "input2_slot_index": 3
+    },
+    "status": "LINKED_CHANNEL2_SLOT3_RECALL_COMPLETED"
+  },
+  "error": null,
+  "events": [
+    {
+      "capture_offset_seconds": 0.522732,
+      "event": "baseline_confirmed",
+      "wall_time": "2026-09-04T02:27:06.989-07:00"
+    },
+    {
+      "capture_offset_seconds": 1.024134,
+      "event": "channel2_slot2_confirmed",
+      "wall_time": "2026-09-04T02:27:07.490-07:00"
+    },
+    {
+      "capture_offset_seconds": 4.525615,
+      "event": "link_on_confirmed",
+      "wall_time": "2026-09-04T02:27:10.992-07:00"
+    },
+    {
+      "capture_offset_seconds": 5.026665,
+      "event": "channel2_slot3_confirmed",
+      "wall_time": "2026-09-04T02:27:11.493-07:00"
+    },
+    {
+      "capture_offset_seconds": 10.528339,
+      "event": "link_off_confirmed",
+      "wall_time": "2026-09-04T02:27:16.995-07:00"
+    }
+  ],
+  "schema": "cp34-linked-channel2-slot3-live-trial-v1",
+  "scope": "passive ALSA capture plus Channel-2 3-to-2, link on, Channel-2 2-to-3, link off",
+  "status": "LINKED_CHANNEL2_SLOT3_RECALL_COMPLETED"
+}

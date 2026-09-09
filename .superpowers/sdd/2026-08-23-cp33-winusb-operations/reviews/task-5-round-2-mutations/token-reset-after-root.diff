@@ -1,0 +1,10 @@
+--- production-main.c
++++ token-reset-after-root-main.c
+@@ -166,6 +166,7 @@
+     HeapFree(GetProcessHeap(), 0, root->snapshot);
+     DeleteCriticalSection(&root->lock);
+     HeapFree(GetProcessHeap(), 0, root);
++    next_handle_token = 1;
+     return TRUE;
+ }
+ 

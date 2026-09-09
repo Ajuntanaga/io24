@@ -1,0 +1,7 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+test_sha256 15312236193040a14b4a63797594b1a703d0be919465e88b9d6cae76a65119ae
+base_main_sha256 6a2ea0ae74185fffbbb81f957bd0af83bda3f044e9212927b8d71920ba700876
+base_private_sha256 2aad333179951f9b806e3e85678b978138ccd1c217a4253934d54335e34d83d8
+command bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/task-5-red-source --handles
+HARNESS: missing or non-regular required input: .io24-build/winusb-api-v1/task-5-red-source/dlls/winusb/winusb.spec
+exit_code 2

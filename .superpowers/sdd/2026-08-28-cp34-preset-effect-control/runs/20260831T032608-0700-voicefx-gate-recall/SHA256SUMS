@@ -1,0 +1,7 @@
+b859a5dce6cba918e36d14bb94b16ce920d4e32e4b9d0cc4ac095c2cf9bce6f1  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T032608-0700-voicefx-gate-recall/REPORT.md
+5677c7c79ce688ee8ee6f597fdb2b6c2aab633626fb043bcf904bfe0a09c9630  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T032608-0700-voicefx-gate-recall/RECALL-STATIC.json
+fde1e29039ccff84a9d00918fa153a1e30905b8ba6de0a4b26016e6ea2108b2d  re/cp34_preset_recall_static.py
+46be2aa8c625c031cf6493c32d737648690327e40b24d61e563c76676aa90580  tests/test_cp34_preset_recall_static.py
+e3127473294cbdc0dee59a5596dbc3195d2c8e2b3eb32849c11307348144ec0a  io24_preset_record.py
+65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a  /tmp/io24-fw-1.28.7DrxHf.bin
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  /tmp/io24-uc472-extract.IHXUdb/hwaccess/dspusbdevice.dll

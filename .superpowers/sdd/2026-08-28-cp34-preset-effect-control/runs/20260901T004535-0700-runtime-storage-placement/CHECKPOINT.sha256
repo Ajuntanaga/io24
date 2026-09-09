@@ -1,0 +1,11 @@
+# CP34 runtime-storage and placement checkpoint, 2026-09-01T02:14:16-07:00.
+# Run `sha256sum -c <this file>` from the workspace root.
+# Pinned local UC 4.7.2 package: 790f668608448b7c9f244c360ad72e3c51f71b4e8a3d828eab0e08cd03b35de1
+# Derived in-memory application: 65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a
+
+28bea490b60610f69599a1eaa2ad2d8396eb2deaf45ca955eca6db64bdfab3e2  re/cp34_lane_control_firmware_static.py
+8897fe4b81dc8c9c3ae82347a789a4bc3b3a1cb1160fca9282638b9d78c78c49  tests/test_cp34_lane_control_firmware_static.py
+fcdaee3905fce49a528714b3b8b263062e48e703ecf8b2d449fc281291b07c24  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+6c8d88234df586ccaffb4c0580fb93ccff12f508a699a0b3f136f4a4412e7644  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T004535-0700-runtime-storage-placement/SCOPE.md
+c91f26d82862a3dd0e854a1a8a7a7c6f806511bdc5cb2724983ae30cbadb26e9  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T004535-0700-runtime-storage-placement/PROGRESS.md
+244eb7ba96fa5fa685aadc8b40d0b9a3dfda5998475dff10d4b5a096a6d9df32  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T004535-0700-runtime-storage-placement/OBSIDIAN.md

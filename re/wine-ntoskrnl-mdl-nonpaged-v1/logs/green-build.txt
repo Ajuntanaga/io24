@@ -1,0 +1,16 @@
+make: 'dlls/ntoskrnl.exe/tests/ntoskrnl.exe_test.exe.so' is up to date.
+gcc -m64 -c -o dlls/ntoskrnl.exe/ntoskrnl.o /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c -Idlls/ntoskrnl.exe \
+  -I/run/io24-source/dlls/ntoskrnl.exe -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/ntoskrnl.exe.so --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -shared /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.exe.spec \
+  dlls/ntoskrnl.exe/instr.o dlls/ntoskrnl.exe/ntoskrnl.o dlls/ntoskrnl.exe/pnp.o \
+  dlls/ntoskrnl.exe/sync.o dlls/ntoskrnl.exe/plugplay_c.o dlls/ntoskrnl.exe/version.res \
+  dlls/advapi32/libadvapi32.a dlls/hal/libhal.a dlls/rpcrt4/librpcrt4.a dlls/setupapi/libsetupapi.a \
+  libs/winecrt0/libwinecrt0.a dlls/msvcrt/libmsvcrt.a dlls/kernel32/libkernel32.a \
+  dlls/ntdll/libntdll.a -Wl,-delayload,rpcrt4.dll -Wl,-delayload,setupapi.dll 

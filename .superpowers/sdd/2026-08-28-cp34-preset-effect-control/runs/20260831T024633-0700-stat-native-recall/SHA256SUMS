@@ -1,0 +1,7 @@
+15f0e10580c8c4ed5cf990d3916bd3b4aa6d5eaffda35bf7feb71ba483a67696  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T024633-0700-stat-native-recall/REPORT.md
+2e19497bcbc71296be7b77f88afc5d8b361f4058171166dca0b8af3ec20782d7  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260831T024633-0700-stat-native-recall/RECALL-STATIC.json
+75e1d5edf8380e12dc4473d56f73f39e94cc499809a2b9cd71c05aab4412d6c0  re/cp34_preset_recall_static.py
+700e5ee5e0e94d6537b28d0163a5fbcfea5154218e8539aae9d8e2c021c90736  tests/test_cp34_preset_recall_static.py
+e3127473294cbdc0dee59a5596dbc3195d2c8e2b3eb32849c11307348144ec0a  io24_preset_record.py
+65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a  /tmp/io24-fw-1.28.7DrxHf.bin
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  /tmp/io24-uc472-extract.IHXUdb/hwaccess/dspusbdevice.dll

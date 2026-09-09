@@ -1,0 +1,6 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+test_sha256 2588b4bfcce2bf465c8a80b9f7dd50bc2e77c4e3db0d699c426ecf8a154cf6fd
+mutation no-retired-reclaim
+command timeout 20s bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/task-5-round-1-mutations/no-retired-reclaim --handles
+CP33 public executed mode=--handles target-mask=0x8c present-mask=0x19c missing-mask=0 fake-events=17 submits=3 releases=1 completions=0 failures=34
+exit_code 1

@@ -1,0 +1,11 @@
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffc6f806d08 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc6f806d08 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffc6f806eb8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc6f806d08 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffc6f806eb8 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc6f806d08 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffc6f806eb8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc6f806d08 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffc6f806eb8 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc6f806d08 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7ffc6f806eb8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc6f806d08 scope=first_interface interface=5 alternate=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffc6f806d08 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x741c6a480281.
+WineUSB pipe-observe fake-libusb behavior: pass
+WineUSB pipe-observe source/binary/runtime contract: pass

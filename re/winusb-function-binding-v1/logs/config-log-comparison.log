@@ -1,0 +1,81 @@
+CP32 config.log comparison
+Raw config.log files differ only in compiler-generated /tmp object basenames:
+--- .io24-build/winusb-function-binding-v1/build-a/config.log	2026-08-23 03:44:07.557055521 -0700
++++ .io24-build/winusb-function-binding-v1/build-b/config.log	2026-08-23 03:45:28.772546764 -0700
+@@ -6676,7 +6676,7 @@
+ configure:17989: result: no
+ configure:18037: checking for resolver library
+ configure:18061: gcc -m64 -o conftest -g -O2   conftest.c   >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccXlkhcf.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/cc7mHpuB.o: in function `main':
+ /run/io24-build/conftest.c:105:(.text.startup+0x32): undefined reference to `ns_initparse'
+ collect2: error: ld returned 1 exit status
+ configure:18061: $? = 1
+@@ -6909,7 +6909,7 @@
+ configure:18124: result: no
+ configure:18261: checking for pthread_getthreadid_np
+ configure:18261: gcc -m64 -o conftest -g -O2   conftest.c   >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccfturt4.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccH3DlBn.o: in function `main':
+ /run/io24-build/conftest.c:126:(.text.startup+0x9): undefined reference to `pthread_getthreadid_np'
+ collect2: error: ld returned 1 exit status
+ configure:18261: $? = 1
+@@ -8954,7 +8954,7 @@
+ configure:21148: result: yes
+ configure:21154: checking for getattrlist
+ configure:21154: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccZgp8SW.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccSBXUI4.o: in function `main':
+ /run/io24-build/conftest.c:137:(.text.startup+0x9): undefined reference to `getattrlist'
+ collect2: error: ld returned 1 exit status
+ configure:21154: $? = 1
+@@ -9114,7 +9114,7 @@
+ configure:21172: result: yes
+ configure:21178: checking for kqueue
+ configure:21178: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccPvbqky.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccK3aNnJ.o: in function `main':
+ /run/io24-build/conftest.c:140:(.text.startup+0x9): undefined reference to `kqueue'
+ collect2: error: ld returned 1 exit status
+ configure:21178: $? = 1
+@@ -9273,7 +9273,7 @@
+ configure:21190: result: yes
+ configure:21196: checking for port_create
+ configure:21196: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccfB3ndu.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccI9qWhV.o: in function `main':
+ /run/io24-build/conftest.c:142:(.text.startup+0x9): undefined reference to `port_create'
+ collect2: error: ld returned 1 exit status
+ configure:21196: $? = 1
+@@ -9454,7 +9454,7 @@
+ configure:21238: result: yes
+ configure:21244: checking for setproctitle
+ configure:21244: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccJjIduV.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/cc51BqMv.o: in function `main':
+ /run/io24-build/conftest.c:149:(.text.startup+0x9): undefined reference to `setproctitle'
+ collect2: error: ld returned 1 exit status
+ configure:21244: $? = 1
+@@ -9614,7 +9614,7 @@
+ configure:21244: result: no
+ configure:21250: checking for setprogname
+ configure:21250: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/cc12LFv7.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccLVFKm6.o: in function `main':
+ /run/io24-build/conftest.c:149:(.text.startup+0x9): undefined reference to `setprogname'
+ collect2: error: ld returned 1 exit status
+ configure:21250: $? = 1
+@@ -9786,7 +9786,7 @@
+ configure:21268: result: yes
+ configure:21274: checking for thr_kill2
+ configure:21274: gcc -m64 -o conftest -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0    conftest.c  >&5
+-/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccN4o9RG.o: in function `main':
++/usr/bin/x86_64-linux-gnu-ld.bfd: /tmp/ccTIj0Kv.o: in function `main':
+ /run/io24-build/conftest.c:152:(.text.startup+0x9): undefined reference to `thr_kill2'
+ collect2: error: ld returned 1 exit status
+ configure:21274: $? = 1
+
+Normalized comparison:
+dcd89f073af5002e2ca60c30246c1f8758b67e8b886dd3a6d3b3b2d9468e7156  build-a/config.log normalized
+dcd89f073af5002e2ca60c30246c1f8758b67e8b886dd3a6d3b3b2d9468e7156  build-b/config.log normalized
+IDENTICAL after replacing /tmp/cc<random>.o basenames

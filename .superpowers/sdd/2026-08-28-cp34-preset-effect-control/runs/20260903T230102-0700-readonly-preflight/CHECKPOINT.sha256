@@ -1,0 +1,11 @@
+f3fa980e9f9c336e3a55fb25ac83f58271f451acad3f1fa7e6a42d19fc4c0f33  re/cp34_readonly_preflight.py
+e06fd4045f5a4bdd9fbdb5c5834f84e2d1bdd7b6b9ba8563d71f56f976cbf50a  tests/test_cp34_readonly_preflight.py
+fb3c5245855ce7ad156f8e3f4f4234c25907aade1be77d3f0f5f84416f138f46  io24_preset_record.py
+7cc8ab9ecd3ffa61ff72ced946d3d9343f60ba6f44eaf95d5d304bb443c34c79  tests/test_io24_preset_persistence.py
+6f937e152d8166ee934c5eff3544228acaa5097423b51d227522df63ddee8b98  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+0f584bf6f7c9e1f5bf432e5d1bf96ba26e0d4bec2e3b3c32f437b07a80d860e9  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/SCOPE.md
+72ec368dc9aceed69dde8636c2a5492c594b44aa3ed3ed057bd1c9fab3f57b6a  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/PROGRESS.md
+c062b53e8a4f4880ff6abb60dc7a06f6a8650102cf162fddfd68d9a75a2750e5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/RESULT.json
+adb6471dfb479884d97339234f2cf37b2fac561552572d4a13be7c2b5f56e6eb  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/COMMANDS.md
+12824da6890623f6a94c30d10eda616c1f432c5715b777877724698da8f962d0  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/OBSIDIAN.md
+11253f882af17f525029308379bc353c1f40cdc0aabc302f6cbd2f482250db67  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T230102-0700-readonly-preflight/PHYSICAL-OBSERVATION.md

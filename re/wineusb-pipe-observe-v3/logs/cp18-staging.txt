@@ -1,0 +1,7 @@
+phase=CP18_EXACT_STAGING
+2026-08-21T05:30:46-07:00
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.sys.so
+90d060571d9f8a56aea8d91485802fe500920f741fb5787543a8c141ae104eb9  re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.so
+staged_bytes_match_build_b=PASS
+staged_bytes_match_build_a=PASS

@@ -1,0 +1,30 @@
+timestamp=2026-08-22T14:35:41-07:00
+battery=78% status=Discharging
+cp23_seal=d54fd537d9319e5dc4394ab202a340295a269d09181a17da4f460a4e4455ef37 verified
+720a780bb9bde1c24064ad848b86472dde66e19a230920402ab2d589c765304a  tests/uc_wine_sandbox.sh
+06386e6ee382c32469b8096cc68c5cd4dd3ed71f7f5f52a10d2d514e293b4461  tests/uc_wine_sandbox_ntoskrnl_mdl_nonpaged_v1_selector_contract.sh
+7ac414022d500e332be0e4196a9183d376791829fe51ce841f856273d9b96a0a  tests/uc_wine_sandbox_multi_interface_handles_v1_selector_contract.sh
+259d80fc4c68df9db3202f6aee7eb42e36bed11593480527f044decf84029c2e  re/wine-ntoskrnl-mdl-nonpaged-v1/x86_64-windows/ntoskrnl.exe
+3c338b34e2f33f3d50772cbea3bd3654bbe9ccaf235b5c16081ed8e9cebd6026  re/wine-ntoskrnl-mdl-nonpaged-v1/x86_64-unix/ntoskrnl.exe.so
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  re/wineusb-multi-interface-handles-v1/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.sys.so
+96f5a63a76d5f0e9a73425717d81e17d1fd6883c7a909508e703897a22fe4039  re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.so
+clone inode=4063245 mode=700 owner=1000:1000 mtime=2026-08-19 19:42:51.259415326 -0700
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  clone/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  clone/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  clone/out/live-service-usb.txt
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  source/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  source/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  source/out/live-service-usb.txt
+active_io24_wine_units=none
+candidate_processes=none
+device sysfs=3-1 node=/dev/bus/usb/003/002 serial=AB7C22200355 authorized=1 config=1 speed=480
+interface=3-1:1.0 alt=0 driver=snd-usb-audio
+interface=3-1:1.1 alt=0 driver=snd-usb-audio
+interface=3-1:1.2 alt=0 driver=snd-usb-audio
+interface=3-1:1.3 alt=0 driver=snd-usb-audio
+interface=3-1:1.4 alt=0 driver=snd-usb-audio
+interface=3-1:1.5 alt=0 driver=none
+interface=3-1:1.6 alt=0 driver=none
+protected_prefix inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+DRIVER_PREFLIGHT=PASS

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+peer_root="$project_root/.claude-peer"
+session_file="$project_root/.context/claude-host-peer-session-id"
+started_file="$project_root/.context/claude-host-peer-session-started"
+settings_file="$project_root/.claude/io24-peer-auto-settings.json"
+turns_root="$peer_root/turns"
+
+mkdir -p "$turns_root"
+exec 9>"$peer_root/.peer-turn.lock"
+flock 9
+
+"$project_root/refresh-claude-peer-evidence" >/dev/null
+session_id="$(tr -d '[:space:]' < "$session_file")"
+if [[ ! "$session_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+  printf 'invalid peer session id\n' >&2
+  exit 2
+fi
+
+turn_stamp="$(date +%Y%m%dT%H%M%S%z)"
+response_file="$turns_root/$turn_stamp.json"
+session_args=(--session-id "$session_id")
+if [[ -f "$started_file" ]]; then
+  session_args=(--resume "$session_id")
+fi
+
+cd "$peer_root"
+
+# A peer launched from another Claude terminal can inherit that terminal's
+# session identity. The unattended peer owns only the explicit UUID above.
+while IFS= read -r inherited_name; do
+  unset "$inherited_name"
+done < <(compgen -A variable | LC_ALL=C grep '^CLAUDE')
+
+# Large source reviews can legitimately spend several minutes in hidden
+# reasoning. Keep both the API request and stream-idle watchdog at 30 minutes;
+# the previous defaults cut two healthy, permission-clean turns at ~185 s.
+export API_TIMEOUT_MS=1800000
+export CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000
+export CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS=1800000
+export CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=1800000
+export API_FORCE_IDLE_TIMEOUT=0
+
+/home/ajuntanaga/.local/bin/claude \
+  -p \
+  "${session_args[@]}" \
+  --name io24-host-claude-peer \
+  --model sonnet \
+  --effort low \
+  --restricted \
+  --add-dir /home/ajuntanaga/.agents/skills \
+  --add-dir /home/ajuntanaga/Documents/Obsidian/ResearchOS \
+  --strict-mcp-config \
+  --permission-mode dontAsk \
+  --permission-prompts none \
+  --allowedTools 'Read,Grep,Glob,Skill,WebSearch,WebFetch,Agent,Bash(../claude-io24-host-view *)' \
+  --disallowedTools Edit,Write,NotebookEdit \
+  --settings "$settings_file" \
+  --output-format json \
+  < PEER-TURN.md > "$response_file"
+
+# A zero exit means Claude accepted/completed the turn and may already have
+# persisted this UUID server-side. Mark it resumable before validating the
+# response envelope so malformed or truncated JSON cannot strand turn one in a
+# permanent --session-id recreation loop.
+touch "$started_file"
+jq -e '.is_error == false and (.result | type == "string")' \
+  "$response_file" >/dev/null
+{
+  printf '\n'
+  jq -r '.result' "$response_file"
+  printf '\n'
+} >> OUTBOX.md
+printf '%s\n' "$response_file"

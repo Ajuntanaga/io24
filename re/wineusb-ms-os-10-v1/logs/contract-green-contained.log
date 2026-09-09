@@ -1,0 +1,33 @@
+CP31 Microsoft OS 1.0 discovery contract GREEN
+Date: 2026-08-23
+Containment: bwrap --unshare-all --unshare-net; read-only workspace; minimal
+/dev; absent sysfs; private /tmp, /run, and HOME; no Wine prefix or device
+namespace.
+
+Clean build A exit: 0
+  WineUSB Microsoft OS 1.0 contract: pass (valid)
+  WineUSB Microsoft OS 1.0 contract: pass (no_string)
+  WineUSB Microsoft OS 1.0 contract: pass (bad_string)
+  WineUSB Microsoft OS 1.0 contract: pass (malformed_compat)
+  WineUSB Microsoft OS 1.0 contract: pass (truncated_compat)
+  WineUSB Microsoft OS 1.0 contract: pass (oversize_compat)
+  WineUSB Microsoft OS 1.0 contract: pass (malformed_properties)
+  WineUSB Microsoft OS 1.0 contract: pass (unrelated_property)
+  WineUSB Microsoft OS 1.0 contract: pass (mixed_ids)
+  WineUSB Microsoft OS 1.0 contract: pass (unknown_interface)
+  WineUSB Microsoft OS 1.0 contract: pass (malformed_second_function)
+  WineUSB Microsoft OS 1.0 behavior matrix: pass
+  WineUSB Microsoft OS 1.0 PnP ID contract: pass
+
+Clean build B exit: 0
+  WineUSB Microsoft OS 1.0 behavior matrix: pass
+  WineUSB Microsoft OS 1.0 PnP ID contract: pass
+
+PnP-ID cases include:
+  USB\MS_COMP_WINUSB
+  USB\MS_COMP_XUSB10&MS_SUBCOMP_ABC, then USB\MS_COMP_XUSB10 fallback
+  full-width eight-character IDs
+  rejected lowercase, embedded-NUL, unterminated, and invalid-character IDs
+
+This is synthetic behavioral proof of the translator and formatter. It is not
+a live io24 descriptor capture, a binding proof, or a WinUsb_* API proof.

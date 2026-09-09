@@ -1,0 +1,51 @@
+phase=CP18_USB_HIDDEN_DRIVER_POSTFLIGHT
+2026-08-21T05:33:52-07:00
+battery_status=Discharging battery_pct=48
+unit_show_begin
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+InvocationID=
+Result=success
+ExecMainStatus=0
+MemoryPeak=[not set]
+MemorySwapCurrent=[not set]
+CPUUsageNSec=[not set]
+unit_show_end
+journal_tail_begin
+2026-08-21T05:32:53.803216-07:00 CipherPixy systemd[4601]: Starting io24-wine-driver-load-212427.service - [systemd-run] /usr/bin/bwrap --die-with-parent --new-session --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts --unshare-cgroup-try --cap-drop ALL --clearenv --setenv HOME /tmp/home --setenv USER ajuntanaga --setenv LOGNAME ajuntanaga --setenv PATH /opt/wine-staging/bin:/usr/local/bin:/usr/bin:/bin --setenv LANG C.UTF-8 --setenv TMPDIR /tmp --setenv WINEPREFIX /tmp/prefix --setenv WINEARCH win64 --setenv WINEDEBUG -all --setenv WINEDLLOVERRIDES winemenubuilder.exe=d --setenv WINEESYNC 0 --setenv WINEFSYNC 0 --setenv DISPLAY :98 --setenv LIBGL_ALWAYS_SOFTWARE 1 --setenv LIBGL_DRI3_DISABLE 1 --setenv XDG_RUNTIME_DIR /tmp/runtime --setenv XDG_CACHE_HOME /tmp/out/cache --setenv XDG_CONFIG_HOME /tmp/out/config --setenv XDG_DATA_HOME /tmp/out/data --setenv DBUS_SESSION_BUS_ADDRESS unix:path=/tmp/no-session-bus --setenv PULSE_SERVER unix:/tmp/no-pulse --setenv IO24_SANDBOX_INNER 1 --setenv IO24_SANDBOX_MODE driver-load --setenv IO24_DRIVER_REGISTRY_TRACE 0 --ro-bind / / --dev /dev --proc /proc --bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821 /tmp --tmpfs /run --tmpfs /home --dir /run/io24-project --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont" /run/io24-project --tmpfs /sys --setenv WINEDLLPATH /tmp/out/wine-ntddi/x86_64-unix:/run/io24-wineusb-pipe-observe-v3/x86_64-unix --setenv WINEDLLOVERRIDES "ntoskrnl.exe=b;wineusb.sys=b;winemenubuilder.exe=d" --dir /run/io24-wineusb-pipe-observe-v3 --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3" /run/io24-wineusb-pipe-observe-v3 --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-rtl-registry-handle/x86_64-windows/ntdll.dll /opt/wine-staging/lib/wine/x86_64-windows/ntdll.dll --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-rtl-registry-handle/x86_64-windows/ntdll.dll /tmp/prefix/drive_c/windows/system32/ntdll.dll --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-ntddi/x86_64-windows/ntoskrnl.exe /opt/wine-staging/lib/wine/x86_64-windows/ntoskrnl.exe --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-ntddi/x86_64-windows/ntoskrnl.exe /tmp/prefix/drive_c/windows/system32/ntoskrnl.exe --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys" /opt/wine-staging/lib/wine/x86_64-windows/wineusb.sys --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys" /tmp/prefix/drive_c/windows/system32/drivers/wineusb.sys --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.so" /opt/wine-staging/lib/wine/x86_64-unix/wineusb.so --chdir /tmp /bin/bash /run/io24-project/tests/uc_wine_sandbox.sh...
+2026-08-21T05:32:53.830588-07:00 CipherPixy systemd[4601]: Started io24-wine-driver-load-212427.service - [systemd-run] /usr/bin/bwrap --die-with-parent --new-session --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts --unshare-cgroup-try --cap-drop ALL --clearenv --setenv HOME /tmp/home --setenv USER ajuntanaga --setenv LOGNAME ajuntanaga --setenv PATH /opt/wine-staging/bin:/usr/local/bin:/usr/bin:/bin --setenv LANG C.UTF-8 --setenv TMPDIR /tmp --setenv WINEPREFIX /tmp/prefix --setenv WINEARCH win64 --setenv WINEDEBUG -all --setenv WINEDLLOVERRIDES winemenubuilder.exe=d --setenv WINEESYNC 0 --setenv WINEFSYNC 0 --setenv DISPLAY :98 --setenv LIBGL_ALWAYS_SOFTWARE 1 --setenv LIBGL_DRI3_DISABLE 1 --setenv XDG_RUNTIME_DIR /tmp/runtime --setenv XDG_CACHE_HOME /tmp/out/cache --setenv XDG_CONFIG_HOME /tmp/out/config --setenv XDG_DATA_HOME /tmp/out/data --setenv DBUS_SESSION_BUS_ADDRESS unix:path=/tmp/no-session-bus --setenv PULSE_SERVER unix:/tmp/no-pulse --setenv IO24_SANDBOX_INNER 1 --setenv IO24_SANDBOX_MODE driver-load --setenv IO24_DRIVER_REGISTRY_TRACE 0 --ro-bind / / --dev /dev --proc /proc --bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821 /tmp --tmpfs /run --tmpfs /home --dir /run/io24-project --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont" /run/io24-project --tmpfs /sys --setenv WINEDLLPATH /tmp/out/wine-ntddi/x86_64-unix:/run/io24-wineusb-pipe-observe-v3/x86_64-unix --setenv WINEDLLOVERRIDES "ntoskrnl.exe=b;wineusb.sys=b;winemenubuilder.exe=d" --dir /run/io24-wineusb-pipe-observe-v3 --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3" /run/io24-wineusb-pipe-observe-v3 --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-rtl-registry-handle/x86_64-windows/ntdll.dll /opt/wine-staging/lib/wine/x86_64-windows/ntdll.dll --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-rtl-registry-handle/x86_64-windows/ntdll.dll /tmp/prefix/drive_c/windows/system32/ntdll.dll --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-ntddi/x86_64-windows/ntoskrnl.exe /opt/wine-staging/lib/wine/x86_64-windows/ntoskrnl.exe --ro-bind /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/out/wine-ntddi/x86_64-windows/ntoskrnl.exe /tmp/prefix/drive_c/windows/system32/ntoskrnl.exe --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys" /opt/wine-staging/lib/wine/x86_64-windows/wineusb.sys --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-windows/wineusb.sys" /tmp/prefix/drive_c/windows/system32/drivers/wineusb.sys --ro-bind "/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-pipe-observe-v3/x86_64-unix/wineusb.so" /opt/wine-staging/lib/wine/x86_64-unix/wineusb.so --chdir /tmp /bin/bash /run/io24-project/tests/uc_wine_sandbox.sh.
+2026-08-21T05:33:11.713409-07:00 CipherPixy systemd[4601]: io24-wine-driver-load-212427.service: Consumed 3.362s CPU time over 17.909s wall clock time, 119.5M memory peak.
+journal_tail_end
+active_io24_units_begin
+
+active_io24_units_end
+candidate_processes_begin
+
+candidate_processes_end
+driver_status:
+start_status=0
+query_status=0
+driver_log_marker_counts:
+pipe_observe=0
+class_reject=0
+usb_pdo=0
+clone_registry_hashes:
+41dde5b893b5467eef4629043b73c88665d067a5c1cf941310955502ae1da1de  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/system.reg
+8691ce2922ef80d57824fc017848fe40735f8507fb93924891464d07f1400028  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/user.reg
+5004f4fa876373edb647bad38247bd7b1aedf0689e1f1d581cf42d466044fb28  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821/prefix/userdef.reg
+source_baseline_hashes:
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+protected_prefix_stat=inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+device=/sys/bus/usb/devices/3-1 serial=AB7C22200355 bus=3 dev=2 config=1
+interface_bindings:
+3-1:1.0 alt= 0 driver=snd-usb-audio
+3-1:1.1 alt= 0 driver=snd-usb-audio
+3-1:1.2 alt= 0 driver=snd-usb-audio
+3-1:1.3 alt= 0 driver=snd-usb-audio
+3-1:1.4 alt= 0 driver=snd-usb-audio
+3-1:1.5 alt= 0 driver=unclaimed
+3-1:1.6 alt= 0 driver=unclaimed
+POSTFLIGHT=PASS

@@ -1,0 +1,26 @@
+{
+  "call_kind": "rip-indirect",
+  "call_sites": [
+    {
+      "address": "0x18007700b",
+      "function_end": "0x1800770b9",
+      "function_start": "0x180076ed0",
+      "nearby_ascii_immediates": []
+    },
+    {
+      "address": "0x1800775ad",
+      "function_end": "0x18007769b",
+      "function_start": "0x1800772e0",
+      "nearby_ascii_immediates": []
+    },
+    {
+      "address": "0x180083a98",
+      "function_end": "0x180083b11",
+      "function_start": "0x1800839b0",
+      "nearby_ascii_immediates": []
+    }
+  ],
+  "image_base": "0x180000000",
+  "queue_target": "0x1800e43f0",
+  "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
+}

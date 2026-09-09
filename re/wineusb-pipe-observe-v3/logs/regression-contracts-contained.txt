@@ -1,0 +1,4 @@
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+io24 usbmon class-IN evidence contract: pass

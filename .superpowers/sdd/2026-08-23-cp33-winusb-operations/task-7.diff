@@ -1,0 +1,2767 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 06:50:34.361489904 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 08:19:32.584588096 -0700
+@@ -39,6 +39,24 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wineusb);
+ 
++#define WINEUSB_PIPE_TOKEN_SLOTS 256
++#define WINEUSB_PIPE_TOKEN_GENERATION_MAX 0x7fffff
++struct wineusb_pipe_token
++{
++    uint32_t generation;
++    uint8_t endpoint, type, interface_number, alternate;
++    bool current;
++};
++
++/* The token table is deliberately detached from HANDLE representation.  A
++ * token is (generation << 9) | (one based slot), never an address. */
++struct wineusb_pipe_table
++{
++    struct wineusb_pipe_token records[WINEUSB_PIPE_TOKEN_SLOTS];
++    uint8_t alternates[256];
++    uint32_t next_generation;
++};
++
+ struct unix_device
+ {
+     struct list entry;
+@@ -52,6 +70,7 @@
+     uint8_t function_root;
+     unsigned char function_interfaces[32];
+     unsigned char claimed_interfaces[32];
++    struct wineusb_pipe_table *pipe_table;
+     struct claim_transaction *pending_claim_transaction;
+ };
+ 
+@@ -60,6 +79,7 @@
+     USBD_CONFIGURATION_HANDLE token;
+     uint8_t interfaces[256];
+     uint16_t count;
++    struct wineusb_pipe_table *pipe_table;
+ };
+ 
+ static uintptr_t next_claim_transaction_token;
+@@ -986,6 +1006,7 @@
+         }
+     }
+ 
++    irp->Tail.Overlay.DriverContext[0] = NULL;
+     free(transfer_ctx);
+ 
+     event.type = USB_EVENT_TRANSFER_COMPLETE;
+@@ -993,35 +1014,112 @@
+     queue_event(&event);
+ }
+ 
+-struct pipe
+-{
+-    unsigned char endpoint;
+-    unsigned char type;
+-};
++static HANDLE issue_pipe_token(struct wineusb_pipe_table *table, unsigned char endpoint,
++        USBD_PIPE_TYPE type, unsigned char interface_number, unsigned char alternate,
++        uint32_t generation)
++{
++    unsigned int slot;
++    if (!generation || generation > WINEUSB_PIPE_TOKEN_GENERATION_MAX) return NULL;
++    for (slot = 0; slot < WINEUSB_PIPE_TOKEN_SLOTS; ++slot)
++        if (!table->records[slot].current) break;
++    if (slot == WINEUSB_PIPE_TOKEN_SLOTS) return NULL;
++    table->records[slot] = (struct wineusb_pipe_token){generation, endpoint, type, interface_number, alternate, true};
++    return (HANDLE)(uintptr_t)((generation << 9) | (slot + 1));
++}
++
++static struct wineusb_pipe_token *lookup_pipe_token(struct unix_device *device, HANDLE handle)
++{
++    uintptr_t value = (uintptr_t)handle; unsigned int slot = (value & 0x1ff) - 1;
++    uint32_t generation = value >> 9;
++    if (!(value & 0x1ff) || value > UINT32_MAX || slot >= WINEUSB_PIPE_TOKEN_SLOTS || !generation || !device->pipe_table ||
++            !device->pipe_table->records[slot].current || device->pipe_table->records[slot].generation != generation) return NULL;
++    return &device->pipe_table->records[slot];
++}
++
++static bool pipe_token_is_current(const struct unix_device *device,
++        const struct wineusb_pipe_token *pipe)
++{
++    struct libusb_config_descriptor *config;
++    bool found = false;
++    unsigned int i, j, k;
++    if (!pipe || !device->handle) return false;
++    if (libusb_get_active_config_descriptor(libusb_get_device(device->handle), &config)) return false;
++    {
++        for (i = 0; i < config->bNumInterfaces && !found; ++i)
++            for (j = 0; j < (unsigned int)config->interface[i].num_altsetting && !found; ++j)
++            {
++                const struct libusb_interface_descriptor *alt = &config->interface[i].altsetting[j];
++                if (alt->bInterfaceNumber != pipe->interface_number || alt->bAlternateSetting != pipe->alternate) continue;
++                for (k = 0; k < alt->bNumEndpoints; ++k)
++                {
++                    const struct libusb_endpoint_descriptor *endpoint = &alt->endpoint[k];
++                    USBD_PIPE_TYPE type;
++                    switch (endpoint->bmAttributes & LIBUSB_TRANSFER_TYPE_MASK)
++                    {
++                        case LIBUSB_TRANSFER_TYPE_BULK: type = UsbdPipeTypeBulk; break;
++                        case LIBUSB_TRANSFER_TYPE_INTERRUPT: type = UsbdPipeTypeInterrupt; break;
++                        default: continue;
++                    }
++                    if (endpoint->bEndpointAddress == pipe->endpoint && type == pipe->type) { found = true; break; }
++                }
++            }
++        libusb_free_config_descriptor(config);
++        if (!found) return false;
++    }
++    return device_has_interface(device, pipe->interface_number) &&
++            (!device->function || interface_in_set(device->claimed_interfaces,
++            pipe->interface_number)) && device->pipe_table &&
++            device->pipe_table->alternates[pipe->interface_number] == pipe->alternate;
++}
+ 
+-static HANDLE make_pipe_handle(unsigned char endpoint, USBD_PIPE_TYPE type)
++static struct wineusb_pipe_table *copy_pipe_table(const struct unix_device *device)
+ {
+-    union
+-    {
+-        struct pipe pipe;
+-        HANDLE handle;
+-    } u = {0};
+-
+-    u.pipe.endpoint = endpoint;
+-    u.pipe.type = type;
+-    return u.handle;
++    struct wineusb_pipe_table *table = calloc(1, sizeof(*table));
++    if (table && device->pipe_table) *table = *device->pipe_table;
++    return table;
+ }
+ 
+-static struct pipe get_pipe(HANDLE handle)
++/* Do not let a URB invent pipe metadata.  The active descriptor is the sole
++ * authority for the interface/alternate and every returned pipe field. */
++static bool validate_active_interface(libusb_device_handle *handle,
++        const USBD_INTERFACE_INFORMATION *interface)
+ {
+-    union
+-    {
+-        struct pipe pipe;
+-        HANDLE handle;
+-    } u;
++    struct libusb_config_descriptor *config;
++    const struct libusb_interface_descriptor *alt = NULL;
++    unsigned int i, j;
+ 
+-    u.handle = handle;
+-    return u.pipe;
++    if (libusb_get_active_config_descriptor(libusb_get_device(handle), &config)) return false;
++    for (i = 0; i < config->bNumInterfaces && !alt; ++i)
++        for (j = 0; j < (unsigned int)config->interface[i].num_altsetting; ++j)
++        {
++            const struct libusb_interface_descriptor *candidate = &config->interface[i].altsetting[j];
++            if (candidate->bInterfaceNumber == interface->InterfaceNumber &&
++                    candidate->bAlternateSetting == interface->AlternateSetting)
++            { alt = candidate; break; }
++        }
++    if (!alt || alt->bNumEndpoints != interface->NumberOfPipes ||
++            alt->bInterfaceClass != interface->Class ||
++            alt->bInterfaceSubClass != interface->SubClass ||
++            alt->bInterfaceProtocol != interface->Protocol)
++    { libusb_free_config_descriptor(config); return false; }
++    for (i = 0; i < interface->NumberOfPipes; ++i)
++    {
++        const USBD_PIPE_INFORMATION *pipe = &interface->Pipes[i];
++        const struct libusb_endpoint_descriptor *endpoint = &alt->endpoint[i];
++        USBD_PIPE_TYPE type;
++        switch (endpoint->bmAttributes & LIBUSB_TRANSFER_TYPE_MASK)
++        {
++            case LIBUSB_TRANSFER_TYPE_BULK: type = UsbdPipeTypeBulk; break;
++            case LIBUSB_TRANSFER_TYPE_INTERRUPT: type = UsbdPipeTypeInterrupt; break;
++            default: libusb_free_config_descriptor(config); return false;
++        }
++        if (pipe->EndpointAddress != endpoint->bEndpointAddress || pipe->PipeType != type ||
++                pipe->MaximumPacketSize != endpoint->wMaxPacketSize ||
++                pipe->Interval != endpoint->bInterval)
++        { libusb_free_config_descriptor(config); return false; }
++    }
++    libusb_free_config_descriptor(config);
++    return true;
+ }
+ 
+ static NTSTATUS validate_select_configuration(const struct unix_device *device, IRP *irp,
+@@ -1075,6 +1173,13 @@
+             required = interface->Length;
+             goto invalid;
+         }
++        if (interface->Length != interface_header_size + interface->NumberOfPipes * sizeof(interface->Pipes[0]))
++        {
++            reason = "non_exact_interface_length";
++            available = interface->Length;
++            required = interface_header_size + interface->NumberOfPipes * sizeof(interface->Pipes[0]);
++            goto invalid;
++        }
+         if (!device_has_interface(device, interface->InterfaceNumber))
+         {
+             reason = "interface_out_of_scope";
+@@ -1083,6 +1188,16 @@
+             goto invalid;
+         }
+ 
++        /* The request is only a proposed map.  Never mint a token from its
++         * metadata unless the active configuration agrees exactly. */
++        if (!validate_active_interface(device->handle, interface))
++        {
++            reason = "active_descriptor_mismatch";
++            available = interface->InterfaceNumber;
++            required = interface->AlternateSetting;
++            goto invalid;
++        }
++
+         available_pipes = (interface->Length - interface_header_size) /
+                 sizeof(interface->Pipes[0]);
+         if (interface->NumberOfPipes > available_pipes)
+@@ -1137,16 +1252,72 @@
+ 
+     switch (urb->UrbHeader.Function)
+     {
++        case URB_FUNCTION_SELECT_INTERFACE:
++        {
++            struct _URB_SELECT_INTERFACE *req = &urb->UrbSelectInterface;
++            USBD_INTERFACE_INFORMATION *interface = &req->Interface;
++            size_t header = offsetof(struct _URB_SELECT_INTERFACE, Interface);
++            size_t interface_header = offsetof(USBD_INTERFACE_INFORMATION, Pipes);
++            struct wineusb_pipe_table *table;
++            HANDLE handles[WINEUSB_PIPE_TOKEN_SLOTS];
++            ULONG i; uint32_t generation;
++            if (req->Hdr.Length < header + interface_header || req->Hdr.Length != header + interface->Length ||
++                    interface->Length < interface_header || interface->Length != interface_header +
++                    interface->NumberOfPipes * sizeof(interface->Pipes[0]) ||
++                    !device_has_interface(params->device, interface->InterfaceNumber) ||
++                    (params->device->function && !interface_in_set(params->device->claimed_interfaces, interface->InterfaceNumber)) ||
++                    interface->NumberOfPipes > WINEUSB_PIPE_TOKEN_SLOTS ||
++                    !validate_active_interface(handle, interface))
++            { req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER; return STATUS_INVALID_PARAMETER; }
++
++            if (!(table = copy_pipe_table(params->device)))
++            { req->Hdr.Status = USBD_STATUS_REQUEST_FAILED; return STATUS_NO_MEMORY; }
++            /* Replacing an alternate retires only this interface's current
++             * records.  Allocate every replacement before touching libusb. */
++            for (i = 0; i < WINEUSB_PIPE_TOKEN_SLOTS; ++i)
++                if (table->records[i].current && table->records[i].interface_number == interface->InterfaceNumber)
++                    table->records[i].current = false;
++            generation = table->next_generation ? table->next_generation : 1;
++            if (generation > WINEUSB_PIPE_TOKEN_GENERATION_MAX)
++            { free(table); req->Hdr.Status = USBD_STATUS_REQUEST_FAILED; return STATUS_INSUFFICIENT_RESOURCES; }
++            for (i = 0; i < interface->NumberOfPipes; ++i)
++            {
++                if (!interface->Pipes[i].EndpointAddress ||
++                        (interface->Pipes[i].PipeType != UsbdPipeTypeBulk &&
++                         interface->Pipes[i].PipeType != UsbdPipeTypeInterrupt) ||
++                        !(handles[i] = issue_pipe_token(table, interface->Pipes[i].EndpointAddress,
++                        interface->Pipes[i].PipeType, interface->InterfaceNumber,
++                        interface->AlternateSetting, generation)))
++                {
++                    free(table);
++                    req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                    return STATUS_INSUFFICIENT_RESOURCES;
++                }
++            }
++            if ((ret = libusb_set_interface_alt_setting(handle, interface->InterfaceNumber, interface->AlternateSetting)) < 0)
++            { free(table); req->Hdr.Status = USBD_STATUS_REQUEST_FAILED; return STATUS_UNSUCCESSFUL; }
++            for (i = 0; i < interface->NumberOfPipes; ++i)
++                interface->Pipes[i].PipeHandle = handles[i];
++            table->alternates[interface->InterfaceNumber] = interface->AlternateSetting;
++            table->next_generation = generation + 1; /* terminal after max; never wrap */
++            free(params->device->pipe_table);
++            params->device->pipe_table = table;
++            req->Hdr.Status = USBD_STATUS_SUCCESS;
++            return STATUS_SUCCESS;
++        }
++
+         case URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL:
+         {
+             struct _URB_PIPE_REQUEST *req = &urb->UrbPipeRequest;
+-            struct pipe pipe = get_pipe(req->PipeHandle);
++            struct wineusb_pipe_token *pipe = lookup_pipe_token(params->device, req->PipeHandle);
+ 
+-            if ((ret = libusb_clear_halt(handle, pipe.endpoint)) < 0)
++            if (!pipe || !pipe_token_is_current(params->device, pipe)) { req->Hdr.Status = USBD_STATUS_INVALID_PIPE_HANDLE; return STATUS_INVALID_PARAMETER; }
++
++            if ((ret = libusb_clear_halt(handle, pipe->endpoint)) < 0)
+                 ERR("Failed to clear halt: %s\n", libusb_strerror(ret));
+             FIXME("IO24_PIPE_OBSERVE event=clear_halt irp=%p handle=%p endpoint=%#x "
+                     "type=%u libusb_status=%d returned_status=%#x.\n", irp,
+-                    req->PipeHandle, pipe.endpoint, pipe.type, ret,
++                    req->PipeHandle, pipe->endpoint, pipe->type, ret,
+                     (unsigned int)STATUS_SUCCESS);
+ 
+             return STATUS_SUCCESS;
+@@ -1155,25 +1326,27 @@
+         case URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER:
+         {
+             struct _URB_BULK_OR_INTERRUPT_TRANSFER *req = &urb->UrbBulkOrInterruptTransfer;
+-            struct pipe pipe = get_pipe(req->PipeHandle);
++            struct wineusb_pipe_token *pipe = lookup_pipe_token(params->device, req->PipeHandle);
+             struct transfer_ctx *transfer_ctx;
+             NTSTATUS status = STATUS_PENDING;
+-            const char *route = pipe.type == UsbdPipeTypeBulk ? "bulk" :
+-                    pipe.type == UsbdPipeTypeInterrupt ? "interrupt" : "invalid";
++            const char *route = pipe && pipe->type == UsbdPipeTypeBulk ? "bulk" :
++                    pipe && pipe->type == UsbdPipeTypeInterrupt ? "interrupt" : "invalid";
++
++            if (!pipe || !pipe_token_is_current(params->device, pipe)) { req->Hdr.Status = USBD_STATUS_INVALID_PIPE_HANDLE; return STATUS_INVALID_PARAMETER; }
+ 
+             if (req->TransferBufferLength && !params->transfer_buffer)
+             {
+                 req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
+                 FIXME("IO24_PIPE_SAFETY event=transfer_reject reason=null_buffer irp=%p "
+                         "handle=%p endpoint=%#x type=%u route=%s length=%u.\n", irp,
+-                        req->PipeHandle, pipe.endpoint, pipe.type, route,
++                        req->PipeHandle, pipe->endpoint, pipe->type, route,
+                         req->TransferBufferLength);
+                 return STATUS_INVALID_PARAMETER;
+             }
+ 
+             FIXME("IO24_PIPE_OBSERVE event=transfer_route irp=%p handle=%p endpoint=%#x "
+                     "type=%u route=%s length=%u buffer=%p.\n", irp, req->PipeHandle,
+-                    pipe.endpoint, pipe.type, route, req->TransferBufferLength,
++                    pipe->endpoint, pipe->type, route, req->TransferBufferLength,
+                     params->transfer_buffer);
+ 
+             if (!(transfer_ctx = calloc(1, sizeof(*transfer_ctx))))
+@@ -1189,19 +1362,19 @@
+             }
+             irp->Tail.Overlay.DriverContext[0] = transfer;
+ 
+-            if (pipe.type == UsbdPipeTypeBulk)
++            if (pipe->type == UsbdPipeTypeBulk)
+             {
+-                libusb_fill_bulk_transfer(transfer, handle, pipe.endpoint,
++                libusb_fill_bulk_transfer(transfer, handle, pipe->endpoint,
+                         params->transfer_buffer, req->TransferBufferLength, transfer_cb, transfer_ctx, 0);
+             }
+-            else if (pipe.type == UsbdPipeTypeInterrupt)
++            else if (pipe->type == UsbdPipeTypeInterrupt)
+             {
+-                libusb_fill_interrupt_transfer(transfer, handle, pipe.endpoint,
++                libusb_fill_interrupt_transfer(transfer, handle, pipe->endpoint,
+                         params->transfer_buffer, req->TransferBufferLength, transfer_cb, transfer_ctx, 0);
+             }
+             else
+             {
+-                WARN("Invalid pipe type %#x.\n", pipe.type);
++                WARN("Invalid pipe type %#x.\n", pipe->type);
+                 irp->Tail.Overlay.DriverContext[0] = NULL;
+                 free(transfer_ctx);
+                 libusb_free_transfer(transfer);
+@@ -1221,7 +1394,7 @@
+             }
+             FIXME("IO24_PIPE_OBSERVE event=transfer_submit irp=%p handle=%p endpoint=%#x "
+                     "route=%s length=%u buffer=%p libusb_status=%d returned_status=%#x.\n",
+-                    irp, req->PipeHandle, pipe.endpoint, route, req->TransferBufferLength,
++                    irp, req->PipeHandle, pipe->endpoint, route, req->TransferBufferLength,
+                     params->transfer_buffer, ret, (unsigned int)status);
+ 
+             return status;
+@@ -1289,10 +1462,12 @@
+             struct _URB_SELECT_CONFIGURATION *req = &urb->UrbSelectConfiguration;
+             unsigned char *cursor, *end;
+             unsigned char required_interfaces[32] = {0};
+-            unsigned int interface_count, pipe_count, interface_index = 0;
++            unsigned int interface_count, pipe_count;
+             struct claim_transaction *transaction = NULL;
++            struct wineusb_pipe_table *table;
++            HANDLE handles[WINEUSB_PIPE_TOKEN_SLOTS];
+             NTSTATUS status;
+-            unsigned int interface_number;
++            unsigned int interface_number; uint32_t generation;
+ 
+             /* FIXME: In theory, we'd call libusb_set_configuration() here, but
+              * the CASIO FX-9750GII (which has only one configuration) goes into
+@@ -1311,6 +1486,50 @@
+             if (status != STATUS_SUCCESS)
+                 return status;
+ 
++            /* Form a complete future table before claiming anything.  Tokens
++             * are published only by COMMIT for a function child. */
++            if (!(table = calloc(1, sizeof(*table))))
++            {
++                req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                return STATUS_NO_MEMORY;
++            }
++            if (params->device->pipe_table)
++                table->next_generation = params->device->pipe_table->next_generation;
++            generation = table->next_generation ? table->next_generation : 1;
++            if (generation > WINEUSB_PIPE_TOKEN_GENERATION_MAX || pipe_count > WINEUSB_PIPE_TOKEN_SLOTS)
++            { free(table); req->Hdr.Status = USBD_STATUS_REQUEST_FAILED; return STATUS_INSUFFICIENT_RESOURCES; }
++
++            /* Build the whole future map before acquiring a single interface.
++             * In particular, no failure below this point may leave a caller
++             * ConfigurationHandle or PipeHandle referring to freed staging. */
++            cursor = (unsigned char *)&req->Interface;
++            end = (unsigned char *)req + req->Hdr.Length;
++            pipe_count = 0;
++            while (cursor < end)
++            {
++                USBD_INTERFACE_INFORMATION *interface = (void *)cursor;
++                ULONG i;
++
++                for (i = 0; i < interface->NumberOfPipes; ++i)
++                {
++                    USBD_PIPE_INFORMATION *pipe = &interface->Pipes[i];
++
++                    if (!(handles[pipe_count] = issue_pipe_token(table,
++                            pipe->EndpointAddress, pipe->PipeType,
++                            interface->InterfaceNumber, interface->AlternateSetting,
++                            generation)))
++                    {
++                        free(table);
++                        req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                        return STATUS_INSUFFICIENT_RESOURCES;
++                    }
++                    ++pipe_count;
++                }
++                table->alternates[interface->InterfaceNumber] = interface->AlternateSetting;
++                cursor += interface->Length;
++            }
++            table->next_generation = generation + 1; /* max succeeds once */
++
+             if (params->device->function)
+             {
+                 cursor = (unsigned char *)&req->Interface;
+@@ -1325,10 +1544,12 @@
+ 
+                 if (!(transaction = calloc(1, sizeof(*transaction))))
+                 {
++                    free(table);
+                     req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
+                     return STATUS_NO_MEMORY;
+                 }
+                 transaction->token = allocate_claim_transaction_token();
++                transaction->pipe_table = table;
+                 for (interface_number = 0; interface_number < 256; ++interface_number)
+                 {
+                     int claim_status;
+@@ -1341,6 +1562,7 @@
+                             interface_number)) < 0)
+                     {
+                         release_claim_transaction(params->device, transaction);
++                        free(transaction->pipe_table);
+                         free(transaction);
+                         req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
+                         return claim_status == LIBUSB_ERROR_BUSY ? STATUS_DEVICE_BUSY :
+@@ -1358,26 +1580,22 @@
+                     params->device->function ? params->device->function_root : 0,
+                     interface_count, pipe_count);
+ 
++            if (!transaction)
++            {
++                free(params->device->pipe_table);
++                params->device->pipe_table = table;
++            }
++
+             cursor = (unsigned char *)&req->Interface;
+             end = (unsigned char *)req + req->Hdr.Length;
++            pipe_count = 0;
+             while (cursor < end)
+             {
+-                USBD_INTERFACE_INFORMATION *interface = (USBD_INTERFACE_INFORMATION *)cursor;
++                USBD_INTERFACE_INFORMATION *interface = (void *)cursor;
+                 ULONG i;
+-
+                 for (i = 0; i < interface->NumberOfPipes; ++i)
+-                {
+-                    USBD_PIPE_INFORMATION *pipe = &interface->Pipes[i];
+-                    pipe->PipeHandle = make_pipe_handle(pipe->EndpointAddress, pipe->PipeType);
+-                    FIXME("IO24_PIPE_OBSERVE event=pipe_handle irp=%p interface_index=%u "
+-                            "interface=%u pipe_index=%u endpoint=%#x type=%u handle=%p.\n",
+-                            irp, interface_index, interface->InterfaceNumber, (unsigned int)i,
+-                            pipe->EndpointAddress, (unsigned int)pipe->PipeType,
+-                            pipe->PipeHandle);
+-                }
+-
++                    interface->Pipes[i].PipeHandle = handles[pipe_count++];
+                 cursor += interface->Length;
+-                ++interface_index;
+             }
+ 
+             FIXME("IO24_HANDLE_POPULATION event=populated irp=%p interfaces=%u pipes=%u.\n",
+@@ -1411,8 +1629,12 @@
+                 for (i = 0; i < transaction->count; ++i)
+                     add_interface_to_set(params->device->claimed_interfaces,
+                             transaction->interfaces[i]);
++                free(params->device->pipe_table);
++                params->device->pipe_table = transaction->pipe_table;
++                transaction->pipe_table = NULL;
+             }
+             else release_claim_transaction(params->device, transaction);
++            free(transaction->pipe_table);
+             free(transaction);
+             req->Hdr.Status = USBD_STATUS_SUCCESS;
+             return STATUS_SUCCESS;
+@@ -1545,9 +1767,12 @@
+     if (device->pending_claim_transaction)
+     {
+         release_claim_transaction(device, device->pending_claim_transaction);
++        free(device->pending_claim_transaction->pipe_table);
+         free(device->pending_claim_transaction);
+         device->pending_claim_transaction = NULL;
+     }
++    free(device->pipe_table);
++    device->pipe_table = NULL;
+     if (device->function)
+     {
+         unsigned int interface;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c	2026-08-24 06:50:34.361423136 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c	2026-08-24 08:19:32.584488851 -0700
+@@ -787,6 +787,7 @@
+         case URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER:
+         case URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE:
+         case URB_FUNCTION_SELECT_CONFIGURATION:
++        case URB_FUNCTION_SELECT_INTERFACE:
+         case URB_FUNCTION_VENDOR_DEVICE:
+         case URB_FUNCTION_VENDOR_INTERFACE:
+         case URB_FUNCTION_VENDOR_ENDPOINT:
+@@ -880,6 +881,15 @@
+             if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_CONFIGURATION)
+                 io24_observe_select_configuration(irp, &urb->UrbSelectConfiguration, "pre");
+             EnterCriticalSection(&wineusb_cs);
++            /* There is not yet a per-interface identity on queued lower IRPs.
++             * Conservatively keep an alternate change from racing any child. */
++            if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_INTERFACE &&
++                    !IsListEmpty(&device->irp_list))
++            {
++                LeaveCriticalSection(&wineusb_cs);
++                urb->UrbHeader.Status = USBD_STATUS_REQUEST_FAILED;
++                return STATUS_DEVICE_BUSY;
++            }
+             status = WINE_UNIX_CALL(unix_usb_submit_urb, &params);
+             if (status == STATUS_PENDING)
+             {
+@@ -893,22 +903,6 @@
+             return status;
+         }
+ 
+-        case URB_FUNCTION_SELECT_INTERFACE:
+-        {
+-            struct _URB_SELECT_INTERFACE *req = &urb->UrbSelectInterface;
+-            USBD_INTERFACE_INFORMATION *iface = &req->Interface;
+-
+-            FIXME("IO24_OBSERVE select-interface: header-length %#x, status %#x, "
+-                    "configuration-handle %p, interface-length %#x, interface %#x, alternate %#x, "
+-                    "class %#x, subclass %#x, protocol %#x, pipes %u; "
+-                    "returning STATUS_NOT_IMPLEMENTED.\n",
+-                    req->Hdr.Length, (unsigned int)req->Hdr.Status, req->ConfigurationHandle,
+-                    iface->Length, iface->InterfaceNumber, iface->AlternateSetting,
+-                    iface->Class, iface->SubClass, iface->Protocol,
+-                    (unsigned int)iface->NumberOfPipes);
+-            break;
+-        }
+-
+         default:
+             FIXME("Unhandled function %#x.\n", urb->UrbHeader.Function);
+     }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in	2026-08-24 06:50:34.361621835 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in	2026-08-24 08:19:32.584948828 -0700
+@@ -2,4 +2,5 @@
+ IMPORTS   = kernelbase ntdll
+ 
+ SOURCES = \
+-	main.c
++	main.c \
++	io.c
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c	1969-12-31 16:00:00.000000000 -0800
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c	2026-08-24 08:19:32.585064207 -0700
+@@ -0,0 +1,76 @@
++/* WinUSB alternate-setting entry point. */
++
++#include "windef.h"
++#include "winbase.h"
++#include "winusb.h"
++#include "wine/winusb.h"
++
++#include "winusb_private.h"
++
++static BOOL snapshot_array(const BYTE *base, SIZE_T total, UINT32 offset, UINT32 count,
++        SIZE_T element_size, const BYTE **array)
++{
++    SIZE_T length;
++
++    if (count > ~(SIZE_T)0 / element_size) return FALSE;
++    length = (SIZE_T)count * element_size;
++    if (offset > total || length > total - offset) return FALSE;
++    *array = base + offset;
++    return TRUE;
++}
++
++static BOOL has_alternate(const struct winusb_root *root, UINT32 interface_index,
++        UCHAR setting)
++{
++    const struct wine_winusb_snapshot *snapshot;
++    const BYTE *base, *interfaces, *alternates;
++    const struct wine_winusb_interface_snapshot *interface;
++    UINT32 i;
++
++    if (!root || !(snapshot = root->snapshot) ||
++            root->snapshot_size < sizeof(*snapshot) ||
++            snapshot->total_size != root->snapshot_size ||
++            interface_index >= snapshot->interface_count) return FALSE;
++    base = (const BYTE *)snapshot;
++    if (!snapshot_array(base, root->snapshot_size, snapshot->interfaces_offset,
++            snapshot->interface_count, sizeof(*interface), &interfaces) ||
++            !snapshot_array(base, root->snapshot_size, snapshot->alternates_offset,
++            snapshot->alternate_count, sizeof(struct wine_winusb_alternate_snapshot),
++            &alternates)) return FALSE;
++    interface = (const struct wine_winusb_interface_snapshot *)interfaces + interface_index;
++    if (interface->first_alternate > snapshot->alternate_count ||
++            interface->alternate_count > snapshot->alternate_count - interface->first_alternate)
++        return FALSE;
++    for (i = 0; i < interface->alternate_count; ++i)
++    {
++        const struct wine_winusb_alternate_snapshot *alternate =
++                (const struct wine_winusb_alternate_snapshot *)alternates +
++                interface->first_alternate + i;
++        if (alternate->interface_index == interface_index &&
++                alternate->alternate_setting == setting) return TRUE;
++    }
++    return FALSE;
++}
++
++BOOL WINAPI WinUsb_SetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE handle,
++        UCHAR setting)
++{
++    struct acquired_handle acquired;
++    struct wine_winusb_alternate_request request;
++    DWORD bytes = 0;
++
++    if (!winusb_acquire_handle(handle, &acquired)) return FALSE;
++    if (!has_alternate(acquired.root, acquired.interface_index, setting))
++        return winusb_fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    memset(&request, 0, sizeof(request));
++    request.request.size = sizeof(request);
++    request.request.version = WINE_WINUSB_ABI_VERSION;
++    request.request.session = acquired.root->session;
++    request.request.interface_index = acquired.interface_index;
++    request.alternate_setting = setting;
++    if (!winusb_submit_request(acquired.root->device, IOCTL_WINE_WINUSB_SET_ALTERNATE,
++            &request, sizeof(request), NULL, 0, &bytes, FALSE))
++        return winusb_fail_after_release(&acquired, GetLastError());
++    winusb_release_handle(&acquired);
++    return TRUE;
++}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 06:55:00.613348457 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 08:19:32.584768497 -0700
+@@ -26,10 +26,15 @@
+ 
+ #include "winusb_private.h"
+ 
+-static BOOL submit_request(HANDLE, DWORD, void *, DWORD, void *, DWORD, DWORD *, BOOL);
+-
+ #include "wine/debug.h"
+ 
++/* Keep the existing entry points below readable while sharing the exact
++ * acquired-handle lifetime boundary with io.c. */
++#define acquire_handle winusb_acquire_handle
++#define release_handle winusb_release_handle
++#define fail_after_release winusb_fail_after_release
++#define submit_request winusb_submit_request
++
+ static CRITICAL_SECTION handle_registry_lock;
+ static CRITICAL_SECTION_DEBUG handle_registry_lock_debug =
+ {
+@@ -41,13 +46,6 @@
+ static struct list handle_registry = LIST_INIT(handle_registry);
+ static ULONG_PTR next_handle_token = 1;
+ 
+-struct acquired_handle
+-{
+-    struct winusb_handle *handle;
+-    struct winusb_root *root;
+-    UINT32 interface_index;
+-};
+-
+ static struct winusb_handle *find_registered_handle(WINUSB_INTERFACE_HANDLE opaque)
+ {
+     struct winusb_handle *candidate;
+@@ -66,7 +64,7 @@
+     return TRUE;
+ }
+ 
+-static BOOL acquire_handle(WINUSB_INTERFACE_HANDLE opaque, struct acquired_handle *acquired)
++BOOL winusb_acquire_handle(WINUSB_INTERFACE_HANDLE opaque, struct acquired_handle *acquired)
+ {
+     struct winusb_handle *handle;
+     struct winusb_root *root;
+@@ -91,7 +89,7 @@
+     return TRUE;
+ }
+ 
+-static void release_handle(struct acquired_handle *acquired)
++void winusb_release_handle(struct acquired_handle *acquired)
+ {
+     struct winusb_handle *handle = acquired->handle;
+     struct winusb_root *root = acquired->root;
+@@ -110,9 +108,9 @@
+     LeaveCriticalSection(&handle_registry_lock);
+ }
+ 
+-static BOOL fail_after_release(struct acquired_handle *acquired, DWORD error)
++BOOL winusb_fail_after_release(struct acquired_handle *acquired, DWORD error)
+ {
+-    release_handle(acquired);
++    winusb_release_handle(acquired);
+     SetLastError(error);
+     return FALSE;
+ }
+@@ -182,7 +180,7 @@
+     return !(mode.Mode & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT));
+ }
+ 
+-static BOOL submit_request(HANDLE device, DWORD code, void *input, DWORD input_size,
++BOOL winusb_submit_request(HANDLE device, DWORD code, void *input, DWORD input_size,
+         void *output, DWORD output_size, DWORD *bytes, BOOL size_query)
+ {
+     OVERLAPPED overlapped;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 06:55:00.613465861 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 08:19:32.584868510 -0700
+@@ -7,6 +7,13 @@
+ 
+ struct winusb_root;
+ 
++struct acquired_handle
++{
++    struct winusb_handle *handle;
++    struct winusb_root *root;
++    UINT32 interface_index;
++};
++
+ struct winusb_handle
+ {
+     struct list entry;
+@@ -33,4 +40,9 @@
+     struct list retired_handles;
+ };
+ 
++BOOL winusb_acquire_handle(WINUSB_INTERFACE_HANDLE, struct acquired_handle *);
++void winusb_release_handle(struct acquired_handle *);
++BOOL winusb_fail_after_release(struct acquired_handle *, DWORD);
++BOOL winusb_submit_request(HANDLE, DWORD, void *, DWORD, void *, DWORD, DWORD *, BOOL);
++
+ #endif
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 06:55:00.613170780 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c	2026-08-24 08:19:32.583972023 -0700
+@@ -373,7 +373,8 @@
+     KeReleaseSpinLock(&device->lock, device_irql);
+ 
+     if (file->snapshot) ExFreePool(file->snapshot);
+-    if (file->interfaces) ExFreePool(file->interfaces);
++    if (file->interfaces) winusb_session_free_interfaces(file->interfaces,
++            file->interface_count);
+     ExFreePool(file);
+ 
+     KeAcquireSpinLock(&device->lock, &device_irql);
+@@ -405,7 +406,8 @@
+     ULONG_PTR information = 0;
+     NTSTATUS status;
+ 
+-    if (code != IOCTL_WINE_WINUSB_INITIALIZE && code != IOCTL_WINE_WINUSB_RELEASE)
++    if (code != IOCTL_WINE_WINUSB_INITIALIZE && code != IOCTL_WINE_WINUSB_RELEASE &&
++            code != IOCTL_WINE_WINUSB_SET_ALTERNATE)
+         return complete_irp(irp, STATUS_NOT_SUPPORTED);
+     if (!file_object || !request)
+         return complete_irp(irp, STATUS_INVALID_PARAMETER);
+@@ -417,6 +419,15 @@
+     if (code == IOCTL_WINE_WINUSB_INITIALIZE)
+         status = winusb_session_initialize(device, file, request, input_length,
+                 irp->MdlAddress, output_length, &information);
++    else if (code == IOCTL_WINE_WINUSB_SET_ALTERNATE)
++    {
++        if (output_length || irp->MdlAddress)
++            status = STATUS_INVALID_PARAMETER;
++        else
++            status = winusb_session_set_alternate(device, file,
++                    (const struct wine_winusb_alternate_request *)request,
++                    input_length, &information);
++    }
+     else if (output_length || irp->MdlAddress)
+         status = STATUS_INVALID_PARAMETER;
+     else
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 06:50:34.361235611 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 08:19:32.584171141 -0700
+@@ -494,6 +494,66 @@
+     return TRUE;
+ }
+ 
++void winusb_session_free_interfaces(struct winusb_interface_state *state,
++        ULONG count)
++{
++    ULONG i;
++
++    if (!state) return;
++    for (i = 0; i < count; ++i)
++        if (state[i].pipes) ExFreePool(state[i].pipes);
++    ExFreePool(state);
++}
++
++static BOOL allocate_pipe_maps(struct winusb_interface_state *state, ULONG count)
++{
++    ULONG i;
++
++    for (i = 0; i < count; ++i)
++    {
++        SIZE_T size;
++
++        if (!state[i].endpoint_count) continue;
++        if (!multiply_size(state[i].endpoint_count, sizeof(*state[i].pipes), &size) ||
++                !(state[i].pipes = ExAllocatePool(NonPagedPool, size)))
++            return FALSE;
++        state[i].generation = 1;
++    }
++    return TRUE;
++}
++
++static BOOL capture_select_pipe_handles(struct _URB_SELECT_CONFIGURATION *select,
++        SIZE_T select_size, struct winusb_interface_state *state, ULONG count)
++{
++    SIZE_T cursor = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++    ULONG i, j;
++
++    for (i = 0; i < count; ++i)
++    {
++        USBD_INTERFACE_INFORMATION *information;
++        SIZE_T pipes_size, size;
++
++        if (!multiply_size(state[i].endpoint_count, sizeof(USBD_PIPE_INFORMATION), &pipes_size) ||
++                !add_size(offsetof(USBD_INTERFACE_INFORMATION, Pipes), pipes_size, &size) ||
++                cursor > select_size || size > select_size - cursor)
++            return FALSE;
++        information = (void *)((UCHAR *)select + cursor);
++        if (information->InterfaceNumber != state[i].interface_number ||
++                information->AlternateSetting != state[i].alternate_setting ||
++                information->NumberOfPipes != state[i].endpoint_count)
++            return FALSE;
++        for (j = 0; j < state[i].endpoint_count; ++j)
++        {
++            state[i].pipes[j].handle = information->Pipes[j].PipeHandle;
++            state[i].pipes[j].endpoint = information->Pipes[j].EndpointAddress;
++            state[i].pipes[j].type = information->Pipes[j].PipeType;
++            state[i].pipes[j].maximum_packet_size = information->Pipes[j].MaximumPacketSize;
++        }
++        cursor += size;
++    }
++    return cursor == select_size;
++}
++
+ static BOOL calculate_select_size(const struct winusb_interface_state *state,
+         ULONG interface_count, SIZE_T *size)
+ {
+@@ -626,7 +686,9 @@
+     device->claim_transaction = NULL;
+     device->claim_snapshot = NULL;
+     device->claim_interfaces = NULL;
+-    if (interfaces) ExFreePool(interfaces);
++    if (interfaces) winusb_session_free_interfaces(interfaces,
++            device->claim_interface_count);
++    device->claim_interface_count = 0;
+     if (snapshot) ExFreePool(snapshot);
+     return STATUS_SUCCESS;
+ }
+@@ -642,7 +704,9 @@
+     device->claim_transaction = NULL;
+     device->claim_snapshot = NULL;
+     device->claim_interfaces = NULL;
+-    if (interfaces) ExFreePool(interfaces);
++    if (interfaces) winusb_session_free_interfaces(interfaces,
++            device->claim_interface_count);
++    device->claim_interface_count = 0;
+     if (snapshot) ExFreePool(snapshot);
+ }
+ 
+@@ -812,7 +876,8 @@
+         status = STATUS_NO_MEMORY;
+         goto done;
+     }
+-    if (!build_interface_state(snapshot, interfaces))
++    if (!build_interface_state(snapshot, interfaces) ||
++            !allocate_pipe_maps(interfaces, parsed.interface_count))
+     {
+         status = STATUS_INVALID_PARAMETER;
+         goto done;
+@@ -831,6 +896,12 @@
+     }
+     if (!NT_SUCCESS(status = submit_urb(device, (URB *)select))) goto done;
+     claim_transaction = select->ConfigurationHandle;
++    if (!capture_select_pipe_handles(select, select_size, interfaces,
++            parsed.interface_count))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
+ 
+     cookie = allocate_session_cookie();
+     KeAcquireSpinLock(&device->lock, &device_irql);
+@@ -856,6 +927,7 @@
+             device->claim_transaction = claim_transaction;
+             device->claim_snapshot = snapshot;
+             device->claim_interfaces = interfaces;
++            device->claim_interface_count = parsed.interface_count;
+             claim_transaction = NULL;
+             snapshot = NULL;
+             interfaces = NULL;
+@@ -874,6 +946,7 @@
+             device->claim_transaction = claim_transaction;
+             device->claim_snapshot = snapshot;
+             device->claim_interfaces = interfaces;
++            device->claim_interface_count = parsed.interface_count;
+             claim_transaction = NULL;
+             snapshot = NULL;
+             interfaces = NULL;
+@@ -911,7 +984,7 @@
+ 
+ done:
+     if (select) ExFreePool(select);
+-    if (!committed && interfaces) ExFreePool(interfaces);
++    if (!committed && interfaces) winusb_session_free_interfaces(interfaces, parsed.interface_count);
+     if (!committed && snapshot) ExFreePool(snapshot);
+     if (configuration) ExFreePool(configuration);
+     if (configuration_header) ExFreePool(configuration_header);
+@@ -921,12 +994,154 @@
+     return status;
+ }
+ 
++NTSTATUS winusb_session_set_alternate(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_alternate_request *request,
++        ULONG input_length, ULONG_PTR *information)
++{
++    const struct wine_winusb_snapshot *snapshot;
++    const UCHAR *memory;
++    struct wine_winusb_interface_snapshot interface_record;
++    struct wine_winusb_alternate_snapshot alternate_record;
++    struct _URB_SELECT_INTERFACE *select;
++    struct winusb_pipe_state *pipes = NULL, *old_pipes = NULL;
++    SIZE_T size, interface_size, i, pipes_size;
++    KIRQL device_irql, file_irql;
++    ULONG j;
++    NTSTATUS status;
++
++    *information = 0;
++    if (!request || input_length != sizeof(*request) ||
++            request->request.size != sizeof(*request) ||
++            request->request.version != WINE_WINUSB_ABI_VERSION ||
++            request->request.reserved || request->reserved ||
++            !request->request.session)
++        return STATUS_INVALID_PARAMETER;
++
++    /* PnP transitions and a physical alternate change must not interleave.
++     * The device-control caller holds file->session_mutex, so publication is
++     * also atomic with release/cleanup/close for this file. */
++    ExAcquireFastMutex(&device->finalization_mutex);
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_INITIALIZED ||
++            request->request.session != file->session || !file->snapshot ||
++            !file->interfaces || request->request.interface_index >= file->interface_count ||
++            /* This IOCTL itself has one outstanding reference.  Until real
++             * transfer records exist, reject every concurrent file request. */
++            file->outstanding != 1)
++        status = STATUS_INVALID_DEVICE_STATE;
++    else
++        status = STATUS_SUCCESS;
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (!NT_SUCCESS(status)) goto done;
++
++    snapshot = file->snapshot; memory = (const UCHAR *)snapshot;
++    if (!read_snapshot_record(memory, snapshot->total_size, snapshot->interfaces_offset,
++            request->request.interface_index, sizeof(interface_record), &interface_record))
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    for (i = 0; i < interface_record.alternate_count; ++i)
++    {
++        if (!read_snapshot_record(memory, snapshot->total_size, snapshot->alternates_offset,
++                interface_record.first_alternate + i, sizeof(alternate_record), &alternate_record))
++        {
++            status = STATUS_INVALID_PARAMETER;
++            goto done;
++        }
++        if (alternate_record.alternate_setting == request->alternate_setting) break;
++    }
++    if (i == interface_record.alternate_count || alternate_record.interface_index != request->request.interface_index ||
++            !multiply_size(alternate_record.endpoint_count, sizeof(*pipes), &pipes_size) ||
++            !add_size(offsetof(USBD_INTERFACE_INFORMATION, Pipes), alternate_record.endpoint_count * sizeof(USBD_PIPE_INFORMATION), &interface_size) ||
++            !add_size(offsetof(struct _URB_SELECT_INTERFACE, Interface), interface_size, &size) || size > 0xffff)
++    {
++        status = STATUS_INVALID_PARAMETER;
++        goto done;
++    }
++    if (alternate_record.endpoint_count &&
++            !(pipes = ExAllocatePool(NonPagedPool, pipes_size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    if (!(select = ExAllocatePool(NonPagedPool, size)))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    memset(select, 0, size); select->Hdr.Length = size; select->Hdr.Function = URB_FUNCTION_SELECT_INTERFACE;
++    select->Interface.Length = interface_size; select->Interface.InterfaceNumber = interface_record.interface_number;
++    select->Interface.AlternateSetting = alternate_record.alternate_setting; select->Interface.NumberOfPipes = alternate_record.endpoint_count;
++    for (j = 0; j < alternate_record.endpoint_count; ++j)
++    {
++        struct wine_winusb_endpoint_snapshot endpoint;
++        if (!read_snapshot_record(memory, snapshot->total_size, snapshot->endpoints_offset,
++                alternate_record.first_endpoint + j, sizeof(endpoint), &endpoint))
++        {
++            status = STATUS_INVALID_PARAMETER;
++            goto done;
++        }
++        select->Interface.Pipes[j].EndpointAddress = endpoint.pipe_id; select->Interface.Pipes[j].PipeType = endpoint.pipe_type;
++        select->Interface.Pipes[j].MaximumPacketSize = endpoint.maximum_packet_size;
++    }
++    status = submit_urb(device, (URB *)select);
++    if (!NT_SUCCESS(status)) goto done;
++
++    /* The lower layer owns token generation.  Preserve only the opaque
++     * handles it returned, alongside descriptor metadata already validated
++     * above. */
++    for (j = 0; j < alternate_record.endpoint_count; ++j)
++    {
++        pipes[j].handle = select->Interface.Pipes[j].PipeHandle;
++        pipes[j].endpoint = select->Interface.Pipes[j].EndpointAddress;
++        pipes[j].type = select->Interface.Pipes[j].PipeType;
++        pipes[j].maximum_packet_size = select->Interface.Pipes[j].MaximumPacketSize;
++    }
++
++    KeAcquireSpinLock(&device->lock, &device_irql);
++    KeAcquireSpinLock(&file->lock, &file_irql);
++    if (device->state != WINUSB_DEVICE_STARTED ||
++            file->state != WINUSB_FILE_INITIALIZED ||
++            request->request.session != file->session || !file->snapshot ||
++            !file->interfaces || request->request.interface_index >= file->interface_count ||
++            file->outstanding != 1)
++        status = STATUS_INVALID_DEVICE_STATE;
++    else
++    {
++        struct winusb_interface_state *state =
++                &file->interfaces[request->request.interface_index];
++
++        old_pipes = state->pipes;
++        state->pipes = pipes;
++        state->alternate_setting = alternate_record.alternate_setting;
++        state->first_endpoint = alternate_record.first_endpoint;
++        state->endpoint_count = alternate_record.endpoint_count;
++        if (++state->generation == 0) ++state->generation;
++        pipes = NULL;
++        status = STATUS_SUCCESS;
++    }
++    KeReleaseSpinLock(&file->lock, file_irql);
++    KeReleaseSpinLock(&device->lock, device_irql);
++    if (NT_SUCCESS(status) && old_pipes) ExFreePool(old_pipes);
++
++done:
++    if (select) ExFreePool(select);
++    if (pipes) ExFreePool(pipes);
++    ExReleaseFastMutex(&device->finalization_mutex);
++    return status;
++}
++
+ NTSTATUS winusb_session_release(struct winusb_device *device,
+         struct winusb_file *file, const struct wine_winusb_request *request,
+         ULONG input_length, ULONG_PTR *information)
+ {
+     struct winusb_interface_state *interfaces;
+     void *snapshot;
++    ULONG interface_count;
+     KIRQL device_irql, file_irql;
+ 
+     *information = 0;
+@@ -951,6 +1166,7 @@
+     file->state = WINUSB_FILE_RELEASING;
+     snapshot = file->snapshot;
+     interfaces = file->interfaces;
++    interface_count = file->interface_count;
+     file->snapshot = NULL;
+     file->snapshot_size = 0;
+     file->interfaces = NULL;
+@@ -960,7 +1176,7 @@
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
+ 
+-    ExFreePool(interfaces);
++    winusb_session_free_interfaces(interfaces, interface_count);
+     ExFreePool(snapshot);
+     return STATUS_SUCCESS;
+ }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 06:50:34.361320538 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h	2026-08-24 08:19:32.584313898 -0700
+@@ -22,6 +22,18 @@
+     ULONG alternate_setting;
+     ULONG first_endpoint;
+     ULONG endpoint_count;
++    ULONG generation;
++    struct winusb_pipe_state *pipes;
++};
++
++/* Pipe handles are opaque lower-layer tokens.  This driver only retains the
++ * values returned in a successful select URB; it never manufactures one. */
++struct winusb_pipe_state
++{
++    USBD_PIPE_HANDLE handle;
++    UCHAR endpoint;
++    UCHAR type;
++    USHORT maximum_packet_size;
+ };
+ 
+ enum winusb_device_state
+@@ -80,6 +92,7 @@
+     USBD_CONFIGURATION_HANDLE claim_transaction;
+     void *claim_snapshot;
+     struct winusb_interface_state *claim_interfaces;
++    ULONG claim_interface_count;
+ };
+ 
+ void winusb_session_driver_init(void);
+@@ -90,7 +103,12 @@
+ NTSTATUS winusb_session_release(struct winusb_device *device,
+         struct winusb_file *file, const struct wine_winusb_request *request,
+         ULONG input_length, ULONG_PTR *information);
++NTSTATUS winusb_session_set_alternate(struct winusb_device *device,
++        struct winusb_file *file, const struct wine_winusb_alternate_request *request,
++        ULONG input_length, ULONG_PTR *information);
+ NTSTATUS winusb_session_recover_claim_transaction(struct winusb_device *device);
+ void winusb_session_claim_child_removed(struct winusb_device *device);
++void winusb_session_free_interfaces(struct winusb_interface_state *interfaces,
++        ULONG count);
+ 
+ #endif /* __WINE_WINUSB_PRIVATE_H */
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_pipe_observe_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_pipe_observe_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_pipe_observe_contract.c	2026-08-24 07:08:04.253772598 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_pipe_observe_contract.c	2026-08-24 08:19:32.586286016 -0700
+@@ -23,6 +23,8 @@
+ 
+ void io24_fake_libusb_reset(void);
+ void io24_fake_libusb_set_clear_halt_result(int result);
++void io24_fake_libusb_enable_mi05_active_descriptor(int enable);
++void io24_fake_libusb_enable_interrupt_active_descriptor(int enable);
+ unsigned int io24_fake_libusb_alloc_count(void);
+ unsigned int io24_fake_libusb_free_count(void);
+ unsigned int io24_fake_libusb_submit_count(void);
+@@ -61,15 +63,10 @@
+     uint8_t function_root;
+     unsigned char function_interfaces[32];
+     unsigned char claimed_interfaces[32];
++    void *pipe_table;
+     void *pending_claim_transaction;
+ };
+ 
+-struct io24_pipe
+-{
+-    unsigned char endpoint;
+-    unsigned char type;
+-};
+-
+ struct fixture
+ {
+     struct io24_unix_device device;
+@@ -80,31 +77,6 @@
+     struct usb_submit_urb_params params;
+ };
+ 
+-static HANDLE make_pipe_handle(unsigned char endpoint, USBD_PIPE_TYPE type)
+-{
+-    union
+-    {
+-        struct io24_pipe pipe;
+-        HANDLE handle;
+-    } value = {0};
+-
+-    value.pipe.endpoint = endpoint;
+-    value.pipe.type = type;
+-    return value.handle;
+-}
+-
+-static struct io24_pipe decode_pipe_handle(HANDLE handle)
+-{
+-    union
+-    {
+-        struct io24_pipe pipe;
+-        HANDLE handle;
+-    } value = {0};
+-
+-    value.handle = handle;
+-    return value.pipe;
+-}
+-
+ static void reset_fixture(struct fixture *fixture, USHORT function)
+ {
+     memset(fixture, 0, sizeof(*fixture));
+@@ -124,15 +96,57 @@
+     return unix_calls[unix_usb_submit_urb](&fixture->params);
+ }
+ 
++static HANDLE select_pipe(struct fixture *fixture, unsigned char endpoint,
++        USBD_PIPE_TYPE type)
++{
++    struct _URB_SELECT_CONFIGURATION *select = &fixture->urb.UrbSelectConfiguration;
++    unsigned int pipes = endpoint == 0x83 ? 1 : 2;
++
++    /* A usable production token requires an active descriptor; reset remains
++     * intentionally descriptor-disabled for negative schedules. */
++    io24_fake_libusb_enable_mi05_active_descriptor(1);
++    io24_fake_libusb_enable_interrupt_active_descriptor(endpoint == 0x83);
++    memset(&fixture->urb, 0, sizeof(fixture->urb));
++    select->Hdr.Function = URB_FUNCTION_SELECT_CONFIGURATION;
++    select->Hdr.Length = offsetof(struct _URB_SELECT_CONFIGURATION, Interface) +
++            offsetof(USBD_INTERFACE_INFORMATION, Pipes) + pipes * sizeof(USBD_PIPE_INFORMATION);
++    select->Interface.Length = offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
++            pipes * sizeof(USBD_PIPE_INFORMATION);
++    select->Interface.InterfaceNumber = 5;
++    select->Interface.AlternateSetting = 1;
++    select->Interface.Class = 0xff;
++    select->Interface.Protocol = 6;
++    select->Interface.NumberOfPipes = pipes;
++    select->Interface.Pipes[0].EndpointAddress = endpoint;
++    select->Interface.Pipes[0].PipeType = type;
++    select->Interface.Pipes[0].MaximumPacketSize = endpoint == 0x83 ? 64 : 512;
++    select->Interface.Pipes[0].Interval = endpoint == 0x83 ? 1 : 0;
++    if (pipes == 2)
++    {
++        select->Interface.Pipes[1].EndpointAddress = 0x01;
++        select->Interface.Pipes[1].PipeType = UsbdPipeTypeBulk;
++        select->Interface.Pipes[1].MaximumPacketSize = 512;
++    }
++    CHECK(submit_fixture(fixture) == STATUS_SUCCESS, "select-configuration failed");
++    CHECK(select->Interface.Pipes[0].MaximumPacketSize == (endpoint == 0x83 ? 64 : 512),
++            "descriptor maximum packet size changed");
++    CHECK(select->Interface.Pipes[0].Interval == (endpoint == 0x83 ? 1 : 0),
++            "descriptor interval changed");
++    return select->Interface.Pipes[0].PipeHandle;
++}
++
+ static void test_clear_halt_return_is_unchanged(void)
+ {
+     struct fixture fixture;
+     struct _URB_PIPE_REQUEST *request;
++    HANDLE pipe;
+     NTSTATUS status;
+ 
+     reset_fixture(&fixture, URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL);
++    pipe = select_pipe(&fixture, 0x81, UsbdPipeTypeBulk);
++    fixture.urb.UrbHeader.Function = URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
+     request = &fixture.urb.UrbPipeRequest;
+-    request->PipeHandle = make_pipe_handle(0x81, UsbdPipeTypeBulk);
++    request->PipeHandle = pipe;
+     io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);
+     status = submit_fixture(&fixture);
+ 
+@@ -150,11 +164,14 @@
+ {
+     struct fixture fixture;
+     struct _URB_BULK_OR_INTERRUPT_TRANSFER *request;
++    HANDLE pipe;
+     NTSTATUS status;
+ 
+     reset_fixture(&fixture, URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER);
++    pipe = select_pipe(&fixture, endpoint, pipe_type);
++    fixture.urb.UrbHeader.Function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+     request = &fixture.urb.UrbBulkOrInterruptTransfer;
+-    request->PipeHandle = make_pipe_handle(endpoint, pipe_type);
++    request->PipeHandle = pipe;
+     request->TransferBufferLength = 32;
+     request->TransferBuffer = fixture.buffer;
+     status = submit_fixture(&fixture);
+@@ -186,14 +203,14 @@
+ 
+     reset_fixture(&fixture, URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER);
+     request = &fixture.urb.UrbBulkOrInterruptTransfer;
+-    request->PipeHandle = make_pipe_handle(0x82, UsbdPipeTypeIsochronous);
++    request->PipeHandle = (HANDLE)(uintptr_t)0x7fffffff;
+     request->TransferBufferLength = 16;
+     status = submit_fixture(&fixture);
+ 
+-    CHECK(status == USBD_STATUS_INVALID_PIPE_HANDLE, "invalid pipe returned %#lx", (long)status);
+-    CHECK(io24_fake_libusb_alloc_count() == 1, "allocation count is %u",
++    CHECK(status == STATUS_INVALID_PARAMETER, "invalid pipe returned %#lx", (long)status);
++    CHECK(io24_fake_libusb_alloc_count() == 0, "allocation count is %u",
+             io24_fake_libusb_alloc_count());
+-    CHECK(io24_fake_libusb_free_count() == 1, "free count is %u",
++    CHECK(io24_fake_libusb_free_count() == 0, "free count is %u",
+             io24_fake_libusb_free_count());
+     CHECK(io24_fake_libusb_submit_count() == 0, "invalid pipe submitted a transfer");
+     CHECK(!io24_fake_libusb_has_pending(), "invalid pipe remained pending");
+@@ -203,28 +220,51 @@
+ {
+     struct fixture fixture;
+     struct _URB_SELECT_CONFIGURATION *request;
+-    struct io24_pipe pipe;
+     NTSTATUS status;
+ 
+     reset_fixture(&fixture, URB_FUNCTION_SELECT_CONFIGURATION);
+     request = &fixture.urb.UrbSelectConfiguration;
+-    request->Hdr.Length = sizeof(*request);
+-    request->Interface.Length = sizeof(request->Interface);
++    request->Hdr.Length = offsetof(struct _URB_SELECT_CONFIGURATION, Interface) +
++            offsetof(USBD_INTERFACE_INFORMATION, Pipes) + 2 * sizeof(USBD_PIPE_INFORMATION);
++    request->Interface.Length = offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
++            2 * sizeof(USBD_PIPE_INFORMATION);
+     request->Interface.InterfaceNumber = 5;
+     request->Interface.AlternateSetting = 1;
+-    request->Interface.NumberOfPipes = 1;
++    request->Interface.Class = 0xff;
++    request->Interface.Protocol = 6;
++    request->Interface.NumberOfPipes = 2;
+     request->Interface.Pipes[0].EndpointAddress = 0x81;
+     request->Interface.Pipes[0].PipeType = UsbdPipeTypeBulk;
++    request->Interface.Pipes[0].MaximumPacketSize = 512;
++    request->Interface.Pipes[1].EndpointAddress = 0x01;
++    request->Interface.Pipes[1].PipeType = UsbdPipeTypeBulk;
++    request->Interface.Pipes[1].MaximumPacketSize = 512;
++    io24_fake_libusb_enable_mi05_active_descriptor(1);
+     status = submit_fixture(&fixture);
+-    pipe = decode_pipe_handle(request->Interface.Pipes[0].PipeHandle);
+ 
+     CHECK(status == STATUS_SUCCESS, "select-configuration returned %#lx", (long)status);
+-    CHECK(pipe.endpoint == 0x81, "decoded endpoint is %#x", pipe.endpoint);
+-    CHECK(pipe.type == UsbdPipeTypeBulk, "decoded type is %#x", pipe.type);
++    CHECK(request->Interface.Pipes[0].PipeHandle != NULL, "SELECT returned no opaque handle");
+     CHECK(io24_fake_libusb_alloc_count() == 0, "select-configuration allocated a transfer");
+     CHECK(io24_fake_libusb_submit_count() == 0, "select-configuration submitted a transfer");
+ }
+ 
++static void test_descriptor_backed_pipe_lookup(void)
++{
++    struct fixture fixture;
++    struct _URB_PIPE_REQUEST *request;
++    HANDLE pipe;
++
++    reset_fixture(&fixture, URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL);
++    io24_fake_libusb_enable_mi05_active_descriptor(1);
++    pipe = select_pipe(&fixture, 0x81, UsbdPipeTypeBulk);
++    fixture.urb.UrbHeader.Function = URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
++    request = &fixture.urb.UrbPipeRequest;
++    request->PipeHandle = pipe;
++    CHECK(submit_fixture(&fixture) == STATUS_SUCCESS, "descriptor-backed clear halt failed");
++    CHECK(io24_fake_libusb_clear_halt_endpoint() == 0x81, "descriptor-backed endpoint mismatch");
++    io24_fake_libusb_enable_mi05_active_descriptor(0);
++}
++
+ int main(int argc, char **argv)
+ {
+     void *module;
+@@ -253,6 +293,7 @@
+     test_transfer_route(UsbdPipeTypeInterrupt, 0x83, LIBUSB_TRANSFER_TYPE_INTERRUPT);
+     test_invalid_pipe_is_unchanged();
+     test_select_configuration_scope_is_unchanged();
++    test_descriptor_backed_pipe_lookup();
+ 
+     dlclose(module);
+     if (failures)
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_pipe_observe_fake_libusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_pipe_observe_fake_libusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_pipe_observe_fake_libusb.c	2026-08-22 17:41:31.735798952 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_pipe_observe_fake_libusb.c	2026-08-24 08:19:32.586556653 -0700
+@@ -22,6 +22,36 @@
+ static unsigned int cancel_count;
+ static unsigned int clear_halt_count;
+ static unsigned char clear_halt_endpoint;
++static int active_descriptor_enabled;
++static int interrupt_descriptor_enabled;
++static const struct libusb_endpoint_descriptor mi05_endpoints[] = {
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x81,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_BULK, .wMaxPacketSize = 512 },
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x01,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_BULK, .wMaxPacketSize = 512 },
++};
++static const struct libusb_interface_descriptor mi05_alts[] = {
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 0, .bInterfaceClass = 0xff, .bInterfaceProtocol = 6 },
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 1, .bNumEndpoints = 2, .bInterfaceClass = 0xff,
++      .bInterfaceProtocol = 6, .endpoint = mi05_endpoints },
++};
++static const struct libusb_interface mi05_interface[] = {{ .altsetting = mi05_alts, .num_altsetting = 2 }};
++static const struct libusb_config_descriptor mi05_config = { .bLength = 9,
++    .bDescriptorType = LIBUSB_DT_CONFIG, .bNumInterfaces = 1, .interface = mi05_interface };
++static const struct libusb_endpoint_descriptor interrupt_endpoint[] = {
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x83,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_INTERRUPT, .wMaxPacketSize = 64, .bInterval = 1 },
++};
++static const struct libusb_interface_descriptor interrupt_alt[] = {
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 1, .bNumEndpoints = 1, .bInterfaceClass = 0xff,
++      .bInterfaceProtocol = 6, .endpoint = interrupt_endpoint },
++};
++static const struct libusb_interface interrupt_interface[] = {{ .altsetting = interrupt_alt, .num_altsetting = 1 }};
++static const struct libusb_config_descriptor interrupt_config = { .bLength = 9,
++    .bDescriptorType = LIBUSB_DT_CONFIG, .bNumInterfaces = 1, .interface = interrupt_interface };
+ 
+ void io24_fake_libusb_reset(void)
+ {
+@@ -35,6 +65,8 @@
+     cancel_count = 0;
+     clear_halt_count = 0;
+     clear_halt_endpoint = 0;
++    active_descriptor_enabled = 0;
++    interrupt_descriptor_enabled = 0;
+ }
+ 
+ void io24_fake_libusb_set_submit_result(int result)
+@@ -46,6 +78,8 @@
+ {
+     clear_halt_result = result;
+ }
++void io24_fake_libusb_enable_mi05_active_descriptor(int enable) { active_descriptor_enabled = !!enable; }
++void io24_fake_libusb_enable_interrupt_active_descriptor(int enable) { interrupt_descriptor_enabled = !!enable; }
+ 
+ unsigned int io24_fake_libusb_alloc_count(void) { return alloc_count; }
+ unsigned int io24_fake_libusb_free_count(void) { return free_count; }
+@@ -215,7 +249,7 @@
+ libusb_device * LIBUSB_CALL libusb_get_device(libusb_device_handle *handle)
+ {
+     (void)handle;
+-    return NULL;
++    return active_descriptor_enabled ? (libusb_device *)(uintptr_t)0x3000 : NULL;
+ }
+ 
+ uint8_t LIBUSB_CALL libusb_get_bus_number(libusb_device *device) { (void)device; return 0; }
+@@ -238,6 +272,7 @@
+         struct libusb_config_descriptor **config)
+ {
+     (void)device;
++    if (active_descriptor_enabled) { if (config) *config = interrupt_descriptor_enabled ? (struct libusb_config_descriptor *)&interrupt_config : (struct libusb_config_descriptor *)&mi05_config; return 0; }
+     if (config) *config = NULL;
+     return LIBUSB_ERROR_NO_DEVICE;
+ }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_busif_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_busif_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_busif_contract.c	2026-08-24 01:45:20.867114209 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_busif_contract.c	2026-08-24 08:19:32.585507282 -0700
+@@ -21,6 +21,16 @@
+ 
+ static unsigned int failures, references, dereferences;
+ static void *expected_callback_context = (void *)0x12345678;
++static unsigned int lower_submit_calls;
++
++unixlib_handle_t __wine_unixlib_handle;
++static NTSTATUS WINAPI lower_dispatch(unixlib_handle_t handle, unsigned int code, void *args)
++{
++    (void)handle; (void)args;
++    if (code == unix_usb_submit_urb) ++lower_submit_calls;
++    return STATUS_SUCCESS;
++}
++NTSTATUS (WINAPI *__wine_unix_call_dispatcher)(unixlib_handle_t, unsigned int, void *) = lower_dispatch;
+ 
+ #define CHECK(condition, ...) do { if (!(condition)) { \
+     fprintf(stderr, "FAIL %s:%u: ", __func__, __LINE__); \
+@@ -323,6 +333,35 @@
+ 
+ void WINAPI EnterCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
+ void WINAPI LeaveCriticalSection(CRITICAL_SECTION *critical_section) { (void)critical_section; }
++PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDL mdl, KPROCESSOR_MODE mode,
++        MEMORY_CACHING_TYPE cache, PVOID base, ULONG bugcheck, MM_PAGE_PRIORITY priority)
++{ (void)mdl; (void)mode; (void)cache; (void)base; (void)bugcheck; (void)priority; return NULL; }
++
++/* This calls the actual static wineusb.c dispatcher in this translation unit.
++ * A queued child must stop SELECT_INTERFACE before it reaches Unix. */
++static void test_select_interface_pending_child(void)
++{
++    struct usb_device device;
++    IRP request, child;
++    IO_STACK_LOCATION stack;
++    URB urb;
++    NTSTATUS status;
++
++    memset(&device, 0, sizeof(device)); memset(&request, 0, sizeof(request));
++    memset(&child, 0, sizeof(child)); memset(&stack, 0, sizeof(stack)); memset(&urb, 0, sizeof(urb));
++    InitializeListHead(&device.irp_list);
++    request.Tail.Overlay.CurrentStackLocation = &stack;
++    stack.Parameters.Others.Argument1 = &urb;
++    urb.UrbHeader.Function = URB_FUNCTION_SELECT_INTERFACE;
++    urb.UrbHeader.Length = sizeof(urb.UrbSelectInterface);
++    InsertTailList(&device.irp_list, &child.Tail.Overlay.ListEntry);
++    lower_submit_calls = 0;
++    status = usb_submit_urb(&device, &request);
++    CHECK(status == STATUS_DEVICE_BUSY, "pending SELECT_INTERFACE returned %#lx", (long)status);
++    CHECK(urb.UrbHeader.Status == USBD_STATUS_REQUEST_FAILED, "pending request status %#x", urb.UrbHeader.Status);
++    CHECK(!lower_submit_calls, "pending SELECT_INTERFACE reached Unix %u times", lower_submit_calls);
++    RemoveEntryList(&child.Tail.Overlay.ListEntry);
++}
+ 
+ static void test_query_success_and_balance(void)
+ {
+@@ -460,6 +499,7 @@
+     test_query_success_and_balance();
+     test_v2_query_and_speed_balance();
+     test_actual_lower_speed_callback();
++    test_select_interface_pending_child();
+     test_metadata_validation();
+     if (failures) { fprintf(stderr, "%u WineUSB metadata bus-interface check(s) failed\n", failures); return 1; }
+     puts("WineUSB WinUSB metadata bus-interface contract: pass");
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_urb_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_urb_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_urb_contract.c	2026-08-24 06:50:34.361775836 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_urb_contract.c	2026-08-24 08:19:32.585309211 -0700
+@@ -6,7 +6,7 @@
+ #define GUARD_BYTE 0xa5
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+-#define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
++#define IO24_CHECK(expr) do { if (!(expr)) { fprintf(stderr, "FAIL %s:%u: %s\n", __func__, __LINE__, #expr); ++counts.failures; } } while (0)
+ struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,close; };
+ struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; };
+ const struct io24_fake_counts *io24_fake_libusb_counts(void);
+@@ -14,6 +14,7 @@
+ void io24_fake_libusb_set_claim_result(int);
+ void io24_fake_libusb_set_claim_failure(unsigned int,int);
+ void io24_fake_libusb_set_alternate_result(int);
++void io24_fake_libusb_enable_extended_active_descriptor(int);
+ int io24_fake_libusb_complete(enum libusb_transfer_status,const unsigned char*,size_t,int);
+ int io24_fake_libusb_claim_at(unsigned int);
+ int io24_fake_libusb_release_at(unsigned int);
+@@ -34,9 +35,55 @@
+     struct list entry; libusb_device_handle *handle; void *parent; unsigned int refcount;
+     bool function; uint8_t function_interface_count; uint16_t configuration_length;
+     uint8_t function_root; unsigned char function_interfaces[32];
+-    unsigned char claimed_interfaces[32]; void *pending_claim_transaction;
++    unsigned char claimed_interfaces[32]; void *pipe_table; void *pending_claim_transaction;
+ };
+ 
++/* ABI-shaped inspection storage used only to seed an already-committed lower
++ * table.  The contract never manufactures a HANDLE; production still mints
++ * every observed token. */
++struct io24_pipe_token { uint32_t generation; uint8_t endpoint,type,interface_number,alternate; bool current; };
++struct io24_pipe_table { struct io24_pipe_token records[256]; uint8_t alternates[256]; uint32_t next_generation; };
++#define IO24_GENERATION_MAX 0x7fffff
++
++struct io24_pipe_table_audit
++{
++    void (*reset)(void);
++    unsigned int (*allocations)(void);
++    unsigned int (*frees)(void);
++    unsigned int (*live)(void);
++    unsigned int (*last_free_order)(void);
++    unsigned int (*close_order)(void);
++    unsigned int (*failures)(void);
++};
++
++static BOOL get_pipe_table_audit(struct io24_pipe_table_audit *audit)
++{
++    if (!getenv("IO24_PIPE_TABLE_ALLOC_AUDIT")) return FALSE;
++    memset(audit, 0, sizeof(*audit));
++    *(void **)&audit->reset = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_reset");
++    *(void **)&audit->allocations = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_allocations");
++    *(void **)&audit->frees = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_frees");
++    *(void **)&audit->live = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_live");
++    *(void **)&audit->last_free_order = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_last_free_order");
++    *(void **)&audit->close_order = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_close_order");
++    *(void **)&audit->failures = dlsym(RTLD_DEFAULT, "io24_pipe_table_audit_failures");
++    return audit->reset && audit->allocations && audit->frees && audit->live &&
++            audit->last_free_order && audit->close_order && audit->failures;
++}
++
++static void check_pipe_table_reclaimed(const struct io24_pipe_table_audit *audit,
++        BOOL closed)
++{
++    IO24_CHECK(audit->allocations() == 1 && audit->frees() == 1 && audit->live() == 0);
++    IO24_CHECK(audit->failures() == 0);
++    if (closed)
++    {
++        IO24_CHECK(audit->close_order() != 0);
++        IO24_CHECK(audit->last_free_order() < audit->close_order());
++    }
++    else IO24_CHECK(audit->close_order() == 0);
++}
++
+ static void check_forbidden(void)
+ {
+     const struct io24_fake_counts *c=io24_fake_libusb_counts();
+@@ -77,6 +124,40 @@
+     return unix_calls[unix_usb_submit_urb](&params);
+ }
+ 
++/* R87: retained paths obtain opaque tokens from the actual lower SELECT
++ * implementation; they never construct or decode a pipe handle. */
++static HANDLE fixture_select_pipe(struct fixture *fixture, unsigned char endpoint,
++        USBD_PIPE_TYPE type)
++{
++    struct _URB_SELECT_CONFIGURATION *select;
++    unsigned int pipes = endpoint == 0x83 ? 1 : 2;
++
++    reset_fixture(fixture, URB_FUNCTION_SELECT_CONFIGURATION);
++    io24_fake_libusb_enable_mi05_active_descriptor(1);
++    select = &fixture->urb.UrbSelectConfiguration;
++    select->Hdr.Length = offsetof(struct _URB_SELECT_CONFIGURATION, Interface) +
++            offsetof(USBD_INTERFACE_INFORMATION, Pipes) + pipes * sizeof(USBD_PIPE_INFORMATION);
++    select->Interface.Length = offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
++            pipes * sizeof(USBD_PIPE_INFORMATION);
++    select->Interface.InterfaceNumber = 5;
++    select->Interface.AlternateSetting = 1;
++    select->Interface.Class = 0xff;
++    select->Interface.Protocol = 6;
++    select->Interface.NumberOfPipes = pipes;
++    select->Interface.Pipes[0].EndpointAddress = endpoint;
++    select->Interface.Pipes[0].PipeType = type;
++    select->Interface.Pipes[0].MaximumPacketSize = endpoint == 0x83 ? 64 : 512;
++    select->Interface.Pipes[0].Interval = endpoint == 0x83 ? 1 : 0;
++    if (pipes == 2)
++    {
++        select->Interface.Pipes[1].EndpointAddress = 0x01;
++        select->Interface.Pipes[1].PipeType = UsbdPipeTypeBulk;
++        select->Interface.Pipes[1].MaximumPacketSize = 512;
++    }
++    IO24_CHECK(submit_fixture(fixture) == STATUS_SUCCESS);
++    return select->Interface.Pipes[0].PipeHandle;
++}
++
+ static struct _URB_SELECT_CONFIGURATION *build_select(unsigned char buffer[256],
+         const unsigned char *interfaces, size_t interface_count)
+ {
+@@ -91,12 +172,35 @@
+         information->Length=offsetof(USBD_INTERFACE_INFORMATION,Pipes);
+         information->InterfaceNumber=interfaces[i];
+         information->AlternateSetting=0;
++        if (interfaces[i] == 5)
++        {
++            information->Class=0xff;
++            information->Protocol=6;
++        }
+         cursor+=information->Length;
+     }
+     select->Hdr.Length=cursor;
+     return select;
+ }
+ 
++static struct _URB_SELECT_CONFIGURATION *build_two_pipe_select(unsigned char buffer[512])
++{
++    struct _URB_SELECT_CONFIGURATION *select=(void *)buffer;
++    USBD_INTERFACE_INFORMATION *interface;
++    size_t cursor=offsetof(struct _URB_SELECT_CONFIGURATION,Interface);
++
++    memset(buffer,0,512); select->Hdr.Function=URB_FUNCTION_SELECT_CONFIGURATION;
++    interface=(void *)(buffer+cursor); interface->Length=offsetof(USBD_INTERFACE_INFORMATION,Pipes)+sizeof(USBD_PIPE_INFORMATION);
++    interface->InterfaceNumber=7; interface->NumberOfPipes=1;
++    interface->Pipes[0].EndpointAddress=0x82; interface->Pipes[0].PipeType=UsbdPipeTypeBulk;
++    interface->Pipes[0].MaximumPacketSize=512; cursor+=interface->Length;
++    interface=(void *)(buffer+cursor); interface->Length=offsetof(USBD_INTERFACE_INFORMATION,Pipes)+2*sizeof(USBD_PIPE_INFORMATION);
++    interface->InterfaceNumber=5; interface->AlternateSetting=1; interface->Class=0xff; interface->Protocol=6; interface->NumberOfPipes=2;
++    interface->Pipes[0].EndpointAddress=0x81; interface->Pipes[0].PipeType=UsbdPipeTypeBulk; interface->Pipes[0].MaximumPacketSize=512;
++    interface->Pipes[1].EndpointAddress=0x01; interface->Pipes[1].PipeType=UsbdPipeTypeBulk; interface->Pipes[1].MaximumPacketSize=512;
++    cursor+=interface->Length; select->Hdr.Length=cursor; return select;
++}
++
+ static NTSTATUS finalize_claim(struct io24_function_device *device,
+         USBD_CONFIGURATION_HANDLE token, ULONG operation,
+         struct io24_claim_transaction_request *request)
+@@ -110,6 +214,62 @@
+     return submit_request(device,request);
+ }
+ 
++static void audit_pipe_table_reclamation(void)
++{
++    static const unsigned char mi05[]={5};
++    struct io24_pipe_table_audit audit;
++    struct io24_function_device *parent, *child;
++    struct io24_claim_transaction_request finalize;
++    struct _URB_SELECT_CONFIGURATION *select;
++    struct usb_destroy_device_params destroy;
++    unsigned char buffer[256];
++
++    if (!getenv("IO24_PIPE_TABLE_ALLOC_AUDIT")) return;
++    if (!get_pipe_table_audit(&audit))
++    {
++        IO24_CHECK(FALSE);
++        return;
++    }
++
++#define PREPARE_AUDIT_PAIR() do { \
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1); audit.reset(); \
++    parent=calloc(1,sizeof(*parent)); child=calloc(1,sizeof(*child)); \
++    IO24_CHECK(parent&&child); if(!parent||!child){free(parent);free(child);return;} \
++    list_init(&parent->entry); parent->handle=(void *)(uintptr_t)0x12340000; parent->refcount=2; \
++    initialize_function_device(child,parent,mi05,ARRAY_SIZE(mi05)); \
++    select=build_select(buffer,mi05,ARRAY_SIZE(mi05)); \
++    IO24_CHECK(submit_request(child,select)==STATUS_SUCCESS); \
++} while(0)
++#define DESTROY_AUDIT_PAIR() do { \
++    destroy.device=(struct unix_device *)child; \
++    IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS); \
++    IO24_CHECK(parent->refcount==1&&io24_fake_libusb_counts()->release==1&& \
++            io24_fake_libusb_release_at(0)==5&&io24_fake_libusb_counts()->close==0); \
++    destroy.device=(struct unix_device *)parent; \
++    IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS); \
++    IO24_CHECK(io24_fake_libusb_counts()->close==1); \
++} while(0)
++
++    /* Explicit rollback frees the staged table before either device is closed. */
++    PREPARE_AUDIT_PAIR();
++    IO24_CHECK(finalize_claim(child,select->ConfigurationHandle,
++            IO24_CLAIM_TRANSACTION_ROLLBACK,&finalize)==STATUS_SUCCESS);
++    check_pipe_table_reclaimed(&audit,FALSE); DESTROY_AUDIT_PAIR();
++    check_pipe_table_reclaimed(&audit,TRUE);
++
++    /* Destruction of an unresolved transaction owns the staged table exactly once. */
++    PREPARE_AUDIT_PAIR();
++    DESTROY_AUDIT_PAIR(); check_pipe_table_reclaimed(&audit,TRUE);
++
++    /* After COMMIT the child owns the table; its destruction precedes parent close. */
++    PREPARE_AUDIT_PAIR();
++    IO24_CHECK(finalize_claim(child,select->ConfigurationHandle,
++            IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++    DESTROY_AUDIT_PAIR(); check_pipe_table_reclaimed(&audit,TRUE);
++#undef DESTROY_AUDIT_PAIR
++#undef PREPARE_AUDIT_PAIR
++}
++
+ static void group_claims(void)
+ {
+     static const unsigned char mi05[]={5}, multi[]={7,2,5}, bad_scope[]={2,9};
+@@ -120,8 +280,17 @@
+     USBD_CONFIGURATION_HANDLE first,second;
+     unsigned char buffer[256];
+ 
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    /* A function configuration is descriptor-backed before claims and must
++     * preserve its caller token on a missing descriptor. */
++    select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
++    select->ConfigurationHandle=(void *)(uintptr_t)0xaaaa;
++    io24_fake_libusb_enable_mi05_active_descriptor(0);
++    IO24_CHECK(submit_request(&device,select)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(select->ConfigurationHandle==(void *)(uintptr_t)0xaaaa);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==0&&device.pending_claim_transaction==NULL);
++    io24_fake_libusb_enable_mi05_active_descriptor(1);
+     select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
+     IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
+     first=select->ConfigurationHandle;
+@@ -156,7 +325,7 @@
+             &finalize)==STATUS_SUCCESS);
+     IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
+ 
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     initialize_function_device(&device,NULL,multi,ARRAY_SIZE(multi));
+     select=build_select(buffer,bad_scope,ARRAY_SIZE(bad_scope));
+     IO24_CHECK(submit_request(&device,select)==STATUS_INVALID_PARAMETER);
+@@ -170,7 +339,7 @@
+     IO24_CHECK(c->release==1&&io24_fake_libusb_release_at(0)==2);
+     check_forbidden();
+ 
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     initialize_function_device(&device,NULL,multi,ARRAY_SIZE(multi));
+     select=build_select(buffer,multi,ARRAY_SIZE(multi));
+     io24_fake_libusb_set_claim_failure(1,LIBUSB_ERROR_BUSY);
+@@ -181,7 +350,7 @@
+ 
+     /* A nonempty explicit rollback releases only its journal in reverse order.
+      * A later partial extension must preserve the earlier committed claim. */
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     {
+         static const unsigned char scope[]={2,5,7}, committed[]={2};
+         static const unsigned char extension[]={5,7}, all[]={2,5,7};
+@@ -228,7 +397,7 @@
+         check_forbidden();
+     }
+ 
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     {
+         struct io24_function_device *parent=calloc(1,sizeof(*parent));
+         struct io24_function_device *left=calloc(1,sizeof(*left));
+@@ -270,7 +439,7 @@
+         check_forbidden();
+     }
+ 
+-    io24_fake_libusb_reset();
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
+     {
+         struct io24_function_device *parent=calloc(1,sizeof(*parent));
+         struct io24_function_device *child=calloc(1,sizeof(*child));
+@@ -292,12 +461,273 @@
+         IO24_CHECK(io24_fake_libusb_counts()->close==1);
+         check_forbidden();
+     }
++
++    /* A committed map at terminal generation is preserved; SELECT_CONFIG
++     * rejects before a new claim transaction or caller-field publication. */
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
++    initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    {
++        struct io24_pipe_table terminal={0};
++        terminal.next_generation=IO24_GENERATION_MAX+1;
++        device.pipe_table=&terminal;
++        select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
++        select->ConfigurationHandle=(void *)(uintptr_t)0xcccc;
++        IO24_CHECK(submit_request(&device,select)==STATUS_INSUFFICIENT_RESOURCES);
++        IO24_CHECK(select->ConfigurationHandle==(void *)(uintptr_t)0xcccc&&
++                device.pipe_table==&terminal&&device.pending_claim_transaction==NULL&&
++                io24_fake_libusb_counts()->claim==0);
++        device.pipe_table=NULL;
++    }
++    audit_pipe_table_reclamation();
+ }
+ static void group_alternate(void)
+ {
+-    struct fixture f; struct _URB_SELECT_INTERFACE *r; const struct io24_fake_counts*c;
+-    reset_fixture(&f,URB_FUNCTION_SELECT_INTERFACE);r=&f.urb.UrbSelectInterface;r->Hdr.Length=sizeof(*r);r->Interface.Length=sizeof(r->Interface);r->Interface.InterfaceNumber=5;r->Interface.AlternateSetting=1;r->Interface.NumberOfPipes=2;r->Interface.Pipes[0].EndpointAddress=0x81;r->Interface.Pipes[0].PipeType=UsbdPipeTypeBulk;r->Interface.Pipes[1].EndpointAddress=0x01;r->Interface.Pipes[1].PipeType=UsbdPipeTypeBulk;
+-    IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->set_alternate==1);IO24_CHECK(io24_fake_libusb_record()->interface_number==5&&io24_fake_libusb_record()->alternate==1);check_forbidden();
++    static const unsigned char mi05[]={5};
++    struct io24_function_device device; struct io24_claim_transaction_request finalize;
++    struct _URB_SELECT_CONFIGURATION *select; const struct io24_fake_counts*c;
++    struct _URB_PIPE_REQUEST stale;
++    HANDLE old0, old1;
++    struct io24_pipe_table *observed;
++    struct io24_pipe_token saved;
++    unsigned int slot;
++    unsigned char config[256], storage[16+offsetof(struct _URB_SELECT_INTERFACE,Interface)+offsetof(USBD_INTERFACE_INFORMATION,Pipes)+2*sizeof(USBD_PIPE_INFORMATION)+16];
++    struct _URB_SELECT_INTERFACE *r=(void*)(storage+16); size_t size=offsetof(struct _URB_SELECT_INTERFACE,Interface)+offsetof(USBD_INTERFACE_INFORMATION,Pipes)+2*sizeof(USBD_PIPE_INFORMATION); unsigned i, before;
++
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1); initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    select=build_select(config,mi05,ARRAY_SIZE(mi05));
++    IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++    IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++    memset(storage,GUARD_BYTE,sizeof(storage));memset(r,0,size);r->Hdr.Function=URB_FUNCTION_SELECT_INTERFACE;r->Hdr.Length=size;r->Interface.Length=size-offsetof(struct _URB_SELECT_INTERFACE,Interface);r->Interface.InterfaceNumber=5;r->Interface.AlternateSetting=1;r->Interface.Class=0xff;r->Interface.SubClass=0;r->Interface.Protocol=6;r->Interface.NumberOfPipes=2;r->Interface.Pipes[0].EndpointAddress=0x81;r->Interface.Pipes[0].PipeType=UsbdPipeTypeBulk;r->Interface.Pipes[0].MaximumPacketSize=512;r->Interface.Pipes[1].EndpointAddress=0x01;r->Interface.Pipes[1].PipeType=UsbdPipeTypeBulk;r->Interface.Pipes[1].MaximumPacketSize=512;
++    IO24_CHECK(submit_request(&device,r)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->set_alternate==1);IO24_CHECK(io24_fake_libusb_record()->interface_number==5&&io24_fake_libusb_record()->alternate==1);IO24_CHECK(r->Interface.Pipes[0].PipeHandle&&r->Interface.Pipes[1].PipeHandle);old0=r->Interface.Pipes[0].PipeHandle;old1=r->Interface.Pipes[1].PipeHandle;IO24_CHECK(((uintptr_t)old0>>9)==((uintptr_t)old1>>9));for(i=0;i<16;++i)IO24_CHECK(storage[i]==GUARD_BYTE&&storage[sizeof(storage)-16+i]==GUARD_BYTE);
++
++    before=c->set_alternate; r->Interface.Pipes[0].MaximumPacketSize=256;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before&&r->Interface.Pipes[0].PipeHandle==old0);
++    r->Interface.Pipes[0].MaximumPacketSize=512; r->Interface.Pipes[0].Interval=1;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before&&r->Interface.Pipes[0].PipeHandle==old0);
++    r->Interface.Pipes[0].Interval=0;
++
++    before=c->set_alternate; r->Interface.InterfaceNumber=7;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    r->Interface.InterfaceNumber=5; r->Hdr.Length--;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    r->Hdr.Length=size; r->Interface.Length++; before=io24_fake_libusb_counts()->set_alternate;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    r->Interface.Length--; io24_fake_libusb_set_alternate_result(LIBUSB_ERROR_IO);
++    r->Interface.Pipes[0].PipeHandle=(HANDLE)(uintptr_t)0x1111;
++    IO24_CHECK(submit_request(&device,r)==STATUS_UNSUCCESSFUL);IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before+1);IO24_CHECK(r->Interface.Pipes[0].PipeHandle==(HANDLE)(uintptr_t)0x1111);
++    io24_fake_libusb_set_alternate_result(0); r->Interface.AlternateSetting=2;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);IO24_CHECK(r->Interface.Pipes[0].PipeHandle==(HANDLE)(uintptr_t)0x1111);
++    r->Interface.AlternateSetting=1; r->Interface.Pipes[0].PipeHandle=NULL; r->Interface.Pipes[1].PipeHandle=NULL;
++    IO24_CHECK(submit_request(&device,r)==STATUS_SUCCESS);
++    memset(&stale,0,sizeof(stale)); stale.Hdr.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL; stale.PipeHandle=old0;
++    before=io24_fake_libusb_counts()->clear_halt;
++    IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->clear_halt==before&&old0!=r->Interface.Pipes[0].PipeHandle);
++    /* The current production-issued token is rejected for every independently
++     * validated record field, without reaching the clear-halt backend. */
++    stale.PipeHandle=r->Interface.Pipes[0].PipeHandle;
++    observed=device.pipe_table; slot=((uintptr_t)stale.PipeHandle&0x1ff)-1;
++    saved=observed->records[slot]; before=io24_fake_libusb_counts()->clear_halt;
++    stale.PipeHandle=(HANDLE)((uintptr_t)stale.PipeHandle ^ 2);
++    IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER);
++    stale.PipeHandle=(HANDLE)((uintptr_t)stale.PipeHandle ^ (1u<<9));
++    IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER);
++    stale.PipeHandle=r->Interface.Pipes[0].PipeHandle;
++    observed->records[slot].endpoint=0x82; IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); observed->records[slot]=saved;
++    observed->records[slot].type=UsbdPipeTypeInterrupt; IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); observed->records[slot]=saved;
++    observed->records[slot].interface_number=7; IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); observed->records[slot]=saved;
++    observed->records[slot].alternate=0; IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); observed->records[slot]=saved;
++    observed->records[slot].current=false; IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); observed->records[slot]=saved;
++    device.claimed_interfaces[5/8]&=~(1u<<(5%8)); IO24_CHECK(submit_request(&device,&stale)==STATUS_INVALID_PARAMETER); device.claimed_interfaces[5/8]|=1u<<(5%8);
++    IO24_CHECK(io24_fake_libusb_counts()->clear_halt==before);
++    check_forbidden();
++}
++
++static void group_atomicity(void)
++{
++    static const unsigned char mi05[]={5};
++    struct io24_function_device device;
++    struct io24_pipe_table *table;
++    unsigned char storage[offsetof(struct _URB_SELECT_INTERFACE,Interface)+
++            offsetof(USBD_INTERFACE_INFORMATION,Pipes)+2*sizeof(USBD_PIPE_INFORMATION)];
++    struct _URB_SELECT_INTERFACE *r=(void *)storage;
++    size_t size=sizeof(storage);
++    unsigned int i, before;
++    unsigned char *oversized;
++    struct _URB_SELECT_CONFIGURATION *configuration;
++    size_t configuration_size;
++
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1);
++    initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    device.claimed_interfaces[5/8]|=1u<<(5%8);
++    memset(r,0,size); r->Hdr.Function=URB_FUNCTION_SELECT_INTERFACE;
++    r->Hdr.Length=size; r->Interface.Length=size-offsetof(struct _URB_SELECT_INTERFACE,Interface);
++    r->Interface.InterfaceNumber=5; r->Interface.AlternateSetting=1;
++    r->Interface.Class=0xff; r->Interface.Protocol=6; r->Interface.NumberOfPipes=2;
++    r->Interface.Pipes[0].EndpointAddress=0x81; r->Interface.Pipes[0].PipeType=UsbdPipeTypeBulk; r->Interface.Pipes[0].MaximumPacketSize=512;
++    r->Interface.Pipes[1].EndpointAddress=0x01; r->Interface.Pipes[1].PipeType=UsbdPipeTypeBulk; r->Interface.Pipes[1].MaximumPacketSize=512;
++
++    /* Exact capacity: 255 occupied unrelated slots leave one, so staging two
++     * replacements must fail before libusb. */
++    table=calloc(1,sizeof(*table)); IO24_CHECK(table!=NULL);
++    if (!table) return;
++    for(i=0;i<255;++i) table->records[i]=(struct io24_pipe_token){1,0x81,UsbdPipeTypeBulk,2,0,true};
++    table->next_generation=2; device.pipe_table=table;
++    before=io24_fake_libusb_counts()->set_alternate;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INSUFFICIENT_RESOURCES);
++    IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    IO24_CHECK(r->Interface.Pipes[0].PipeHandle==NULL&&r->Interface.Pipes[1].PipeHandle==NULL);
++    free(device.pipe_table); device.pipe_table=NULL;
++
++    /* The maximum generation is usable exactly once; the next operation is
++     * terminal and cannot reach the backend or overwrite returned fields. */
++    table=calloc(1,sizeof(*table)); IO24_CHECK(table!=NULL);
++    if (!table) return;
++    table->next_generation=IO24_GENERATION_MAX; device.pipe_table=table;
++    IO24_CHECK(submit_request(&device,r)==STATUS_SUCCESS);
++    before=io24_fake_libusb_counts()->set_alternate;
++    r->Interface.Pipes[0].PipeHandle=(HANDLE)(uintptr_t)0x5555;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INSUFFICIENT_RESOURCES);
++    IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    IO24_CHECK(r->Interface.Pipes[0].PipeHandle==(HANDLE)(uintptr_t)0x5555);
++    free(device.pipe_table); device.pipe_table=NULL;
++
++    /* Both undersize and trailing-byte variable layouts are rejected before
++     * an alternate backend call. */
++    r->Hdr.Length=size-1; before=io24_fake_libusb_counts()->set_alternate;
++    IO24_CHECK(submit_request(&device,r)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->set_alternate==before);
++    check_forbidden();
++
++    /* SELECT_CONFIGURATION rejects a map larger than the exact 256-slot
++     * table before it can allocate tokens, claim, or publish any pipe field. */
++    io24_fake_libusb_reset();
++    initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    device.function=false;
++    configuration_size=offsetof(struct _URB_SELECT_CONFIGURATION,Interface)+
++            offsetof(USBD_INTERFACE_INFORMATION,Pipes)+257*sizeof(USBD_PIPE_INFORMATION);
++    oversized=calloc(1,configuration_size); IO24_CHECK(oversized!=NULL);
++    if (!oversized) return;
++    configuration=(void *)oversized;
++    configuration->Hdr.Function=URB_FUNCTION_SELECT_CONFIGURATION;
++    configuration->Hdr.Length=configuration_size;
++    configuration->Interface.Length=configuration_size-offsetof(struct _URB_SELECT_CONFIGURATION,Interface);
++    configuration->Interface.NumberOfPipes=257;
++    for(i=0;i<257;++i)
++    {
++        configuration->Interface.Pipes[i].EndpointAddress=0x81;
++        configuration->Interface.Pipes[i].PipeType=UsbdPipeTypeBulk;
++        configuration->Interface.Pipes[i].PipeHandle=(HANDLE)(uintptr_t)0x3333;
++    }
++    IO24_CHECK(submit_request(&device,configuration)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==0&&
++            io24_fake_libusb_counts()->set_configuration==0);
++    IO24_CHECK(configuration->Interface.Pipes[0].PipeHandle==(HANDLE)(uintptr_t)0x3333&&
++            configuration->Interface.Pipes[256].PipeHandle==(HANDLE)(uintptr_t)0x3333);
++    free(oversized);
++}
++
++static void group_target_only(void)
++{
++    static const unsigned char both[]={5,7};
++    struct io24_function_device device;
++    struct io24_claim_transaction_request finalize;
++    unsigned char config[512], storage[offsetof(struct _URB_SELECT_INTERFACE,Interface)+
++            offsetof(USBD_INTERFACE_INFORMATION,Pipes)+2*sizeof(USBD_PIPE_INFORMATION)];
++    struct _URB_SELECT_CONFIGURATION *select;
++    struct _URB_SELECT_INTERFACE *alternate=(void *)storage;
++    struct _URB_PIPE_REQUEST pipe;
++    HANDLE old5, token7;
++    void *committed;
++    size_t size=sizeof(storage);
++    unsigned before;
++
++    io24_fake_libusb_reset(); io24_fake_libusb_enable_mi05_active_descriptor(1); io24_fake_libusb_enable_extended_active_descriptor(1);
++    initialize_function_device(&device,NULL,both,ARRAY_SIZE(both));
++    select=build_two_pipe_select(config);
++    IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++    IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++    committed=device.pipe_table;
++    token7=((USBD_INTERFACE_INFORMATION *)(config+offsetof(struct _URB_SELECT_CONFIGURATION,Interface)))->Pipes[0].PipeHandle;
++    old5=((USBD_INTERFACE_INFORMATION *)(config+offsetof(struct _URB_SELECT_CONFIGURATION,Interface)+
++            ((USBD_INTERFACE_INFORMATION *)(config+offsetof(struct _URB_SELECT_CONFIGURATION,Interface)))->Length))->Pipes[0].PipeHandle;
++    memset(alternate,0,size); alternate->Hdr.Function=URB_FUNCTION_SELECT_INTERFACE; alternate->Hdr.Length=size;
++    alternate->Interface.Length=size-offsetof(struct _URB_SELECT_INTERFACE,Interface); alternate->Interface.InterfaceNumber=5;
++    alternate->Interface.AlternateSetting=1; alternate->Interface.Class=0xff; alternate->Interface.Protocol=6; alternate->Interface.NumberOfPipes=2;
++    alternate->Interface.Pipes[0].EndpointAddress=0x81; alternate->Interface.Pipes[0].PipeType=UsbdPipeTypeBulk; alternate->Interface.Pipes[0].MaximumPacketSize=512;
++    alternate->Interface.Pipes[1].EndpointAddress=0x01; alternate->Interface.Pipes[1].PipeType=UsbdPipeTypeBulk; alternate->Interface.Pipes[1].MaximumPacketSize=512;
++    IO24_CHECK(submit_request(&device,alternate)==STATUS_SUCCESS);
++    committed=device.pipe_table;
++    memset(&pipe,0,sizeof(pipe)); pipe.Hdr.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL; pipe.PipeHandle=token7;
++    before=io24_fake_libusb_counts()->clear_halt; IO24_CHECK(submit_request(&device,&pipe)==STATUS_SUCCESS);
++    pipe.PipeHandle=old5; IO24_CHECK(submit_request(&device,&pipe)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->clear_halt==before+1);
++
++    /* A staged replacement cannot publish its new handles.  Rollback leaves
++     * the committed table pointer/token usable exactly as before. */
++    io24_fake_libusb_enable_mi05_active_descriptor(0);
++    select=build_two_pipe_select(config); select->ConfigurationHandle=(void *)(uintptr_t)0xfeed;
++    IO24_CHECK(submit_request(&device,select)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(device.pipe_table==committed&&select->ConfigurationHandle==(void *)(uintptr_t)0xfeed);
++    io24_fake_libusb_enable_mi05_active_descriptor(1); io24_fake_libusb_enable_extended_active_descriptor(1);
++    pipe.PipeHandle=token7; IO24_CHECK(submit_request(&device,&pipe)==STATUS_SUCCESS);
++    select=build_two_pipe_select(config);
++    IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++    IO24_CHECK(device.pipe_table==committed);
++    pipe.PipeHandle=((USBD_INTERFACE_INFORMATION *)(config+offsetof(struct _URB_SELECT_CONFIGURATION,Interface)))->Pipes[0].PipeHandle;
++    before=io24_fake_libusb_counts()->clear_halt;
++    IO24_CHECK(submit_request(&device,&pipe)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(finalize_claim(&device,select->ConfigurationHandle,IO24_CLAIM_TRANSACTION_ROLLBACK,&finalize)==STATUS_SUCCESS);
++    IO24_CHECK(device.pipe_table==committed);
++    pipe.PipeHandle=token7; IO24_CHECK(submit_request(&device,&pipe)==STATUS_SUCCESS);
++    IO24_CHECK(io24_fake_libusb_counts()->clear_halt==before+1);
++}
++
++static void group_isolated_record_checks(void)
++{
++    struct fixture fixture;
++    struct io24_function_device *device=(struct io24_function_device *)&fixture.device;
++    struct io24_pipe_table *table;
++    struct io24_pipe_token saved;
++    struct _URB_PIPE_REQUEST request;
++    HANDLE token;
++    unsigned int slot, before;
++
++    token=fixture_select_pipe(&fixture,0x81,UsbdPipeTypeBulk);
++    table=device->pipe_table; slot=((uintptr_t)token&0x1ff)-1; saved=table->records[slot];
++    memset(&request,0,sizeof(request)); request.Hdr.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
++    request.PipeHandle=token; before=io24_fake_libusb_counts()->clear_halt;
++
++    /* Root token: scope/claim are vacuous.  Interface 7's descriptor has
++     * only 0x82, so deleting just descriptor-interface comparison would let
++     * the MI05 0x81 descriptor spuriously validate. */
++    table->records[slot].interface_number=7; table->alternates[7]=1;
++    IO24_CHECK(submit_request(device,&request)==STATUS_INVALID_PARAMETER);
++    table->records[slot]=saved; table->alternates[7]=0;
++
++    /* The active alt0 has no endpoints; table current-alt agrees, isolating
++     * descriptor alternate selection from the separate table-current check. */
++    table->records[slot].alternate=0; table->alternates[5]=0;
++    IO24_CHECK(submit_request(device,&request)==STATUS_INVALID_PARAMETER);
++    table->records[slot]=saved; table->alternates[5]=1;
++
++    /* Descriptor record is exact but committed table says a different alt. */
++    table->alternates[5]=0;
++    IO24_CHECK(submit_request(device,&request)==STATUS_INVALID_PARAMETER);
++    table->alternates[5]=1;
++
++    /* Function membership and committed claim are independent lower guards. */
++    device->function=true; device->function_interfaces[5/8]|=1u<<(5%8);
++    device->claimed_interfaces[5/8]|=1u<<(5%8);
++    device->function_interfaces[5/8]&=~(1u<<(5%8));
++    IO24_CHECK(submit_request(device,&request)==STATUS_INVALID_PARAMETER);
++    device->function_interfaces[5/8]|=1u<<(5%8);
++    device->claimed_interfaces[5/8]&=~(1u<<(5%8));
++    IO24_CHECK(submit_request(device,&request)==STATUS_INVALID_PARAMETER);
++    device->function=false; device->function_interfaces[5/8]=0; device->claimed_interfaces[5/8]=0;
++    IO24_CHECK(io24_fake_libusb_counts()->clear_halt==before);
+ }
+ static void group_control_descriptor(void)
+ {
+@@ -309,13 +739,13 @@
+ }
+ static void group_sync_pipes(void)
+ {
+-    struct fixture f;struct _URB_PIPE_REQUEST*r;const struct io24_fake_counts*c;reset_fixture(&f,URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL);r=&f.urb.UrbPipeRequest;r->PipeHandle=make_pipe_handle(0x81,UsbdPipeTypeBulk);io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);IO24_CHECK(submit_fixture(&f)==STATUS_UNSUCCESSFUL);c=io24_fake_libusb_counts();IO24_CHECK(c->clear_halt==1&&io24_fake_libusb_record()->endpoint==0x81);check_forbidden();
++    struct fixture f;struct _URB_PIPE_REQUEST*r;HANDLE pipe;const struct io24_fake_counts*c;pipe=fixture_select_pipe(&f,0x81,UsbdPipeTypeBulk);f.urb.UrbHeader.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;r=&f.urb.UrbPipeRequest;r->PipeHandle=pipe;io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->clear_halt==1&&io24_fake_libusb_record()->endpoint==0x81);check_forbidden();
+ }
+ static void group_transfer_lifetime(void)
+ {
+-    struct fixture f,natural;struct _URB_BULK_OR_INTERRUPT_TRANSFER*r;struct usb_cancel_transfer_params cancel;struct usb_event event;struct usb_main_loop_params loop={.event=&event};const struct io24_fake_counts*c;unsigned char payload[32];
+-    reset_fixture(&f,URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER);r=&f.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=make_pipe_handle(0x81,UsbdPipeTypeBulk);r->TransferBufferLength=32;r->TransferBuffer=f.buffer;IO24_CHECK(submit_fixture(&f)==STATUS_PENDING);cancel.transfer=f.irp.Tail.Overlay.DriverContext[0];IO24_CHECK(cancel.transfer!=NULL);IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->cancel==1);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_CANCELLED,NULL,0,0)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.type==USB_EVENT_TRANSFER_COMPLETE&&event.u.completed_irp==&f.irp);counts.completions++;IO24_CHECK(f.irp.Tail.Overlay.DriverContext[0]==NULL);check_forbidden();
+-    memset(payload,0x6d,sizeof(payload));reset_fixture(&natural,URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER);r=&natural.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=make_pipe_handle(0x81,UsbdPipeTypeBulk);r->TransferBufferLength=32;r->TransferBuffer=natural.buffer;IO24_CHECK(submit_fixture(&natural)==STATUS_PENDING);IO24_CHECK(io24_fake_libusb_pending_type()==LIBUSB_TRANSFER_TYPE_BULK&&io24_fake_libusb_pending_length()==32);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_COMPLETED,payload,sizeof(payload),32)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.u.completed_irp==&natural.irp);IO24_CHECK(!memcmp(natural.buffer,payload,sizeof(payload)));IO24_CHECK(natural.urb.UrbBulkOrInterruptTransfer.TransferBufferLength==32);counts.completions++;check_forbidden();
++    struct fixture f,natural;struct _URB_BULK_OR_INTERRUPT_TRANSFER*r;HANDLE pipe;struct usb_cancel_transfer_params cancel;struct usb_event event;struct usb_main_loop_params loop={.event=&event};const struct io24_fake_counts*c;unsigned char payload[32];
++    pipe=fixture_select_pipe(&f,0x81,UsbdPipeTypeBulk);f.urb.UrbHeader.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;r=&f.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=pipe;r->TransferBufferLength=32;r->TransferBuffer=f.buffer;IO24_CHECK(submit_fixture(&f)==STATUS_PENDING);cancel.transfer=f.irp.Tail.Overlay.DriverContext[0];IO24_CHECK(cancel.transfer!=NULL);IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->cancel==1);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_CANCELLED,NULL,0,0)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.type==USB_EVENT_TRANSFER_COMPLETE&&event.u.completed_irp==&f.irp);counts.completions++;IO24_CHECK(f.irp.Tail.Overlay.DriverContext[0]==NULL);check_forbidden();
++    memset(payload,0x6d,sizeof(payload));pipe=fixture_select_pipe(&natural,0x81,UsbdPipeTypeBulk);natural.urb.UrbHeader.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;r=&natural.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=pipe;r->TransferBufferLength=32;r->TransferBuffer=natural.buffer;IO24_CHECK(submit_fixture(&natural)==STATUS_PENDING);IO24_CHECK(io24_fake_libusb_pending_type()==LIBUSB_TRANSFER_TYPE_BULK&&io24_fake_libusb_pending_length()==32);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_COMPLETED,payload,sizeof(payload),32)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.u.completed_irp==&natural.irp);IO24_CHECK(!memcmp(natural.buffer,payload,sizeof(payload)));IO24_CHECK(natural.urb.UrbBulkOrInterruptTransfer.TransferBufferLength==32);counts.completions++;check_forbidden();
+ }
+-static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--claims"))group_claims();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();if(!strcmp(m,"--red")||!strcmp(m,"--sync-pipes"))group_sync_pipes();if(!strcmp(m,"--red")||!strcmp(m,"--transfer-lifetime"))group_transfer_lifetime();}
++static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--claims"))group_claims();if(!strcmp(m,"--red")||!strcmp(m,"--alternate")){group_alternate();group_atomicity();group_target_only();group_isolated_record_checks();}if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();if(!strcmp(m,"--red")||!strcmp(m,"--sync-pipes"))group_sync_pipes();if(!strcmp(m,"--red")||!strcmp(m,"--transfer-lifetime"))group_transfer_lifetime();}
+ int main(int argc,char**argv){void*module;char*retained_argv[3];if(argc!=3)return 2;retained_argv[0]=argv[0];retained_argv[1]=argv[1];retained_argv[2]=NULL;if(io24_retained_pipe_main(2,retained_argv)){fprintf(stderr,"HARNESS: retained pipe execution baseline failed\n");return 2;}module=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!module){fprintf(stderr,"HARNESS: dlopen actual unixlib: %s\n",dlerror());return 2;}unix_calls=dlsym(module,"__wine_unix_call_funcs");if(!unix_calls){fprintf(stderr,"HARNESS: dlsym actual unix calls: %s\n",dlerror());return 2;}run(argv[2]);dlclose(module);printf("CP33 lower executed mode=%s completions=%u failures=%u\n",argv[2],counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_urb_fake_libusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_urb_fake_libusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-24 06:00:08.585210538 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-24 08:19:32.585406500 -0700
+@@ -4,22 +4,200 @@
+ #include <string.h>
+ #include <libusb.h>
+ 
++#ifdef IO24_PIPE_TABLE_ALLOC_AUDIT
++#include <dlfcn.h>
++#endif
++
+ struct io24_fake_counts { unsigned claim, release, detach, auto_detach, set_configuration, set_alternate, control, bulk, interrupt, cancel, clear_halt, transfer_free, close; };
+ struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; };
+ static struct io24_fake_counts counts;
+ static struct io24_fake_record record;
+ static int claim_journal[256], release_journal[256];
++static int active_descriptor_enabled;
++static int interrupt_descriptor_enabled;
++static int extended_descriptor_enabled;
+ static struct libusb_transfer *pending;
+ static int submit_result,clear_halt_result,claim_result,alternate_result,control_result;
+ static unsigned int claim_failure_call;
+ static unsigned int alloc_count;
++#ifdef IO24_PIPE_TABLE_ALLOC_AUDIT
++/* This is deliberately an ABI-shaped copy of unixlib.c's private allocation,
++ * used only to identify its calloc(1, sizeof(table)) calls under LD_PRELOAD. */
++struct io24_pipe_table_audit_token
++{
++    uint32_t generation;
++    uint8_t endpoint, type, interface_number, alternate, current;
++};
++struct io24_pipe_table_audit_table
++{
++    struct io24_pipe_table_audit_token records[256];
++    uint8_t alternates[256];
++    uint32_t next_generation;
++};
++struct io24_pipe_table_audit_entry { void *pointer; unsigned int order; int live; };
++static struct io24_pipe_table_audit_entry pipe_table_entries[8];
++static void *(*pipe_table_real_calloc)(size_t, size_t);
++static void (*pipe_table_real_free)(void *);
++static unsigned int pipe_table_allocations, pipe_table_frees, pipe_table_order;
++static unsigned int pipe_table_last_free_order, pipe_table_close_order, pipe_table_failures;
++static __thread int pipe_table_resolving;
++
++static void pipe_table_resolve_allocator(void)
++{
++    if (pipe_table_real_calloc && pipe_table_real_free) return;
++    if (pipe_table_resolving) return;
++    pipe_table_resolving = 1;
++    if (!pipe_table_real_calloc) pipe_table_real_calloc = dlsym(RTLD_NEXT, "calloc");
++    if (!pipe_table_real_free) pipe_table_real_free = dlsym(RTLD_NEXT, "free");
++    pipe_table_resolving = 0;
++}
++
++__attribute__((constructor)) static void pipe_table_allocator_init(void)
++{
++    pipe_table_resolve_allocator();
++}
++
++void *calloc(size_t count, size_t size)
++{
++    void *pointer;
++    unsigned int i;
++
++    pipe_table_resolve_allocator();
++    if (!pipe_table_real_calloc) return NULL;
++    pointer = pipe_table_real_calloc(count, size);
++    if (count != 1 || size != sizeof(struct io24_pipe_table_audit_table)) return pointer;
++    ++pipe_table_order;
++    for (i = 0; i < sizeof(pipe_table_entries) / sizeof(pipe_table_entries[0]); ++i)
++        if (!pipe_table_entries[i].live && !pipe_table_entries[i].pointer)
++        {
++            pipe_table_entries[i] = (struct io24_pipe_table_audit_entry){pointer, pipe_table_order, 1};
++            ++pipe_table_allocations;
++            return pointer;
++        }
++    ++pipe_table_failures;
++    return pointer;
++}
++
++void free(void *pointer)
++{
++    unsigned int i;
++
++    pipe_table_resolve_allocator();
++    for (i = 0; pointer && i < sizeof(pipe_table_entries) / sizeof(pipe_table_entries[0]); ++i)
++        if (pipe_table_entries[i].pointer == pointer)
++        {
++            ++pipe_table_order;
++            if (!pipe_table_entries[i].live) ++pipe_table_failures;
++            else
++            {
++                pipe_table_entries[i].live = 0;
++                pipe_table_entries[i].pointer = NULL;
++                ++pipe_table_frees;
++                pipe_table_last_free_order = pipe_table_order;
++            }
++            break;
++        }
++    if (pipe_table_real_free) pipe_table_real_free(pointer);
++}
++
++void io24_pipe_table_audit_reset(void)
++{
++    memset(pipe_table_entries, 0, sizeof(pipe_table_entries));
++    pipe_table_allocations = pipe_table_frees = pipe_table_order = 0;
++    pipe_table_last_free_order = pipe_table_close_order = pipe_table_failures = 0;
++}
++unsigned int io24_pipe_table_audit_allocations(void) { return pipe_table_allocations; }
++unsigned int io24_pipe_table_audit_frees(void) { return pipe_table_frees; }
++unsigned int io24_pipe_table_audit_live(void)
++{
++    unsigned int i, live = 0;
++    for (i = 0; i < sizeof(pipe_table_entries) / sizeof(pipe_table_entries[0]); ++i)
++        live += pipe_table_entries[i].live;
++    return live;
++}
++unsigned int io24_pipe_table_audit_last_free_order(void) { return pipe_table_last_free_order; }
++unsigned int io24_pipe_table_audit_close_order(void) { return pipe_table_close_order; }
++unsigned int io24_pipe_table_audit_failures(void) { return pipe_table_failures; }
++static void io24_pipe_table_audit_note_close(void)
++{
++    ++pipe_table_order;
++    pipe_table_close_order = pipe_table_order;
++    if (io24_pipe_table_audit_live()) ++pipe_table_failures;
++}
++#endif
+ static const unsigned char mi05[]={9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0};
++/* The lower contract must validate a real active descriptor, rather than
++ * accepting caller-supplied endpoint metadata.  This is deliberately static:
++ * libusb descriptors are read-only for the duration of each fake call. */
++static const struct libusb_endpoint_descriptor mi05_alt1_endpoints[] = {
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x81,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_BULK, .wMaxPacketSize = 512 },
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x01,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_BULK, .wMaxPacketSize = 512 },
++};
++static const struct libusb_interface_descriptor mi05_alts[] = {
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 0, .bNumEndpoints = 0, .bInterfaceClass = 0xff,
++      .bInterfaceSubClass = 0, .bInterfaceProtocol = 6 },
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 1, .bNumEndpoints = 2, .bInterfaceClass = 0xff,
++      .bInterfaceSubClass = 0, .bInterfaceProtocol = 6,
++      .endpoint = mi05_alt1_endpoints },
++};
++static const struct libusb_interface_descriptor empty_alt2 = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 2,
++};
++static const struct libusb_endpoint_descriptor endpoint7[] = {
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x82,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_BULK, .wMaxPacketSize = 512 },
++};
++static const struct libusb_interface_descriptor alt7 = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 7,
++    .bNumEndpoints = 1, .endpoint = endpoint7,
++};
++static const struct libusb_interface_descriptor empty_alt7 = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 7,
++};
++static const struct libusb_interface scope_interfaces[] = {
++    { .altsetting = &empty_alt2, .num_altsetting = 1 },
++    { .altsetting = mi05_alts, .num_altsetting = 2 },
++    { .altsetting = &alt7, .num_altsetting = 1 },
++};
++static const struct libusb_interface base_scope_interfaces[] = {
++    { .altsetting = &empty_alt2, .num_altsetting = 1 },
++    { .altsetting = mi05_alts, .num_altsetting = 2 },
++    { .altsetting = &empty_alt7, .num_altsetting = 1 },
++};
++static const struct libusb_config_descriptor mi05_config = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_CONFIG, .wTotalLength = sizeof(mi05),
++    .bNumInterfaces = 3, .bConfigurationValue = 1, .interface = base_scope_interfaces,
++};
++static const struct libusb_config_descriptor extended_mi05_config = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_CONFIG, .wTotalLength = sizeof(mi05),
++    .bNumInterfaces = 3, .bConfigurationValue = 1, .interface = scope_interfaces,
++};
++static const struct libusb_endpoint_descriptor interrupt_endpoints[] = {
++    { .bLength = 7, .bDescriptorType = LIBUSB_DT_ENDPOINT, .bEndpointAddress = 0x83,
++      .bmAttributes = LIBUSB_TRANSFER_TYPE_INTERRUPT, .wMaxPacketSize = 64, .bInterval = 1 },
++};
++static const struct libusb_interface_descriptor interrupt_alts[] = {
++    { .bLength = 9, .bDescriptorType = LIBUSB_DT_INTERFACE, .bInterfaceNumber = 5,
++      .bAlternateSetting = 1, .bNumEndpoints = 1, .bInterfaceClass = 0xff,
++      .bInterfaceProtocol = 6, .endpoint = interrupt_endpoints },
++};
++static const struct libusb_interface interrupt_interfaces[] = {{ .altsetting = interrupt_alts, .num_altsetting = 1 }};
++static const struct libusb_config_descriptor interrupt_config = {
++    .bLength = 9, .bDescriptorType = LIBUSB_DT_CONFIG, .bNumInterfaces = 1, .interface = interrupt_interfaces,
++};
+ 
+-void io24_fake_libusb_reset(void){if(pending){libusb_free_transfer(pending);pending=NULL;}memset(&counts,0,sizeof(counts));memset(&record,0,sizeof(record));memset(claim_journal,0,sizeof(claim_journal));memset(release_journal,0,sizeof(release_journal));alloc_count=0;submit_result=0;clear_halt_result=0;claim_result=0;claim_failure_call=0;alternate_result=0;control_result=0;}
++void io24_fake_libusb_reset(void){if(pending){libusb_free_transfer(pending);pending=NULL;}memset(&counts,0,sizeof(counts));memset(&record,0,sizeof(record));memset(claim_journal,0,sizeof(claim_journal));memset(release_journal,0,sizeof(release_journal));alloc_count=0;submit_result=0;clear_halt_result=0;claim_result=0;claim_failure_call=0;alternate_result=0;control_result=0;active_descriptor_enabled=0;interrupt_descriptor_enabled=0;extended_descriptor_enabled=0;}
+ const struct io24_fake_counts *io24_fake_libusb_counts(void){return &counts;}
+ const struct io24_fake_record *io24_fake_libusb_record(void){return &record;}
+ const unsigned char *io24_fake_mi05(size_t*size){*size=sizeof(mi05);return mi05;}
+ void io24_fake_libusb_set_submit_result(int r){submit_result=r;} void io24_fake_libusb_set_clear_halt_result(int r){clear_halt_result=r;}
++void io24_fake_libusb_enable_mi05_active_descriptor(int enable){active_descriptor_enabled=!!enable;}
++void io24_fake_libusb_enable_interrupt_active_descriptor(int enable){interrupt_descriptor_enabled=!!enable;}
++void io24_fake_libusb_enable_extended_active_descriptor(int enable){extended_descriptor_enabled=!!enable;}
+ void io24_fake_libusb_set_claim_result(int r){claim_result=r;claim_failure_call=r?1:0;} void io24_fake_libusb_set_claim_failure(unsigned int call,int r){claim_failure_call=call;claim_result=r;} void io24_fake_libusb_set_alternate_result(int r){alternate_result=r;} void io24_fake_libusb_set_control_result(int r){control_result=r;}
+ int io24_fake_libusb_claim_at(unsigned int i){return i<counts.claim?claim_journal[i]:-1;} int io24_fake_libusb_release_at(unsigned int i){return i<counts.release?release_journal[i]:-1;}
+ int io24_fake_libusb_has_pending(void){return pending!=NULL;} int io24_fake_libusb_pending_type(void){return pending?pending->type:-1;} int io24_fake_libusb_pending_endpoint(void){return pending?pending->endpoint:-1;} int io24_fake_libusb_pending_length(void){return pending?pending->length:-1;} int io24_fake_libusb_pending_flags(void){return pending?pending->flags:-1;}
+@@ -36,8 +214,12 @@
+ int libusb_init(libusb_context**c){if(c)*c=(void*)(uintptr_t)0x1000;return 0;} void libusb_exit(libusb_context*c){(void)c;}
+ int libusb_hotplug_register_callback(libusb_context*c,int e,int f,int v,int p,int k,libusb_hotplug_callback_fn cb,void*u,libusb_hotplug_callback_handle*h){(void)c;(void)e;(void)f;(void)v;(void)p;(void)k;(void)cb;(void)u;if(h)*h=1;return 0;} void libusb_hotplug_deregister_callback(libusb_context*c,libusb_hotplug_callback_handle h){(void)c;(void)h;} int libusb_handle_events(libusb_context*c){(void)c;return 0;} void libusb_interrupt_event_handler(libusb_context*c){(void)c;}
+ uint8_t libusb_get_bus_number(libusb_device*d){(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device*d){(void)d;return 1;} int libusb_get_device_speed(libusb_device*d){(void)d;return LIBUSB_SPEED_HIGH;}
+-int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){(void)h;counts.close++;}
+-int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){(void)d;if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){free(c);} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){free(a);}
++int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){(void)h;counts.close++;
++#ifdef IO24_PIPE_TABLE_ALLOC_AUDIT
++io24_pipe_table_audit_note_close();
++#endif
++}
++int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){(void)d;if(active_descriptor_enabled){if(c){if(interrupt_descriptor_enabled)*c=(struct libusb_config_descriptor*)&interrupt_config;else if(extended_descriptor_enabled)*c=(struct libusb_config_descriptor*)&extended_mi05_config;else *c=(struct libusb_config_descriptor*)&mi05_config;}return 0;}if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){(void)c;} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){free(a);}
+ int libusb_claim_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.claim;claim_journal[call-1]=i;record.interface_number=i;return claim_failure_call==call?claim_result:0;} int libusb_release_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.release;release_journal[call-1]=i;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
+ int libusb_control_transfer(libusb_device_handle*h,uint8_t rt,uint8_t r,uint16_t v,uint16_t i,unsigned char*d,uint16_t l,unsigned int t){(void)h;(void)d;(void)t;counts.control++;record.request_type=rt;record.request=r;record.value=v;record.index=i;record.length=l;return control_result<0?control_result:l;} int libusb_bulk_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.bulk++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.interrupt++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;}
+ const char *libusb_strerror(int e){(void)e;return "io24 fake libusb";}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_function_io_contract.c	2026-08-24 06:50:34.361699639 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_function_io_contract.c	2026-08-24 08:19:32.585181121 -0700
+@@ -77,6 +77,13 @@
+     9,2,25,0,1,1,0,0x80,0xfa, 9,4,5,0,1,0xff,0,0,6,
+     7,5,0x82,2,64,0,0
+ };
++static const unsigned char two_interface_configuration[] =
++{
++    9,2,43,0,2,1,0,0x80,0xfa,
++    9,4,5,0,0,0xff,0,0,6,
++    9,4,6,0,0,0xff,0,0,6,
++    9,4,6,1,1,0xff,0,0,6, 7,5,0x83,2,64,0,0
++};
+ static const unsigned char mi05_device[] =
+ {
+     18,1,0x00,0x02,0,0,0,64,0x46,0x19,0x24,0x00,0x00,0x01,1,2,3,1
+@@ -91,19 +98,25 @@
+ static BOOL lower_returns_pending;
+ static unsigned int descriptor_reads, select_calls;
+ static unsigned int finalize_calls, finalize_commit_calls, finalize_rollback_calls;
+-static BOOL mutate_after_select, rollback_saw_unpublished;
++static BOOL mutate_after_select, alternate_mutate_after_select, rollback_saw_unpublished;
+ static BOOL lower_claim_pending, lower_claim_committed, lower_selected_state;
+ static BOOL select_returns_transaction;
+ static NTSTATUS commit_failure_status, rollback_failure_status;
+ static unsigned int rollback_failures_remaining;
+ static unsigned char *active_initialize_output;
+ static USBD_CONFIGURATION_HANDLE lower_transaction_token;
+-static unsigned int urb_builds, fail_urb_build;
++static unsigned int urb_builds, fail_urb_build, select_interface_calls;
+ static unsigned int builder_allocations, builder_frees;
+ static ULONG expected_select_pipes;
+ static UCHAR expected_select_endpoint;
+ static USBD_PIPE_TYPE expected_select_type;
+ static USHORT expected_select_packet_size;
++static ULONG expected_select_interfaces;
++static UCHAR expected_select_interface_numbers[2];
++static UCHAR expected_alternate_interface, expected_alternate_setting;
++static ULONG expected_alternate_pipes;
++static UCHAR expected_alternate_endpoints[2];
++static USHORT expected_alternate_packets[2];
+ static FILE_OBJECT *active_session_file;
+ static void (*commit_reentrant_hook)(void);
+ static BOOL concurrent_session_allowed;
+@@ -139,9 +152,9 @@
+     descriptor_urb_status = select_urb_status = USBD_STATUS_SUCCESS;
+     descriptor_writes_urb_status = select_writes_urb_status = TRUE;
+     lower_returns_pending = FALSE;
+-    descriptor_reads = select_calls = urb_builds = fail_urb_build = 0;
++    descriptor_reads = select_calls = urb_builds = fail_urb_build = select_interface_calls = 0;
+     finalize_calls = finalize_commit_calls = finalize_rollback_calls = 0;
+-    mutate_after_select = rollback_saw_unpublished = FALSE;
++    mutate_after_select = alternate_mutate_after_select = rollback_saw_unpublished = FALSE;
+     lower_claim_pending = lower_claim_committed = lower_selected_state = FALSE;
+     select_returns_transaction = TRUE;
+     commit_failure_status = rollback_failure_status = STATUS_SUCCESS;
+@@ -154,6 +167,15 @@
+     expected_select_endpoint = 0;
+     expected_select_type = UsbdPipeTypeControl;
+     expected_select_packet_size = 0;
++    expected_select_interfaces = 1;
++    expected_select_interface_numbers[0] = 5;
++    expected_select_interface_numbers[1] = 0;
++    expected_alternate_interface = 5;
++    expected_alternate_setting = 1;
++    expected_alternate_pipes = 2;
++    expected_alternate_endpoints[0] = 0x81;
++    expected_alternate_endpoints[1] = 0x01;
++    expected_alternate_packets[0] = expected_alternate_packets[1] = 512;
+ }
+ 
+ PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDLX mdl, KPROCESSOR_MODE mode,
+@@ -276,24 +298,33 @@
+     else if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_CONFIGURATION)
+     {
+         struct _URB_SELECT_CONFIGURATION *request = &urb->UrbSelectConfiguration;
++        SIZE_T cursor = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++        ULONG interface_index;
+         select_calls++;
+         IO24_CHECK(descriptor_reads == 3);
+         IO24_CHECK(request->ConfigurationDescriptor != NULL);
+-        IO24_CHECK(request->Interface.InterfaceNumber == 5);
+-        IO24_CHECK(request->Interface.AlternateSetting == 0);
+-        IO24_CHECK(request->Interface.NumberOfPipes == expected_select_pipes);
+-        IO24_CHECK(request->Interface.Length == offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
+-                expected_select_pipes * sizeof(USBD_PIPE_INFORMATION));
+-        IO24_CHECK(request->Hdr.Length == offsetof(struct _URB_SELECT_CONFIGURATION, Interface) +
+-                request->Interface.Length);
+-        if (expected_select_pipes)
++        for (interface_index = 0; interface_index < expected_select_interfaces;
++                ++interface_index)
+         {
+-            const USBD_PIPE_INFORMATION *pipe = &request->Interface.Pipes[0];
+-            IO24_CHECK(expected_select_pipes == 1);
+-            IO24_CHECK(pipe->EndpointAddress == expected_select_endpoint);
+-            IO24_CHECK(pipe->PipeType == expected_select_type);
+-            IO24_CHECK(pipe->MaximumPacketSize == expected_select_packet_size);
++            USBD_INTERFACE_INFORMATION *information = (void *)((UCHAR *)request + cursor);
++            ULONG expected_pipes = interface_index ? 0 : expected_select_pipes;
++
++            IO24_CHECK(information->InterfaceNumber == expected_select_interface_numbers[interface_index]);
++            IO24_CHECK(information->AlternateSetting == 0);
++            IO24_CHECK(information->NumberOfPipes == expected_pipes);
++            IO24_CHECK(information->Length == offsetof(USBD_INTERFACE_INFORMATION, Pipes) +
++                    expected_pipes * sizeof(USBD_PIPE_INFORMATION));
++            if (expected_pipes)
++            {
++                const USBD_PIPE_INFORMATION *pipe = &information->Pipes[0];
++                IO24_CHECK(expected_pipes == 1);
++                IO24_CHECK(pipe->EndpointAddress == expected_select_endpoint);
++                IO24_CHECK(pipe->PipeType == expected_select_type);
++                IO24_CHECK(pipe->MaximumPacketSize == expected_select_packet_size);
++            }
++            cursor += information->Length;
+         }
++        IO24_CHECK(request->Hdr.Length == cursor);
+         status = select_nt_status;
+         if (select_writes_urb_status)
+             request->Hdr.Status = select_urb_status;
+@@ -310,11 +341,50 @@
+                     lower_transaction_token : NULL;
+             lower_claim_pending = TRUE;
+             lower_selected_state = TRUE;
++            for (interface_index = 0, cursor = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++                    interface_index < expected_select_interfaces; ++interface_index)
++            {
++                USBD_INTERFACE_INFORMATION *information = (void *)((UCHAR *)request + cursor);
++                ULONG i;
++                for (i = 0; i < information->NumberOfPipes; ++i)
++                    information->Pipes[i].PipeHandle = (HANDLE)(UINT_PTR)
++                            (0x2000 + information->Pipes[i].EndpointAddress);
++                cursor += information->Length;
++            }
+             if (mutate_after_select && active_session_file && active_session_file->FsContext)
+                 ((struct winusb_file *)active_session_file->FsContext)->state =
+                         WINUSB_FILE_CLOSING;
+         }
+     }
++    else if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_INTERFACE)
++    {
++        struct _URB_SELECT_INTERFACE *request = &urb->UrbSelectInterface;
++        IO24_CHECK(request->Hdr.Length == offsetof(struct _URB_SELECT_INTERFACE, Interface) + request->Interface.Length);
++        ULONG pipe_index;
++        IO24_CHECK(request->Interface.InterfaceNumber == expected_alternate_interface &&
++                request->Interface.AlternateSetting == expected_alternate_setting &&
++                request->Interface.NumberOfPipes == expected_alternate_pipes);
++        for (pipe_index = 0; pipe_index < expected_alternate_pipes; ++pipe_index)
++            IO24_CHECK(request->Interface.Pipes[pipe_index].EndpointAddress == expected_alternate_endpoints[pipe_index] &&
++                    request->Interface.Pipes[pipe_index].PipeType == UsbdPipeTypeBulk &&
++                    request->Interface.Pipes[pipe_index].MaximumPacketSize == expected_alternate_packets[pipe_index]);
++        select_interface_calls++;
++        status = select_nt_status;
++        if (NT_SUCCESS(status) && select_writes_urb_status &&
++                select_urb_status == USBD_STATUS_SUCCESS)
++        {
++            request->Hdr.Status = USBD_STATUS_SUCCESS;
++            for (pipe_index = 0; pipe_index < expected_alternate_pipes; ++pipe_index)
++                request->Interface.Pipes[pipe_index].PipeHandle = (HANDLE)(UINT_PTR)
++                        (0x1000 + 0x100 * select_interface_calls + pipe_index + 1);
++            if (alternate_mutate_after_select && active_session_file &&
++                    active_session_file->FsContext)
++                ((struct winusb_file *)active_session_file->FsContext)->state =
++                        WINUSB_FILE_CLOSING;
++        }
++        else request->Hdr.Status = select_writes_urb_status ?
++                select_urb_status : USBD_STATUS_REQUEST_FAILED;
++    }
+     else if (urb->UrbHeader.Function == IO24_URB_FUNCTION_CLAIM_TRANSACTION)
+     {
+         struct io24_claim_transaction_request *request = (void *)urb;
+@@ -1073,7 +1143,12 @@
+     IO24_CHECK(context->interfaces[0].interface_number == 5 &&
+             context->interfaces[0].alternate_setting == 0 &&
+             context->interfaces[0].first_endpoint == 0 &&
+-            context->interfaces[0].endpoint_count == 1);
++            context->interfaces[0].endpoint_count == 1 &&
++            context->interfaces[0].pipes &&
++            context->interfaces[0].pipes[0].handle == (HANDLE)(UINT_PTR)0x2082 &&
++            context->interfaces[0].pipes[0].endpoint == 0x82 &&
++            context->interfaces[0].pipes[0].type == UsbdPipeTypeBulk &&
++            context->interfaces[0].pipes[0].maximum_packet_size == 64);
+     teardown(&driver, &retained, &file);
+ }
+ 
+@@ -1457,7 +1532,131 @@
+ static void group_session(void)
+ {DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;setup(&d,&e,&p,&g,&file);create_file(&d,&g,&file);initialize_session(&d,&g,&file);teardown(&d,&g,&file);}
+ static void group_alternate(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;uint32_t generation;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=1;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_ALTERNATE);teardown(&d,&g,&file);return;}generation=g.request.generation;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before+1);IO24_CHECK(g.request.generation==generation+1);teardown(&d,&g,&file);}
++{
++    DRIVER_OBJECT d; DRIVER_EXTENSION e; DEVICE_OBJECT p; FILE_OBJECT file;
++    struct guarded_request g; struct { UCHAR before[16]; struct wine_winusb_alternate_request request; UCHAR after[16]; } input;
++    IRP irp; IO_STACK_LOCATION stack[2]; MDL guarded_mdl; struct dispatch_effect effect; struct winusb_file *context;
++    struct guarded_initialize initialize; struct guarded_snapshot output;
++    unsigned int i, lower_before, allocations_before, frees_before;
++    ULONG input_length, output_length;
++    PMDL mdl_address;
++    HANDLE first_handle;
++    struct winusb_interface_state before;
++#define DISPATCH_ALTERNATE() do { \
++    memset(&irp,0,sizeof(irp)); memset(stack,0,sizeof(stack)); \
++    stack[1].MajorFunction=IRP_MJ_DEVICE_CONTROL; stack[1].FileObject=&file; \
++    stack[1].Parameters.DeviceIoControl.IoControlCode=IO24_IOCTL_SET_ALTERNATE; \
++    stack[1].Parameters.DeviceIoControl.InputBufferLength=input_length; \
++    stack[1].Parameters.DeviceIoControl.OutputBufferLength=output_length; \
++    irp.AssociatedIrp.SystemBuffer=&input.request; irp.MdlAddress=mdl_address; irp.Tail.Overlay.CurrentStackLocation=&stack[1]; \
++    active_session_file=&file; d.MajorFunction[IRP_MJ_DEVICE_CONTROL](last_fdo,&irp); active_session_file=NULL; \
++} while(0)
++
++    setup(&d,&e,&p,&g,&file); if (!create_file(&d,&g,&file) || !initialize_session(&d,&g,&file)) { teardown(&d,&g,&file); return; }
++    memset(&input,GUARD_BYTE,sizeof(input)); memset(&input.request,0,sizeof(input.request));
++    context=file.FsContext; input.request.request.size=sizeof(input.request); input.request.request.version=WINE_WINUSB_ABI_VERSION;
++    input.request.request.session=context->session; input.request.request.interface_index=0; input.request.alternate_setting=1;
++    input_length=sizeof(input.request);output_length=0;mdl_address=NULL;memset(&guarded_mdl,0,sizeof(guarded_mdl));
++    before=context->interfaces[0]; lower_before=lower_calls;
++    input_length=sizeof(input.request)-1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input_length=sizeof(input.request)+1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input_length=sizeof(input.request); input.request.request.size--; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.request.size=sizeof(input.request); input.request.request.version++; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.request.version=WINE_WINUSB_ABI_VERSION; input.request.request.reserved=1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.request.reserved=0; input.request.reserved=1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.reserved=0; input.request.request.session=0; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.request.session=context->session+1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_DEVICE_STATE&&lower_calls==lower_before);
++    input.request.request.session=context->session; output_length=1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    output_length=0; mdl_address=&guarded_mdl; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    mdl_address=NULL;
++    input.request.request.interface_index=1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_DEVICE_STATE&&lower_calls==lower_before);
++    IO24_CHECK(!memcmp(&before,&context->interfaces[0],sizeof(before)));
++    input.request.request.interface_index=0; input.request.alternate_setting=2; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    IO24_CHECK(!memcmp(&before,&context->interfaces[0],sizeof(before)));
++    input.request.alternate_setting=1; input.request.reserved=1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_PARAMETER&&lower_calls==lower_before);
++    input.request.reserved=0; context->outstanding=1; KeClearEvent(&context->zero_outstanding); DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_DEVICE_STATE&&lower_calls==lower_before);
++    context->outstanding=0; KeSetEvent(&context->zero_outstanding,IO_NO_INCREMENT,FALSE);
++    allocations_before=pool_allocations;frees_before=pool_frees;
++    session_fail_allocation=session_allocation_calls+1; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_NO_MEMORY&&lower_calls==lower_before&&
++            pool_allocations-allocations_before==pool_frees-frees_before);
++    session_fail_allocation=session_allocation_calls+2; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_NO_MEMORY&&lower_calls==lower_before&&
++            pool_allocations-allocations_before==pool_frees-frees_before);
++    session_fail_allocation=0; select_nt_status=STATUS_UNSUCCESSFUL; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_UNSUCCESSFUL&&lower_calls==lower_before+1);
++    IO24_CHECK(!memcmp(&before,&context->interfaces[0],sizeof(before)));
++    select_nt_status=STATUS_SUCCESS;select_urb_status=USBD_STATUS_REQUEST_FAILED;DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_UNSUCCESSFUL&&lower_calls==lower_before+2);
++    IO24_CHECK(!memcmp(&before,&context->interfaces[0],sizeof(before)));
++    select_urb_status=USBD_STATUS_SUCCESS;alternate_mutate_after_select=TRUE;DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_INVALID_DEVICE_STATE&&lower_calls==lower_before+3);
++    IO24_CHECK(!memcmp(&before,&context->interfaces[0],sizeof(before)));
++    context->state=WINUSB_FILE_INITIALIZED;alternate_mutate_after_select=FALSE;
++    effect.lower_before=lower_calls; effect.complete_before=completes;
++    DISPATCH_ALTERNATE(); effect.lower_after=lower_calls; effect.complete_after=completes; effect.status=irp.IoStatus.Status;
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1&&effect.complete_after==effect.complete_before+1);
++    IO24_CHECK(context->interfaces[0].alternate_setting==1&&context->interfaces[0].endpoint_count==2);
++    IO24_CHECK(context->interfaces[0].generation==1&&context->interfaces[0].pipes&&
++            context->interfaces[0].pipes[0].handle&&
++            context->interfaces[0].pipes[0].endpoint==0x81&&
++            context->interfaces[0].pipes[0].type==UsbdPipeTypeBulk&&
++            context->interfaces[0].pipes[0].maximum_packet_size==512&&
++            context->interfaces[0].pipes[1].handle&&
++            context->interfaces[0].pipes[1].endpoint==0x01&&
++            context->interfaces[0].pipes[1].maximum_packet_size==512);
++    first_handle=context->interfaces[0].pipes[0].handle;before=context->interfaces[0]; DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_SUCCESS&&context->interfaces[0].generation==2&&
++            context->interfaces[0].pipes!=before.pipes&&context->interfaces[0].pipes[0].handle!=first_handle);
++    for(i=0;i<sizeof(input.before);++i)IO24_CHECK(input.before[i]==GUARD_BYTE&&input.after[i]==GUARD_BYTE);
++    teardown(&d,&g,&file);
++
++    /* A second real parsed snapshot proves that replacing index 1 cannot
++     * disturb index 0.  The configuration selects both default alternates;
++     * only MI06 is then moved to its one-pipe alternate. */
++    setup(&d,&e,&p,&g,&file); if (!create_file(&d,&g,&file)) { teardown(&d,&g,&file); return; }
++    reset_initialize_lower();
++    memcpy(lower_configuration,two_interface_configuration,sizeof(two_interface_configuration));
++    lower_configuration_size=lower_body_actual=sizeof(two_interface_configuration);
++    expected_select_interfaces=2;expected_select_interface_numbers[0]=5;expected_select_interface_numbers[1]=6;
++    reset_initialize_buffers(&initialize,&output);session_allocation_calls=0;
++    effect=call_initialize(&d,&file,&initialize,&output,229,229,&initialize.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.information==229);
++    context=file.FsContext;
++    IO24_CHECK(context&&context->interface_count==2&&context->interfaces[0].interface_number==5&&
++            context->interfaces[0].alternate_setting==0&&context->interfaces[0].pipes==NULL&&
++            context->interfaces[1].interface_number==6&&context->interfaces[1].alternate_setting==0&&
++            context->interfaces[1].pipes==NULL);
++    before=context->interfaces[0];
++    memset(&input,GUARD_BYTE,sizeof(input));memset(&input.request,0,sizeof(input.request));
++    input.request.request.size=sizeof(input.request);input.request.request.version=WINE_WINUSB_ABI_VERSION;
++    input.request.request.session=context->session;input.request.request.interface_index=1;input.request.alternate_setting=1;
++    input_length=sizeof(input.request);output_length=0;mdl_address=NULL;
++    expected_alternate_interface=6;expected_alternate_setting=1;expected_alternate_pipes=1;
++    expected_alternate_endpoints[0]=0x83;expected_alternate_packets[0]=64;
++    DISPATCH_ALTERNATE();
++    IO24_CHECK(irp.IoStatus.Status==STATUS_SUCCESS&&!memcmp(&before,&context->interfaces[0],sizeof(before))&&
++            context->interfaces[1].alternate_setting==1&&context->interfaces[1].endpoint_count==1&&
++            context->interfaces[1].pipes&&context->interfaces[1].pipes[0].endpoint==0x83&&
++            context->interfaces[1].pipes[0].type==UsbdPipeTypeBulk&&
++            context->interfaces[1].pipes[0].maximum_packet_size==64&&context->interfaces[1].pipes[0].handle);
++    teardown(&d,&g,&file);
++#undef DISPATCH_ALTERNATE
++}
+ static void group_policy(void)
+ {DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=7;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_POLICY);teardown(&d,&g,&file);return;}effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);teardown(&d,&g,&file);}
+ static void group_transfer(void)
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_user_api_contract.c	2026-08-24 06:50:34.361830801 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_user_api_contract.c	2026-08-24 08:19:32.586945671 -0700
+@@ -439,7 +439,7 @@
+ {
+     struct fake_event*e=record_event(EVENT_IOCTL);size_t expected=request_size_for_code(code),saved=out_length;DWORD transfer_length;e->handle=device;e->code=code;e->in_length=in_length;e->out_length=out_length;e->pointer=out;e->overlapped=ov;e->private_event=ov?ov->hEvent:NULL;e->bytes_returned_pointer=bytes;e->result=fake.ioctl_result;
+     if(code==IO24_IOCTL_RELEASE)fake.release_ioctls++;
+-    if(code==IO24_IOCTL_INITIALIZE||code==IO24_IOCTL_RELEASE){if(fake.private_call_index<fake.private_call_count){unsigned int i=fake.private_call_index++;fake.active_private_call=i;e->result=fake.private_call[i].pending?FALSE:fake.private_call[i].result;if(!e->result)fake.last_error=fake.private_call[i].pending?ERROR_IO_PENDING:fake.private_call[i].error;}}
++    if(code==IO24_IOCTL_INITIALIZE||code==IO24_IOCTL_RELEASE||code==IO24_IOCTL_SET_ALTERNATE){if(fake.private_call_index<fake.private_call_count){unsigned int i=fake.private_call_index++;fake.active_private_call=i;e->result=fake.private_call[i].pending?FALSE:fake.private_call[i].result;if(!e->result)fake.last_error=fake.private_call[i].pending?ERROR_IO_PENDING:fake.private_call[i].error;}}
+     if(in&&expected&&in_length==expected){memcpy(&e->request,in,expected);e->typed_request=TRUE;}
+     if(saved>sizeof(e->output_before))saved=sizeof(e->output_before);
+     if(out&&saved)memcpy(e->output_before,out,saved);
+@@ -510,6 +510,7 @@
+ if(f->write_pipe)f->present_mask|=SYMBOL_WRITE;}
+ static uint32_t target_mask(const char *mode)
+ {
++    if(!strcmp(mode,"--alternate"))return SYMBOL_INITIALIZE|SYMBOL_ASSOCIATED|SYMBOL_FREE|SYMBOL_ALTERNATE;
+     if(!strcmp(mode,"--initialize"))return SYMBOL_INITIALIZE;
+     if(!strcmp(mode,"--handles"))return SYMBOL_INITIALIZE|SYMBOL_ASSOCIATED|SYMBOL_FREE;
+     if(!strcmp(mode,"--descriptors"))return SYMBOL_INITIALIZE|SYMBOL_DESCRIPTOR|SYMBOL_QUERY;
+@@ -725,6 +726,105 @@
+     IO24_CHECK(!f->associated(root,0,&associated)&&associated==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY);IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees);
+ }
+ 
++/* This uses the real DLL entry point and the ordinary fake DeviceIoControl
++ * boundary.  A text scan or a copied request builder cannot satisfy it. */
++static void test_alternate(const struct functions *f)
++{
++    WINUSB_INTERFACE_HANDLE root = NULL, associated = NULL, associated2 = NULL;
++    const struct fake_event *event;
++    unsigned int submits;
++
++    if (!f->initialize || !f->free_handle || !f->set_alt) return;
++    fake_reset();
++    IO24_CHECK(!f->set_alt(NULL, 1) && fake.last_error == ERROR_INVALID_HANDLE);
++    if (!initialize_handle(f, &root)) return;
++    submits = counts.submits;
++    IO24_CHECK(f->set_alt(root, 1));
++    IO24_CHECK(counts.submits == submits + 1);
++    event = find_ioctl_after(submits ? submits - 1 : 0, IO24_IOCTL_SET_ALTERNATE);
++    IO24_CHECK(event && event->in_length == sizeof(struct io24_wire_alternate) &&
++            event->out_length == 0 && event->typed_request);
++    if (event)
++    {
++        check_header(event, sizeof(struct io24_wire_alternate), UINT64_C(0x1122334455667788), 0);
++        IO24_CHECK(event->request.alternate.alternate_setting == 1 &&
++                event->request.alternate.reserved == 0);
++    }
++    submits = counts.submits;
++    IO24_CHECK(f->set_alt(root, 0) && counts.submits == submits + 1);
++    submits = counts.submits;
++    IO24_CHECK(!f->set_alt(root, 2) && fake.last_error == ERROR_INVALID_PARAMETER &&
++            counts.submits == submits);
++    IO24_CHECK(f->free_handle(root));
++    IO24_CHECK(!f->set_alt(root, 1) && fake.last_error == ERROR_INVALID_HANDLE);
++
++    /* R71: the real opaque associated handles must carry their distinct
++     * stored interface indices into the actual private request. */
++    fake_reset(); fake.three_interface_fixture = TRUE;
++    if (!initialize_handle(f, &root)) return;
++    IO24_CHECK(f->associated(root, 0, &associated) && associated);
++    IO24_CHECK(f->associated(root, 1, &associated2) && associated2);
++    submits = counts.submits;
++    {
++        unsigned int event_start = fake.event_count;
++    IO24_CHECK(f->set_alt(associated, 0) && counts.submits == submits + 1);
++    event = find_ioctl_after(event_start, IO24_IOCTL_SET_ALTERNATE);
++    IO24_CHECK(event && event->request.alternate.request.interface_index == 1);
++    }
++    submits = counts.submits;
++    {
++        unsigned int event_start = fake.event_count;
++    IO24_CHECK(f->set_alt(associated2, 0) && counts.submits == submits + 1);
++    event = find_ioctl_after(event_start, IO24_IOCTL_SET_ALTERNATE);
++    IO24_CHECK(event && event->request.alternate.request.interface_index == 2);
++    }
++    IO24_CHECK(f->free_handle(associated) && f->free_handle(associated2) &&
++            f->free_handle(root));
++    IO24_CHECK(fake.release_ioctls == 1 && fake.event_creates == fake.event_closes &&
++            counts.allocations == counts.frees);
++
++    /* Every submit schedule must acquire/release one root reference, close
++     * its event, and leave the eventual final root release balanced. */
++    fake_reset();
++    if (!initialize_handle(f, &root)) return;
++    submits = counts.submits;
++    fake.private_call_count = 1;
++    fake.private_call[0].pending = FALSE;
++    fake.private_call[0].result = FALSE;
++    fake.private_call[0].error = ERROR_ACCESS_DENIED;
++    IO24_CHECK(!f->set_alt(root, 1) && fake.last_error == ERROR_ACCESS_DENIED &&
++            counts.submits == submits + 1);
++    IO24_CHECK(f->free_handle(root));
++    IO24_CHECK(fake.release_ioctls == 1 && fake.event_creates == fake.event_closes &&
++            counts.allocations == counts.frees);
++
++    fake_reset();
++    if (!initialize_handle(f, &root)) return;
++    submits = counts.submits;
++    fake.private_call_count = 1;
++    fake.private_call[0].pending = TRUE;
++    fake.private_call[0].completion_result = FALSE;
++    fake.private_call[0].completion_error = ERROR_ACCESS_DENIED;
++    IO24_CHECK(!f->set_alt(root, 1) && fake.last_error == ERROR_ACCESS_DENIED &&
++            counts.submits == submits + 1 && counts.completions == 1);
++    IO24_CHECK(f->free_handle(root));
++    IO24_CHECK(fake.release_ioctls == 1 && fake.event_creates == fake.event_closes &&
++            counts.allocations == counts.frees);
++
++    fake_reset();
++    if (!initialize_handle(f, &root)) return;
++    submits = counts.submits;
++    fake.private_call_count = 1;
++    fake.private_call[0].pending = TRUE;
++    fake.wait_result = WAIT_FAILED;
++    fake.wait_error = ERROR_INVALID_HANDLE;
++    IO24_CHECK(!f->set_alt(root, 1) && fake.last_error == ERROR_INVALID_HANDLE &&
++            counts.submits == submits + 1 && counts.completions == 0);
++    IO24_CHECK(f->free_handle(root));
++    IO24_CHECK(fake.release_ioctls == 1 && fake.event_creates == fake.event_closes &&
++            counts.allocations == counts.frees);
++}
++
+ static void test_descriptors(const struct functions*f)
+ {
+     WINUSB_INTERFACE_HANDLE h;struct guarded_buffer g;struct guarded_configuration_buffer configuration;uint8_t speed[4];ULONG n,sl;unsigned int submits;BOOL ok;
+@@ -815,5 +915,5 @@
+     n=IO24_LENGTH_SENTINEL;ok=f->overlapped&&f->overlapped(root,&ov,&n,TRUE);IO24_CHECK(ok);IO24_CHECK(n==IO24_OVERLAPPED_RESULT_LENGTH);ok=f->abort_pipe&&f->abort_pipe(root,0x81);IO24_CHECK(ok);ok=f->reset_pipe&&f->reset_pipe(root,0x81);IO24_CHECK(ok);ok=f->associated&&f->associated(root,0,&associated);IO24_CHECK(ok&&associated&&associated!=root);if(!associated){if(f->free_handle)f->free_handle(root);return;}
+     ok=f->free_handle&&f->free_handle(associated);IO24_CHECK(ok);ok=f->free_handle&&f->free_handle(root);IO24_CHECK(ok);check_buffer_guards(&g);validate_vendor_fake_trace(&ov);
+ }
+-static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
++static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))test_alternate(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
+ int main(int argc,char**argv){void*m;struct functions f;uint32_t target,missing;if(argc!=3)return 2;m=dlopen(!strcmp(argv[1],"self")?NULL:argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);target=target_mask(argv[2]);missing=target&~f.present_mask;check_target_symbols(&f,target);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s target-mask=%#x present-mask=%#x missing-mask=%#x fake-events=%u submits=%u releases=%u completions=%u failures=%u\n",argv[2],target,f.present_mask,missing,fake.event_count,counts.submits,fake.release_ioctls,counts.completions,counts.failures);return counts.failures?1:0;}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_user_api_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_user_api_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-base/tests/winusb_user_api_contract.sh	2026-08-24 06:55:00.613621119 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-7-head/tests/winusb_user_api_contract.sh	2026-08-24 08:19:32.587535763 -0700
+@@ -2,7 +2,7 @@
+ set -uo pipefail
+ if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 mode=${2:---red}
+-case "$mode" in --red|--surface-only|--initialize|--handles|--descriptors|--policy|--transfer|--cancel|--vendor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
++case "$mode" in --red|--surface-only|--initialize|--handles|--alternate|--descriptors|--policy|--transfer|--cancel|--vendor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+ required_tools=(awk cc dirname find grep mktemp rmdir)
+ for tool in "${required_tools[@]}"; do
+     command -v "$tool" >/dev/null 2>&1 || { echo "HARNESS: required tool unavailable: $tool" >&2; exit 2; }

@@ -1,0 +1,11 @@
+--- production-main.c
++++ token-reuse-main.c
+@@ -62,7 +62,7 @@
+ {
+     if (!next_handle_token || next_handle_token == ~(ULONG_PTR)0) return FALSE;
+     handle->token = (WINUSB_INTERFACE_HANDLE)next_handle_token;
+-    next_handle_token += 2;
++    if (next_handle_token == 1) next_handle_token += 2;
+     return TRUE;
+ }
+ 

@@ -1,0 +1,10 @@
+.io24-build/winusb-api-v1/dev-source/include/winusb.h
+.io24-build/winusb-api-v1/dev-source/include/winusbio.h
+.io24-build/winusb-api-v1/dev-source/include/wine/winusb.h
+.io24-build/winusb-api-v1/dev-source/include/Makefile.in
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb.spec
+tests/winusb_user_api_contract.c
+tests/winusb_user_api_contract.sh
+tests/winusb_function_io_contract.c
+re/winusb-api-v1/logs/task-02-abi.patch
+re/winusb-api-v1/logs/task-02-abi.sha256

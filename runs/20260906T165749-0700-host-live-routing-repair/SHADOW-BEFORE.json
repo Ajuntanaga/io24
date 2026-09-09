@@ -1,0 +1,510 @@
+{
+ "set_send_db#source=line/ch1,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_eq_band#channel=1,band=0": {
+  "fn": "set_eq_band",
+  "kwargs": {
+   "channel": 1,
+   "band": 0,
+   "shape": "off",
+   "freq_hz": 99.999992,
+   "gain_db": 2.0,
+   "q": 1.0,
+   "fs": 48000.0
+  }
+ },
+ "set_eq_band#channel=1,band=1": {
+  "fn": "set_eq_band",
+  "kwargs": {
+   "channel": 1,
+   "band": 1,
+   "shape": "off",
+   "freq_hz": 1000.0,
+   "gain_db": 0.0,
+   "q": 0.7,
+   "fs": 48000.0
+  }
+ },
+ "set_eq_band#channel=1,band=2": {
+  "fn": "set_eq_band",
+  "kwargs": {
+   "channel": 1,
+   "band": 2,
+   "shape": "off",
+   "freq_hz": 1000.0,
+   "gain_db": 0.0,
+   "q": 0.7,
+   "fs": 48000.0
+  }
+ },
+ "set_eq_band#channel=1,band=3": {
+  "fn": "set_eq_band",
+  "kwargs": {
+   "channel": 1,
+   "band": 3,
+   "shape": "off",
+   "freq_hz": 1000.0,
+   "gain_db": 0.0,
+   "q": 0.7,
+   "fs": 48000.0
+  }
+ },
+ "set_send_db#source=return/ch1,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "return/ch1",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_channel_link": {
+  "fn": "set_channel_link",
+  "kwargs": {
+   "on": false
+  }
+ },
+ "set_processing_channel#channel=1": {
+  "fn": "set_processing_channel",
+  "kwargs": {
+   "channel": 1,
+   "source_input": 1
+  }
+ },
+ "set_send_db#source=line/ch2,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_pan#source=line/ch1,bus=mixa": {
+  "fn": "set_pan",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "mixa",
+   "pan": null
+  }
+ },
+ "set_pan#source=line/ch2,bus=mixa": {
+  "fn": "set_pan",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "mixa",
+   "pan": null
+  }
+ },
+ "set_hp_mute": {
+  "fn": "set_hp_mute",
+  "kwargs": {
+   "on": false
+  }
+ },
+ "set_preset_slot#channel=1": {
+  "fn": "set_preset_slot",
+  "kwargs": {
+   "channel": 1,
+   "slot": 0
+  }
+ },
+ "set_preset_button_mode#channel=1": {
+  "fn": "set_preset_button_mode",
+  "kwargs": {
+   "channel": 1,
+   "two_slots": false
+  }
+ },
+ "set_mute#channel=2": {
+  "fn": "set_mute",
+  "kwargs": {
+   "channel": 2,
+   "on": false
+  }
+ },
+ "set_mute#channel=1": {
+  "fn": "set_mute",
+  "kwargs": {
+   "channel": 1,
+   "on": false
+  }
+ },
+ "set_highpass#channel=1": {
+  "fn": "set_highpass",
+  "kwargs": {
+   "channel": 1,
+   "on": false
+  }
+ },
+ "set_fx_mix#channel=1": {
+  "fn": "set_fx_mix",
+  "kwargs": {
+   "channel": 1,
+   "value": 0.0
+  }
+ },
+ "set_fx_mix#channel=2": {
+  "fn": "set_fx_mix",
+  "kwargs": {
+   "channel": 2,
+   "value": 0.9533527696793003
+  }
+ },
+ "set_reverb": {
+  "fn": "set_reverb",
+  "kwargs": {
+   "on": true,
+   "size": 0.4218614235093146,
+   "mix": 0.38274932614555257,
+   "hp_freq": 110.0,
+   "predelay": 0.07,
+   "fs": 48000.0
+  }
+ },
+ "set_pan#source=line/ch2,bus=main": {
+  "fn": "set_pan",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "main",
+   "pan": 0.5
+  }
+ },
+ "set_pan#source=line/ch1,bus=main": {
+  "fn": "set_pan",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "main",
+   "pan": 0.5
+  }
+ },
+ "set_preset_slot#channel=2": {
+  "fn": "set_preset_slot",
+  "kwargs": {
+   "channel": 2,
+   "slot": 3
+  }
+ },
+ "set_preset_button_mode#channel=2": {
+  "fn": "set_preset_button_mode",
+  "kwargs": {
+   "channel": 2,
+   "two_slots": true
+  }
+ },
+ "set_preset_mode": {
+  "fn": "set_preset_mode",
+  "kwargs": {
+   "mode": 1
+  }
+ },
+ "set_highpass_freq#channel=2": {
+  "fn": "set_highpass_freq",
+  "kwargs": {
+   "channel": 2,
+   "freq_hz": 24.0,
+   "fs": 48000.0
+  }
+ },
+ "set_send_db#source=return/ch2,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "return/ch2",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_send_db#source=return/ch3,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "return/ch3",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_send_db#source=fxreturn/ch1,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_fx": {
+  "fn": "set_fx",
+  "kwargs": {
+   "model": "delay",
+   "on": true,
+   "time_s": 0.168742,
+   "feedback": 0.365,
+   "mix": 0.105
+  }
+ },
+ "set_send_db#source=line/ch3,bus=mixa": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "line/ch3",
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_preset_enabled#channel=1": {
+  "fn": "set_preset_enabled",
+  "kwargs": {
+   "channel": 1,
+   "on": true
+  }
+ },
+ "set_preset_enabled#channel=2": {
+  "fn": "set_preset_enabled",
+  "kwargs": {
+   "channel": 2,
+   "on": true
+  }
+ },
+ "set_highpass_freq#channel=1": {
+  "fn": "set_highpass_freq",
+  "kwargs": {
+   "channel": 1,
+   "freq_hz": 24.0,
+   "fs": 48000.0
+  }
+ },
+ "set_comp_eq_order#channel=1": {
+  "fn": "set_comp_eq_order",
+  "kwargs": {
+   "channel": 1,
+   "eq_first": false
+  }
+ },
+ "set_compressor#channel=1,instance=None": {
+  "fn": "compressor_off",
+  "kwargs": {
+   "channel": 1,
+   "instance": null
+  }
+ },
+ "set_send_assigned#source=line/ch2,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "main",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=line/ch1,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "main",
+   "on": false
+  }
+ },
+ "set_send_db#source=line/ch2,bus=main": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "main",
+   "gain_db": 0.0
+  }
+ },
+ "set_send_assigned#source=line/ch2,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "mixa",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=line/ch2,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch2",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=fxreturn/ch1,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "main",
+   "on": false
+  }
+ },
+ "set_gate#channel=1,instance=None": {
+  "fn": "gate_off",
+  "kwargs": {
+   "channel": 1,
+   "instance": null
+  }
+ },
+ "set_limiter#channel=1,instance=None": {
+  "fn": "set_limiter",
+  "kwargs": {
+   "channel": 1,
+   "on": false,
+   "threshold_db": -28.0,
+   "instance": null,
+   "release_s": 0.4,
+   "fs": 48000.0
+  }
+ },
+ "set_eq_band#channel=2,band=0": {
+  "fn": "set_eq_band",
+  "kwargs": {
+   "channel": 2,
+   "band": 0,
+   "shape": "off",
+   "freq_hz": 30.0,
+   "gain_db": 15.0,
+   "q": 3.2362595419847326,
+   "fs": 48000.0
+  }
+ },
+ "set_send_db#source=fxreturn/ch1,bus=main": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "main",
+   "gain_db": -60.0
+  }
+ },
+ "set_bus_master#bus=main": {
+  "fn": "set_bus_master",
+  "kwargs": {
+   "bus": "main",
+   "gain_db": -40.0
+  }
+ },
+ "set_send_assigned#source=return/ch2,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch2",
+   "bus": "main",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch3,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch3",
+   "bus": "main",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch3,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch3",
+   "bus": "mixa",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch2,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch2",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch1,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch1",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch1,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch1",
+   "bus": "mixa",
+   "on": true
+  }
+ },
+ "set_send_assigned#source=line/ch1,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "mixa",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=line/ch1,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "line/ch1",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_db#source=fxreturn/ch1,bus=mixb": {
+  "fn": "set_send_db",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "mixb",
+   "gain_db": -60.0
+  }
+ },
+ "set_send_assigned#source=fxreturn/ch1,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "mixa",
+   "on": true
+  }
+ },
+ "set_send_assigned#source=fxreturn/ch1,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "fxreturn/ch1",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch3,bus=mixb": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch3",
+   "bus": "mixb",
+   "on": false
+  }
+ },
+ "set_send_assigned#source=return/ch2,bus=mixa": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch2",
+   "bus": "mixa",
+   "on": false
+  }
+ },
+ "set_bus_master#bus=mixa": {
+  "fn": "set_bus_master",
+  "kwargs": {
+   "bus": "mixa",
+   "gain_db": 0.0
+  }
+ },
+ "set_bus_master#bus=mixb": {
+  "fn": "set_bus_master",
+  "kwargs": {
+   "bus": "mixb",
+   "gain_db": -40.0
+  }
+ },
+ "set_send_assigned#source=return/ch1,bus=main": {
+  "fn": "set_send_assigned",
+  "kwargs": {
+   "source": "return/ch1",
+   "bus": "main",
+   "on": false
+  }
+ }
+}

@@ -1,0 +1,23 @@
+f1355108c542a81581ff6efafce1fc0080b01116ee9ecd80247e482a5f9858bc  ../MANIFEST.md
+445b7f817ef4c73151e290ee510538cb4000f4e3a0ca1c7878af3b7f749c25ad  CP30_WINUSB_READINESS_BOUNDARY.md
+d0138e4003aede66aae5e9f4ae85e078b07c7a0a8c2ce3f8449c6579d6456859  ../../../tests/io24_winusb_readiness.py
+c5855ac84bc21d3c7f8b7806a5e118256d4443f1db82bbb4eef0ffdd5e8882ae  ../../../tests/io24_winusb_readiness_contract.py
+8f76f4b89b6b8113397bcde8bc03ea8a0cbdc444c2feb8707040c0b1d6cf74d2  ../../../tests/uc_wine_capture.sh
+22ea82fd39dcbe77d4cb8ec4cfad9d177b178f16fe5e1a98a06164b75b242b91  ../../../tests/usbtap.c
+d9e9c8fd9c119af874ade88df323d005ff3617d8966c3fc5578e61043e276b1b  ../../../tests/usbmon_decode.py
+916fe424573e3a35ad6efbb8509691338119ef1dbbc9797b7853f48f7b4f8ca8  ../../../PROTOCOL.md
+210023da17d6b19cb81f94f8588187da94d37c2c8bd3a56064a2903a35028c55  ../../IO24_HANDOFF.md
+db5337f78b78853ccccda4c7c89d47f8fe73806cd82bc7c2c9069b12f73923e4  ../logs/synthetic-contract.log
+5b86a7741fcef100817d536e8dd1c050a8f6134283fcb2c9a321b9ea87aafcc5  ../logs/real-boundary.log
+85153a3134ff2dca17b7d466246d1843620244b489d2e60c37acdf99798616a6  ../logs/real-readiness-red.log
+783a4a14b1257c001291ef8a42240951575efae8829896d756e9de2262a554b7  ../logs/retained-contracts.log
+36b098d8079462ce5d90a8480be16a843cd2ba2494db086e8f407d941d031f55  ../logs/upstream-verification.log
+fc6f7b3ae09fc9332e13fa5e5f676fdd01640fd62d6caeeeb52fbc92005c6675  ../logs/legacy-capture-guard.log
+2a46d20ca95091f13ac178a0a2a180bf133cbc69986fcb4732cbae2789203346  ../../wineusb-function-scope-v1/checkpoints/CP29_SHA256SUMS
+ab94b70ceae65eee5019e053c9bf7ec3ce01f20af2a3e824282fbbc3d786785c  ../../../.io24-build/wineusb-function-scope-v1/dev-source/dlls/wineusb.sys/wineusb.c
+ece69385446001072853c747342e84e2f1be4c3a18b42c663f6c9b050664d12e  ../../../.io24-build/wineusb-function-scope-v1/dev-source/dlls/wineusb.sys/wineusb.inf
+dfc9616f254e4e9f6acd10d10aa08dfab27d3fee9d91d7f6fbc83021100865ce  ../../../.io24-build/wineusb-function-scope-v1/dev-source/dlls/winusb/winusb.spec
+54fe006bce49d7bf52e0bfe3268964d1099da2fc13fe32b3225aa2c95c106089  ../../../.io24-build/wineusb-function-scope-v1/dev-source/dlls/winusb/main.c
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+38b006a496f0d5d9e3183016d9716c163bcc7e502b69807c8a8bb5a0350aa7ea  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/checkpoints/live-read-ntoskrnl-mdl-nonpaged-v1-20260822T145019PDT/postflight/system.reg
+ddc74cea184a22990939cf8bab7b846161847b784882e1b224b650f8fd83e124  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/checkpoints/live-read-ntoskrnl-mdl-nonpaged-v1-20260822T145019PDT/run/service-install.log

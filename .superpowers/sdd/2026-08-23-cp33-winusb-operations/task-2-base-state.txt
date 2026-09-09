@@ -1,0 +1,14 @@
+snapshot_label task-2-base
+plan_sha256 013feee53959cd8efdf5a13e6a83ffacf2a6517f43def0566ed95f534b0fe981
+spec_sha256 8d04b44c89860b34afe0560caa9fa83c12aa80ca1e49f93734ce899dd56294a7
+PRESENT .io24-build/winusb-api-v1/dev-source/include/winusb.h
+ABSENT .io24-build/winusb-api-v1/dev-source/include/winusbio.h
+ABSENT .io24-build/winusb-api-v1/dev-source/include/wine/winusb.h
+PRESENT .io24-build/winusb-api-v1/dev-source/include/Makefile.in
+PRESENT .io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb.spec
+PRESENT tests/winusb_user_api_contract.c
+PRESENT tests/winusb_user_api_contract.sh
+PRESENT tests/winusb_function_io_contract.c
+ABSENT re/winusb-api-v1/logs/task-02-abi.patch
+ABSENT re/winusb-api-v1/logs/task-02-abi.sha256
+ABSENT .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md

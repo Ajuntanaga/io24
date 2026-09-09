@@ -1,0 +1,6 @@
+2104fc3de8d30ccd1e5d216b392cafe2931cc020acb501aa597ac87d2abad544  re/cp34_lane_control_firmware_static.py
+dec71f903649fd8a984e4d68d18dd1abf57cf3ab7540f4ec1a034251e1441484  tests/test_cp34_lane_control_firmware_static.py
+1a33d55dbb89e5ef12714b2a8c271653906e8b4ab6c57efca5ad990c4a0d15b9  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+604deea62d83b72703e58e950919bce70d73dbd8f912e0994bd947aaf39a4c1f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T110029-0700-secondary-state-interface-caller/SCOPE.md
+b12a469c155fec79b4e12f7fe10ea302743ab7a487801b42d64cd2fb0ce452a3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T110029-0700-secondary-state-interface-caller/PROGRESS.md
+b6f4c162b3e9cf1678c566f250d2e4fe78635940f580bfc2aa57ec2496b40533  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T110029-0700-secondary-state-interface-caller/OBSIDIAN.md

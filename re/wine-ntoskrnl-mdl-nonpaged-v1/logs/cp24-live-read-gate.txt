@@ -1,0 +1,11 @@
+2026-08-22T14:48:35-07:00
+battery=71% status=Discharging
+authorization=single bounded non-mutating CP24 live diagnostic
+preflight_1=pass
+live_audit=pass
+preflight_2=pass
+serial=AB7C22200355
+node=/dev/bus/usb/003/002
+prior_exact_transfer_direction=8 bulk-IN endpoint 0x82; 0 endpoint-OUT
+capture_collision=absent
+retry_policy=no retry regardless of result

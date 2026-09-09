@@ -1,0 +1,74 @@
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=0 root_interfaces=3 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=0 root_interfaces=3 physical_length=392 returned_length=218.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=3 root_interfaces=2 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=3 root_interfaces=2 physical_length=392 returned_length=133.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=5 root_interfaces=1 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=5 root_interfaces=1 physical_length=392 returned_length=41.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=6 root_interfaces=1 physical_length=392 returned_length=9.
+fixme:wineusb:transfer_cb IO24_FUNCTION_SCOPE event=descriptor root=6 root_interfaces=1 physical_length=392 returned_length=27.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7ffd4eb13c10 reason=interface_out_of_scope interface_index=0 available=4 required=0 declared_pipes=0.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffd4eb13c10 header_length=136 interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffd4eb13c10 scope=function root=3 interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffd4eb13c10 interface_index=1 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffd4eb13c10 interface_index=1 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffd4eb13c10 interfaces=2 pipes=2.
+WineUSB function-scope contract: pass
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff324c7ea8 handle=0x282 endpoint=0x82 type=2 route=bulk length=32 buffer=0x7fff324c8058.
+err:wineusb:usb_submit_urb Failed to submit bulk transfer: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fff324c7ea8 handle=0x282 endpoint=0x82 route=bulk length=32 buffer=0x7fff324c8058 libusb_status=-6 returned_status=0xc0000001.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fff324c7ea8 handle=0x182 endpoint=0x82 type=1 route=invalid length=32 buffer=0x7fff324c8058.
+err:wineusb:usb_submit_urb Failed to submit GET_DESCRIPTOR transfer: io24 fake libusb
+err:wineusb:usb_submit_urb Failed to submit vendor-specific interface transfer: io24 fake libusb
+WineUSB immediate-submit cleanup contract: pass
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffe8ecf0f08 header_length=184 interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffe8ecf0f08 scope=all_interfaces root=0 interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe8ecf0f08 interface_index=1 interface=2 pipe_index=0 endpoint=0x83 type=3 handle=0x383.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe8ecf0f08 interface_index=2 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffe8ecf0f08 interface_index=2 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffe8ecf0f08 interfaces=3 pipes=3.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=reject irp=0x7ffe8ecf0f08 reason=truncated_pipe_array interface_index=1 available=1 required=2 declared_pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_SAFETY event=transfer_reject reason=null_buffer irp=0x7ffe8ecf0f08 handle=0x202 endpoint=0x2 type=2 route=bulk length=512.
+WineUSB multi-interface handle contract: pass
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffd866c6e38 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd866c6e38 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffd866c6fe8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffd866c6e38 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffd866c6fe8 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd866c6e38 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffd866c6fe8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffd866c6e38 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffd866c6fe8 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffd866c6e38 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7ffd866c6fe8.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffd866c6e38 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffd866c6e38 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffd866c6e38 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffd866c6e38 interfaces=1 pipes=1.
+WineUSB pipe-observe fake-libusb behavior: pass
+WineUSB pipe-observe source/binary/runtime contract: pass
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass
+wineusb USBDI V1 contract checks passed
+io24 usbmon class-IN evidence contract: pass
+io24 usbmon function topology contract: pass
+pcap=/home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/io24-passive-usbmon/passive-usbmon-range-v1-20260821T023641-0700/control-urbs.pcap
+pcap_sha256=194a4b2619e0bddcdeef2108b0969cf13c029b3d2516309123c6567437b2922d
+packet_count=316
+target_device_count=3
+configuration_count=1
+configuration bus=3 device=3 sha256=69131e7af6340cb70cdaaf134548e6f6ebab66c869a94b78073d69a9e3aaa51c total_length=392 interfaces=7
+function root=0 source=iad interfaces=0,1,2
+function root=3 source=audio_control_collection interfaces=3,4
+function root=5 source=ungrouped interfaces=5
+function root=6 source=ungrouped interfaces=6
+interface number=0 alternate=0 class=0x01 subclass=0x01 protocol=0x20 endpoints=none
+interface number=1 alternate=0 class=0x01 subclass=0x02 protocol=0x20 endpoints=none
+interface number=1 alternate=1 class=0x01 subclass=0x02 protocol=0x20 endpoints=0x83
+interface number=2 alternate=0 class=0x01 subclass=0x02 protocol=0x20 endpoints=none
+interface number=2 alternate=1 class=0x01 subclass=0x02 protocol=0x20 endpoints=0x03,0x84
+interface number=3 alternate=0 class=0x01 subclass=0x01 protocol=0x00 endpoints=none
+interface number=4 alternate=0 class=0x01 subclass=0x03 protocol=0x00 endpoints=0x02,0x82
+interface number=5 alternate=0 class=0xff subclass=0x00 protocol=0x00 endpoints=none
+interface number=5 alternate=1 class=0xff subclass=0x00 protocol=0x00 endpoints=0x81,0x01
+interface number=6 alternate=0 class=0xfe subclass=0x01 protocol=0x01 endpoints=none

@@ -1,0 +1,15 @@
+starting live-read in /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822 (unit io24-wine-live-read-464970.service)
+Running as unit: io24-wine-live-read-464970.service; invocation ID: 59fd56a3262a46d5b59922ce0600257b
+live isolation verified: one io24 node; no audio, GPU, home, bus, or external network
+libusb debug level: 4
+service installer status: 255
+loader diagnostic status: 255
+registered service: PreSonus Hardware Access Service
+service readiness checks: 1
+service reports RUNNING with only the io24 exposed
+io24 Wine sandbox: live non-mutating service probe failed with status 1
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 25.639s
+             CPU time consumed: 4.492s
+                   Memory peak: 103.8M (swap: 0B)

@@ -1,0 +1,11 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-2-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-1-head/tests/winusb_user_api_contract.c	2026-08-24 05:09:52.091735512 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-round-2-head/tests/winusb_user_api_contract.c	2026-08-24 05:17:41.158618370 -0700
+@@ -719,6 +719,7 @@
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;baseline=counts.allocations-counts.frees;
+     for(i=0;i<32;++i){associated=NULL;IO24_CHECK(f->associated(root,0,&associated)&&associated&&associated!=INVALID_HANDLE_VALUE);for(j=0;j<i;++j)IO24_CHECK(associated!=issued[j]);issued[i]=associated;IO24_CHECK(f->free_handle(associated));IO24_CHECK(counts.allocations-counts.frees==baseline&&fake.release_ioctls==0);}
+     IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees&&!fake.device_closes);
++    duplicate=root;fake_reset();if(!initialize_two_interface_handle(f,&root))return;IO24_CHECK(root!=duplicate);for(i=0;i<32;++i)IO24_CHECK(root!=issued[i]);check_bad_free(f,duplicate);check_stale_admission(f,duplicate,0);check_stale_admission(f,duplicate,1);check_stale_admission(f,duplicate,2);check_bad_free(f,issued[0]);check_stale_admission(f,issued[0],0);IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees&&!fake.device_closes);
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;test_acquire_before_free(f,root);
+     fake_reset();if(!initialize_two_interface_handle(f,&root))return;fake.alloc_fail_at=fake.alloc_attempts+1;associated=(void *)(uintptr_t)1;
+     IO24_CHECK(!f->associated(root,0,&associated)&&associated==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY);IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees);

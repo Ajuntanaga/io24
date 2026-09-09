@@ -1,0 +1,7 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+test_sha256 645f788d4e97a49fa1bb4dfa1badc19be50d7d0b2f5c1613919d002999dd4420
+production_main_sha256 79d5256182678f791a7863d93e3b9ccac917c474518cbf2a6e2a3a51063a8e2b
+production_private_sha256 d3dee379a578cb54e40c2a37601e64e75d1c26749d4de14c552d822f0eb3e888
+command bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/dev-source --handles
+CP33 public executed mode=--handles target-mask=0x8c present-mask=0x19c missing-mask=0 fake-events=18 submits=3 releases=1 completions=0 failures=32
+exit_code 1

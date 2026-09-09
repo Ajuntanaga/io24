@@ -1,0 +1,42 @@
+{
+  "authority": "native Linux host control; Channel-2 preset/effect changes permitted; leave Channel 1 alone",
+  "device": {
+    "host_battery_percent": 100,
+    "serial": "AB7C22200355"
+  },
+  "host": {
+    "interface_owner": "python3 io24gtk.py",
+    "pid": 492143,
+    "remained_open": true
+  },
+  "hypothesis": "the previous slot-3-to-slot-3 reassertion did not create the selector edge required for native Stat recall",
+  "operator_report_timestamp": "2026-09-04T00:30:05-07:00",
+  "physical_observation": {
+    "direct_signal_present": true,
+    "effect_absence": "UNPROVED",
+    "report": "dry only",
+    "status": "CONTROLLED_RECALL_EDGE_DRY"
+  },
+  "recall": {
+    "channel": 2,
+    "final_global_slot": 3,
+    "intermediate_global_slot": 2,
+    "path": "open GTK host accessibility controls",
+    "pre_global_slot": 3,
+    "preset_content_written": false,
+    "status": "CHANNEL2_RECALL_EDGE_3_TO_2_TO_3_CONFIRMED_BY_HOST_UI"
+  },
+  "result": "RECALL_EDGE_COMPLETED_NO_AUDIBLE_VOICE_FX",
+  "schema": "cp34-channel2-native-recall-edge-v1",
+  "timestamp": "2026-09-04T00:27:09-07:00",
+  "transport_exclusions": [
+    "no competing USB client",
+    "no Channel-1 operation",
+    "no preset-content write",
+    "no direct block-201 parameter write",
+    "no Wine",
+    "no firmware/reset/DFU",
+    "no network",
+    "no audio playback or capture"
+  ]
+}

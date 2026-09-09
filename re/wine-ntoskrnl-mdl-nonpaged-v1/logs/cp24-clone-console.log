@@ -1,0 +1,6 @@
+Running as unit: io24-sandbox-clone-mdl-nonpaged-v1-20260822.service; invocation ID: 145e647a11ff45caa21359ecdf097512
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 8.128s
+             CPU time consumed: 4.039s
+                   Memory peak: 2G (swap: 0B)

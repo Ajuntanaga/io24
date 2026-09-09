@@ -1,0 +1,10 @@
+1dc7044c41c0dfbe895ecac023876b5f4a9bcded71149da29a7018b890a3de6c  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T202119-0700-firmware-stored-record-recall-framing/SCOPE.md
+e8634b9206e914dae6d6f966867f37d5e2631bb4469a8ea8a95f2d8cec06814d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T202119-0700-firmware-stored-record-recall-framing/PROGRESS.md
+c90d0de1836dc5c724a5ecc3ea3d39dadbcdaf7bbf2f550b9146d0b9b676a346  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T202119-0700-firmware-stored-record-recall-framing/OBSIDIAN.md
+0e84db43c1d45552f151d6945b8bb5a4b1837ea1a830ca4bf6f86a03de3f8073  re/cp34_firmware_recall_framing.py
+5b8c63cdb7aa3e35c540965a074276f658fa9d1abeebd3edbe7abd4b0d8bdbb1  tests/test_cp34_firmware_recall_framing.py
+e04729ad9b6a18f56b422466a1445b4711745e66a3887a776bc9cc18376047fa  io24_firmware.py
+cf6aa579ecfe8ac0b75cdd79796764169ef3600cc898fc3aaf8e6c0737836520  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+09a8d0984fad9ff01f56d9afe7a2987b8e56d09481aa85e4789152e259e58e7a  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+060dae49d7f91c107a3e5f44c638bc2de0a1606297cb8cd56601061ea0797534  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T200005-0700-uc5-structured-state-serializer-comparison/CHECKPOINT.sha256
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll

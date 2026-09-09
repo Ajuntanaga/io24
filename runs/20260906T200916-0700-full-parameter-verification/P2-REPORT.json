@@ -1,0 +1,78 @@
+{
+  "audio_was_permitted": false,
+  "battery_after": 21,
+  "battery_before": 21,
+  "cleanup_error": {
+    "message": "[Errno 110] Operation timed out",
+    "type": "USBTimeoutError"
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "error": {
+    "message": "[Errno 110] Operation timed out",
+    "type": "USBTimeoutError"
+  },
+  "finished": "2026-09-06T20:17:49.652-07:00",
+  "readable_before": {
+    "channel_linked": false,
+    "flags_word": 385,
+    "hp_volume": 0.5541094541549683,
+    "input1_gain_db": 35.0,
+    "input1_muted": false,
+    "input1_phantom": false,
+    "input1_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input1_slot_index": 1,
+    "input2_gain_db": 20.287769317626953,
+    "input2_muted": false,
+    "input2_phantom": false,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 1,
+    "input2_slot_index": 2,
+    "main_volume": 0.04999999701976776,
+    "monitor_mix": 0.0
+  },
+  "schema": "io24-loopback-foundation-v1",
+  "scope": "Main Left physical loopback to Channel 2; Mix A USB 3-4",
+  "started": "2026-09-06T20:17:44.459-07:00",
+  "status": "RESTORATION_FAILED",
+  "stimulus": {
+    "active_playback_channel": 1,
+    "bytes": 4032044,
+    "channels": 6,
+    "format": "S32_LE_PCM",
+    "path": "runs/20260906T200916-0700-full-parameter-verification/p2-stimulus.wav",
+    "rate_hz": 48000,
+    "rms_dbfs": -30.0,
+    "sha256": "384c4251574c463d5d88acaf3765cc03df92970a604bf9903bf288efa84544ca"
+  },
+  "transport": [
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "9c1791986d5d06a26d07546fd1a9f2668a3cc5d8639d8774084a8b86071fa7f9",
+      "timestamp": "2026-09-06T20:17:44.579-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 2
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "d032c867eda12bb4fbc470302c0df970ee8236b6bf0a651a9bca7e21dd0910ca",
+      "timestamp": "2026-09-06T20:17:44.829-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    }
+  ],
+  "write_only_route_state": "NOT_ATTEMPTED"
+}

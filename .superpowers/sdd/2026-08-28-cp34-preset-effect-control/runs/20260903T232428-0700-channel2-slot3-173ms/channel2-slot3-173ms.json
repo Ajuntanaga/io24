@@ -1,0 +1,69 @@
+{
+  "preset_name": "CP34 Ch2 173ms Echo",
+  "icon_id": "slapecho",
+  "opt": {
+    "swapcompeq": 0
+  },
+  "filter": {
+    "hpf": 79.999992
+  },
+  "gate": {
+    "on": 1,
+    "keylisten": 0,
+    "expander": 1,
+    "keyfilter": 730.000244,
+    "threshold": -47.5,
+    "range": -60.0,
+    "attack": 0.025,
+    "release": 0.7
+  },
+  "limit": {
+    "limiteron": 1,
+    "threshold": -3.0
+  },
+  "voicefxopt": {
+    " ": " "
+  },
+  "eq": {
+    "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+    "eqallon": 1,
+    "eqgain1": 2.0,
+    "eqq1": 1.0,
+    "eqfreq1": 99.999992,
+    "eqbandon1": 1,
+    "eqbandop1": 1,
+    "eqgain2": 1.5,
+    "eqq2": 1.0,
+    "eqfreq2": 260.000122,
+    "eqbandon2": 1,
+    "eqgain3": -3.0,
+    "eqq3": 2.3,
+    "eqfreq3": 1200.000122,
+    "eqbandon3": 1,
+    "eqgain4": 1.200001,
+    "eqq4": 1.0,
+    "eqfreq4": 4999.999023,
+    "eqbandon4": 1,
+    "eqbandop4": 1
+  },
+  "comp": {
+    "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+    "on": 1,
+    "softknee": 0,
+    "automode": 0,
+    "threshold": -22.0,
+    "ratio": 2.0,
+    "attack": 0.02,
+    "release": 0.15,
+    "gain": 11.5,
+    "keyfilter": 40.0,
+    "keylisten": 0
+  },
+  "voicefx": {
+    "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+    "on": 1,
+    "time": 0.173,
+    "feedback": 0.25,
+    "mix": 0.5
+  }
+}

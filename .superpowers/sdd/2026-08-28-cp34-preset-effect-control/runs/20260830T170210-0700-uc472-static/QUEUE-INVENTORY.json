@@ -1,0 +1,58 @@
+{
+  "call_kind": "direct",
+  "call_sites": [
+    {
+      "address": "0x18003535d",
+      "function_end": "0x1800354ab",
+      "function_start": "0x1800352d0",
+      "nearby_ascii_immediates": [
+        "FRst",
+        "Appl"
+      ]
+    },
+    {
+      "address": "0x1800497c1",
+      "function_end": "0x180049870",
+      "function_start": "0x180049260",
+      "nearby_ascii_immediates": [
+        "JICC",
+        "JDvC",
+        "VoFx"
+      ]
+    },
+    {
+      "address": "0x180051065",
+      "function_end": "0x1800510a3",
+      "function_start": "0x180050fab",
+      "nearby_ascii_immediates": [
+        "MemP"
+      ]
+    },
+    {
+      "address": "0x180052e10",
+      "function_end": "0x180052e2e",
+      "function_start": "0x180052db0",
+      "nearby_ascii_immediates": []
+    },
+    {
+      "address": "0x180052fca",
+      "function_end": "0x180052fdf",
+      "function_start": "0x180052f87",
+      "nearby_ascii_immediates": [
+        "Pari"
+      ]
+    },
+    {
+      "address": "0x18005308b",
+      "function_end": "0x1800530a0",
+      "function_start": "0x180053048",
+      "nearby_ascii_immediates": [
+        "Pari",
+        "Para"
+      ]
+    }
+  ],
+  "image_base": "0x180000000",
+  "queue_target": "0x180053420",
+  "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
+}

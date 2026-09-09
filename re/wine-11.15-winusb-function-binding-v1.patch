@@ -1,0 +1,665 @@
+diff -urN a/configure b/configure
+--- a/configure	2026-08-08 04:48:00.000000000 -0700
++++ b/configure	2026-08-23 03:07:38.837698985 -0700
+@@ -23141,6 +23141,7 @@
+ wine_fn_config_makefile dlls/wintypes enable_wintypes
+ wine_fn_config_makefile dlls/wintypes/tests enable_tests
+ wine_fn_config_makefile dlls/winusb enable_winusb
++wine_fn_config_makefile dlls/winusb.sys enable_winusb_sys
+ wine_fn_config_makefile dlls/wkscli enable_wkscli
+ wine_fn_config_makefile dlls/wlanapi enable_wlanapi
+ wine_fn_config_makefile dlls/wlanapi/tests enable_tests
+@@ -24884,4 +24885,3 @@
+ $as_me: Finished.  Do '${MAKE-make}' to compile Wine.
+ " >&6
+ 
+-
+diff -urN a/configure.ac b/configure.ac
+--- a/configure.ac	2026-08-08 04:48:00.000000000 -0700
++++ b/configure.ac	2026-08-23 03:07:38.709699825 -0700
+@@ -3434,6 +3434,7 @@
+ WINE_CONFIG_MAKEFILE(dlls/wintypes)
+ WINE_CONFIG_MAKEFILE(dlls/wintypes/tests)
+ WINE_CONFIG_MAKEFILE(dlls/winusb)
++WINE_CONFIG_MAKEFILE(dlls/winusb.sys)
+ WINE_CONFIG_MAKEFILE(dlls/wkscli)
+ WINE_CONFIG_MAKEFILE(dlls/wlanapi)
+ WINE_CONFIG_MAKEFILE(dlls/wlanapi/tests)
+diff -urN a/dlls/wineusb.sys/Makefile.in b/dlls/wineusb.sys/Makefile.in
+--- a/dlls/wineusb.sys/Makefile.in	2026-08-22 23:50:21.984810270 -0700
++++ b/dlls/wineusb.sys/Makefile.in	2026-08-23 03:05:23.977584265 -0700
+@@ -10,5 +10,6 @@
+ 	unixlib.c \
+ 	msos_id.c \
+ 	usbdi.c \
++	winusb_busif.c \
+ 	wineusb.c \
+ 	wineusb.rc
+diff -urN a/dlls/wineusb.sys/unixlib.h b/dlls/wineusb.sys/unixlib.h
+--- a/dlls/wineusb.sys/unixlib.h	2026-08-22 23:50:21.985422780 -0700
++++ b/dlls/wineusb.sys/unixlib.h	2026-08-23 03:05:24.086583549 -0700
+@@ -27,14 +27,12 @@
+ #include "ddk/usb.h"
+ #include "wine/unixlib.h"
+ 
+-#include "msos_id.h"
++#include "winusb_busif.h"
+ 
+ #define WINEUSB_IO24_CLASS_INTERFACE_FLAGS \
+     (USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK)
+ 
+ #define WINEUSB_MS_OS_10_ID_SIZE WINEUSB_MS_OS_10_SOURCE_ID_SIZE
+-#define WINEUSB_MS_OS_10_GUID_SIZE 39
+-
+ static inline bool wineusb_io24_class_interface_in_supported(
+         const struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req)
+ {
+diff -urN a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
+--- a/dlls/wineusb.sys/wineusb.c	2026-08-22 23:50:21.985558133 -0700
++++ b/dlls/wineusb.sys/wineusb.c	2026-08-23 03:05:46.842434170 -0700
+@@ -38,6 +38,7 @@
+ #include "usbdi.h"
+ #include "msos_id.h"
+ #include "unixlib.h"
++#include "winusb_busif.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wineusb);
+ 
+@@ -84,9 +85,7 @@
+     uint16_t vendor, product, revision, usbver;
+ 
+     uint8_t ms_vendor_code;
+-    char ms_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
+-    char ms_sub_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
+-    WCHAR device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE];
++    struct wineusb_ms_os_10_metadata_source winusb_metadata;
+ 
+     struct unix_device *unix_device;
+ 
+@@ -228,12 +227,13 @@
+     device->usbver = event->usbver;
+     device->high_speed = event->high_speed;
+     device->ms_vendor_code = event->ms_vendor_code;
+-    memcpy(device->ms_compatible_id, event->ms_compatible_id,
+-            sizeof(device->ms_compatible_id));
+-    memcpy(device->ms_sub_compatible_id, event->ms_sub_compatible_id,
+-            sizeof(device->ms_sub_compatible_id));
+-    memcpy(device->device_interface_guid, event->device_interface_guid,
+-            sizeof(device->device_interface_guid));
++    memcpy(device->winusb_metadata.compatible_id, event->ms_compatible_id,
++            sizeof(device->winusb_metadata.compatible_id));
++    memcpy(device->winusb_metadata.sub_compatible_id, event->ms_sub_compatible_id,
++            sizeof(device->winusb_metadata.sub_compatible_id));
++    memcpy(device->winusb_metadata.device_interface_guid, event->device_interface_guid,
++            sizeof(device->winusb_metadata.device_interface_guid));
++    device->winusb_metadata.removed = FALSE;
+ 
+     EnterCriticalSection(&wineusb_cs);
+     list_add_tail(&device_list, &device->entry);
+@@ -256,6 +256,7 @@
+             if (!device->removed)
+             {
+                 device->removed = TRUE;
++                device->winusb_metadata.removed = TRUE;
+                 list_remove(&device->entry);
+             }
+             break;
+@@ -395,6 +396,7 @@
+             LIST_FOR_EACH_ENTRY_SAFE(device, cursor, &device_list, struct usb_device, entry)
+             {
+                 assert(!device->removed);
++                device->winusb_metadata.removed = TRUE;
+                 destroy_unix_device(device->unix_device);
+                 list_remove(&device->entry);
+                 IoDeleteDevice(device->device_obj);
+@@ -487,8 +489,8 @@
+     struct wineusb_ms_os_10_pnp_ids ids;
+     unsigned int i;
+ 
+-    if (!wineusb_ms_os_10_build_pnp_ids(device->ms_compatible_id,
+-            device->ms_sub_compatible_id, &ids))
++    if (!wineusb_ms_os_10_build_pnp_ids(device->winusb_metadata.compatible_id,
++            device->winusb_metadata.sub_compatible_id, &ids))
+         return;
+     for (i = 0; i < ids.count; ++i) append_id(buffer, L"%ls", ids.ids[i]);
+ }
+@@ -573,6 +575,11 @@
+     TRACE("context %p.\n", context);
+ }
+ 
++static NTSTATUS WINAPI winusb_metadata_get_guid(void *context, GUID *guid)
++{
++    return wineusb_ms_os_10_get_device_interface_guid(context, guid);
++}
++
+ static void WINAPI usbdi_get_version(void *context,
+         USBD_VERSION_INFORMATION *version, ULONG *capabilities)
+ {
+@@ -625,6 +632,13 @@
+     usbdi_is_device_high_speed,
+ };
+ 
++static const struct wineusb_ms_os_10_metadata_routines winusb_metadata_routines =
++{
++    usbdi_reference,
++    usbdi_dereference,
++    winusb_metadata_get_guid,
++};
++
+ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device_obj, IRP *irp)
+ {
+     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
+@@ -636,12 +650,19 @@
+     switch (stack->MinorFunction)
+     {
+         case IRP_MN_QUERY_INTERFACE:
+-            ret = wineusb_query_usbdi_interface(
++            ret = wineusb_query_ms_os_10_metadata_interface(
+                     stack->Parameters.QueryInterface.InterfaceType,
+                     stack->Parameters.QueryInterface.Size,
+                     stack->Parameters.QueryInterface.Version,
+                     stack->Parameters.QueryInterface.Interface,
+-                    device, &usbdi_routines);
++                    &device->winusb_metadata, &winusb_metadata_routines);
++            if (ret == STATUS_NOT_SUPPORTED)
++                ret = wineusb_query_usbdi_interface(
++                        stack->Parameters.QueryInterface.InterfaceType,
++                        stack->Parameters.QueryInterface.Size,
++                        stack->Parameters.QueryInterface.Version,
++                        stack->Parameters.QueryInterface.Interface,
++                        device, &usbdi_routines);
+             break;
+ 
+         case IRP_MN_QUERY_ID:
+@@ -668,6 +689,7 @@
+             if (!device->removed)
+             {
+                 device->removed = TRUE;
++                device->winusb_metadata.removed = TRUE;
+                 list_remove(&device->entry);
+             }
+             LeaveCriticalSection(&wineusb_cs);
+diff -urN a/dlls/wineusb.sys/winusb_busif.c b/dlls/wineusb.sys/winusb_busif.c
+--- a/dlls/wineusb.sys/winusb_busif.c	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/wineusb.sys/winusb_busif.c	2026-08-23 03:34:26.692187819 -0700
+@@ -0,0 +1,68 @@
++/*
++ * Private WinUSB metadata bus interface for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include <string.h>
++
++#include "winusb_busif.h"
++
++static const GUID metadata_interface =
++        WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT;
++
++NTSTATUS wineusb_ms_os_10_get_device_interface_guid(
++        const struct wineusb_ms_os_10_metadata_source *source, GUID *guid)
++{
++    static const char winusb_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE] = "WINUSB";
++    UNICODE_STRING string;
++    GUID parsed;
++    NTSTATUS status;
++
++    if (!source || !guid || source->removed ||
++            memcmp(source->compatible_id, winusb_id, sizeof(winusb_id)) ||
++            source->device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE - 1])
++        return STATUS_NOT_SUPPORTED;
++
++    RtlInitUnicodeString(&string, source->device_interface_guid);
++    if (string.Length != 38 * sizeof(WCHAR) ||
++            (status = RtlGUIDFromString(&string, &parsed)))
++        return STATUS_NOT_SUPPORTED;
++
++    *guid = parsed;
++    return STATUS_SUCCESS;
++}
++
++NTSTATUS wineusb_query_ms_os_10_metadata_interface(const GUID *interface_type,
++        USHORT size, USHORT version, INTERFACE *interface, void *context,
++        const struct wineusb_ms_os_10_metadata_routines *routines)
++{
++    struct wineusb_ms_os_10_metadata_interface_v1 *metadata;
++
++    if (!interface_type || !interface || !context || !routines ||
++            !IsEqualGUID(interface_type, &metadata_interface))
++        return STATUS_NOT_SUPPORTED;
++
++    if (version != WINEUSB_MS_OS_10_METADATA_VERSION_1 ||
++            size < sizeof(*metadata) || !routines->InterfaceReference ||
++            !routines->InterfaceDereference || !routines->GetDeviceInterfaceGuid)
++        return STATUS_NOT_SUPPORTED;
++
++    metadata = (struct wineusb_ms_os_10_metadata_interface_v1 *)interface;
++    *metadata = (struct wineusb_ms_os_10_metadata_interface_v1)
++    {
++        sizeof(*metadata),
++        WINEUSB_MS_OS_10_METADATA_VERSION_1,
++        context,
++        routines->InterfaceReference,
++        routines->InterfaceDereference,
++        routines->GetDeviceInterfaceGuid,
++    };
++    routines->InterfaceReference(context);
++    return STATUS_SUCCESS;
++}
+diff -urN a/dlls/wineusb.sys/winusb_busif.h b/dlls/wineusb.sys/winusb_busif.h
+--- a/dlls/wineusb.sys/winusb_busif.h	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/wineusb.sys/winusb_busif.h	2026-08-23 03:34:26.586188541 -0700
+@@ -0,0 +1,62 @@
++/*
++ * Private WinUSB metadata bus interface for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#ifndef __WINE_WINEUSB_WINUSB_BUSIF_H
++#define __WINE_WINEUSB_WINUSB_BUSIF_H
++
++#include "ntstatus.h"
++#include "windef.h"
++#include "winternl.h"
++#include "ddk/wdm.h"
++
++#include "msos_id.h"
++
++#define WINEUSB_MS_OS_10_GUID_SIZE 39
++#define WINEUSB_MS_OS_10_METADATA_VERSION_1 1
++#define WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT \
++    {0xa6523832, 0x2ca5, 0x42ff, {0xaa, 0x70, 0xc7, 0x60, 0xf0, 0x6a, 0x8e, 0x73}}
++
++struct wineusb_ms_os_10_metadata_source
++{
++    char compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE];
++    char sub_compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE];
++    WCHAR device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE];
++    BOOL removed;
++};
++
++typedef NTSTATUS (WINAPI *wineusb_get_device_interface_guid)(void *context,
++        GUID *guid);
++
++struct wineusb_ms_os_10_metadata_interface_v1
++{
++    USHORT Size;
++    USHORT Version;
++    void *BusContext;
++    PINTERFACE_REFERENCE InterfaceReference;
++    PINTERFACE_DEREFERENCE InterfaceDereference;
++    wineusb_get_device_interface_guid GetDeviceInterfaceGuid;
++};
++
++struct wineusb_ms_os_10_metadata_routines
++{
++    PINTERFACE_REFERENCE InterfaceReference;
++    PINTERFACE_DEREFERENCE InterfaceDereference;
++    wineusb_get_device_interface_guid GetDeviceInterfaceGuid;
++};
++
++NTSTATUS wineusb_ms_os_10_get_device_interface_guid(
++        const struct wineusb_ms_os_10_metadata_source *source, GUID *guid);
++
++NTSTATUS wineusb_query_ms_os_10_metadata_interface(const GUID *interface_type,
++        USHORT size, USHORT version, INTERFACE *interface, void *context,
++        const struct wineusb_ms_os_10_metadata_routines *routines);
++
++#endif /* __WINE_WINEUSB_WINUSB_BUSIF_H */
+diff -urN a/dlls/winusb.sys/Makefile.in b/dlls/winusb.sys/Makefile.in
+--- a/dlls/winusb.sys/Makefile.in	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/winusb.sys/Makefile.in	2026-08-23 03:07:23.053802597 -0700
+@@ -0,0 +1,7 @@
++MODULE        = winusb.sys
++IMPORTS       = ntoskrnl
++EXTRADLLFLAGS = -Wl,--subsystem,native
++
++SOURCES = \
++	main.c \
++	winusb.rc
+diff -urN a/dlls/winusb.sys/main.c b/dlls/winusb.sys/main.c
+--- a/dlls/winusb.sys/main.c	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/winusb.sys/main.c	2026-08-23 03:37:04.655987535 -0700
+@@ -0,0 +1,279 @@
++/*
++ * Generic WinUSB function driver
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This layer deliberately implements only Plug and Play binding and device-
++ * interface lifetime. WinUSB transfer semantics belong to a later layer.
++ */
++
++#include <stdarg.h>
++#include <string.h>
++
++#include "ntstatus.h"
++#include "windef.h"
++#include "winternl.h"
++#include "ddk/wdm.h"
++
++#include "wine/debug.h"
++
++#include "../wineusb.sys/winusb_busif.h"
++
++WINE_DEFAULT_DEBUG_CHANNEL(winusb);
++
++static const GUID metadata_interface =
++        WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT;
++
++enum winusb_device_state
++{
++    WINUSB_DEVICE_ADDED,
++    WINUSB_DEVICE_STARTED,
++    WINUSB_DEVICE_STOPPED,
++    WINUSB_DEVICE_SURPRISE_REMOVED,
++    WINUSB_DEVICE_REMOVED,
++};
++
++struct winusb_device
++{
++    DEVICE_OBJECT *pdo;
++    DEVICE_OBJECT *lower_device;
++    GUID interface_guid;
++    UNICODE_STRING symbolic_link;
++    BOOL registered;
++    BOOL enabled;
++    enum winusb_device_state state;
++};
++
++static NTSTATUS WINAPI set_event_completion(DEVICE_OBJECT *device, IRP *irp,
++        void *context)
++{
++    if (irp->PendingReturned) KeSetEvent(context, IO_NO_INCREMENT, FALSE);
++    return STATUS_MORE_PROCESSING_REQUIRED;
++}
++
++static NTSTATUS forward_irp_synchronously(struct winusb_device *device, IRP *irp)
++{
++    KEVENT event;
++    NTSTATUS status;
++
++    KeInitializeEvent(&event, NotificationEvent, FALSE);
++    IoCopyCurrentIrpStackLocationToNext(irp);
++    IoSetCompletionRoutine(irp, set_event_completion, &event, TRUE, TRUE, TRUE);
++
++    status = IoCallDriver(device->lower_device, irp);
++    if (status == STATUS_PENDING)
++        KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
++    return irp->IoStatus.Status;
++}
++
++static NTSTATUS query_metadata_interface(DEVICE_OBJECT *pdo, GUID *guid)
++{
++    struct wineusb_ms_os_10_metadata_interface_v1 interface = {0};
++    IO_STACK_LOCATION *stack;
++    IO_STATUS_BLOCK io_status = {{STATUS_NOT_SUPPORTED}, 0};
++    KEVENT event;
++    NTSTATUS status;
++    IRP *irp;
++
++    KeInitializeEvent(&event, NotificationEvent, FALSE);
++    if (!(irp = IoBuildSynchronousFsdRequest(IRP_MJ_PNP, pdo, NULL, 0, NULL,
++            &event, &io_status)))
++        return STATUS_NO_MEMORY;
++
++    stack = IoGetNextIrpStackLocation(irp);
++    stack->MinorFunction = IRP_MN_QUERY_INTERFACE;
++    stack->Parameters.QueryInterface.InterfaceType =
++            &metadata_interface;
++    stack->Parameters.QueryInterface.Size = sizeof(interface);
++    stack->Parameters.QueryInterface.Version =
++            WINEUSB_MS_OS_10_METADATA_VERSION_1;
++    stack->Parameters.QueryInterface.Interface = (INTERFACE *)&interface;
++    stack->Parameters.QueryInterface.InterfaceSpecificData = NULL;
++    irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
++
++    status = IoCallDriver(pdo, irp);
++    if (status == STATUS_PENDING)
++        KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
++    status = io_status.Status;
++    if (!NT_SUCCESS(status)) return status;
++
++    if (interface.Size != sizeof(interface) ||
++            interface.Version != WINEUSB_MS_OS_10_METADATA_VERSION_1 ||
++            !interface.BusContext || !interface.InterfaceReference ||
++            !interface.InterfaceDereference ||
++            !interface.GetDeviceInterfaceGuid)
++    {
++        if (interface.BusContext && interface.InterfaceDereference)
++            interface.InterfaceDereference(interface.BusContext);
++        return STATUS_NOT_SUPPORTED;
++    }
++
++    status = interface.GetDeviceInterfaceGuid(interface.BusContext, guid);
++    interface.InterfaceDereference(interface.BusContext);
++    return status;
++}
++
++static void disable_interface(struct winusb_device *device, const char *phase)
++{
++    NTSTATUS status;
++
++    if (!device->enabled) return;
++    status = IoSetDeviceInterfaceState(&device->symbolic_link, FALSE);
++    if (NT_SUCCESS(status) || status == STATUS_OBJECT_NAME_NOT_FOUND)
++        device->enabled = FALSE;
++    else
++        WARN("Failed to disable interface %s during %s, status %#lx.\n",
++                debugstr_w(device->symbolic_link.Buffer), phase,
++                (unsigned long)status);
++}
++
++static NTSTATUS complete_irp(IRP *irp, NTSTATUS status)
++{
++    irp->IoStatus.Status = status;
++    irp->IoStatus.Information = 0;
++    IoCompleteRequest(irp, IO_NO_INCREMENT);
++    return status;
++}
++
++static NTSTATUS WINAPI driver_pnp(DEVICE_OBJECT *device_obj, IRP *irp)
++{
++    IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
++    struct winusb_device *device = device_obj->DeviceExtension;
++    NTSTATUS status;
++
++    TRACE("device %p, irp %p, minor function %#x.\n",
++            device_obj, irp, stack->MinorFunction);
++
++    switch (stack->MinorFunction)
++    {
++        case IRP_MN_START_DEVICE:
++        {
++            BOOL restarting = device->state == WINUSB_DEVICE_STOPPED;
++
++            status = forward_irp_synchronously(device, irp);
++            if (!NT_SUCCESS(status))
++            {
++                if (restarting) disable_interface(device, "failed restart");
++                return complete_irp(irp, status);
++            }
++
++            if (!device->enabled)
++            {
++                status = IoSetDeviceInterfaceState(&device->symbolic_link, TRUE);
++                if (!NT_SUCCESS(status)) return complete_irp(irp, status);
++                device->enabled = TRUE;
++            }
++            device->state = WINUSB_DEVICE_STARTED;
++            return complete_irp(irp, STATUS_SUCCESS);
++        }
++
++        case IRP_MN_STOP_DEVICE:
++            status = forward_irp_synchronously(device, irp);
++            if (NT_SUCCESS(status)) device->state = WINUSB_DEVICE_STOPPED;
++            return complete_irp(irp, status);
++
++        case IRP_MN_SURPRISE_REMOVAL:
++            device->state = WINUSB_DEVICE_SURPRISE_REMOVED;
++            disable_interface(device, "surprise removal");
++            status = forward_irp_synchronously(device, irp);
++            return complete_irp(irp, status);
++
++        case IRP_MN_REMOVE_DEVICE:
++            disable_interface(device, "removal");
++            device->enabled = FALSE;
++            status = forward_irp_synchronously(device, irp);
++            device->state = WINUSB_DEVICE_REMOVED;
++            IoDetachDevice(device->lower_device);
++            if (device->symbolic_link.Buffer)
++                RtlFreeUnicodeString(&device->symbolic_link);
++            IoDeleteDevice(device_obj);
++            return complete_irp(irp, status);
++
++        default:
++            IoSkipCurrentIrpStackLocation(irp);
++            return IoCallDriver(device->lower_device, irp);
++    }
++}
++
++static NTSTATUS WINAPI driver_unsupported(DEVICE_OBJECT *device, IRP *irp)
++{
++    TRACE("device %p, irp %p.\n", device, irp);
++    return complete_irp(irp, STATUS_NOT_SUPPORTED);
++}
++
++static NTSTATUS WINAPI driver_close(DEVICE_OBJECT *device, IRP *irp)
++{
++    TRACE("device %p, irp %p.\n", device, irp);
++    return complete_irp(irp, STATUS_SUCCESS);
++}
++
++static NTSTATUS WINAPI driver_add_device(DRIVER_OBJECT *driver, DEVICE_OBJECT *pdo)
++{
++    struct winusb_device *device;
++    DEVICE_OBJECT *device_obj;
++    GUID interface_guid;
++    NTSTATUS status;
++
++    TRACE("driver %p, pdo %p.\n", driver, pdo);
++
++    if ((status = query_metadata_interface(pdo, &interface_guid)))
++        return status;
++
++    if ((status = IoCreateDevice(driver, sizeof(*device), NULL,
++            FILE_DEVICE_UNKNOWN, 0, FALSE, &device_obj)))
++        return status;
++
++    device = device_obj->DeviceExtension;
++    memset(device, 0, sizeof(*device));
++    device->pdo = pdo;
++    device->interface_guid = interface_guid;
++    device->state = WINUSB_DEVICE_ADDED;
++
++    if (!(device->lower_device = IoAttachDeviceToDeviceStack(device_obj, pdo)))
++    {
++        IoDeleteDevice(device_obj);
++        return STATUS_NO_SUCH_DEVICE;
++    }
++
++    status = IoRegisterDeviceInterface(pdo, &device->interface_guid, NULL,
++            &device->symbolic_link);
++    if (!NT_SUCCESS(status))
++    {
++        IoDetachDevice(device->lower_device);
++        if (device->symbolic_link.Buffer)
++            RtlFreeUnicodeString(&device->symbolic_link);
++        IoDeleteDevice(device_obj);
++        return status;
++    }
++
++    device->registered = TRUE;
++    device_obj->Flags &= ~DO_DEVICE_INITIALIZING;
++    return STATUS_SUCCESS;
++}
++
++static void WINAPI driver_unload(DRIVER_OBJECT *driver)
++{
++    TRACE("driver %p.\n", driver);
++}
++
++NTSTATUS WINAPI DriverEntry(DRIVER_OBJECT *driver, UNICODE_STRING *path)
++{
++    TRACE("driver %p, path %s.\n", driver,
++            path ? debugstr_w(path->Buffer) : "(null)");
++
++    driver->DriverExtension->AddDevice = driver_add_device;
++    driver->DriverUnload = driver_unload;
++    driver->MajorFunction[IRP_MJ_CREATE] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_CLOSE] = driver_close;
++    driver->MajorFunction[IRP_MJ_READ] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_WRITE] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = driver_unsupported;
++    driver->MajorFunction[IRP_MJ_PNP] = driver_pnp;
++    return STATUS_SUCCESS;
++}
+diff -urN a/dlls/winusb.sys/winusb.inf b/dlls/winusb.sys/winusb.inf
+--- a/dlls/winusb.sys/winusb.inf	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/winusb.sys/winusb.inf	2026-08-23 03:07:23.157801914 -0700
+@@ -0,0 +1,22 @@
++[Version]
++Signature="$CHICAGO$"
++ClassGuid={88bae032-5a81-49f0-bc3d-a4ff138216d6}
++Class=USBDevice
++
++[Manufacturer]
++Wine=mfg_section
++
++[mfg_section]
++Wine WinUSB compatible function=device_section,USB\MS_COMP_WINUSB
++
++[device_section.Services]
++AddService=winusb,0x2,svc_section
++
++[svc_section]
++Description="Wine WinUSB function driver"
++DisplayName="Wine WinUSB"
++ServiceBinary="%12%\winusb.sys"
++LoadOrderGroup="WinePlugPlay"
++ServiceType=1
++StartType=3
++ErrorControl=1
+diff -urN a/dlls/winusb.sys/winusb.rc b/dlls/winusb.sys/winusb.rc
+--- a/dlls/winusb.sys/winusb.rc	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/winusb.sys/winusb.rc	2026-08-23 03:07:23.263801219 -0700
+@@ -0,0 +1,11 @@
++/*
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++/* @makedep: winusb.inf */
++1 WINE_DATA_FILE winusb.inf
+diff -urN a/loader/wine.inf.in b/loader/wine.inf.in
+--- a/loader/wine.inf.in	2026-08-08 04:48:00.000000000 -0700
++++ b/loader/wine.inf.in	2026-08-23 03:07:38.951698236 -0700
+@@ -1237,6 +1237,7 @@
+ winebus.inf,"@%12%\winebus.sys,-1"
+ winehid.inf,"@%12%\winehid.sys,-1"
+ wineusb.inf,"@%12%\wineusb.sys,-1"
++winusb.inf,"@%12%\winusb.sys,-1"
+ winexinput.inf,"@%12%\winexinput.sys,-1"
+ 
+ [NlsFiles]

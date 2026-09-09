@@ -1,0 +1,301 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 03:44:51.574281036 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 03:54:05.476324385 -0700
+@@ -417,3 +417,68 @@
+ the classifier into a live capture procedure or restoration contract. No
+ title-free live slot survey is authorized or executable from the current CP34
+ records.
++
++## Current-slot survey offline integration
++
++Integrated 2026-08-29 after Tasks 1-4 passed their independent reviews. The
++six-row task-local stage is
++`CURRENT-SLOT-SURVEY-STAGE.sha256`; its current SHA-256 is recorded by
++`LINUX-OFFLINE-SHA256SUMS`. The tracked artifact hashes are:
++
++```text
++1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
++3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
++8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
++7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++```
++
++The full hardware-free command covering the host inventory, live-matrix,
++current-slot survey, retained host persistence, capture normalization, and
++capture decoder returned `94 passed, 27 subtests passed`. The two pinned host
++inventories reproduced six direct callers of `0x1800546b0`, three RIP-relative
++consumers of `0x1800e53f0`, and DLL SHA-256
++`567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b`.
++
++The implemented offline contracts are:
++
++- plan validation schema
++  `cp34-current-slot-survey-plan-validation-v1`, with `VALID`/exit 0 only for
++  an exact populated plan; the checked-in template remains intentionally
++  `NOT_AUTHORIZED` with `UNRECORDED` source fields and is rejected;
++- mapping schema `cp34-current-slot-map-v1`, with `MAPPED`/exit 0 only for an
++  exact six-channel 48 kHz S32_LE input, five pinned-cadence impulses, safe
++  levels, and a score of at least 0.80 on predeclared Mix A channel 3 or 4;
++  the chosen channel is frozen before effect results are visible;
++- analyzer schema `cp34-slot-survey-audio-v1`, retaining `candidate`,
++  `model_identity: "UNRESOLVED"`, `title_verified: false`, `live_ready: false`,
++  `restoration_verified: false`, exact dry/active metric rows, and their local
++  derivative paths and SHA-256 values; and
++- restoration schema `cp34-current-slot-restoration-v1`, with `RESTORED`/exit
++  0 only after exact plan, event, P0/P1/P2, map, A/B, audible, physical, and
++  manifest checks. It returns the snapshotted `input_hashes` and preserves the
++  literal limitation `JaSt cannot prove every internal DSP byte.`
++
++Each `P0.json`, `P1.json`, and `P2.json` JaSt summary must use schema
++`cp34-current-slot-jast-summary-v1` and bind its untouched raw JaSt input by
++safe relative `raw_snapshot_path` plus exact `raw_snapshot_sha256`. The
++retained `MAP.raw.wav` binds to `MAP.json.raw_sha256`. `AB.json` binds exactly
++two dry and two active `S1.mixN.mono.wav` through `S4.mixN.mono.wav`
++derivatives by safe relative `path` and `sha256`, where `N` is the already
++frozen Mix A channel. Roles derive from `P0.enabled`, never filenames.
++`EVIDENCE-SHA256SUMS` must exactly cover every pre-verification input; the
++final no-clobber `SHA256SUMS` covers every retained file except itself.
++
++This is positive-only evidence. `SIGNATURE_PRESENT` becomes meaningful only
++with `RESTORED` and supports only a restored, repeatable audible 150 ms effect
++signature on the controlled path. A null signal or non-specific late tail is
++`INCONCLUSIVE`, never a negative. Neither a signature nor restoration proves a
++preset title, effect model, custom device-resident storage, device source, or
++every internal DSP byte. Channel 2 is eligible only after channel 1 is exactly
++`RESTORED` plus `INCONCLUSIVE`; `UNAVAILABLE` and `RESTORATION_FAILED` stop.
++
++No live acquisition, USB/device access, ALSA stream, Wine/prefix access,
++front-panel action, preset/effect operation, mapped write, firmware/reset/DFU,
++installation, external staging, network action, or audio monitoring occurred
++during this integration.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 03:44:51.574422955 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 03:54:05.476465326 -0700
+@@ -236,7 +236,30 @@
+ validator are implemented and contract-tested. Populate the still-unrecorded
+ target-specific PRESTATE fields and validate the real restoration ledger next.
+ Live authority can then be requested only for that named device and the exact
+-L01-L07 actions. If the title-verified path remains unavailable, design and
+-review the separate no-write slot-survey procedure before requesting its own
+-authority. Do not treat `PASS` or `SIGNATURE_PRESENT` from an offline fixture as
+-device evidence.
++L01-L07 actions. If the title-verified path remains unavailable, independently
++review the implemented no-write current-slot survey before requesting its own
++separate exact authority. Do not treat `PASS` or `SIGNATURE_PRESENT` from an
++offline fixture as device evidence.
++
++## Current-slot survey integration
++
++The separate no-write current-slot survey is now implemented at
++`CURRENT-SLOT-SURVEY.md`, with its intentionally invalid plan template and
++offline validator, mapper, analyzer binding, restoration verifier, and six-row
++stage manifest. It does not modify this title-verified L02-L07 matrix and was
++not executed.
++
++That survey can produce only positive signal-domain evidence after exact
++restoration. Its actual analyzer input schema is `cp34-slot-survey-audio-v1`;
++it fixes `model_identity` to `UNRESOLVED` and title/live/restoration flags to
++false until the separate restoration verifier passes. It binds the three JaSt
++summaries to immutable raw snapshots and binds each dry/active metric to the
++deterministic frozen-channel derivative path and SHA-256. A null signal is
++`INCONCLUSIVE`, never a negative, and channel 2 is forbidden after either
++`UNAVAILABLE` or `RESTORATION_FAILED` channel 1.
++
++The integrated files are eligible only for independent offline review. A clean
++review must precede, and cannot replace, a separately exact authorization for
++the named live run. No validator, template, fixture, manifest, or offline
++`SIGNATURE_PRESENT` result authorizes USB, ALSA, front-panel, preset/effect, or
++other hardware action.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 03:44:51.574365475 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 03:54:05.476427681 -0700
+@@ -115,9 +115,10 @@
+ explicit. It is therefore not yet restoration authority.
+ 
+ The title-free `analyze-slot` classifier is also contract-tested, but it does
+-not remove those live preconditions. A no-write slot survey would need its own
+-offline procedure and executable restoration contract before separate exact
+-authorization could be requested.
++not remove those live preconditions. The no-write current-slot survey now has
++its own offline procedure and executable restoration contract; they require an
++independent offline review before a separate exact authorization can be
++requested.
+ 
+ L01 now names target `AB7C22200355` and records its readable slots and ALSA
+ identity. It remains partial: the device-screen title, preset mode, physical
+@@ -125,3 +126,43 @@
+ execute L02-L07 without those preconditions and separate exact live-device
+ authorization. A factory recall can test audible Voice FX; it cannot prove
+ custom device-resident storage.
++
++## L05: current-slot survey offline stage
++
++The positive-only no-write survey is now implemented and hash-pinned without
++running it. Its six tracked files are listed in
++`CURRENT-SLOT-SURVEY-STAGE.sha256`; verify that manifest before review:
++
++```text
++sha256sum -c .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
++```
++
++The complete hardware-free regression command is:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q \
++  tests/test_cp34_host_queue_inventory.py \
++  tests/test_cp34_live_matrix.py \
++  tests/test_cp34_current_slot_survey.py \
++  tests/test_io24_preset_persistence.py \
++  tests/test_normalize_io24_capture.py \
++  tests/test_io24_capture_decode.py
++```
++
++Expected and reproduced: 94 passed and 27 subtests passed. The 31 current-slot
++contracts cover exact plan rejection, frozen six-channel Mix A mapping,
++restoration and evidence-manifest verification, and the intentionally invalid
++checked-in template.
++
++`validate-plan` returns `VALID` only for exact authorization and source
++provenance. `map-channel` freezes channel 3 or 4 before any effect result.
++`verify-restoration` consumes the existing `cp34-slot-survey-audio-v1` schema,
++requires JaSt summary-to-raw bindings and exact derivative path/hash bindings,
++and fail-closes on any missing evidence input. A passing offline result is not
++a preset title or model claim, is never a negative result, and is not live
++authority. Channel 2 requires a sealed channel-1 result of exactly `RESTORED`
++plus `INCONCLUSIVE`.
++
++The next gate is an independent offline review. Only after that review is clean
++may a new separately exact authorization be requested for a named live run.
++No live action occurred while producing or integrating this stage.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 03:44:51.574462834 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 03:54:05.476504437 -0700
+@@ -6,11 +6,18 @@
+ 89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d  re/uc_factory_presets.json
+ 6502fa83125fb519d61bd2bba40e9d10d81f0307bdbe104e2d0e38304b1d6fce  tests/fx_gate_probe.py
+ 2e71faaa046d1bd87a02c62fe36c8a5692e7e7f7007c2c6a11352c5db956bb6c  PROTOCOL.md
+-8fe2d3e2b80f1b886ad4710b7f92ef929046bc4cb825c2deb9c8f076a771d415  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
++7f64dc4fe2a445ccda584a657b286fd210b5c9d616e2a13f6052ded9404d3912  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+ c6238bac7efb7eda37f3289be948eb2fc34455f44a1b3fbfd6cb7c55389f86e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CAPTURE-MANIFEST.md
+ 2267f83eb9eaec10ad493b2d0d520135d55ccba3e96e05ad70eb0a90d319f6b6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PRESTATE.md
+-a671af83117366db48aacc3805fd7930b5bf5b921491fbd5ae9a113472c74471  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+-4e9db084dc315e06d1e3e79de53f0f83d30a4242483bed4538699a7f123b6bff  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+-58bc9296877467e829e94034c8f300f11e7c28e227e2e2da86ba4e8b8e31a5e5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+-bb8b5af521e474f1f741b0f91709cb3237a13e5ea4a321d45856eed6e162d2a8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++ef1f1063ed82cb15b13196755578daa420b992c43d571c2e649fe79ab38bf773  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
++f1bc0ac0e8eb2b0e43637db80beb2b55e10f7f0c313705d0ed090bfa67561709  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
++76be841805716bdc1216f7ae57fd12925e7370348ed4b6bda8052a1d614056e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
++5be41b257c781ab9d014d4a885537c977e2ca9dc5965fbb99716343ef62f3a7b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
++3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c  tests/test_cp34_current_slot_survey.py
++8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
++7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++25fbebbed34be6b11809f58e563a68844b675dfb3604805a51281b3d06c97f28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+ 567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 03:44:51.574231868 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 03:54:05.476274658 -0700
+@@ -1,6 +1,7 @@
+ # CP34 execution plan
+ 
+-Status: active, Linux-only
++Status: active, Linux-only; current-slot survey offline stage integrated and
++awaiting independent review
+ 
+ The project runs on Linux. A Windows or macOS Universal Control host is not an
+ available dependency. Wine and the protected io24 prefix remain outside this
+@@ -60,3 +61,28 @@
+ 
+ Exit: both CP34 outcomes pass and restoration is complete. Otherwise CP34 stays
+ active with the exact failed gate recorded.
++
++## Current-slot survey offline stage
++
++The positive-only current-slot survey is implemented as a review-eligible
++offline stage. Its exact tracked artifacts are:
++
++- `re/cp34_current_slot_survey.py` —
++  `1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3`;
++- `tests/test_cp34_current_slot_survey.py` —
++  `3119b35f1710470bc246897dce001098bfe75c86152754813e5e0913c724a55c`;
++- `CURRENT-SLOT-SURVEY-DESIGN.md` —
++  `8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28`;
++- `CURRENT-SLOT-SURVEY.md` —
++  `295d6763f70a4bf095b0ad0fff1be16e85ac449aa9d6e7216a8cec8adcb87c43`;
++- `CURRENT-SLOT-SURVEY-PLAN.template.json` —
++  `3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3`;
++- `CURRENT-SLOT-SURVEY-IMPLEMENTATION.md` —
++  `7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49`.
++
++The complete hardware-free regression passed with 94 tests and 27 subtests.
++The stage does not run a survey and does not authorize hardware. Its next gate
++is an independent offline review. Only after a clean review may a separately
++exact authorization be considered for a named run; validator, analyzer,
++restoration-verifier, template, test, or manifest success is never live
++authority.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 03:44:51.574324827 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-5-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 03:54:05.476388779 -0700
+@@ -1,7 +1,8 @@
+ # CP34 device preset and Voice FX continuation
+ 
+-Timestamp: 2026-08-29T02:04:22-07:00
+-Status: active
++Timestamp: 2026-08-29
++Status: active; current-slot survey offline stage integrated, independent
++review required before any authorization request
+ 
+ ## Outcomes
+ 
+@@ -178,8 +179,11 @@
+ 
+ ## Exact continuation
+ 
+-1. Reproduce the pinned host inventories and all hardware-free contracts, then
+-   verify `LINUX-OFFLINE-SHA256SUMS`.
++1. The current-slot survey implementation, six-row
++   `CURRENT-SLOT-SURVEY-STAGE.sha256`, 94-test plus 27-subtest regression, two
++   pinned host inventories, and `LINUX-OFFLINE-SHA256SUMS` have been reproduced
++   offline. Obtain an independent offline review of this integrated stage.
++   Passing tools, templates, tests, or manifests does not authorize hardware.
+ 2. Treat device-resident custom store/assignment as unsupported by this exact
+    host-module/firmware pair unless a new source artifact shows another io24
+    transport. Do not implement or probe a guessed sender.
+@@ -189,20 +193,25 @@
+    preset-enable state, and ALSA card. Obtain operator transcription of the
+    currently visible title and preset mode without inferring either from the
+    numeric slots. The physical channel A/B map and exact restoration values are
+-   still unknown; do not create or validate a live ledger yet. If title
+-   transcription is unavailable, keep `analyze-slot` offline-only until a
+-   separate no-write slot-survey procedure and restoration contract are written
+-   and reviewed.
++   still unknown. A no-write current-slot survey procedure and executable
++   restoration contract now exist and are offline-sealed, but remain
++   review-only until the independent review in step 1 is clean.
+ 5. The current shadow is stale/unattested. A live run is ineligible unless the
+    user can attest its validity since the last power cycle/editor change or
+    separately authorizes a new known-baseline and restoration boundary.
+-6. The L01-only authority has been exercised. Do not execute L02-L07 on it. For
++6. The L01-only authority has been exercised. Do not execute L02-L07 or the
++   current-slot survey on it. After a clean independent review, any live run
++   still requires a new, separately exact authorization. For
+    the title-verified matrix, separate exact authorization must name serial
+    `AB7C22200355` and permit the physical audio path, ALSA playback/capture,
+    manual Preset-button actions, exact validated mapped writes, evidence
+-   directory, and restoration. Any future no-write slot survey requires its own
+-   reviewed procedure and narrower exact authorization; `analyze-slot` is not
+-   that procedure.
++   directory, and restoration. The no-write current-slot survey likewise
++   requires its own exact named-run authorization, including the source,
++   stimulus hash, physical path and inverse, capture identity, bounded JaSt
++   reads, two long manual toggles per attempted candidate, evidence directory,
++   audible replay, battery floor, and stop conditions. Offline `VALID`,
++   `MAPPED`, `SIGNATURE_PRESENT`, or `RESTORED` fixture results are not that
++   authorization.
+ 7. If an authorized factory recall makes Voice FX audible, preserve that result
+    without mislabeling it as custom preset storage. If it does not, retain the
+    positive control and record an honest negative.

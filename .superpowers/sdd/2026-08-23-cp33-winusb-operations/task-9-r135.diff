@@ -1,0 +1,34 @@
+--- r134-head/tests/winusb_function_io_contract.c
++++ r135-head/tests/winusb_function_io_contract.c
+@@ -86,6 +86,7 @@
+ static BOOL control_retirement_observing;
+ static unsigned int control_pool_attempts, control_pool_count;
+ static unsigned int control_completion_allocation_attempts;
++static unsigned int control_completion_pool_allocations_before;
+ static unsigned int control_pool_fail_ordinal;
+ static void control_note_free(PVOID pointer);
+ #define IO24_CHECK(expr) do { if (!(expr)) { \
+@@ -208,6 +209,7 @@
+ {
+     IO24_CHECK(!control_completion_allocation_observing);
+     control_completion_allocation_attempts = 0;
++    control_completion_pool_allocations_before = pool_allocations;
+     control_completion_allocation_observing = TRUE;
+ }
+ 
+@@ -215,6 +217,7 @@
+ {
+     control_completion_allocation_observing = FALSE;
+     IO24_CHECK(control_completion_allocation_attempts == 0);
++    IO24_CHECK(pool_allocations == control_completion_pool_allocations_before);
+ }
+ 
+ static struct control_pool_allocation *control_pool_find(PVOID pointer)
+@@ -665,6 +668,7 @@
+     control_pool_tracking_frees = FALSE;
+     control_completion_allocation_observing = FALSE;
+     control_completion_allocation_attempts = 0;
++    control_completion_pool_allocations_before = 0;
+     descriptor_unmapped_mdl = FALSE;
+     memset(control_retirement_order, 0, sizeof(control_retirement_order));
+     memset(builder_irps, 0, sizeof(builder_irps));

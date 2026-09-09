@@ -1,0 +1,11 @@
+--- production-main.c
++++ associated-no-plus-one-main.c
+@@ -455,7 +455,7 @@
+         return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
+     if (index == 0xff)
+         return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
+-    root_index = (UINT32)index + 1;
++    root_index = (UINT32)index;
+ 
+     EnterCriticalSection(&root->lock);
+     if (root_index >= root->interface_count) error = ERROR_NO_MORE_ITEMS;

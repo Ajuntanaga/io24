@@ -1,0 +1,713 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 04:16:01.894009912 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c	2026-08-24 04:57:48.403032944 -0700
+@@ -30,22 +30,130 @@
+ 
+ #include "wine/debug.h"
+ 
++static CRITICAL_SECTION handle_registry_lock;
++static CRITICAL_SECTION_DEBUG handle_registry_lock_debug =
++{
++    0, 0, &handle_registry_lock,
++    { &handle_registry_lock_debug.ProcessLocksList, &handle_registry_lock_debug.ProcessLocksList },
++    0, 0, { 0 }
++};
++static CRITICAL_SECTION handle_registry_lock = { &handle_registry_lock_debug, -1, 0, 0, 0, 0 };
++static struct list handle_registry = LIST_INIT(handle_registry);
++
++struct acquired_handle
++{
++    struct winusb_handle *handle;
++    struct winusb_root *root;
++    UINT32 interface_index;
++};
++
++static struct winusb_handle *find_registered_handle(WINUSB_INTERFACE_HANDLE opaque)
++{
++    struct winusb_handle *candidate;
++
++    LIST_FOR_EACH_ENTRY(candidate, &handle_registry, struct winusb_handle, entry)
++        if ((WINUSB_INTERFACE_HANDLE)candidate == opaque && candidate->live) return candidate;
++    return NULL;
++}
++
++static BOOL acquire_handle(WINUSB_INTERFACE_HANDLE opaque, struct acquired_handle *acquired)
++{
++    struct winusb_handle *handle;
++    struct winusb_root *root;
++
++    EnterCriticalSection(&handle_registry_lock);
++    if (!(handle = find_registered_handle(opaque)))
++    {
++        LeaveCriticalSection(&handle_registry_lock);
++        SetLastError(ERROR_INVALID_HANDLE);
++        return FALSE;
++    }
++
++    ++handle->api_references;
++    root = handle->root;
++    EnterCriticalSection(&root->lock);
++    ++root->references;
++    acquired->handle = handle;
++    acquired->root = root;
++    acquired->interface_index = handle->interface_index;
++    LeaveCriticalSection(&root->lock);
++    LeaveCriticalSection(&handle_registry_lock);
++    return TRUE;
++}
++
++static void release_handle(struct acquired_handle *acquired)
++{
++    struct winusb_handle *handle = acquired->handle;
++    struct winusb_root *root = acquired->root;
++
++    EnterCriticalSection(&handle_registry_lock);
++    EnterCriticalSection(&root->lock);
++    --handle->api_references;
++    --root->references;
++    if (root->retiring && !root->references) WakeAllConditionVariable(&root->drained);
++    LeaveCriticalSection(&root->lock);
++    LeaveCriticalSection(&handle_registry_lock);
++}
++
++static BOOL fail_after_release(struct acquired_handle *acquired, DWORD error)
++{
++    release_handle(acquired);
++    SetLastError(error);
++    return FALSE;
++}
++
+ /***********************************************************************
+  *           WinUsb_Free (winusb.@)
+  */
+ BOOL WINAPI WinUsb_Free(WINUSB_INTERFACE_HANDLE handle)
+ {
+-    struct winusb_handle *object = handle;
++    struct winusb_handle *object;
++    struct winusb_root *root;
+     struct wine_winusb_request request = {.size = sizeof(request), .version = WINE_WINUSB_ABI_VERSION};
+-    DWORD bytes;
++    DWORD bytes = 0;
++    struct winusb_handle *retired, *next;
++    BOOL final;
++
++    EnterCriticalSection(&handle_registry_lock);
++    if (!(object = find_registered_handle(handle)))
++    {
++        LeaveCriticalSection(&handle_registry_lock);
++        SetLastError(ERROR_INVALID_HANDLE);
++        return FALSE;
++    }
+ 
+-    if (!object || object->magic != WINUSB_HANDLE_MAGIC) return FALSE;
+-    object->magic = 0;
+-    request.session = object->session;
+-    submit_request(object->device, IOCTL_WINE_WINUSB_RELEASE, &request, sizeof(request),
+-            NULL, 0, &bytes, FALSE);
+-    HeapFree(GetProcessHeap(), 0, object->snapshot);
+-    HeapFree(GetProcessHeap(), 0, object);
++    root = object->root;
++    EnterCriticalSection(&root->lock);
++    list_remove(&object->entry);
++    list_add_tail(&root->retired_handles, &object->entry);
++    object->live = FALSE;
++    if (object->interface_index < root->interface_count &&
++            root->interface_handles[object->interface_index] == object)
++        root->interface_handles[object->interface_index] = NULL;
++    --root->live_handles;
++    --root->references;
++    final = !root->live_handles;
++    if (final) root->retiring = TRUE;
++    LeaveCriticalSection(&root->lock);
++    LeaveCriticalSection(&handle_registry_lock);
++
++    if (!final) return TRUE;
++
++    EnterCriticalSection(&root->lock);
++    while (root->references) SleepConditionVariableCS(&root->drained, &root->lock, INFINITE);
++    LeaveCriticalSection(&root->lock);
++
++    request.session = root->session;
++    submit_request(root->device, IOCTL_WINE_WINUSB_RELEASE, &request, sizeof(request), NULL, 0, &bytes, FALSE);
++    LIST_FOR_EACH_ENTRY_SAFE(retired, next, &root->retired_handles, struct winusb_handle, entry)
++    {
++        list_remove(&retired->entry);
++        HeapFree(GetProcessHeap(), 0, retired);
++    }
++    HeapFree(GetProcessHeap(), 0, root->interface_handles);
++    HeapFree(GetProcessHeap(), 0, root->snapshot);
++    DeleteCriticalSection(&root->lock);
++    HeapFree(GetProcessHeap(), 0, root);
+     return TRUE;
+ }
+ 
+@@ -321,12 +429,177 @@
+     return TRUE;
+ }
+ 
++/***********************************************************************
++ *           WinUsb_GetAssociatedInterface (winusb.@)
++ */
++BOOL WINAPI WinUsb_GetAssociatedInterface(WINUSB_INTERFACE_HANDLE handle, UCHAR index,
++        PWINUSB_INTERFACE_HANDLE associated)
++{
++    struct acquired_handle acquired;
++    struct winusb_handle *object;
++    struct winusb_root *root;
++    UINT32 root_index;
++    DWORD error = ERROR_SUCCESS;
++    BOOL published = FALSE;
++
++    if (!associated)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++    *associated = NULL;
++    if (!acquire_handle(handle, &acquired)) return FALSE;
++    root = acquired.root;
++
++    if (acquired.interface_index)
++        return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    if (index == 0xff)
++        return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    root_index = (UINT32)index + 1;
++
++    EnterCriticalSection(&root->lock);
++    if (root_index >= root->interface_count) error = ERROR_NO_MORE_ITEMS;
++    else if (root->interface_handles[root_index]) error = ERROR_ALREADY_EXISTS;
++    LeaveCriticalSection(&root->lock);
++    if (error) return fail_after_release(&acquired, error);
++
++    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
++        return fail_after_release(&acquired, ERROR_NOT_ENOUGH_MEMORY);
++    object->root = root;
++    object->interface_index = root_index;
++
++    EnterCriticalSection(&handle_registry_lock);
++    EnterCriticalSection(&root->lock);
++    if (root->retiring) error = ERROR_INVALID_HANDLE;
++    else if (root->interface_handles[root_index]) error = ERROR_ALREADY_EXISTS;
++    else
++    {
++        object->live = TRUE;
++        root->interface_handles[root_index] = object;
++        ++root->live_handles;
++        ++root->references;
++        list_add_tail(&handle_registry, &object->entry);
++        published = TRUE;
++    }
++    LeaveCriticalSection(&root->lock);
++    LeaveCriticalSection(&handle_registry_lock);
++
++    if (!published)
++    {
++        HeapFree(GetProcessHeap(), 0, object);
++        return fail_after_release(&acquired, error);
++    }
++
++    *associated = object;
++    release_handle(&acquired);
++    return TRUE;
++}
++
++static BOOL cached_descriptor_region(const struct winusb_root *root, UCHAR type,
++        const BYTE **buffer, UINT32 *length)
++{
++    const struct wine_winusb_snapshot *snapshot = root->snapshot;
++    SIZE_T end;
++    UINT32 offset;
++
++    if (!snapshot || root->snapshot_size != snapshot->total_size) return FALSE;
++    if (type == 1)
++    {
++        offset = snapshot->device_offset;
++        *length = snapshot->device_length;
++    }
++    else
++    {
++        offset = snapshot->configuration_offset;
++        *length = snapshot->configuration_length;
++    }
++    if (!range_end(root->snapshot_size, offset, *length, &end)) return FALSE;
++    *buffer = (const BYTE *)snapshot + offset;
++    return TRUE;
++}
++
++/***********************************************************************
++ *           WinUsb_GetDescriptor (winusb.@)
++ */
++BOOL WINAPI WinUsb_GetDescriptor(WINUSB_INTERFACE_HANDLE handle, UCHAR type, UCHAR index,
++        USHORT language, PUCHAR buffer, ULONG buffer_length, PULONG transferred)
++{
++    struct acquired_handle acquired;
++    const BYTE *cached;
++    UINT32 length;
++
++    if (!transferred)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++    *transferred = 0;
++    if (!buffer)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++    if (!acquire_handle(handle, &acquired)) return FALSE;
++    if (acquired.interface_index)
++        return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    if (type != 1 && type != 2)
++        return fail_after_release(&acquired, ERROR_NOT_SUPPORTED);
++    if (index || language)
++        return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    if (!cached_descriptor_region(acquired.root, type, &cached, &length))
++        return fail_after_release(&acquired, ERROR_BAD_DEVICE);
++    if (buffer_length < length)
++        return fail_after_release(&acquired, ERROR_INSUFFICIENT_BUFFER);
++
++    memcpy(buffer, cached, length);
++    *transferred = length;
++    release_handle(&acquired);
++    return TRUE;
++}
++
++/***********************************************************************
++ *           WinUsb_QueryDeviceInformation (winusb.@)
++ */
++BOOL WINAPI WinUsb_QueryDeviceInformation(WINUSB_INTERFACE_HANDLE handle, ULONG type,
++        PULONG buffer_length, PVOID buffer)
++{
++    struct acquired_handle acquired;
++    ULONG capacity;
++
++    if (!buffer_length || !buffer)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++    capacity = *buffer_length;
++    if (type != DEVICE_SPEED)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++    if (!acquire_handle(handle, &acquired)) return FALSE;
++    if (acquired.interface_index)
++        return fail_after_release(&acquired, ERROR_INVALID_PARAMETER);
++    if (!capacity)
++    {
++        *buffer_length = 1;
++        return fail_after_release(&acquired, ERROR_INSUFFICIENT_BUFFER);
++    }
++
++    *(UCHAR *)buffer = acquired.root->snapshot->speed >= HighSpeed ? 0x03 : 0x01;
++    *buffer_length = 1;
++    release_handle(&acquired);
++    return TRUE;
++}
++
+ BOOL WINAPI WinUsb_Initialize(HANDLE device, PWINUSB_INTERFACE_HANDLE handle)
+ {
+     struct wine_winusb_snapshot header, *snapshot;
+-    struct winusb_handle *object;
++    struct winusb_handle *object = NULL;
++    struct winusb_root *root = NULL;
+     struct wine_winusb_request release = {.size = sizeof(release), .version = WINE_WINUSB_ABI_VERSION};
+     DWORD bytes = 0;
++    SIZE_T slots_size;
+ 
+     if (!handle) { SetLastError(ERROR_INVALID_PARAMETER); return FALSE; }
+     *handle = NULL;
+@@ -337,8 +610,30 @@
+     if (!(snapshot = HeapAlloc(GetProcessHeap(), 0, header.total_size))) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); return FALSE; }
+     if (!submit_request(device, IOCTL_WINE_WINUSB_INITIALIZE, &(struct wine_winusb_request){.size=24,.version=1}, 24, snapshot, header.total_size, &bytes, FALSE)) goto bad_transport;
+     if (!validate_snapshot(snapshot, bytes, &header)) goto bad_postcommit;
++    if (!(root = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*root)))) goto bad_postcommit_memory;
++    InitializeCriticalSection(&root->lock);
++    InitializeConditionVariable(&root->drained);
++    slots_size = snapshot->interface_count;
++    if (slots_size > (SIZE_T)-1 / sizeof(*root->interface_handles)) goto bad_postcommit_layout;
++    slots_size *= sizeof(*root->interface_handles);
++    if (!(root->interface_handles = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, slots_size))) goto bad_postcommit_memory;
+     if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object)))) goto bad_postcommit_memory;
+-    object->magic = WINUSB_HANDLE_MAGIC; object->device = device; object->session = snapshot->session; object->snapshot = snapshot;
++
++    root->references = 1;
++    root->live_handles = 1;
++    root->device = device;
++    root->session = snapshot->session;
++    root->snapshot = snapshot;
++    root->snapshot_size = snapshot->total_size;
++    root->interface_count = snapshot->interface_count;
++    list_init(&root->retired_handles);
++    root->interface_handles[0] = object;
++    object->root = root;
++    object->live = TRUE;
++
++    EnterCriticalSection(&handle_registry_lock);
++    list_add_tail(&handle_registry, &object->entry);
++    LeaveCriticalSection(&handle_registry_lock);
+     *handle = object;
+     return TRUE;
+ bad_postcommit:
+@@ -355,7 +650,22 @@
+ bad_postcommit_memory:
+     release.session = snapshot->session;
+     submit_request(device, IOCTL_WINE_WINUSB_RELEASE, &release, sizeof(release), NULL, 0, &bytes, FALSE);
++    if (root)
++    {
++        HeapFree(GetProcessHeap(), 0, object);
++        HeapFree(GetProcessHeap(), 0, root->interface_handles);
++        DeleteCriticalSection(&root->lock);
++        HeapFree(GetProcessHeap(), 0, root);
++    }
+     HeapFree(GetProcessHeap(), 0, snapshot);
+     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+     return FALSE;
++bad_postcommit_layout:
++    release.session = snapshot->session;
++    submit_request(device, IOCTL_WINE_WINUSB_RELEASE, &release, sizeof(release), NULL, 0, &bytes, FALSE);
++    DeleteCriticalSection(&root->lock);
++    HeapFree(GetProcessHeap(), 0, root);
++    HeapFree(GetProcessHeap(), 0, snapshot);
++    SetLastError(ERROR_BAD_DEVICE);
++    return FALSE;
+ }
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 04:16:01.899835677 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h	2026-08-24 04:57:48.408510060 -0700
+@@ -1,15 +1,35 @@
+ #ifndef __WINE_WINUSB_DLL_PRIVATE_H
+ #define __WINE_WINUSB_DLL_PRIVATE_H
+ 
++#include "winbase.h"
++#include "wine/list.h"
+ #include "wine/winusb.h"
+ 
+-#define WINUSB_HANDLE_MAGIC 0x42535557u
++struct winusb_root;
++
+ struct winusb_handle
+ {
+-    UINT32 magic;
++    struct list entry;
++    struct winusb_root *root;
++    UINT32 interface_index;
++    ULONG api_references;
++    BOOL live;
++};
++
++struct winusb_root
++{
++    CRITICAL_SECTION lock;
++    CONDITION_VARIABLE drained;
++    LONG references;
++    UINT32 live_handles;
++    BOOL retiring;
+     HANDLE device;
+     UINT64 session;
+-    void *snapshot;
++    struct wine_winusb_snapshot *snapshot;
++    UINT32 snapshot_size;
++    struct winusb_handle **interface_handles;
++    UINT32 interface_count;
++    struct list retired_handles;
+ };
+ 
+ #endif
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-base/tests/winusb_user_api_contract.c	2026-08-24 04:16:01.905736731 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-5-head/tests/winusb_user_api_contract.c	2026-08-24 04:57:48.414040605 -0700
+@@ -5,6 +5,11 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <limits.h>
++#include <threads.h>
++#include <stdatomic.h>
++#include <sys/wait.h>
++#include <unistd.h>
+ #include "windef.h"
+ #include "winbase.h"
+ #include "winternl.h"
+@@ -192,7 +197,7 @@
+ struct io24_wire_snapshot
+ {
+     struct wine_winusb_snapshot header;
+-    UINT8 bytes[176];
++    UINT8 bytes[224];
+ };
+ union io24_wire_request
+ {
+@@ -218,6 +223,27 @@
+ struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
+ static struct io24_counts counts;
+ #define IO24_CHECK(expr) do { if (!(expr)) ++counts.failures; } while (0)
++static atomic_int io24_leave_gate_enabled, io24_leave_gate_count, io24_leave_gate_target, io24_leave_gate_entered, io24_leave_gate_release;
++static atomic_int io24_free_drain_entered, io24_free_done;
++struct io24_fake_cs { CRITICAL_SECTION *object; mtx_t lock; };
++struct io24_fake_cv { CONDITION_VARIABLE *object; cnd_t condition; };
++static struct io24_fake_cs io24_fake_cs[16];
++static struct io24_fake_cv io24_fake_cv[16];
++
++static struct io24_fake_cs *io24_cs_slot(CRITICAL_SECTION *object)
++{
++    unsigned int i;
++    for (i=0;i<sizeof(io24_fake_cs)/sizeof(io24_fake_cs[0]);++i)
++        if (io24_fake_cs[i].object==object) return &io24_fake_cs[i];
++    return NULL;
++}
++static struct io24_fake_cv *io24_cv_slot(CONDITION_VARIABLE *object)
++{
++    unsigned int i;
++    for (i=0;i<sizeof(io24_fake_cv)/sizeof(io24_fake_cv[0]);++i)
++        if (io24_fake_cv[i].object==object) return &io24_fake_cv[i];
++    return NULL;
++}
+ enum fake_event_kind { EVENT_IOCTL, EVENT_ALLOC, EVENT_FREE, EVENT_CLOSE, EVENT_DUPLICATE, EVENT_OVERLAPPED };
+ struct fake_event
+ {
+@@ -229,7 +255,7 @@
+ {
+     DWORD last_error; BOOL ioctl_result,overlapped_result; DWORD ioctl_error,query_ok; ULONG mode; NTSTATUS query_iosb_status; ULONG_PTR query_information;
+     struct { BOOL result,pending; DWORD error,bytes,completion_result,completion_error,completion_bytes; } private_call[8]; unsigned int private_call_count,private_call_index,active_private_call,release_ioctls,event_creates,event_closes,device_closes,alloc_fail_at,alloc_attempts; DWORD wait_result,wait_error;
+-    OVERLAPPED *caller_overlapped; HANDLE wait_handle; unsigned int snapshot_mutation,header_mutation,event_fail_at,fixture; BOOL low_speed_fixture;
++    OVERLAPPED *caller_overlapped; HANDLE wait_handle; unsigned int snapshot_mutation,header_mutation,event_fail_at,fixture; BOOL low_speed_fixture,two_interface_fixture,three_interface_fixture;
+     struct fake_event events[128]; unsigned int event_count,duplicates,closes;
+ };
+ static struct io24_fake_win32 fake;
+@@ -241,6 +267,7 @@
+     SNAPSHOT_FIXTURE_NONADJACENT_DUPLICATE_INTERFACE };
+ 
+ struct guarded_buffer { uint8_t before,bytes[32],after; };
++struct guarded_configuration_buffer { uint8_t before,bytes[64],after; };
+ struct guarded_ulong { uint32_t before;ULONG value;uint32_t after; };
+ struct guarded_policy_value { uint32_t before;uint8_t bytes[IO24_POLICY_PROBE_CAPACITY];uint32_t after; };
+ _Static_assert(sizeof(ULONG) == IO24_VENDOR_POLICY_CAPACITY, "vendor policy-8 input capacity");
+@@ -255,6 +282,7 @@
+ {
+     unsigned int failures=counts.failures;memset(&fake,0,sizeof(fake));memset(&counts,0,sizeof(counts));counts.failures=failures;
+     fake.ioctl_result=TRUE;fake.overlapped_result=TRUE;fake.query_ok=TRUE;fake.query_information=sizeof(FILE_MODE_INFORMATION);fake.wait_result=WAIT_OBJECT_0;fake.wait_error=ERROR_GEN_FAILURE;fake.active_private_call=~0u;
++    atomic_store(&io24_leave_gate_enabled,0);atomic_store(&io24_leave_gate_count,0);atomic_store(&io24_leave_gate_target,0);atomic_store(&io24_leave_gate_entered,0);atomic_store(&io24_leave_gate_release,0);atomic_store(&io24_free_drain_entered,0);atomic_store(&io24_free_done,0);
+ }
+ static void mutate_snapshot(struct io24_wire_snapshot *snapshot)
+ {
+@@ -318,6 +346,10 @@
+ {buffer->before=GUARD_BYTE;memset(buffer->bytes,value,sizeof(buffer->bytes));buffer->after=GUARD_BYTE;}
+ static void check_buffer_guards(const struct guarded_buffer *buffer)
+ {IO24_CHECK(buffer->before==GUARD_BYTE);IO24_CHECK(buffer->after==GUARD_BYTE);}
++static void guard_configuration_buffer_reset(struct guarded_configuration_buffer *buffer,uint8_t value)
++{buffer->before=GUARD_BYTE;memset(buffer->bytes,value,sizeof(buffer->bytes));buffer->after=GUARD_BYTE;}
++static void check_configuration_buffer_guards(const struct guarded_configuration_buffer *buffer)
++{IO24_CHECK(buffer->before==GUARD_BYTE);IO24_CHECK(buffer->after==GUARD_BYTE);}
+ static DWORD transfer_response_length(DWORD code,const OVERLAPPED *overlapped)
+ {
+     BOOL caller=fake.caller_overlapped&&overlapped==fake.caller_overlapped;
+@@ -385,6 +417,24 @@
+ BOOL WINAPI CloseHandle(HANDLE h){struct fake_event*e=record_event(EVENT_CLOSE);e->handle=h;e->result=TRUE;fake.closes++;if(h==IO24_FILE_HANDLE)fake.device_closes++;else fake.event_closes++;fake.last_error=ERROR_GEN_FAILURE;return TRUE;}
+ BOOL WINAPI DuplicateHandle(HANDLE a,HANDLE source,HANDLE b,HANDLE *target,DWORD c,BOOL d,DWORD flags)
+ {struct fake_event*e;(void)a;(void)b;(void)c;(void)d;(void)flags;e=record_event(EVENT_DUPLICATE);e->handle=source;e->result=TRUE;fake.duplicates++;if(target)*target=(HANDLE)((uintptr_t)source+0x100);e->pointer=target?*target:NULL;return TRUE;}
++void WINAPI InitializeCriticalSection(CRITICAL_SECTION *object)
++{unsigned int i;for(i=0;i<sizeof(io24_fake_cs)/sizeof(io24_fake_cs[0]);++i)if(!io24_fake_cs[i].object){io24_fake_cs[i].object=object;mtx_init(&io24_fake_cs[i].lock,mtx_plain);return;}}
++void WINAPI DeleteCriticalSection(CRITICAL_SECTION *object)
++{struct io24_fake_cs *slot=io24_cs_slot(object);if(slot){mtx_destroy(&slot->lock);slot->object=NULL;}}
++void WINAPI EnterCriticalSection(CRITICAL_SECTION *object)
++{struct io24_fake_cs *slot=io24_cs_slot(object);if(!slot){InitializeCriticalSection(object);slot=io24_cs_slot(object);}if(slot)mtx_lock(&slot->lock);}
++void WINAPI LeaveCriticalSection(CRITICAL_SECTION *object)
++{struct io24_fake_cs *slot=io24_cs_slot(object);if(slot){int count=atomic_fetch_add(&io24_leave_gate_count,1)+1;mtx_unlock(&slot->lock);if(atomic_load(&io24_leave_gate_enabled)&&count==atomic_load(&io24_leave_gate_target)){atomic_store(&io24_leave_gate_entered,1);while(!atomic_load(&io24_leave_gate_release))thrd_yield();}}}
++BOOL WINAPI TryEnterCriticalSection(CRITICAL_SECTION *object)
++{struct io24_fake_cs *slot=io24_cs_slot(object);if(!slot)return FALSE;return mtx_trylock(&slot->lock)==thrd_success;}
++void WINAPI InitializeConditionVariable(CONDITION_VARIABLE *object)
++{unsigned int i;struct io24_fake_cv *old=io24_cv_slot(object);if(old){cnd_destroy(&old->condition);old->object=NULL;}for(i=0;i<sizeof(io24_fake_cv)/sizeof(io24_fake_cv[0]);++i)if(!io24_fake_cv[i].object){io24_fake_cv[i].object=object;cnd_init(&io24_fake_cv[i].condition);return;}}
++BOOL WINAPI SleepConditionVariableCS(CONDITION_VARIABLE *condition,CRITICAL_SECTION *object,DWORD timeout)
++{struct io24_fake_cv *cv=io24_cv_slot(condition);struct io24_fake_cs *cs=io24_cs_slot(object);(void)timeout;atomic_store(&io24_free_drain_entered,1);return cv&&cs&&cnd_wait(&cv->condition,&cs->lock)==thrd_success;}
++void WINAPI WakeAllConditionVariable(CONDITION_VARIABLE *condition)
++{struct io24_fake_cv *cv=io24_cv_slot(condition);if(cv)cnd_broadcast(&cv->condition);}
++void WINAPI WakeConditionVariable(CONDITION_VARIABLE *condition)
++{struct io24_fake_cv *cv=io24_cv_slot(condition);if(cv)cnd_signal(&cv->condition);}
+ BOOL WINAPI DeviceIoControl(HANDLE device,DWORD code,void*in,DWORD in_length,void*out,DWORD out_length,DWORD*bytes,OVERLAPPED*ov)
+ {
+     struct fake_event*e=record_event(EVENT_IOCTL);size_t expected=request_size_for_code(code),saved=out_length;DWORD transfer_length;e->handle=device;e->code=code;e->in_length=in_length;e->out_length=out_length;e->pointer=out;e->overlapped=ov;e->private_event=ov?ov->hEvent:NULL;e->bytes_returned_pointer=bytes;e->result=fake.ioctl_result;
+@@ -397,7 +447,7 @@
+     e->returned_bytes=0;
+     if(out&&out_length&&e->typed_request)
+     {
+-        if(code==IO24_IOCTL_INITIALIZE&&out_length>=sizeof(struct wine_winusb_snapshot)&&e->typed_request){struct io24_wire_snapshot snapshot;struct wine_winusb_interface_snapshot iface={5,0,2,0};struct wine_winusb_alternate_snapshot alternate[2]={{0,0,0,0},{0,1,0,2}};struct wine_winusb_endpoint_snapshot endpoint[2]={{1,0x81,2,512},{1,1,2,512}};DWORD total=211;memset(&snapshot,0,sizeof(snapshot));snapshot.header.size=72;snapshot.header.version=IO24_ABI_VERSION;snapshot.header.session=out_length==72?0:UINT64_C(0x1122334455667788);snapshot.header.total_size=211;snapshot.header.speed=3;snapshot.header.device_offset=72;snapshot.header.device_length=18;snapshot.header.configuration_offset=90;snapshot.header.configuration_length=41;snapshot.header.interfaces_offset=131;snapshot.header.interface_count=1;snapshot.header.alternates_offset=147;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=179;snapshot.header.endpoint_count=2;memcpy(snapshot.bytes,io24_device_descriptor,18);memcpy(snapshot.bytes+18,io24_mi05_configuration,41);memcpy(snapshot.bytes+59,&iface,sizeof(iface));memcpy(snapshot.bytes+75,alternate,sizeof(alternate));memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));if(fake.fixture==SNAPSHOT_FIXTURE_DESCENDING||fake.fixture==SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE){struct wine_winusb_interface_snapshot interfaces[2]={{5,0,1,0},{fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?2:5,1,1,0}};struct wine_winusb_alternate_snapshot alternates[2]={{0,0,0,0},{1,0,0,0}};total=181;snapshot.header.total_size=total;snapshot.header.configuration_length=27;snapshot.header.interfaces_offset=117;snapshot.header.interface_count=2;snapshot.header.alternates_offset=149;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=181;snapshot.header.endpoint_count=0;memcpy(snapshot.bytes+18,fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?io24_descending_configuration:io24_duplicate_interface_configuration,27);memcpy(snapshot.bytes+45,interfaces,sizeof(interfaces));memcpy(snapshot.bytes+77,alternates,sizeof(alternates));}else if(fake.fixture==SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE){snapshot.bytes[54]=0x81;endpoint[1].pipe_id=0x81;memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));}if(fake.low_speed_fixture){iface.interface_number=2;iface.first_alternate=0;iface.alternate_count=1;alternate[0]=(struct wine_winusb_alternate_snapshot){0,0,0,1};endpoint[0]=(struct wine_winusb_endpoint_snapshot){0,0x82,3,64};total=163;snapshot.header.total_size=total;snapshot.header.speed=LowSpeed;snapshot.header.configuration_length=25;snapshot.header.interfaces_offset=115;snapshot.header.alternates_offset=131;snapshot.header.alternate_count=1;snapshot.header.endpoints_offset=147;snapshot.header.endpoint_count=1;memcpy(snapshot.bytes+18,io24_low_configuration,25);memcpy(snapshot.bytes+43,&iface,sizeof(iface));memcpy(snapshot.bytes+59,alternate,sizeof(alternate[0]));memcpy(snapshot.bytes+75,endpoint,sizeof(endpoint[0]));}if(out_length==72)mutate_header(&snapshot);else mutate_snapshot(&snapshot);memcpy(out,&snapshot,out_length==72?72:total);e->returned_bytes=out_length==72?72:total;}
++        if(code==IO24_IOCTL_INITIALIZE&&out_length>=sizeof(struct wine_winusb_snapshot)&&e->typed_request){struct io24_wire_snapshot snapshot;struct wine_winusb_interface_snapshot iface={5,0,2,0};struct wine_winusb_alternate_snapshot alternate[2]={{0,0,0,0},{0,1,0,2}};struct wine_winusb_endpoint_snapshot endpoint[2]={{1,0x81,2,512},{1,1,2,512}};DWORD total=211;memset(&snapshot,0,sizeof(snapshot));snapshot.header.size=72;snapshot.header.version=IO24_ABI_VERSION;snapshot.header.session=out_length==72?0:UINT64_C(0x1122334455667788);snapshot.header.total_size=211;snapshot.header.speed=3;snapshot.header.device_offset=72;snapshot.header.device_length=18;snapshot.header.configuration_offset=90;snapshot.header.configuration_length=41;snapshot.header.interfaces_offset=131;snapshot.header.interface_count=1;snapshot.header.alternates_offset=147;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=179;snapshot.header.endpoint_count=2;memcpy(snapshot.bytes,io24_device_descriptor,18);memcpy(snapshot.bytes+18,io24_mi05_configuration,41);memcpy(snapshot.bytes+59,&iface,sizeof(iface));memcpy(snapshot.bytes+75,alternate,sizeof(alternate));memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));if(fake.three_interface_fixture){static const uint8_t configuration[59]={9,2,59,0,3,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0,9,4,2,0,0,0xff,0,0,1,9,4,3,0,0,0xff,0,0,1};struct wine_winusb_interface_snapshot interfaces[3]={{5,0,2,0},{2,2,1,0},{3,3,1,0}};struct wine_winusb_alternate_snapshot alternates[4]={{0,0,0,0},{0,1,0,2},{1,0,2,0},{2,0,2,0}};total=293;snapshot.header.total_size=total;snapshot.header.configuration_length=59;snapshot.header.interfaces_offset=149;snapshot.header.interface_count=3;snapshot.header.alternates_offset=197;snapshot.header.alternate_count=4;snapshot.header.endpoints_offset=261;snapshot.header.endpoint_count=2;memcpy(snapshot.bytes+18,configuration,sizeof(configuration));memcpy(snapshot.bytes+77,interfaces,sizeof(interfaces));memcpy(snapshot.bytes+125,alternates,sizeof(alternates));memcpy(snapshot.bytes+189,endpoint,sizeof(endpoint));}else if(fake.two_interface_fixture){static const uint8_t configuration[50]={9,2,50,0,2,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0,9,4,2,0,0,0xff,0,0,1};struct wine_winusb_interface_snapshot interfaces[2]={{5,0,2,0},{2,2,1,0}};struct wine_winusb_alternate_snapshot alternates[3]={{0,0,0,0},{0,1,0,2},{1,0,2,0}};total=252;snapshot.header.total_size=total;snapshot.header.configuration_length=50;snapshot.header.interfaces_offset=140;snapshot.header.interface_count=2;snapshot.header.alternates_offset=172;snapshot.header.alternate_count=3;snapshot.header.endpoints_offset=220;snapshot.header.endpoint_count=2;memcpy(snapshot.bytes+18,configuration,sizeof(configuration));memcpy(snapshot.bytes+68,interfaces,sizeof(interfaces));memcpy(snapshot.bytes+100,alternates,sizeof(alternates));memcpy(snapshot.bytes+148,endpoint,sizeof(endpoint));}else if(fake.fixture==SNAPSHOT_FIXTURE_DESCENDING||fake.fixture==SNAPSHOT_FIXTURE_DUPLICATE_INTERFACE){struct wine_winusb_interface_snapshot interfaces[2]={{5,0,1,0},{fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?2:5,1,1,0}};struct wine_winusb_alternate_snapshot alternates[2]={{0,0,0,0},{1,0,0,0}};total=181;snapshot.header.total_size=total;snapshot.header.configuration_length=27;snapshot.header.interfaces_offset=117;snapshot.header.interface_count=2;snapshot.header.alternates_offset=149;snapshot.header.alternate_count=2;snapshot.header.endpoints_offset=181;snapshot.header.endpoint_count=0;memcpy(snapshot.bytes+18,fake.fixture==SNAPSHOT_FIXTURE_DESCENDING?io24_descending_configuration:io24_duplicate_interface_configuration,27);memcpy(snapshot.bytes+45,interfaces,sizeof(interfaces));memcpy(snapshot.bytes+77,alternates,sizeof(alternates));}else if(fake.fixture==SNAPSHOT_FIXTURE_CROSS_ALTERNATE_ENDPOINT_REUSE){snapshot.bytes[54]=0x81;endpoint[1].pipe_id=0x81;memcpy(snapshot.bytes+107,endpoint,sizeof(endpoint));}if(fake.low_speed_fixture){iface.interface_number=2;iface.first_alternate=0;iface.alternate_count=1;alternate[0]=(struct wine_winusb_alternate_snapshot){0,0,0,1};endpoint[0]=(struct wine_winusb_endpoint_snapshot){0,0x82,3,64};total=163;snapshot.header.total_size=total;snapshot.header.speed=LowSpeed;snapshot.header.configuration_length=25;snapshot.header.interfaces_offset=115;snapshot.header.alternates_offset=131;snapshot.header.alternate_count=1;snapshot.header.endpoints_offset=147;snapshot.header.endpoint_count=1;memcpy(snapshot.bytes+18,io24_low_configuration,25);memcpy(snapshot.bytes+43,&iface,sizeof(iface));memcpy(snapshot.bytes+59,alternate,sizeof(alternate[0]));memcpy(snapshot.bytes+75,endpoint,sizeof(endpoint[0]));}if(out_length==72)mutate_header(&snapshot);else mutate_snapshot(&snapshot);memcpy(out,&snapshot,out_length==72?72:total);e->returned_bytes=out_length==72?72:total;}
+         if(code==IO24_IOCTL_DESCRIPTOR&&out_length>=sizeof(io24_string_descriptor_response)){memcpy(out,io24_string_descriptor_response,sizeof(io24_string_descriptor_response));e->returned_bytes=sizeof(io24_string_descriptor_response);}
+         if(code==IO24_IOCTL_GET_POLICY&&out_length>=sizeof(struct io24_wire_policy)){struct io24_wire_policy response=e->request.policy;response.value_length=IO24_POLICY_RESPONSE_LENGTH;response.value=IO24_POLICY_RESPONSE_VALUE;memcpy(out,&response,sizeof(response));e->returned_bytes=sizeof(response);}
+         transfer_length=transfer_response_length(code,ov);
+@@ -539,20 +589,162 @@
+     fake_reset();if(initialize_handle(f,&h)){fake.event_fail_at=fake.event_creates+1;IO24_CHECK(f->free_handle&&f->free_handle(h));IO24_CHECK(fake.release_ioctls==0&&counts.allocations==counts.frees);}
+     fake_reset();if(initialize_handle(f,&h)){unsigned int completion_start=counts.completions;const struct fake_event *release;fake.private_call_count=1;fake.private_call[0].pending=TRUE;fake.wait_result=WAIT_FAILED;fake.wait_error=ERROR_INVALID_HANDLE;IO24_CHECK(f->free_handle&&f->free_handle(h));IO24_CHECK(fake.release_ioctls==1&&counts.allocations==counts.frees&&counts.completions==completion_start);release=find_ioctl_after(0,IO24_IOCTL_RELEASE);check_release(release);IO24_CHECK(release&&fake.wait_handle==release->private_event);}
+ }
++static void check_bad_free(const struct functions *f, WINUSB_INTERFACE_HANDLE handle)
++{
++    pid_t child;int status;
++
++    if (!f->free_handle) return;
++    child=fork();
++    IO24_CHECK(child>=0);
++    if (!child)
++    {
++        BOOL ok=f->free_handle(handle);
++        _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE?0:1);
++    }
++    if (child>0)
++    {
++        IO24_CHECK(waitpid(child,&status,0)==child);
++        IO24_CHECK(WIFEXITED(status)&&WEXITSTATUS(status)==0);
++    }
++}
++
++static void check_unreadable_admission(const struct functions *f, unsigned int operation)
++{
++    pid_t child;int status;
++    if ((operation==0&&!f->associated)||(operation==1&&!f->descriptor)||(operation==2&&!f->query)) return;
++    child=fork();IO24_CHECK(child>=0);if(!child)
++    {
++        WINUSB_INTERFACE_HANDLE out=NULL;ULONG length=1;uint8_t byte=0;BOOL ok=FALSE;
++        if(operation==0) ok=f->associated((void *)(uintptr_t)1,0,&out);
++        else if(operation==1) ok=f->descriptor((void *)(uintptr_t)1,1,0,0,&byte,1,&length);
++        else ok=f->query((void *)(uintptr_t)1,DEVICE_SPEED,&length,&byte);
++        if(operation==0) _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&out==NULL?0:1);
++        if(operation==1) _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&length==0&&byte==0?0:1);
++        _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&length==1&&byte==0?0:1);
++    }
++    if(child>0){IO24_CHECK(waitpid(child,&status,0)==child);IO24_CHECK(WIFEXITED(status)&&WEXITSTATUS(status)==0);}
++}
++
++static void check_stale_admission(const struct functions *f, WINUSB_INTERFACE_HANDLE stale, unsigned int operation)
++{
++    pid_t child;int status;
++    if ((operation==0&&!f->associated)||(operation==1&&!f->descriptor)||(operation==2&&!f->query)) return;
++    child=fork();IO24_CHECK(child>=0);if(!child)
++    {
++        WINUSB_INTERFACE_HANDLE output=(void *)(uintptr_t)1;ULONG length=1;uint8_t byte=0x6d;BOOL ok;
++        if(operation==0) ok=f->associated(stale,0,&output);
++        else if(operation==1) ok=f->descriptor(stale,1,0,0,&byte,1,&length);
++        else ok=f->query(stale,DEVICE_SPEED,&length,&byte);
++        if(operation==0) _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&output==NULL?0:1);
++        if(operation==1) _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&length==0&&byte==0x6d?0:1);
++        _exit(!ok&&GetLastError()==ERROR_INVALID_HANDLE&&length==1&&byte==0x6d?0:1);
++    }
++    if(child>0){IO24_CHECK(waitpid(child,&status,0)==child);IO24_CHECK(WIFEXITED(status)&&WEXITSTATUS(status)==0);}
++}
++
++static void check_task5_initialize_allocations(const struct functions *f)
++{
++    unsigned int attempt;WINUSB_INTERFACE_HANDLE handle;
++    if(!f->initialize||!f->free_handle) return;
++    for(attempt=2;attempt<=4;++attempt)
++    {
++        fake_reset();handle=(void *)(uintptr_t)1;fake.alloc_fail_at=attempt;
++        IO24_CHECK(!f->initialize(IO24_FILE_HANDLE,&handle)&&handle==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY);
++        IO24_CHECK(counts.submits==3&&fake.release_ioctls==1&&counts.allocations==counts.frees&&!fake.device_closes);
++        if(handle) f->free_handle(handle);
++    }
++}
++
++static BOOL initialize_two_interface_handle(const struct functions *f, WINUSB_INTERFACE_HANDLE *root)
++{
++    fake_reset();fake.two_interface_fixture=TRUE;
++    return initialize_handle(f,root);
++}
++static BOOL initialize_three_interface_handle(const struct functions *f, WINUSB_INTERFACE_HANDLE *root)
++{
++    fake_reset();fake.three_interface_fixture=TRUE;
++    return initialize_handle(f,root);
++}
++
++struct io24_cache_thread { const struct functions *functions; WINUSB_INTERFACE_HANDLE root; atomic_int started; BOOL result; ULONG length; uint8_t speed[2]; };
++struct io24_free_thread { const struct functions *functions; WINUSB_INTERFACE_HANDLE handle; atomic_int started; BOOL result; };
++static int io24_cache_thread_main(void *opaque)
++{struct io24_cache_thread *state=opaque;state->length=sizeof(state->speed);atomic_store(&state->started,1);state->result=state->functions->query(state->root,DEVICE_SPEED,&state->length,state->speed);return 0;}
++static int io24_free_thread_main(void *opaque)
++{struct io24_free_thread *state=opaque;atomic_store(&state->started,1);state->result=state->functions->free_handle(state->handle);atomic_store(&io24_free_done,1);return 0;}
++
++static void test_acquire_before_free(const struct functions *f, WINUSB_INTERFACE_HANDLE root)
++{
++    struct io24_cache_thread acquire={.functions=f,.root=root};struct io24_free_thread retire={.functions=f,.handle=root};thrd_t acquire_thread,retire_thread;unsigned int spins;
++    atomic_init(&acquire.started,0);atomic_init(&retire.started,0);atomic_store(&io24_leave_gate_count,0);atomic_store(&io24_leave_gate_target,2);atomic_store(&io24_leave_gate_enabled,1);
++    IO24_CHECK(thrd_create(&acquire_thread,io24_cache_thread_main,&acquire)==thrd_success);
++    for(spins=0;spins<1000000&&!atomic_load(&io24_leave_gate_entered);++spins) thrd_yield();
++    IO24_CHECK(atomic_load(&io24_leave_gate_entered));
++    IO24_CHECK(thrd_create(&retire_thread,io24_free_thread_main,&retire)==thrd_success);
++    for(spins=0;spins<1000000&&!atomic_load(&retire.started);++spins)thrd_yield();
++    for(spins=0;spins<1000000&&!atomic_load(&io24_free_drain_entered);++spins) thrd_yield();
++    IO24_CHECK(atomic_load(&io24_free_drain_entered)&&!atomic_load(&io24_free_done));
++    atomic_store(&io24_leave_gate_enabled,0);atomic_store(&io24_leave_gate_release,1);IO24_CHECK(thrd_join(acquire_thread,NULL)==thrd_success);IO24_CHECK(thrd_join(retire_thread,NULL)==thrd_success);
++    IO24_CHECK(acquire.result&&acquire.length==1&&acquire.speed[0]==HighSpeed&&retire.result&&fake.release_ioctls==1&&!fake.device_closes&&counts.allocations==counts.frees);
++}
++
+ static void test_handles(const struct functions*f)
+ {
+-    WINUSB_INTERFACE_HANDLE root,associated=NULL;unsigned int frees_before,assoc_pos,root_pos;fake_reset();if(!initialize_handle(f,&root))return;frees_before=counts.frees;
+-    IO24_CHECK(f->associated&&f->associated(root,0,&associated)&&associated&&associated!=root);if(!associated){if(f->free_handle)f->free_handle(root);return;}
+-    IO24_CHECK(f->free_handle&&f->free_handle(associated));IO24_CHECK(f->free_handle&&f->free_handle(root));assoc_pos=event_position(EVENT_FREE,associated);root_pos=event_position(EVENT_FREE,root);
+-    IO24_CHECK(assoc_pos!=~0u&&root_pos!=~0u&&assoc_pos<root_pos);IO24_CHECK(counts.frees>=frees_before+2);IO24_CHECK(fake.closes==0);
++    WINUSB_INTERFACE_HANDLE root,associated=NULL,associated2=NULL,duplicate=(void *)(uintptr_t)1;unsigned int frees_before,assoc_pos,root_pos,releases;
++
++    check_bad_free(f,(void *)(uintptr_t)1);check_unreadable_admission(f,0);check_unreadable_admission(f,1);check_unreadable_admission(f,2);check_task5_initialize_allocations(f);
++    if(!f->associated||!f->free_handle||!f->initialize) return;
++    fake_reset();IO24_CHECK(!f->associated(NULL,0,&associated)&&fake.last_error==ERROR_INVALID_HANDLE&&associated==NULL);
++    if(!initialize_three_interface_handle(f,&root)) return;
++    frees_before=counts.frees;
++    associated=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,0,NULL)&&fake.last_error==ERROR_INVALID_PARAMETER);
++    IO24_CHECK(f->associated(root,0,&associated)&&associated&&associated!=root);
++    IO24_CHECK(f->associated(root,1,&associated2)&&associated2&&associated2!=root&&associated2!=associated);
++    duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,0,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_ALREADY_EXISTS);
++    duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,1,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_ALREADY_EXISTS);
++    duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,2,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_NO_MORE_ITEMS);
++    duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(root,UCHAR_MAX,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_INVALID_PARAMETER);
++    duplicate=(void *)(uintptr_t)1;IO24_CHECK(!f->associated(associated,0,&duplicate)&&duplicate==NULL&&fake.last_error==ERROR_INVALID_PARAMETER);
++    if(f->descriptor&&f->query){ULONG length=1;uint8_t byte=0;IO24_CHECK(!f->descriptor(associated,1,0,0,&byte,1,&length)&&fake.last_error==ERROR_INVALID_PARAMETER&&length==0);length=1;IO24_CHECK(!f->query(associated,DEVICE_SPEED,&length,&byte)&&fake.last_error==ERROR_INVALID_PARAMETER&&length==1);length=1;IO24_CHECK(!f->descriptor(associated2,1,0,0,&byte,1,&length)&&fake.last_error==ERROR_INVALID_PARAMETER&&length==0);length=1;IO24_CHECK(!f->query(associated2,DEVICE_SPEED,&length,&byte)&&fake.last_error==ERROR_INVALID_PARAMETER&&length==1);}
++    /* Reissuing each slot independently detects a shifted or swapped root slot map. */
++    IO24_CHECK(f->free_handle(associated));duplicate=NULL;IO24_CHECK(f->associated(root,0,&duplicate)&&duplicate&&duplicate!=associated);associated=duplicate;
++    IO24_CHECK(f->free_handle(associated2));duplicate=NULL;IO24_CHECK(f->associated(root,1,&duplicate)&&duplicate&&duplicate!=associated2);associated2=duplicate;
++    releases=fake.release_ioctls;IO24_CHECK(f->free_handle(root));IO24_CHECK(fake.release_ioctls==releases);
++    check_bad_free(f,root);
++    check_stale_admission(f,root,0);check_stale_admission(f,root,1);check_stale_admission(f,root,2);
++    IO24_CHECK(f->free_handle(associated)&&f->free_handle(associated2));IO24_CHECK(fake.release_ioctls==releases+1&&counts.frees>=frees_before+3&&!fake.device_closes);
++    fake_reset();if(!initialize_two_interface_handle(f,&root))return;associated=NULL;IO24_CHECK(f->associated(root,0,&associated));
++    releases=fake.release_ioctls;IO24_CHECK(f->free_handle(associated));IO24_CHECK(fake.release_ioctls==releases);IO24_CHECK(f->free_handle(root));
++    assoc_pos=event_position(EVENT_FREE,associated);root_pos=event_position(EVENT_FREE,root);
++    IO24_CHECK(assoc_pos!=~0u&&root_pos!=~0u&&assoc_pos<root_pos&&fake.release_ioctls==releases+1&&!fake.device_closes);
++    fake_reset();if(!initialize_two_interface_handle(f,&root))return;test_acquire_before_free(f,root);
++    fake_reset();if(!initialize_two_interface_handle(f,&root))return;fake.alloc_fail_at=fake.alloc_attempts+1;associated=(void *)(uintptr_t)1;
++    IO24_CHECK(!f->associated(root,0,&associated)&&associated==NULL&&fake.last_error==ERROR_NOT_ENOUGH_MEMORY);IO24_CHECK(f->free_handle(root)&&fake.release_ioctls==1&&counts.allocations==counts.frees);
+ }
++
+ static void test_descriptors(const struct functions*f)
+ {
+-    WINUSB_INTERFACE_HANDLE h;struct guarded_buffer g;uint8_t speed[4];ULONG n,sl;unsigned int submits;BOOL ok;fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;
+-    memset(speed,0x6d,sizeof(speed));sl=sizeof(speed);ok=f->query&&f->query(h,1,&sl,speed);IO24_CHECK(ok);IO24_CHECK(sl==1);IO24_CHECK(speed[0]==3&&bytes_equal(speed+1,3,0x6d));
+-    guard_buffer_reset(&g,GUARD_BYTE);n=IO24_LENGTH_SENTINEL;ok=f->descriptor&&f->descriptor(h,1,0,0,g.bytes,sizeof(g.bytes),&n);IO24_CHECK(ok);IO24_CHECK(n==sizeof(io24_device_descriptor));IO24_CHECK(!memcmp(g.bytes,io24_device_descriptor,sizeof(io24_device_descriptor)));IO24_CHECK(bytes_equal(g.bytes+sizeof(io24_device_descriptor),sizeof(g.bytes)-sizeof(io24_device_descriptor),GUARD_BYTE));check_buffer_guards(&g);
+-    guard_buffer_reset(&g,GUARD_BYTE);n=IO24_LENGTH_SENTINEL;ok=f->descriptor&&f->descriptor(h,3,1,0x409,g.bytes,sizeof(g.bytes),&n);IO24_CHECK(ok);IO24_CHECK(n==sizeof(io24_string_descriptor_response));IO24_CHECK(!memcmp(g.bytes,io24_string_descriptor_response,sizeof(io24_string_descriptor_response)));IO24_CHECK(bytes_equal(g.bytes+sizeof(io24_string_descriptor_response),sizeof(g.bytes)-sizeof(io24_string_descriptor_response),GUARD_BYTE));check_buffer_guards(&g);
+-    IO24_CHECK(counts.submits==submits+1);if(f->free_handle)f->free_handle(h);
++    WINUSB_INTERFACE_HANDLE h;struct guarded_buffer g;struct guarded_configuration_buffer configuration;uint8_t speed[4];ULONG n,sl;unsigned int submits;BOOL ok;
++
++    if(!f->descriptor||!f->query||!f->associated||!f->free_handle||!f->initialize) return;
++    fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;
++    n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(NULL,1,0,0,g.bytes,sizeof(g.bytes),&n)&&fake.last_error==ERROR_INVALID_HANDLE&&n==0);
++    sl=sizeof(speed);IO24_CHECK(!f->query(NULL,DEVICE_SPEED,&sl,speed)&&fake.last_error==ERROR_INVALID_HANDLE&&sl==sizeof(speed));
++    memset(speed,0x6d,sizeof(speed));sl=sizeof(speed);ok=f->query(h,DEVICE_SPEED,&sl,speed);IO24_CHECK(ok&&sl==1&&speed[0]==HighSpeed&&bytes_equal(speed+1,3,0x6d));
++    sl=0;memset(speed,0x6d,sizeof(speed));IO24_CHECK(!f->query(h,DEVICE_SPEED,&sl,speed)&&fake.last_error==ERROR_INSUFFICIENT_BUFFER&&sl==1&&bytes_equal(speed,sizeof(speed),0x6d));
++    sl=sizeof(speed);IO24_CHECK(!f->query(h,2,&sl,speed)&&fake.last_error==ERROR_INVALID_PARAMETER&&sl==sizeof(speed));
++    sl=sizeof(speed);IO24_CHECK(!f->query(h,DEVICE_SPEED,NULL,speed)&&fake.last_error==ERROR_INVALID_PARAMETER&&sl==sizeof(speed));
++    sl=sizeof(speed);IO24_CHECK(!f->query(h,DEVICE_SPEED,&sl,NULL)&&fake.last_error==ERROR_INVALID_PARAMETER&&sl==sizeof(speed));
++    guard_buffer_reset(&g,GUARD_BYTE);n=IO24_LENGTH_SENTINEL;ok=f->descriptor(h,1,0,0,g.bytes,sizeof(g.bytes),&n);IO24_CHECK(ok&&n==sizeof(io24_device_descriptor)&&!memcmp(g.bytes,io24_device_descriptor,n)&&bytes_equal(g.bytes+n,sizeof(g.bytes)-n,GUARD_BYTE));check_buffer_guards(&g);
++    guard_configuration_buffer_reset(&configuration,GUARD_BYTE);n=IO24_LENGTH_SENTINEL;ok=f->descriptor(h,2,0,0,configuration.bytes,sizeof(configuration.bytes),&n);IO24_CHECK(ok&&n==sizeof(io24_mi05_configuration)&&!memcmp(configuration.bytes,io24_mi05_configuration,n)&&bytes_equal(configuration.bytes+n,sizeof(configuration.bytes)-n,GUARD_BYTE));check_configuration_buffer_guards(&configuration);
++    guard_buffer_reset(&g,GUARD_BYTE);n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(h,1,0,0,g.bytes,sizeof(io24_device_descriptor)-1,&n)&&fake.last_error==ERROR_INSUFFICIENT_BUFFER&&n==0&&bytes_equal(g.bytes,sizeof(g.bytes),GUARD_BYTE));
++    n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(h,1,0,0,NULL,sizeof(io24_device_descriptor),&n)&&fake.last_error==ERROR_INVALID_PARAMETER&&n==0);
++    guard_buffer_reset(&g,GUARD_BYTE);IO24_CHECK(!f->descriptor(h,1,0,0,g.bytes,sizeof(g.bytes),NULL)&&fake.last_error==ERROR_INVALID_PARAMETER&&bytes_equal(g.bytes,sizeof(g.bytes),GUARD_BYTE));check_buffer_guards(&g);
++    n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(h,1,1,0,g.bytes,sizeof(g.bytes),&n)&&fake.last_error==ERROR_INVALID_PARAMETER&&n==0);
++    n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(h,1,0,0x409,g.bytes,sizeof(g.bytes),&n)&&fake.last_error==ERROR_INVALID_PARAMETER&&n==0);
++    n=IO24_LENGTH_SENTINEL;IO24_CHECK(!f->descriptor(h,3,1,0x409,g.bytes,sizeof(g.bytes),&n)&&fake.last_error==ERROR_NOT_SUPPORTED&&n==0&&counts.submits==submits);
++    IO24_CHECK(f->free_handle(h)&&fake.release_ioctls==1&&!fake.device_closes);
++    fake_reset();fake.low_speed_fixture=TRUE;if(!initialize_handle(f,&h))return;sl=sizeof(speed);memset(speed,0x6d,sizeof(speed));IO24_CHECK(f->query(h,DEVICE_SPEED,&sl,speed)&&sl==1&&speed[0]==LowSpeed&&bytes_equal(speed+1,3,0x6d));IO24_CHECK(f->free_handle(h));
+ }
+ static void test_policy(const struct functions*f)
+ {

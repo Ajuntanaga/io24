@@ -1,0 +1,7 @@
+timestamp=2026-08-21T02:56:27-07:00
+capture_fixture_sha256=b061190bf90c23bbe1c5202ad22230ed5d630963e3c4872c5c305e6341bd4bda
+capture_bytes=50
+contract_bytes=50
+contract_matches_capture=true
+implementation_bytes=50
+implementation_matches_capture=true

@@ -1,0 +1,5 @@
+4f8f0814f94329b354c0fd9169add9195ae8981da38877af78492fefdc10bde7  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T090317-0700-hotkey-voicefx-state-route/SCOPE.md
+049dbfcd0dd125f1a915835afb0edc5c68212229c5d2ced96052fbdb18f3fc43  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T090317-0700-hotkey-voicefx-state-route/ANALYSIS.json
+6380dcba5b13f8dfda23e07d72fb9695cea189c5361ab1fb7628388a9bec8bd6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T090317-0700-hotkey-voicefx-state-route/PROGRESS.md
+2588934d865aa5a528dd218245d19fb12a5993a473221af8cb871c5ee437bb0a  re/cp34_uc472_hotkey_voicefx_route.py
+d71e03c8b18a55283c77e2843fb0196bcbb06f35fcd0e1b2bf4f12a0462c1114  tests/test_cp34_uc472_hotkey_voicefx_route.py

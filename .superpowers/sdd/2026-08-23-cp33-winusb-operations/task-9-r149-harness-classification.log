@@ -1,0 +1,4 @@
+R149_HARNESS_CLASSIFICATION PASS cases=3
+usage exit=2 marker=usage
+unsupported-mode exit=2 marker=usage
+missing-input exit=2 marker=HARNESS

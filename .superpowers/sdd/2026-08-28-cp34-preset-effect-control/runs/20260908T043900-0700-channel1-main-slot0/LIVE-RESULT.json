@@ -1,0 +1,73 @@
+{
+  "schema": "cp34-channel1-main-slot-stage-v1",
+  "status": "MAIN_ACTIVE_WRITE_SENT",
+  "battery_percent": 95,
+  "device": {
+    "serial": "AB7C22200355",
+    "bcd_device": "0128"
+  },
+  "preset_name": "MAIN",
+  "target_channel": 1,
+  "target_slot": 0,
+  "preserved_channel": 2,
+  "changes_preset_mode": false,
+  "changes_voicefx_assignment": false,
+  "record_bytes": 851,
+  "record_sha256": "fdd1c3def78bd774f49eccb34ae85c1f1e60906337723b06e847aee6e63b2404",
+  "memp_fragments": 1,
+  "memp_payload_sha256": [
+    "aec4841d0f3d5bbc7e9b5a9e59623a24c680b7d376bdf11081d354bab12fa1c5"
+  ],
+  "baseline": {
+    "flags_word": 385,
+    "channel_linked": false,
+    "input1_gain_db": 30.0,
+    "input2_gain_db": 24.287769317626953,
+    "input1_slot_index": 0,
+    "input2_slot_index": 2,
+    "input1_preset_enabled": true,
+    "input2_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input2_processing_channel": 1
+  },
+  "prewrite_state": {
+    "flags_word": 417,
+    "channel_linked": false,
+    "input1_gain_db": 30.0,
+    "input2_gain_db": 24.287769317626953,
+    "input1_slot_index": 1,
+    "input2_slot_index": 2,
+    "input1_preset_enabled": false,
+    "input2_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input2_processing_channel": 1
+  },
+  "transport": {
+    "slot": 0,
+    "fragments_sent": 1,
+    "replies_received": 0
+  },
+  "direct_apply": [
+    "order=comp-first",
+    "hpf=24Hz",
+    "comp(Standard)",
+    "eq(4)",
+    "limiter"
+  ],
+  "preamp_hpf_switch": "OFF_WRITE_SENT",
+  "post_state": {
+    "flags_word": 385,
+    "channel_linked": false,
+    "input1_gain_db": 30.0,
+    "input2_gain_db": 24.287769317626953,
+    "input1_slot_index": 0,
+    "input2_slot_index": 2,
+    "input1_preset_enabled": true,
+    "input2_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input2_processing_channel": 1
+  },
+  "left_selected_and_enabled": true,
+  "physical_commit": "UNPROVED",
+  "audibility": "REQUIRES_USER_LISTENING"
+}

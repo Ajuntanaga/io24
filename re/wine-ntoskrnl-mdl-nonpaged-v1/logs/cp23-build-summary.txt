@@ -1,0 +1,26 @@
+CP23 build summary
+
+Both configured trees use the same virtual paths and command:
+BISON_PKGDATADIR=/run/io24-tools/usr/share/bison
+M4=/run/io24-tools/usr/bin/m4
+SOURCE_DATE_EPOCH=1787101002
+/run/io24-source/configure --quiet --enable-win64 --without-mingw --without-x --without-freetype --with-usb USB_CFLAGS=-I/run/io24-tools/usr/include/libusb-1.0 USB_LIBS=/usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0
+
+Each build ran alone with make -j1, idle I/O priority, nice level 10, a
+2 GiB address-space ceiling, a 600-second hard timeout, private /dev, empty
+/sys, private home/tmp/run, and unshared networking.
+
+build_a_exit=0
+build_b_exit=0
+makefile_sha256_a=794b6f4ec0f46376ef41c0c33432b4e3ea79ea4c7868e1b0e99c2be8d04c7d82
+makefile_sha256_b=794b6f4ec0f46376ef41c0c33432b4e3ea79ea4c7868e1b0e99c2be8d04c7d82
+compile_commands_sha256_a=37a566a26540e24a4ea0fbc2acb404a21d7431102aa70417a78563b688615005
+compile_commands_sha256_b=37a566a26540e24a4ea0fbc2acb404a21d7431102aa70417a78563b688615005
+config_status_sha256_a=f24d118f5da7590a7537ff0e30dc0e04d1113559d816a3fcc7040a29ce2c6dcc
+config_status_sha256_b=f24d118f5da7590a7537ff0e30dc0e04d1113559d816a3fcc7040a29ce2c6dcc
+normalized_config_log_sha256_a=7880b0b42218ac9e691cdc9b34f58f56bc84222fd6c884e1ee5cabf9a31a4319
+normalized_config_log_sha256_b=7880b0b42218ac9e691cdc9b34f58f56bc84222fd6c884e1ee5cabf9a31a4319
+
+The only raw config.log differences are randomized /tmp/cc*.o names from
+expected failed feature probes. After normalizing those names, the logs are
+byte-identical. Both final build invocations exited zero.

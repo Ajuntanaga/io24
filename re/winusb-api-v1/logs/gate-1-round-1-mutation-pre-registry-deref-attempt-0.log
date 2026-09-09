@@ -1,0 +1,7 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+test_sha256 2588b4bfcce2bf465c8a80b9f7dd50bc2e77c4e3db0d699c426ecf8a154cf6fd
+mutation pre-registry-deref
+command timeout 20s bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/task-5-round-1-mutations/pre-registry-deref --handles
+tests/winusb_user_api_contract.sh: line 230: 1044151 Segmentation fault         (core dumped) "$build_dir/contract" self "$mode"
+HARNESS: public contract exited 139
+exit_code 2

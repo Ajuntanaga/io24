@@ -1,0 +1,85 @@
+CP33 TASK 1 CORRECTION ROUND 2 EXECUTED RED
+
+COMMAND public: tests/winusb_user_api_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+CP33 public executed mode=--red fake-events=0 submits=0 releases=0 completions=0 failures=7
+EXIT: 1
+
+COMMAND function: tests/winusb_function_io_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+CP32 winusb function-binding lifecycle checks passed
+CP33 function executed mode=--red dispatches=1 completions=0 failures=18
+EXIT: 1
+
+COMMAND lower: tests/wineusb_winusb_urb_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffcdc71dd78 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffcdc71dd78 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffcdc71df28.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffcdc71dd78 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffcdc71df28 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffcdc71dd78 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffcdc71df28.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffcdc71dd78 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffcdc71df28 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffcdc71dd78 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7ffcdc71df28.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffcdc71dd78 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffcdc71dd78 scope=all_interfaces root=0 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffcdc71dd78 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffcdc71dd78 interfaces=1 pipes=1.
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffcdc71dd88 header_length=88 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffcdc71dd88 scope=all_interfaces root=0 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffcdc71dd88 interfaces=1 pipes=0.
+fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffcdc71dd88 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffcdc71db38 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffcdc71dce8.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffcdc71db38 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffcdc71dce8 libusb_status=0 returned_status=0x103.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffcdc71dd68 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffcdc71df18.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffcdc71dd68 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffcdc71df18 libusb_status=0 returned_status=0x103.
+WineUSB pipe-observe fake-libusb behavior: pass
+CP33 lower executed mode=--red completions=2 failures=8
+EXIT: 1
+
+COMMAND cancel: tests/winusb_overlapped_cancel_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+err:wineusb:usb_cancel_transfer Failed to cancel transfer: io24 fake libusb
+err:wineusb:usb_cancel_transfer Failed to cancel transfer: io24 fake libusb
+CP33 cancel executed mode=--red cancels=0 completions=2 failures=7
+EXIT: 1
+
+COMMAND vendor: python3 tests/io24_winusb_vendor_profile_contract.py --wine-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source --vendor-dll /home/ajuntanaga/Documents/Universal\ Control/hwaccess/dspusbdevice.dll
+CP33 public executed mode=--vendor fake-events=0 submits=0 releases=0 completions=0 failures=1
+CP33 vendor RED: hash=OK imports=14/14 policy-callsite=0x180084d50 initializer=0x180095e20 static-definitions=1/14 synthetic-sequence=RED policy-pairs=9 failures=vendor callable count 1/14; synthetic fourteen-operation sequence
+EXIT: 1
+
+MODE public --red EXIT=1 DIAGNOSTIC=CP33 public executed mode=--red fake-events=0 submits=0 releases=0 completions=0 failures=7 
+MODE public --initialize EXIT=1 DIAGNOSTIC=CP33 public executed mode=--initialize fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --handles EXIT=1 DIAGNOSTIC=CP33 public executed mode=--handles fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --descriptors EXIT=1 DIAGNOSTIC=CP33 public executed mode=--descriptors fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --policy EXIT=1 DIAGNOSTIC=CP33 public executed mode=--policy fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --transfer EXIT=1 DIAGNOSTIC=CP33 public executed mode=--transfer fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --cancel EXIT=1 DIAGNOSTIC=CP33 public executed mode=--cancel fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE public --vendor EXIT=1 DIAGNOSTIC=CP33 public executed mode=--vendor fake-events=0 submits=0 releases=0 completions=0 failures=1 
+MODE function --red EXIT=1 DIAGNOSTIC=CP33 function executed mode=--red dispatches=1 completions=0 failures=18 
+MODE function --lifecycle EXIT=1 DIAGNOSTIC=CP33 function executed mode=--lifecycle dispatches=1 completions=0 failures=2 
+MODE function --session EXIT=1 DIAGNOSTIC=CP33 function executed mode=--session dispatches=1 completions=0 failures=4 
+MODE function --alternate EXIT=1 DIAGNOSTIC=CP33 function executed mode=--alternate dispatches=1 completions=0 failures=4 
+MODE function --policy EXIT=1 DIAGNOSTIC=CP33 function executed mode=--policy dispatches=1 completions=0 failures=4 
+MODE function --transfer EXIT=1 DIAGNOSTIC=CP33 function executed mode=--transfer dispatches=1 completions=0 failures=4 
+MODE lower --red EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--red completions=2 failures=8 
+MODE lower --claims EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--claims completions=0 failures=1 
+MODE lower --alternate EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--alternate completions=0 failures=3 
+MODE lower --control-descriptor EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--control-descriptor completions=0 failures=2 
+MODE lower --sync-pipes EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--sync-pipes completions=0 failures=1 
+MODE lower --transfer-lifetime EXIT=1 DIAGNOSTIC=CP33 lower executed mode=--transfer-lifetime completions=2 failures=1 
+MODE cancel --red EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--red cancels=0 completions=2 failures=7 
+MODE cancel --lower EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--lower cancels=2 completions=0 failures=3 
+MODE cancel --upper EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--upper cancels=0 completions=0 failures=1 
+MODE cancel --teardown EXIT=1 DIAGNOSTIC=CP33 cancel executed mode=--teardown cancels=0 completions=2 failures=3 
+PROBE public_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE] 
+PROBE function_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT [MODE] 
+PROBE lower_usage EXIT=2 DIAGNOSTIC=usage: tests/wineusb_winusb_urb_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE] 
+PROBE cancel_usage EXIT=2 DIAGNOSTIC=usage: tests/winusb_overlapped_cancel_contract.sh WINE_SOURCE_ROOT WINE_BUILD_ROOT LIBUSB_INCLUDE [MODE] 
+PROBE vendor_usage EXIT=2 DIAGNOSTIC=io24_winusb_vendor_profile_contract.py: error: the following arguments are required: --wine-source, --vendor-dll 
+PROBE public_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+PROBE function_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+PROBE lower_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+PROBE cancel_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+PROBE public_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round2.iaSVu4/missing-source/include/winusb.h 
+PROBE lower_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round2.iaSVu4/missing-libusb/libusb.h 
+PROBE vendor_missing_tool EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 2] No such file or directory: 'objdump' 
+PROBE vendor_unreadable_source EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 13] Permission denied: '/tmp/cp33-task1-round2.iaSVu4/unreadable-root/dlls/winusb/io.c' 

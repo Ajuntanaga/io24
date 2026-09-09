@@ -1,0 +1,5 @@
+command=bash tests/uc_wine_capture.sh uc
+expected_exit=1
+Refusing Universal Control capture: CP30 proves the required Wine
+WinUSB discovery, function binding, and API layers are incomplete.
+Remove this guard only with a future hash-pinned behavioral selector.

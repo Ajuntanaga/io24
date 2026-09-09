@@ -1,0 +1,6 @@
+c577190120f193d51d93aa7fb224b1f63ffafe75314cbd037d61757924af6d6a  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+f118747b7cce73967519d6192896fded8279c31b483e4be24d18ea6f55879f64  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+9f9ed03b0af32f223f1c77b9f8f8ed0a341f4c61401a60dd9a40be6a5d3b0402  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+211dfebb91d009c858101730781d452b9c51d05f66ebe52486a70993bf720e28  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c
+54d003595e23ec6b8a7eeeb0c524232efd1c7a6f285740b7b43bd3852ed757c9  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_function_io_contract.c
+8e77966e4d73efb34832f898da9269ecee0252a6dd4f74a7a08af949706c41f6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_user_api_contract.c

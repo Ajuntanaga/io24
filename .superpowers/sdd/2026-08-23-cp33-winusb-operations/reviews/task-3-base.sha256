@@ -1,0 +1,7 @@
+5768b84459dc5f3802794608f5253d25db73da2d8253643f6956e26418b8479c  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+b1c454852ced491c7d7633f036022631d56d934812d793c8d3610a1df3cdbcd6  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.c
+60b11dd4a4b4689ae10c1b09de7029f202fcb6f8abaf2b63465d4b354dd64597  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+076f0e0fad9bea770a4039ab04fdb7392e8847969ef93c61027dcd930503722c  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+6c02c570e55eae72c5e11a28276c61cff5bf784ec8b27c6f70aa3b15a27e85ed  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/tests/wineusb_winusb_busif_contract.c
+c599bcae6d9f33042da2e9fb8f2a1636ea6f7ce30ce32d994ea2f37c1929a2ad  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/tests/winusb_function_io_contract.c
+b0f826d488424987fea7bcfe91dd0605a00e1f2c478cdf732df2c37e15fe0d7d  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-base/tests/winusb_function_binding_contract.c

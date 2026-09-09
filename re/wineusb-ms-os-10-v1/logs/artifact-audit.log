@@ -1,0 +1,37 @@
+CP31 production patch and artifact audit
+Date: 2026-08-23
+
+Patch:
+  d63c0b6727c6fa313153738aa0a33bfd5f0cc799e90012d92257eebb0a0ed6d4
+  re/wine-11.15-wineusb-ms-os-10-v1.patch
+  590 lines; 6 source-file sections
+  patch --batch --forward --fuzz=0 -p1: exit 0
+
+Source equivalence:
+  dev-source regular files:         12447
+  patch-check-source regular files: 12447
+  diff -qr: no differences, exit 0
+  .orig/.rej files: none
+
+Clean WineUSB Unix dependency boundary:
+  NEEDED ntdll.so
+  NEEDED libusb-1.0.so.0
+  NEEDED libc.so.6
+
+New unique actionable libusb symbol:
+  UND libusb_control_transfer
+
+Absent actionable symbols:
+  libusb_claim_interface
+  libusb_detach_kernel_driver
+  libusb_set_interface_alt_setting
+  libusb_set_configuration
+
+The two readelf rows for libusb_control_transfer are the same unique undefined
+symbol shown once in .dynsym and once in .symtab. The builtin's UTF-16 strings
+contain generic USB\MS_COMP_ and &MS_SUBCOMP_ prefixes. Production source has
+no io24 VID/PID or vendor-code hardcode.
+
+The fake PE module is unchanged from CP29. Discovery logic lives in the native
+WineUSB builtin/Unix pair, so matching halves remain mandatory for any future
+overlay. Nothing was copied to a staging root in CP31.

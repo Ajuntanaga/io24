@@ -1,0 +1,14 @@
+finished=2026-08-21T02:30:55,109832918-07:00
+disconnect_seen=0
+reconnect_seen=0
+tcpdump_status=0
+matching_devices=1
+device=3-1 bus=3 dev=3 serial=AB7C22200355 vidpid=194f:0422
+interface=1.0 driver=snd-usb-audio
+interface=1.1 driver=snd-usb-audio
+interface=1.2 driver=snd-usb-audio
+interface=1.3 driver=snd-usb-audio
+interface=1.4 driver=snd-usb-audio
+interface=1.5 driver=unclaimed
+interface=1.6 driver=unclaimed
+usbmon_restored=unloaded

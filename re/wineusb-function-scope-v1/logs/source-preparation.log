@@ -1,0 +1,5 @@
+patching file dlls/wineusb.sys/unixlib.c
+patching file dlls/wineusb.sys/unixlib.c
+source_a_regular_files=12445
+source_b_regular_files=12445
+source_equivalence=true

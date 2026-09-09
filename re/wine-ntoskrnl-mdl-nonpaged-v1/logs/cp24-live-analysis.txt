@@ -1,0 +1,65 @@
+CP24 live diagnostic analysis
+capture=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/live-service-usb.txt
+capture_size=187249
+capture_sha256=ab998beda7e6544cf56d574b66212ee3129d17e4f7b97cf3378582d5ef105da8
+service_log=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/service-install.log
+unit=io24-wine-live-read-197499.service
+invocation=8f9790c96bc84b8a9d331c11949d15e4
+unit_exit=1
+retry=no
+
+select_configuration_validated=2
+select_configuration_populated=2
+select_configuration_rejected=0
+pipe_handles_total=4
+pipe_handle_endpoint_0x02=2
+pipe_handle_endpoint_0x82=2
+MmBuildMdlForNonPagedPool=24
+transfer_map=8
+transfer_map_mapped_ok=8
+transfer_map_mapped_null=0
+transfer_map_unique_handle=0x282
+transfer_map_unique_flags=0x3
+transfer_map_unique_length=512
+transfer_route=8
+transfer_submit=8
+transfer_submit_endpoint=0x82
+transfer_submit_route=bulk
+transfer_submit_libusb_status=-1
+transfer_submit_returned_status=0x103
+transfer_reject_null=0
+MmMapLockedPagesSpecifyCache=0
+KeInitializeDpc=27
+KeInsertQueueDpc=0
+structured_clear_halt=4
+
+libusb_submit_transfer=117
+usbmon_submit_control_in=109
+usbmon_complete_control_in=109
+usbmon_non_control_in=0
+submit_bulk_transfer_lines=24
+submiturb_failed_errno_16=8
+libusb_clear_halt=4
+libusb_sync_bulk_transfer=0
+libusb_sync_interrupt_transfer=0
+libusb_sync_control_transfer=0
+libusb_claim_interface=0
+libusb_release_interface=0
+libusb_detach_kernel_driver=0
+libusb_set_auto_detach_kernel_driver=0
+libusb_set_interface_alt_setting=0
+libusb_set_configuration=0
+kernel_interface4_not_claimed=12
+kernel_reset_disconnect_reconnect_rebind=0
+
+ucnet_DA=absent
+synchronize_json=absent
+synchronization=no
+
+finding=The CP22 nonpaged-pool MDL compatibility change worked live: all eight bulk-IN URBs obtained their mapped source addresses and passed the null-buffer guard.
+finding=All eight bulk-IN libusb submissions failed immediately with errno 16 before usbfs accepted an URB because host interface 4 remained bound to snd-usb-audio and was not claimed.
+finding=WineUSB stored each transfer in DriverContext[0], logged the immediate libusb failure, and nevertheless returned STATUS_PENDING. No callback can run for a transfer that was never submitted, leaving each IRP pending and its transfer context allocated.
+finding=No KeInsertQueueDpc call occurred in CP24. The immediate-submit error path, not DPC execution, is the first newly demonstrated software blocker.
+finding=Interface routing remains a separate boundary. Claim, detach, alternate-setting, and configuration operations remain forbidden without new explicit authorization.
+
+ANALYSIS=PASS

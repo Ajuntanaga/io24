@@ -1,0 +1,546 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:11:59.183587101 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:20:45.891066467 -0700
+@@ -1,2 +1,2 @@
+-201ae0611c9458de53084b3f6f9df095ba15fd523ea945d7f076385f1db0ccf1  re/cp34_current_slot_survey.py
+-4d7e40e06498566a89d19ea861bec0e2156b5ce272c165aa89972e42aa331fb5  tests/test_cp34_current_slot_survey.py
++13c67d0c5840df636bb49c8338acb2efc97f8a7478e3460469479e2549075d51  re/cp34_current_slot_survey.py
++19bcfe269dd835943a75be2d9f23b0c5be24426fba0b2cb10c323cb330427535  tests/test_cp34_current_slot_survey.py
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/re/cp34_current_slot_survey.py	2026-08-29 03:11:59.183366122 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/re/cp34_current_slot_survey.py	2026-08-29 03:20:45.890854917 -0700
+@@ -54,7 +54,7 @@
+ )
+ JA_ST_LIMITATION = "JaSt cannot prove every internal DSP byte."
+ _MANIFEST_ROW = re.compile(r"([0-9a-f]{64})  ([^\r\n]+)\Z")
+-_EXCLUDED_INPUT_NAMES = frozenset({
++_EXCLUDED_INPUT_PATHS = frozenset({
+     "EVIDENCE-SHA256SUMS", "RESTORATION.json", "REPORT.md", "SHA256SUMS",
+ })
+ 
+@@ -405,7 +405,7 @@
+                 elif entry.is_dir(follow_symlinks=False):
+                     visit(entry.path, child_relative)
+                 elif entry.is_file(follow_symlinks=False):
+-                    if entry.name in _EXCLUDED_INPUT_NAMES:
++                    if child_relative in _EXCLUDED_INPUT_PATHS:
+                         continue
+                     try:
+                         inputs[child_relative] = _read_regular_file_once(entry.path)
+@@ -446,9 +446,7 @@
+             reasons.append("evidence_manifest_row_invalid:%d" % line_number)
+             continue
+         expected_hash, relative_text = match.groups()
+-        relative = PurePosixPath(relative_text)
+-        if (relative.is_absolute() or relative_text != relative.as_posix()
+-                or relative_text in ("", ".") or ".." in relative.parts):
++        if not _is_safe_relative_path(relative_text):
+             reasons.append("evidence_manifest_path_unsafe:%d" % line_number)
+             continue
+         if relative_text in rows:
+@@ -525,30 +523,115 @@
+     return reasons
+ 
+ 
++def _is_safe_relative_path(value):
++    if not isinstance(value, str):
++        return False
++    relative = PurePosixPath(value)
++    return not (
++        relative.is_absolute() or value != relative.as_posix()
++        or value in ("", ".") or ".." in relative.parts
++    )
++
++
+ def _same_json_scalar(first, second):
+     return type(first) is type(second) and first == second
+ 
+ 
+-def _deduplicate(reasons):
+-    return list(dict.fromkeys(reasons))
++def _state_type_reasons(state, prefix):
++    reasons = []
++    for key in ("selected_slot", "processing_channel_1", "processing_channel_2"):
++        value = state.get(key)
++        if not isinstance(value, int) or isinstance(value, bool):
++            reasons.append("%s_%s_must_be_integer" % (prefix, key))
++    for key in ("enabled", "phantom_1", "phantom_2"):
++        if not isinstance(state.get(key), bool):
++            reasons.append("%s_%s_must_be_boolean" % (prefix, key))
++    for key in ("gain_1", "gain_2", "headphone", "main", "monitor_blend"):
++        value = state.get(key)
++        if (not isinstance(value, (int, float)) or isinstance(value, bool)
++                or not math.isfinite(value)):
++            reasons.append("%s_%s_must_be_finite_numeric" % (prefix, key))
++    return reasons
+ 
+ 
+-def _read_first_restoration(run_dir):
+-    paths = (
+-        Path(run_dir) / "ch1-slot1" / "RESTORATION.json",
+-        Path(run_dir) / "RESTORATION.json",
+-    )
+-    for path in paths:
+-        try:
+-            raw = _read_regular_file_once(str(path))
+-        except OSError:
++def _is_mono_s32_48khz_wav(raw):
++    try:
++        with wave.open(io.BytesIO(raw), "rb") as source:
++            return (
++                source.getcomptype() == "NONE"
++                and source.getnchannels() == 1
++                and source.getsampwidth() == 4
++                and source.getframerate() == RATE
++                and _has_exact_s32_pcm_semantics(raw)
++                and len(source.readframes(source.getnframes()))
++                    == source.getnframes() * 4
++            )
++    except (OSError, EOFError, wave.Error):
++        return False
++
++
++def _verify_ab_metric_bindings(ab_result, candidate, frozen_channel,
++                               p0_enabled, inputs, reasons):
++    if (not isinstance(frozen_channel, int) or isinstance(frozen_channel, bool)
++            or frozen_channel not in MIX_CHANNELS):
++        reasons.append("ab_metric_frozen_channel_invalid")
++        return
++    if p0_enabled is True:
++        expected = {"dry": ("S2", "S3"), "active": ("S1", "S4")}
++    else:
++        expected = {"dry": ("S1", "S4"), "active": ("S2", "S3")}
++    seen_paths = []
++    role_binding_valid = True
++    for role in ("dry", "active"):
++        rows = ab_result.get(role)
++        if not isinstance(rows, list) or len(rows) != 2:
++            reasons.append("ab_metric_count_invalid:%s" % role)
++            role_binding_valid = False
+             continue
+-        try:
+-            value = _strict_json_loads(raw)
+-        except (UnicodeDecodeError, json.JSONDecodeError):
+-            return None
+-        return value if isinstance(value, dict) else None
+-    return None
++        actual_paths = []
++        for index, (row, capture) in enumerate(zip(rows, expected[role]), 1):
++            if not isinstance(row, dict):
++                reasons.append("ab_metric_row_invalid:%s:%d" % (role, index))
++                role_binding_valid = False
++                continue
++            path = row.get("path")
++            expected_path = "%s/%s.mix%d.mono.wav" % (
++                candidate, capture, frozen_channel,
++            )
++            if not _is_safe_relative_path(path):
++                reasons.append("ab_metric_path_unsafe:%s:%d" % (role, index))
++                role_binding_valid = False
++                continue
++            actual_paths.append(path)
++            seen_paths.append(path)
++            if path != expected_path:
++                reasons.append("ab_metric_path_mismatch:%s:%d" % (role, index))
++                role_binding_valid = False
++            derivative = inputs.get(path)
++            if derivative is None:
++                reasons.append("ab_metric_input_missing:%s:%d" % (role, index))
++                continue
++            declared_hash = row.get("sha256")
++            if (not isinstance(declared_hash, str)
++                    or not _STIMULUS_HASH.fullmatch(declared_hash)):
++                reasons.append("ab_metric_sha256_invalid:%s:%d" % (role, index))
++            elif hashlib.sha256(derivative).hexdigest() != declared_hash:
++                reasons.append("ab_metric_hash_mismatch:%s:%d" % (role, index))
++            if not _is_mono_s32_48khz_wav(derivative):
++                reasons.append("ab_metric_wav_invalid:%s:%d" % (role, index))
++        if tuple(actual_paths) != tuple(
++                "%s/%s.mix%d.mono.wav" % (candidate, capture, frozen_channel)
++                for capture in expected[role]):
++            role_binding_valid = False
++    if len(seen_paths) != 4 or len(set(seen_paths)) != 4:
++        reasons.append("ab_metric_paths_must_be_four_distinct_inputs")
++        role_binding_valid = False
++    if not role_binding_valid:
++        reasons.append("ab_metric_role_binding_invalid")
++
++
++def _deduplicate(reasons):
++    return list(dict.fromkeys(reasons))
+ 
+ 
+ def verify_restoration(run_dir: str, candidate: str) -> dict:
+@@ -611,16 +694,42 @@
+         checkpoint: _json_input(inputs, prefix + checkpoint + ".json", reasons)
+         for checkpoint in ("P0", "P1", "P2")
+     }
++    raw_snapshot_paths = []
+     for checkpoint, state_value in states.items():
+         reasons.extend(_scope_reasons(state_value, candidate_spec, checkpoint.lower()))
+         if isinstance(state_value, dict):
++            checkpoint_prefix = checkpoint.lower()
++            reasons.extend(_state_type_reasons(state_value, checkpoint_prefix))
++            if state_value.get("schema") != "cp34-current-slot-jast-summary-v1":
++                reasons.append("%s_jast_summary_schema_invalid" % checkpoint_prefix)
+             if state_value.get("checkpoint") != checkpoint:
+-                reasons.append("%s_checkpoint_mismatch" % checkpoint.lower())
++                reasons.append("%s_checkpoint_mismatch" % checkpoint_prefix)
+             if not _same_json_scalar(
+                     state_value.get("selected_slot"), candidate_spec["numeric_slot"]):
+-                reasons.append("%s_selected_slot_mismatch" % checkpoint.lower())
++                reasons.append("%s_selected_slot_mismatch" % checkpoint_prefix)
+             if not isinstance(state_value.get("enabled"), bool):
+-                reasons.append("%s_enabled_must_be_boolean" % checkpoint.lower())
++                reasons.append("%s_enabled_must_be_boolean" % checkpoint_prefix)
++            raw_path = state_value.get("raw_snapshot_path")
++            raw_hash = state_value.get("raw_snapshot_sha256")
++            if (not _is_safe_relative_path(raw_path)
++                    or PurePosixPath(raw_path).parts[0] != candidate
++                    or len(PurePosixPath(raw_path).parts) < 2):
++                reasons.append("%s_raw_snapshot_path_invalid" % checkpoint_prefix)
++            else:
++                raw_snapshot_paths.append(raw_path)
++                raw_bytes = inputs.get(raw_path)
++                if raw_bytes is None:
++                    reasons.append("%s_raw_snapshot_missing" % checkpoint_prefix)
++                elif (not isinstance(raw_hash, str)
++                        or not _STIMULUS_HASH.fullmatch(raw_hash)):
++                    reasons.append("%s_raw_snapshot_sha256_invalid" % checkpoint_prefix)
++                elif hashlib.sha256(raw_bytes).hexdigest() != raw_hash:
++                    reasons.append("%s_raw_snapshot_hash_mismatch" % checkpoint_prefix)
++            if (not isinstance(raw_hash, str)
++                    or not _STIMULUS_HASH.fullmatch(raw_hash)):
++                reasons.append("%s_raw_snapshot_sha256_invalid" % checkpoint_prefix)
++    if len(raw_snapshot_paths) != len(set(raw_snapshot_paths)):
++        reasons.append("jast_raw_snapshots_must_be_distinct")
+ 
+     p0, p1, p2 = states["P0"], states["P1"], states["P2"]
+     if isinstance(p0, dict) and isinstance(p1, dict):
+@@ -688,6 +797,15 @@
+         elif map_result.get("raw_sha256") != hashlib.sha256(map_raw).hexdigest():
+             reasons.append("map_raw_hash_mismatch")
+ 
++    for event in events:
++        if (event.get("kind") == "audio_capture"
++                and not _same_json_scalar(
++                    event.get("frozen_mix_channel"), frozen_channel
++                )):
++            reasons.append(
++                "audio_capture_frozen_channel_mismatch:%s" % event.get("id"),
++            )
++
+     s4_raw = inputs.get(prefix + "S4.raw.wav")
+     if s4_raw is None:
+         reasons.append("required_input_missing:%sS4.raw.wav" % prefix)
+@@ -703,18 +821,45 @@
+     ab_result = _json_input(inputs, prefix + "AB.json", reasons)
+     ab_status = None
+     if isinstance(ab_result, dict):
+-        reasons.extend(_scope_reasons(ab_result, candidate_spec, "ab"))
+-        if ab_result.get("schema") != "cp34-current-slot-ab-v1":
++        if ab_result.get("schema") != "cp34-slot-survey-audio-v1":
+             reasons.append("ab_schema_invalid")
+-        if not _same_json_scalar(
+-                ab_result.get("selected_slot"), candidate_spec["numeric_slot"]):
+-            reasons.append("ab_selected_slot_mismatch")
+-        if not _same_json_scalar(ab_result.get("frozen_mix_channel"), frozen_channel):
+-            reasons.append("ab_frozen_channel_mismatch")
++        if not _same_json_scalar(ab_result.get("candidate"), candidate):
++            reasons.append("ab_candidate_mismatch")
++        if ab_result.get("model_identity") != "UNRESOLVED":
++            reasons.append("ab_model_identity_must_be_unresolved")
++        for field in ("title_verified", "live_ready", "restoration_verified"):
++            if ab_result.get(field) is not False:
++                reasons.append("ab_%s_must_be_false" % field)
+         ab_status = ab_result.get("status")
+-        if ("model" not in ab_result or "title" not in ab_result
+-                or ab_result.get("model") is not None or ab_result.get("title") is not None):
+-            reasons.append("ab_model_and_title_must_be_unresolved")
++        classification = ab_result.get("classification")
++        positive_classifier = (
++            ab_status == "SIGNATURE_PRESENT"
++            and classification == "REPEAT_150MS_SIGNATURE"
++            and ab_result.get("reverb_like_observed") is False
++            and ab_result.get("audible_attested") is True
++            and ab_result.get("reasons") == []
++        )
++        inconclusive_classifier = (
++            ab_status == "INCONCLUSIVE"
++            and classification in (
++                "NO_DISTINCTIVE_SIGNATURE", "NON_SPECIFIC_LATE_TAIL",
++            )
++            and isinstance(ab_result.get("audible_attested"), bool)
++            and isinstance(ab_result.get("reasons"), list)
++            and (
++                (classification == "NON_SPECIFIC_LATE_TAIL"
++                 and ab_result.get("reverb_like_observed") is True)
++                or (classification == "NO_DISTINCTIVE_SIGNATURE"
++                    and ab_result.get("reverb_like_observed") is False)
++            )
++        )
++        if not positive_classifier and not inconclusive_classifier:
++            reasons.append("ab_status_classification_inconsistent")
++        _verify_ab_metric_bindings(
++            ab_result, candidate, frozen_channel,
++            p0.get("enabled") if isinstance(p0, dict) else None,
++            inputs, reasons,
++        )
+ 
+     audible = _json_input(inputs, prefix + "AUDIBLE-ATTESTATION.json", reasons)
+     audible_positive = False
+@@ -744,7 +889,9 @@
+             reasons.append("physical_restoration_connection_mismatch")
+ 
+     if candidate == "ch2-slot1":
+-        first_result = _read_first_restoration(run_dir)
++        first_result = _json_input(
++            inputs, "ch1-slot1/RESTORATION.json", reasons,
++        )
+         if not (isinstance(first_result, dict)
+                 and first_result.get("schema") == "cp34-current-slot-restoration-v1"
+                 and _same_json_scalar(first_result.get("candidate"), "ch1-slot1")
+@@ -756,7 +903,9 @@
+     result["reasons"] = _deduplicate(reasons)
+     if not result["reasons"]:
+         result["status"] = "RESTORED"
+-        if ab_status == "SIGNATURE_PRESENT" and audible_positive:
++        if (ab_status == "SIGNATURE_PRESENT"
++                and ab_result.get("classification") == "REPEAT_150MS_SIGNATURE"
++                and audible_positive):
+             result["survey_outcome"] = "SIGNATURE_PRESENT"
+     return result
+ 
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-before/tests/test_cp34_current_slot_survey.py	2026-08-29 03:11:59.183468580 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-3-fix1-after/tests/test_cp34_current_slot_survey.py	2026-08-29 03:20:45.890941032 -0700
+@@ -141,12 +141,20 @@
+         output.writeframes(b"\0" * 24)
+ 
+ 
++def _write_minimal_mono_wav(path):
++    with wave.open(str(path), "wb") as output:
++        output.setnchannels(1)
++        output.setsampwidth(4)
++        output.setframerate(48000)
++        output.writeframes(b"\0" * 4)
++
++
+ def _refresh_evidence_manifest(run_dir):
+     excluded = {"EVIDENCE-SHA256SUMS", "RESTORATION.json", "REPORT.md", "SHA256SUMS"}
+     rows = []
+     for path in sorted(item for item in run_dir.rglob("*") if item.is_file()):
+-        if path.name not in excluded:
+-            relative = path.relative_to(run_dir).as_posix()
++        relative = path.relative_to(run_dir).as_posix()
++        if relative not in excluded:
+             rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {relative}\n")
+     (run_dir / "EVIDENCE-SHA256SUMS").write_text("".join(rows), encoding="utf-8")
+ 
+@@ -181,7 +189,17 @@
+     for checkpoint, checkpoint_enabled in (
+         ("P0", enabled), ("P1", not enabled), ("P2", enabled),
+     ):
+-        payload = dict(scope, checkpoint=checkpoint, enabled=checkpoint_enabled, **stable)
++        raw_path = candidate_dir / f"{checkpoint}.raw.jast"
++        raw_path.write_bytes((checkpoint + " immutable raw JaSt fixture\n").encode("ascii"))
++        payload = dict(
++            scope,
++            schema="cp34-current-slot-jast-summary-v1",
++            checkpoint=checkpoint,
++            enabled=checkpoint_enabled,
++            raw_snapshot_path=raw_path.relative_to(run_dir).as_posix(),
++            raw_snapshot_sha256=hashlib.sha256(raw_path.read_bytes()).hexdigest(),
++            **stable,
++        )
+         (candidate_dir / f"{checkpoint}.json").write_text(
+             json.dumps(payload), encoding="utf-8",
+         )
+@@ -215,14 +233,45 @@
+         "frozen_mix_channel": 3,
+         "reasons": [],
+     }), encoding="utf-8")
++    active_ids = ("S1", "S4") if enabled else ("S2", "S3")
++    dry_ids = ("S2", "S3") if enabled else ("S1", "S4")
++    metric_rows = {}
++    for capture in ("S1", "S2", "S3", "S4"):
++        derivative = candidate_dir / f"{capture}.mix3.mono.wav"
++        _write_minimal_mono_wav(derivative)
++        relative = derivative.relative_to(run_dir).as_posix()
++        metric_rows[capture] = {
++            "path": relative,
++            "sha256": hashlib.sha256(derivative.read_bytes()).hexdigest(),
++            "impulses": 5,
++            "arrival_offsets_samples": [0, 33600, 67200, 100800, 134400],
++            "peak": 0.125,
++            "rms_db": -40.0,
++            "echo_ratio_db": -6.0 if capture in active_ids else -40.0,
++            "late_ratio_db": -40.0,
++        }
++    for capture in active_ids:
++        metric_rows[capture]["echo_delta_db"] = 34.0
++        metric_rows[capture]["late_delta_db"] = 0.0
++    classifier_positive = outcome == "SIGNATURE_PRESENT"
+     (candidate_dir / "AB.json").write_text(json.dumps({
+-        "schema": "cp34-current-slot-ab-v1",
+-        "status": outcome,
+-        **scope,
+-        "selected_slot": candidate_spec["numeric_slot"],
+-        "frozen_mix_channel": 3,
+-        "model": None,
+-        "title": None,
++        "schema": "cp34-slot-survey-audio-v1",
++        "status": "SIGNATURE_PRESENT" if classifier_positive else "INCONCLUSIVE",
++        "classification": (
++            "REPEAT_150MS_SIGNATURE" if classifier_positive
++            else "NO_DISTINCTIVE_SIGNATURE"
++        ),
++        "reverb_like_observed": False,
++        "candidate": candidate,
++        "model_identity": "UNRESOLVED",
++        "title_verified": False,
++        "live_ready": False,
++        "restoration_verified": False,
++        "audible_attested": classifier_positive,
++        "expected_delay_s": 0.15,
++        "dry": [metric_rows[capture] for capture in dry_ids],
++        "active": [metric_rows[capture] for capture in active_ids],
++        "reasons": [] if classifier_positive else ["audible result was not attested"],
+     }), encoding="utf-8")
+     (candidate_dir / "AUDIBLE-ATTESTATION.json").write_text(json.dumps({
+         "schema": "cp34-current-slot-audible-attestation-v1",
+@@ -529,7 +578,7 @@
+         self.assertEqual(
+             result["input_hashes"],
+             {relative: digest for relative, digest in before.items()
+-             if Path(relative).name not in {
++             if relative not in {
+                  "EVIDENCE-SHA256SUMS", "RESTORATION.json", "REPORT.md", "SHA256SUMS",
+              }},
+         )
+@@ -559,11 +608,18 @@
+             run_dir = _build_restoration_run(directory)
+             p2 = run_dir / "ch1-slot1" / "P2.json"
+             self._mutate_json(p2, lambda value: value.update(selected_slot=1))
++            p0 = run_dir / "ch1-slot1" / "P0.json"
++            self._mutate_json(
++                p0, lambda value: value.update(raw_snapshot_sha256="0" * 64),
++            )
++            (run_dir / "ch1-slot1" / "P1.raw.jast").unlink()
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 2)
+         self.assertEqual(result["status"], "RESTORATION_FAILED")
+         self.assertIn("p2_selected_slot_mismatch", result["reasons"])
++        self.assertIn("p0_raw_snapshot_hash_mismatch", result["reasons"])
++        self.assertIn("p1_raw_snapshot_missing", result["reasons"])
+ 
+     def test_p1_must_invert_the_initial_enable_state(self):
+         with tempfile.TemporaryDirectory() as directory:
+@@ -580,6 +636,15 @@
+             run_dir = _build_restoration_run(directory)
+             p2 = run_dir / "ch1-slot1" / "P2.json"
+             self._mutate_json(p2, lambda value: value.update(gain_1=36.5, main=0.25))
++            p0 = run_dir / "ch1-slot1" / "P0.json"
++            invalid_equal = {
++                "processing_channel_1": True,
++                "phantom_2": 0,
++                "gain_2": [],
++                "monitor_blend": None,
++            }
++            self._mutate_json(p0, lambda value: value.update(invalid_equal))
++            self._mutate_json(p2, lambda value: value.update(invalid_equal))
+             physical = run_dir / "ch1-slot1" / "PHYSICAL-RESTORATION.json"
+             self._mutate_json(physical, lambda value: value.update(restored=False))
+             _refresh_evidence_manifest(run_dir)
+@@ -588,6 +653,10 @@
+         self.assertIn("p2_stable_state_mismatch:gain_1", result["reasons"])
+         self.assertIn("p2_stable_state_mismatch:main", result["reasons"])
+         self.assertIn("physical_restoration_not_attested", result["reasons"])
++        self.assertIn("p0_processing_channel_1_must_be_integer", result["reasons"])
++        self.assertIn("p2_phantom_2_must_be_boolean", result["reasons"])
++        self.assertIn("p0_gain_2_must_be_finite_numeric", result["reasons"])
++        self.assertIn("p2_monitor_blend_must_be_finite_numeric", result["reasons"])
+ 
+     def test_extra_toggle_or_event_fails_restoration(self):
+         with tempfile.TemporaryDirectory() as directory:
+@@ -597,11 +666,16 @@
+                 "candidate": "ch1-slot1", "channel": 1, "id": "T3",
+                 "kind": "manual_preset_toggle", "press": "long", "monotonic_ns": 11,
+             }))
++            self._mutate_action_log(
++                action_log,
++                lambda events: events[2].update(frozen_mix_channel=4),
++            )
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 2)
+         self.assertIn("action_log_event_sequence_mismatch", result["reasons"])
+         self.assertIn("exactly_two_manual_toggles_required", result["reasons"])
++        self.assertIn("audio_capture_frozen_channel_mismatch:S1", result["reasons"])
+ 
+     def test_short_press_is_rejected(self):
+         with tempfile.TemporaryDirectory() as directory:
+@@ -633,10 +707,35 @@
+         with tempfile.TemporaryDirectory() as directory:
+             run_dir = _build_restoration_run(directory)
+             (run_dir / "ch1-slot1" / "S4.raw.wav").unlink()
++            ab = run_dir / "ch1-slot1" / "AB.json"
++            self._mutate_json(ab, lambda value: value.update(schema="wrong"))
++            self._mutate_json(
++                ab, lambda value: value["dry"][0].update(path="../outside.wav"),
++            )
++            self._mutate_json(
++                ab, lambda value: value["dry"][1].update(sha256="0" * 64),
++            )
++            self._mutate_json(
++                ab,
++                lambda value: value["active"][0].update(
++                    path="ch1-slot1/S1.mix4.mono.wav",
++                ),
++            )
++            self._mutate_json(
++                ab,
++                lambda value: value["active"][1].update(
++                    path="ch1-slot1/S2.mix3.mono.wav",
++                ),
++            )
+             _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir)
+         self.assertEqual(completed.returncode, 2)
+         self.assertIn("required_input_missing:ch1-slot1/S4.raw.wav", result["reasons"])
++        self.assertIn("ab_schema_invalid", result["reasons"])
++        self.assertIn("ab_metric_path_unsafe:dry:1", result["reasons"])
++        self.assertIn("ab_metric_hash_mismatch:dry:2", result["reasons"])
++        self.assertIn("ab_metric_path_mismatch:active:1", result["reasons"])
++        self.assertIn("ab_metric_role_binding_invalid", result["reasons"])
+ 
+     def test_incomplete_or_mismatched_evidence_manifest_fails(self):
+         with tempfile.TemporaryDirectory() as directory:
+@@ -688,8 +787,25 @@
+             first_result = run_dir / "ch1-slot1" / "RESTORATION.json"
+             self._mutate_json(
+                 first_result,
+-                lambda value: value.update(survey_outcome="SIGNATURE_PRESENT"),
++                lambda value: value.update(reasons=["stale swapped bytes"]),
++            )
++            completed, result = self._result(run_dir, "ch2-slot1")
++            self.assertEqual(completed.returncode, 2)
++            self.assertIn(
++                "evidence_manifest_hash_mismatch:ch1-slot1/RESTORATION.json",
++                result["reasons"],
+             )
++
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(
++                directory, candidate="ch2-slot1", enabled=True,
++                outcome="INCONCLUSIVE", include_first_result=True,
++            )
++            nested = run_dir / "ch1-slot1" / "RESTORATION.json"
++            root_result = run_dir / "RESTORATION.json"
++            root_result.write_bytes(nested.read_bytes())
++            nested.unlink()
++            _refresh_evidence_manifest(run_dir)
+             completed, result = self._result(run_dir, "ch2-slot1")
+         self.assertEqual(completed.returncode, 2)
+         self.assertIn(

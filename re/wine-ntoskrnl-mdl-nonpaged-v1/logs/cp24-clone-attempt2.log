@@ -1,0 +1,7 @@
+Running as unit: io24-sandbox-clone-mdl-nonpaged-v1-20260822.service; invocation ID: 7412f6aecd48421ab10e3755cbd7ede5
+bwrap: Can't mkdir /run/io24-source: Read-only file system
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 22ms
+             CPU time consumed: 22ms
+                   Memory peak: 2M (swap: 0B)

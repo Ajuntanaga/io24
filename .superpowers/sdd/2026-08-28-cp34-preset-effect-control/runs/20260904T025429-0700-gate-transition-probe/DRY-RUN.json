@@ -1,0 +1,16 @@
+{
+  "capture": {
+    "channels": 6,
+    "duration_seconds": 14,
+    "endpoint": "hw:CARD=R24,DEV=0",
+    "format": "S32_LE",
+    "playback": false,
+    "rate_hz": 48000
+  },
+  "capture_opened": false,
+  "expected_serial": "AB7C22200355",
+  "permitted_action": "linked Channel-2 slot-3 factory gate transition",
+  "schema": "cp34-gate-transition-live-trial-v1",
+  "status": "DRY_RUN_ONLY",
+  "usb_opened": false
+}

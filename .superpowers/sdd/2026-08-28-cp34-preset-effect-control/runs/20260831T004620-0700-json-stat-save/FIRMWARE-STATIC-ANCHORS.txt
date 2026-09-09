@@ -1,0 +1,51 @@
+CP34 io24 firmware 1.28 static preset-save anchors
+Generated: 2026-08-31
+Action boundary: offline reads only; no device, USB, Wine, or firmware action
+
+Source
+------
+path: /tmp/io24-fw-1.28.7DrxHf.bin
+size: 1104448 bytes
+sha256: 65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a
+image base: 0x60020000
+
+Pinned vtable words
+-------------------
+root vtable start      file 0x6d208  word 0x6004c1c5  -> fw 0x2c1c4
+root slot +0x20        file 0x6d228  word 0x6005c065  -> fw 0x3c064
+root slot +0x80 MemP   file 0x6d288  word 0x6004f211  -> fw 0x2f210
+preset slot +0x0c bind file 0x67504  word 0x600506b5  -> fw 0x306b4
+preset slot +0x18 set  file 0x67510  word 0x6005099d  -> fw 0x3099c
+backend slot +0x00     file 0x676ec  word 0x600516dd  -> fw 0x316dc
+
+Object and call edges
+---------------------
+constructor: 0x3c890 -> 0x30260 -> 0x2fca8
+root child:  root+0x70 = root+0x1240
+preset construction: 0x3c8dc -> 0x306bc, vtable 0x674f8
+incoming record: 0x2f210 -> child vtable+0x18 -> 0x3099c -> 0x3092c
+record wrapper: 0x3092c -> 0x2bfe4
+backend bind: 0x31ab0 -> 0x2d660 -> 0x300ac -> 0x306b4 -> 0x2c1c0
+backend write: vtable 0x676ec +0x00 -> 0x316dc -> underlying object, flag 1
+
+Pinned code-slice hashes
+------------------------
+root_to_preset_constructor  offset 0x3c894 length 0x50
+  a52f6e60715c859c173e6ff2fc8e7c95570f6068b3198a140d3ab80c7d33fc1d
+root_memp_handler           offset 0x2f210 length 0x64
+  21ce6c37eec3b7bc075667a5c42b4e252ffbc08f493717d885029be2e7447c23
+preset_fragment_handler     offset 0x3099c length 0x70
+  88af1e0c52748b560c297ca84b30c88c07c12ca19db3a4706d0ddb32b0120429
+preset_record_writer        offset 0x3092c length 0x70
+  7898bcd992c0df3971fa8cf55cf2eb5a4947c6980da5c2d8eab0f09dca6b8826
+backend_bind_adapter        offset 0x300ac length 0x10
+  51178b6de0b723bd3e3c0c1d44e590fd325b5074ed590dcdf336db46f63a095e
+startup_backend_bind        offset 0x31ab0 length 0x38
+  1130e7c1d6411fab1f9c59a10208a178d6b532a7713009eac11d0a2f95e07bdf
+
+Interpretation boundary
+-----------------------
+These anchors establish incoming MemP dispatch, nested Stat/PrsM acceptance,
+record assembly, and the startup-bound firmware storage-write interface. They
+do not by themselves establish physical nonvolatile commit, power-cycle
+endurance, editor-independent recall, or audible Voice FX behavior.

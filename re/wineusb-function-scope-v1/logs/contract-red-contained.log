@@ -1,0 +1,36 @@
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+FAIL test_enumerates_function_roots:230: event 2 interface index is 1, expected 3
+FAIL test_enumerates_function_roots:230: event 3 interface index is 2, expected 5
+FAIL test_enumerates_function_roots:233: event 3 class is 0x1, expected 0xff
+FAIL test_enumerates_function_roots:230: event 4 interface index is 3, expected 6
+FAIL test_enumerates_function_roots:233: event 4 class is 0x1, expected 0xfe
+FAIL test_partial_configuration:270: physical request length is 9, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 0 at capacity 9
+FAIL test_partial_configuration:270: physical request length is 218, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 0 at capacity 218
+FAIL test_partial_configuration:270: physical request length is 9, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 3 at capacity 9
+FAIL test_partial_configuration:270: physical request length is 133, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 3 at capacity 133
+FAIL test_partial_configuration:270: physical request length is 9, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 5 at capacity 9
+FAIL test_partial_configuration:270: physical request length is 41, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 5 at capacity 41
+FAIL test_partial_configuration:270: physical request length is 9, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 6 at capacity 9
+FAIL test_partial_configuration:270: physical request length is 27, expected 392
+FAIL test_partial_configuration:281: partial descriptor bytes differ for root 6 at capacity 27
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fff8fab5c20 header_length=88 interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff8fab5c20 scope=all_interfaces interfaces=1 pipes=1.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff8fab5c20 interface_index=0 interface=4 pipe_index=0 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fff8fab5c20 interfaces=1 pipes=1.
+FAIL test_select_configuration_enforces_membership:334: function 0 accepted interface 4 with status 0
+FAIL test_select_configuration_enforces_membership:336: out-of-scope USBD status is 0
+FAIL test_select_configuration_enforces_membership:338: out-of-scope interface received handle 0x282
+fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fff8fab5c20 header_length=136 interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff8fab5c20 scope=all_interfaces interfaces=2 pipes=2.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff8fab5c20 interface_index=1 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff8fab5c20 interface_index=1 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fff8fab5c20 interfaces=2 pipes=2.
+24 WineUSB function-scope contract check(s) failed
+red_exit=1

@@ -1,0 +1,11 @@
+8c5dfc703ccb563ac2e95e1f2338ea40062f0d495697f06c4ebb6ec48d7ca966  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T210639-0700-firmware-ingress-storage-framing/SCOPE.md
+4ff79b55a62cbf7c031d60dc8a653e0dbbd54d16ac7f9deb4f693bf51607cd9c  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T210639-0700-firmware-ingress-storage-framing/PROGRESS.md
+1384528ea6787d34a14a32f6e3a54e8784c027871a949e0a5c8b4f88fae267d6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T210639-0700-firmware-ingress-storage-framing/OBSIDIAN.md
+1e6295b18e254dd2e820eb7b089fb918efccc6710e8f0bd4b4646b441ab54c16  re/cp34_firmware_ingress_storage_framing.py
+8ca25fe4cdd0f8ac63dc66afdafcb8c6271cea5b4b204e479fc6059ade931d4b  tests/test_cp34_firmware_ingress_storage_framing.py
+e04729ad9b6a18f56b422466a1445b4711745e66a3887a776bc9cc18376047fa  io24_firmware.py
+8c6d62490eace39b00aa4dda19d587e087758fd400eb14a6d9794d24bf1320af  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+fd0d03aa8c0c58d9c10cdf8a8819ee5402e5e5da411bdea3d2f75296fa7f2b57  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+83970ad8defbd935de7b25d67cf959e7826f04d8ca27a4c8305dfe06db66d596  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T202119-0700-firmware-stored-record-recall-framing/CHECKPOINT.sha256
+e9a7d65c06832ad4391d05f5de0b090dc0594685ba720f4af0be1776b66992cd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T204944-0700-uc5-record-writer-sink/CHECKPOINT.sha256
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll

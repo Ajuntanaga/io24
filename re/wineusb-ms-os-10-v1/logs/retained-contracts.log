@@ -1,0 +1,41 @@
+CP31 retained hardware-free contract matrix
+Date: 2026-08-23
+Containment: bwrap --unshare-all --unshare-net; source and workspace read-only;
+minimal /dev; absent sysfs; private temporary runtime paths; no Wine prefix.
+
+Clean build A exit: 0
+  WineUSB function-scope contract: pass
+  WineUSB immediate-submit cleanup contract: pass
+  WineUSB multi-interface handle contract: pass
+  WineUSB pipe-observe fake-libusb behavior: pass
+  WineUSB pipe-observe plus bounded OS 1.0 reader contract: pass
+  WineUSB captured-RANGE fake-libusb contract: pass
+  WineUSB captured-RANGE source/binary contract: pass
+  wineusb USBDI V1 contract checks passed
+  io24 usbmon class-IN evidence contract: pass
+  io24 usbmon function topology contract: pass
+  io24 WinUSB readiness contract: pass (known RED and synthetic structural GREEN)
+
+Clean build B exit: 0
+  WineUSB function-scope contract: pass
+  WineUSB immediate-submit cleanup contract: pass
+  WineUSB multi-interface handle contract: pass
+  WineUSB pipe-observe plus bounded OS 1.0 reader contract: pass
+  WineUSB captured-RANGE source/binary contract: pass
+  wineusb USBDI V1 contract checks passed
+  io24 usbmon class-IN evidence contract: pass
+  io24 usbmon function topology contract: pass
+  io24 WinUSB readiness contract: pass (known RED and synthetic structural GREEN)
+
+The CP31-derived retained wrappers add only an explicit unsupported
+libusb_control_transfer fixture response and update the static guard to permit
+the one audited Microsoft OS reader call site. The sealed predecessor scripts
+were not modified. Claim, detach, set-interface-alt, and set-configuration
+remain prohibited by the static and dynamic contracts.
+
+The CP30 readiness analyzer is a frozen predecessor contract: it searches for
+the complete literal USB\MS_COMP_WINUSB in one source file. CP31 constructs the
+generic prefix and validated descriptor ID in separate code, so that old
+literal heuristic still labels discovery missing. Its synthetic known-RED/
+structural-GREEN self-contract continues to pass; it is not used as a CP31
+forward-readiness oracle.

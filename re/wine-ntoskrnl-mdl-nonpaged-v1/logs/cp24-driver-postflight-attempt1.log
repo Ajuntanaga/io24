@@ -1,0 +1,14 @@
+timestamp=2026-08-22T14:37:48-07:00
+battery=77% status=Discharging
+[driver-status]
+start_status=0
+query_status=0
+[driver-query]
+SERVICE_NAME: PaeDSPUSB
+        TYPE               : 1
+        STATE              : 4  RUNNING
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+[registry-probe-required-markers]

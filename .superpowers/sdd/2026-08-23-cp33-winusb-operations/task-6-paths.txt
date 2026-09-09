@@ -1,0 +1,10 @@
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.h
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+tests/wineusb_winusb_urb_contract.c
+tests/wineusb_winusb_urb_fake_libusb.c
+tests/wineusb_pipe_observe_contract.c
+tests/winusb_function_io_contract.c
+tests/wineusb_function_scope_fake_libusb.c

@@ -1,0 +1,11 @@
+--- production-main.c
++++ missing-final-wait-main.c
+@@ -157,7 +157,7 @@
+     if (!final) return TRUE;
+ 
+     EnterCriticalSection(&root->lock);
+-    while (root->references) SleepConditionVariableCS(&root->drained, &root->lock, INFINITE);
++    while (FALSE && root->references) SleepConditionVariableCS(&root->drained, &root->lock, INFINITE);
+     LeaveCriticalSection(&root->lock);
+ 
+     request.session = root->session;

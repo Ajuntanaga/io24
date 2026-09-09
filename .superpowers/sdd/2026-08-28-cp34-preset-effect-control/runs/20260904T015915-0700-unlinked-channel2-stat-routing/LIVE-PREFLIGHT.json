@@ -1,0 +1,52 @@
+{
+  "schema": "cp34-readonly-preflight-v1",
+  "observation_date": "2026-09-04",
+  "observed_at": null,
+  "timestamp_status": "EXACT_WALL_CLOCK_NOT_RETAINED_FROM_CONSOLE_RESULT",
+  "authorization_basis": "user-directed continuation requiring device use/check; execution restricted to the existing read-only preflight",
+  "status": "PASS",
+  "battery_percent": 98,
+  "device": {
+    "serial": "AB7C22200355",
+    "bcd_device": "0128"
+  },
+  "interface": {
+    "number": 5,
+    "alternate_setting": 1
+  },
+  "jast_reads": [
+    {
+      "reply_bytes": 2040,
+      "sha256": "086ca18f0f9dd095d25a046d5d2ceddf0d22e693a554a9c4b38081088702576e"
+    },
+    {
+      "reply_bytes": 2040,
+      "sha256": "086ca18f0f9dd095d25a046d5d2ceddf0d22e693a554a9c4b38081088702576e"
+    }
+  ],
+  "flags_word": 417,
+  "flags_hex": "0x1a1",
+  "channel_linked": false,
+  "input1_slot_index": 0,
+  "input2_slot_index": 3,
+  "input1_preset_enabled": false,
+  "input2_preset_enabled": true,
+  "unresolved": [
+    "stored_slot_record_content",
+    "physical_nonvolatile_commit",
+    "front_panel_recall",
+    "audible_voicefx",
+    "channel1_disable_attribution"
+  ],
+  "actions_not_performed": [
+    "SetP",
+    "preset_or_effect_mutation",
+    "stereo_link_change",
+    "channel1_write",
+    "audio_io",
+    "firmware_or_dfu",
+    "Wine",
+    "network"
+  ]
+}
+

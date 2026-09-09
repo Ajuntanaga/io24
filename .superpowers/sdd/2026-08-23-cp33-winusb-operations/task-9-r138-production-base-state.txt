@@ -1,0 +1,13 @@
+CP33 Task 9 R138 production correction base
+timestamp=2026-08-25T17:38:44-07:00
+workspace=non-git
+authorized_live_paths=9
+snapshot_files=9
+production_edit_started=no
+r136_head=3/3
+r136_prior_bundle=54/54
+r137_additive_bundle=56/56
+r132_frozen_paths=14/14
+tests_support_wrappers_range_evidence=frozen
+safety=offline-host-only
+next=run-four-focused-reds

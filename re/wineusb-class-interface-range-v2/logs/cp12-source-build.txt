@@ -1,0 +1,74 @@
+CP12 independent clean-source and build summary
+Reached: 2026-08-21T03:14:22-07:00
+
+Pinned inputs
+5046f36dae210b198ea69792774d4401feed975d465eca6c251c9394400ec272  wine-11.15.tar.xz
+9e1c3b88a428e3bdd245ee5cdda9dfa423e77ad4abe08c7423bf14dceb073e91  wine-11.15-wineusb-usbdi-v1.patch
+ad260f9ab4a1bc138d8ee3fdd7ec3157e0caf8d6a67b490be4bd815092fa5e64  wine-11.15-wineusb-urb-observe-v2.patch
+461f68de736ddba876cfaa4d0e385c8eaa0002bd22df05932987ad3f4fe7fe8f  wine-11.15-wineusb-class-interface-range-v2.patch
+
+Independent source preparation
+- A and B were extracted separately from the pinned archive.
+- Each patch was applied in the listed order with:
+    patch --batch --forward --fuzz=0 -p1
+- Both trees contain 12,445 regular files and zero symbolic links.
+- diff -qr --no-dereference reports the full trees identical.
+- Neither tree contains a .rej or .orig file.
+
+Changed-source hashes, identical in A and B
+603998bae9b4c40877bc5d3b2678d9b87682b7137cb2e10da5b2ee548ef27a4f  dlls/wineusb.sys/unixlib.h
+1d05ac120e747808ee5af56b532bc3e14558babf607bdc53f9fc751c2a575003  dlls/wineusb.sys/wineusb.c
+f3d12d30b80ef1142f0da888f8c6a2d51dbf7a7c87e7212f5ad5a3b7d3483252  dlls/wineusb.sys/unixlib.c
+4296c33f7aa300a042b8198b6715e8d1e108c3907a58a7ed3d8e96c250890886  dlls/wineusb.sys/usbdi.h
+93422cbd9975088b217ef4730620ef1512e70e3879750e8dc4860f0db75ae33b  dlls/wineusb.sys/usbdi.c
+
+Identical build recipe
+- Separate empty build-a and build-b directories.
+- Identical virtual paths: /run/io24-source and /run/io24-build.
+- SOURCE_DATE_EPOCH=1787101002.
+- BISON_PKGDATADIR=/run/io24-tools/usr/share/bison.
+- M4=/run/io24-tools/usr/bin/m4.
+- Configure:
+    /run/io24-source/configure --quiet --enable-win64 --without-mingw
+    --without-x --without-freetype --with-usb
+    USB_CFLAGS=-I/run/io24-tools/usr/include/libusb-1.0
+    USB_LIBS=/usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0
+- Build:
+    make -j1 dlls/wineusb.sys/all
+
+Containment
+- Bubblewrap unshared user, PID, network, IPC, UTS, and cgroup namespaces.
+- All capabilities were dropped.
+- /dev was private; host /sys and /run were hidden behind temporary
+  filesystems containing only the explicit sandbox mounts.
+- Sources and tools were read-only; only the selected build and log
+  directories were writable.
+- Configure and build each had a 2 GiB address-space ceiling, bounded wall
+  and CPU time, nice level 15, idle I/O priority, and single-job make.
+
+Results
+- Configure A: exit 0, 13.26 s, 137,208 KiB peak RSS, zero swap.
+- Build A: exit 0, 48.72 s, 137,232 KiB peak RSS, zero swap.
+- Configure B: exit 0, 13.24 s, 137,404 KiB peak RSS, zero swap.
+- Build B: exit 0, 48.77 s, 137,396 KiB peak RSS, zero swap.
+- Configure stdout/stderr logs are byte-identical.
+- Build stdout/stderr logs are byte-identical.
+- Generated Makefiles and compile_commands.json are byte-identical.
+- Raw config.log differs only in GCC random /tmp object basenames and is
+  identical after normalizing those basenames.
+- Both builds emitted the same expected optional gettext, GnuTLS, and sound
+  warnings plus Wine's pre-existing five WRC shift/reduce conflicts.
+- The modified WineUSB translation units emitted no warning.
+
+Raw workspace log hashes
+3e7fe017f34441e7451a35bf8b928a2036249bc67c7ed099e65bea453c7a487f  configure-a-resource.txt
+f811f70f45eda802d7af6b909a5609b64f2db697727cf73b9bddfca0d8dac4ef  configure-a.log
+dbfaa6f0e09e5d4b707e7c6f7db477634eeed6c2b381c99e95519284d73dbd63  build-a-resource.txt
+a0f968537bfb0de9f3e823b38cca2fef7ef41d35160d87333091233891cb8e48  build-a.log
+37fc485b4ea195a3ab559fd365986f687f0b18ae238f4212649d8be4f9fed23f  configure-b-resource.txt
+f811f70f45eda802d7af6b909a5609b64f2db697727cf73b9bddfca0d8dac4ef  configure-b.log
+19b226ee5b516380c7523ef6eddd916d0b56fc8a7617342a9f1e5fa7ac5f2508  build-b-resource.txt
+a0f968537bfb0de9f3e823b38cca2fef7ef41d35160d87333091233891cb8e48  build-b.log
+
+The raw logs and both source/build trees remain under:
+    .io24-build/wineusb-class-interface-range-v2/

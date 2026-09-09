@@ -1,0 +1,22 @@
+CP12 byte-reproducibility comparison
+Reached: 2026-08-21T03:14:22-07:00
+
+The following files compare byte-for-byte between independent build A and B:
+
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  x86_64-windows/wineusb.sys  size=2560
+404a07ffccb44e4fc34dd5b42df0aef8e96eb44ad2878ffc417f7a75e409abaa  wineusb.sys.so                  size=192528
+9518320f495ace5cabc27ef4e740f182b3840700fba3e9371b36b7e12538dea2  wineusb.so                      size=89680
+
+ELF build IDs, identical in A and B:
+wineusb.sys.so  e599b02a315eeee14ddf1285d1d995cde15f43c7
+wineusb.so      8bf9a581c36824d5df469ab6ccc9a38974aab73a
+
+Generated build metadata, also byte-identical:
+27e8b14ea57d3746c03dcbd8108e4195333e39a5e72a671170b99fd5f48e0808  Makefile
+05c20c62104f2dbb01467d1580d60528a1897261ed164401416101afb8feb213  compile_commands.json
+
+cmp exit status was zero for all three candidate artifacts, Makefile, and
+compile_commands.json.
+
+No candidate artifact was copied into re/wineusb-class-interface-range-v2/.
+The existing class-IN-v1 staged triplet and sandbox selector were not changed.

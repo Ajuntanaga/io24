@@ -1,0 +1,4 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+command bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/dev-source --handles
+CP33 public executed mode=--handles target-mask=0x8c present-mask=0x19c missing-mask=0 fake-events=18 submits=3 releases=1 completions=0 failures=0
+exit_code 0

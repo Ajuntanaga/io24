@@ -1,0 +1,4 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+command bash tests/winusb_function_binding_contract.sh .io24-build/winusb-api-v1/dev-source
+CP32 winusb function-binding lifecycle checks passed
+exit_code 0

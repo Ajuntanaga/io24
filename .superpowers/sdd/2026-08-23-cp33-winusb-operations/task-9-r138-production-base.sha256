@@ -1,0 +1,9 @@
+ebe2623a43cdf2818fe2877711a013348af4519468d015db6c57c17575ac16b5  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/transfer.c
+a83b5d82ff4ed8306f51dfc08c880cb5f93cf68cd035a492b4e162aba8716e41  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in
+c295084660f340dd18ff77be490f7ac017f1b3cf265d6e8821b0d921154cc49e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+b915d107361c26a3b012c352307ffa1a07a2722e79fd39fc446d9af4cf67afd7  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+acd38e8c35c69c725c1036b78443859a348dbe9da093336cfe4b20669dc316c2  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+c9b03c17aefe21201f9cdf2e332b9024cb7562c75fe6e1ede392453f2b4f0c3b  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+ff9bea91cb6eb749b165c721afe41c4c6253bb79225e84ea96bcaf9c571b760e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+5d1ae980235251b17e90c4088f4cc7b0198d38cc26dd0c75c2df3737502e7971  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+74e0af9eb4836aee5dd5462c6a83a33823812cce0640d6f1a9b76449dc929654  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-9-r138-production-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c

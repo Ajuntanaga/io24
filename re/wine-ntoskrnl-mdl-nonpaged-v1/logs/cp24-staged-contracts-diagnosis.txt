@@ -1,0 +1,7 @@
+The first CP24 staged-contract invocation passed the multi-interface handle
+contract but failed the pipe-observe compiled-builtin marker check. The command
+had supplied the PE loader stub (x86_64-windows/wineusb.sys) as WINEUSB_BUILTIN.
+That stub contains zero transfer_map markers. The code-bearing staged builtin
+(x86_64-unix/wineusb.sys.so) contains exactly one, as required by the contract.
+No staged artifact changed. Repeating the contained batch with only the
+WINEUSB_BUILTIN argument corrected passed all five contracts.

@@ -1,0 +1,9 @@
+gcc -m64 -c -o dlls/wineusb.sys/unixlib.o /run/io24-source/dlls/wineusb.sys/unixlib.c -Idlls/wineusb.sys \
+  -I/run/io24-source/dlls/wineusb.sys -Iinclude -I/run/io24-source/include -D__WINESRC__ \
+  -DWINE_UNIX_LIB -I/run/io24-tools/usr/include/libusb-1.0 -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+gcc -m64 -o dlls/wineusb.sys/wineusb.so -shared -Wl,-Bsymbolic -Wl,-soname,wineusb.so -Wl,-z,defs dlls/wineusb.sys/unixlib.o \
+  dlls/ntdll/ntdll.so /usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0 

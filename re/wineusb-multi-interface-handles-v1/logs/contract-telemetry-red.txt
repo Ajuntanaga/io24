@@ -1,0 +1,6 @@
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fff5c177d98 scope=all_interfaces interfaces=3 pipes=3.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff5c177d98 interface_index=1 interface=2 pipe_index=0 endpoint=0x83 type=3 handle=0x383.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff5c177d98 interface_index=2 interface=4 pipe_index=0 endpoint=0x2 type=2 handle=0x202.
+fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fff5c177d98 interface_index=2 interface=4 pipe_index=1 endpoint=0x82 type=2 handle=0x282.
+WineUSB multi-interface handle contract: pass
+FAIL: missing runtime marker 'IO24_HANDLE_POPULATION event=validated'

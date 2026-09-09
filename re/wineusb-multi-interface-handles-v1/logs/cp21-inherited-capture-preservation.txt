@@ -1,0 +1,3 @@
+preserved_from=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/out/live-service-usb.txt
+preserved_as=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/out/inherited-live-service-usb-observe-v2-20260819T194220PDT.txt
+sha256=f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67

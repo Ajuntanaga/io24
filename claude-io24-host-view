@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+runtime_dir="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR="$runtime_dir"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus"
+
+case "${1:-status}" in
+  open)
+    if ! pgrep -f "[p]ython3 .*io24gtk.py" >/dev/null; then
+      nohup python3 "$project_root/io24gtk.py" \
+        >"$project_root/.claude-peer/host-view.log" 2>&1 &
+      printf '%s\n' "$!" >"$project_root/.claude-peer/host-view.pid"
+    fi
+    wmctrl -a "Revelator" 2>/dev/null || true
+    ;;
+  status)
+    pgrep -af "[p]ython3 .*io24gtk.py" || true
+    wmctrl -l 2>/dev/null | grep -i -E 'revelator|io24|mixer' || true
+    if [[ -f "$project_root/.claude-peer/host-view.log" ]]; then
+      tail -40 "$project_root/.claude-peer/host-view.log"
+    fi
+    ;;
+  raise)
+    wmctrl -a "Revelator" 2>/dev/null || true
+    ;;
+  *)
+    printf 'usage: %s {open|status|raise}\n' "$0" >&2
+    exit 2
+    ;;
+esac

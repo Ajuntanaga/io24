@@ -1,0 +1,56 @@
+{
+  "action": {
+    "dbus_name": "arm-channel2-delay",
+    "dispatch_reply": "()",
+    "host_message": "Shared 173 ms Delay armed; Channel 2 remains slot 3 (2 parameter writes; audibility still unproved)",
+    "requested_delay": {
+      "feedback": 0.25,
+      "mix": 0.5,
+      "model": "delay",
+      "on": true,
+      "time_s": 0.173
+    },
+    "status": "HOST_DELAY_ARMED_CH2_REASSERTED"
+  },
+  "authority": "native Linux host control; Channel-2 preset/effect changes permitted; leave Channel 1 alone",
+  "device": {
+    "last_known_battery_percent": 98,
+    "serial": "AB7C22200355"
+  },
+  "host": {
+    "interface_owner": "python3 io24gtk.py",
+    "pid": 492143,
+    "remained_open": true,
+    "started_at": "2026-09-04T00:11:35-07:00"
+  },
+  "interpretation": {
+    "audibility": "UNPROVED",
+    "host_action_execution": "CONFIRMED",
+    "physical_report_before_repeat": "dry; operator also recalled one possible delay-like moment shortly after host restart",
+    "physical_report_during_or_after_repeat": "no audible difference; dry",
+    "physical_repeat_status": "CONTROLLED_REPEAT_DRY",
+    "possible_transient_delay": "UNCONFIRMED_SINGLE_EVENT"
+  },
+  "postconditions": {
+    "channel1_guard": "UNCHANGED",
+    "channel2_preset_enabled": true,
+    "channel2_slot_index": 3
+  },
+  "schema": "cp34-native-host-channel2-delay-v1",
+  "shadow_evidence": {
+    "path": "/home/ajuntanaga/.cache/io24/shadow.json",
+    "sha256_after_repeat": "ea7461ebd7008539f9f289f2623b1fe7924645f3dddb834534e7b06e96ab7a4d",
+    "timestamp": "2026-09-04T00:19:18.059663449-07:00",
+    "warning": "host write mirror, not device readback"
+  },
+  "operator_report_timestamp": "2026-09-04T00:24:47-07:00",
+  "timestamp": "2026-09-04T00:19:18-07:00",
+  "transport_exclusions": [
+    "no competing USB client",
+    "no Channel-1 write",
+    "no Wine",
+    "no firmware/reset/DFU",
+    "no network",
+    "no audio playback or capture"
+  ]
+}

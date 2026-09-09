@@ -1,0 +1,10 @@
+Gate-2 seal: re/winusb-api-v1/logs/gate-2-function-pipe-state.sha256
+Gate-2 seal SHA-256: 431d7e0d885f80d10aaa70907b61b2a7ff2f4066a5b3204a8988fcf6f908e421
+Gate-2 verification: 29/29, unique, non-self
+Task-9 base manifest: task-9-base.sha256
+Task-9 base manifest SHA-256: 34ba2f90f2e2d3ddba1b75b5dcc0ca5341503a7c5ad33c1c9a2879144dfdee51
+Existing owned paths snapshotted: 15/15
+Explicitly absent new path: .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/transfer.c
+Physical interface: unplugged
+Execution boundary: offline host contracts only
+Battery at freeze: 53%, Charging

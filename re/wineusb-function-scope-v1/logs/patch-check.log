@@ -1,0 +1,5 @@
+3c44d15b710cc99c253590ace734c28ba5f2fb1f0b7a678dac195ea5184c4a7e  re/wine-11.15-wineusb-function-scope-v1.patch
+patch_check_regular_files=12445
+patch_check_symlinks=0
+patch_check_reject_or_orig=0
+patch_check_matches_development=true

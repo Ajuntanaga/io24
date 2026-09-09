@@ -1,0 +1,65 @@
+{
+  "schema": "io24-full-parameter-results-overlay-v1",
+  "source_matrix": "../20260906T165749-0700-host-live-routing-repair/PARAMETER-VERIFICATION-MATRIX.json",
+  "batches": [
+    {
+      "id": "P0",
+      "status": "PASS",
+      "evidence": [
+        "P0-PREFLIGHT.md",
+        "READABLE-BASELINE.json"
+      ]
+    },
+    {
+      "id": "P2-attempt-1",
+      "status": "ABORTED_BEFORE_AUDIO",
+      "reason": "USB endpoint timeout before any mixer write or audio endpoint open",
+      "evidence": [
+        "P2-REPORT.json",
+        "MUTE-RECOVERY.json",
+        "P2-POSTFLIGHT.md"
+      ],
+      "restoration": "READABLE_STATE_CONFIRMED_RESTORED",
+      "write_only_route_attempted": false,
+      "audio_played": false
+    }
+  ],
+  "row_observations": {
+    "native.channel1.input_mute": {
+      "status": "INCOMPLETE",
+      "observed": [
+        "on state read back once in combined two-channel guard",
+        "off state independently read back twice after recovery"
+      ],
+      "missing": [
+        "isolated Channel-1 toggle",
+        "second trial"
+      ],
+      "terminal_matrix_status": "PENDING"
+    },
+    "native.channel2.input_mute": {
+      "status": "INCOMPLETE",
+      "observed": [
+        "on state read back once in combined two-channel guard",
+        "off state independently observed during recovery"
+      ],
+      "missing": [
+        "isolated Channel-2 toggle",
+        "second trial"
+      ],
+      "terminal_matrix_status": "PENDING"
+    }
+  },
+  "live_forward_work": "STOPPED_ON_PREDECLARED_USB_TIMEOUT_GATE",
+  "last_confirmed_device_state": {
+    "battery_percent": 19,
+    "flags_word": 385,
+    "channel_linked": false,
+    "input1_slot_index": 1,
+    "input2_slot_index": 2,
+    "input1_preset_enabled": true,
+    "input2_preset_enabled": true,
+    "input1_muted": false,
+    "input2_muted": false
+  }
+}

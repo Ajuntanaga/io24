@@ -1,0 +1,16 @@
+timestamp=2026-08-21T02:56:27-07:00
+phase=CP11_RED
+baseline=preserved class-interface-IN v1 source-a and build-a
+exit=1
+
+FAIL submit returned STATUS_PENDING (0x103), expected STATUS_SUCCESS
+FAIL USBD status remained unset
+FAIL returned length remained 256, expected 50
+FAIL captured RANGE payload differed
+FAIL libusb allocation count was 1, expected 0
+FAIL libusb submission count was 1, expected 0
+FAIL fake libusb retained a pending transfer
+FAIL IRP retained a cancel handle
+
+8 WineUSB captured-RANGE contract checks failed
+Teardown completed normally; this is the expected missing-feature failure.

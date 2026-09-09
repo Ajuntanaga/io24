@@ -1,0 +1,28 @@
+phase=CP18_SANDBOX_CLONE
+source=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819
+partial=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821.partial
+destination=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821
+unit=io24-sandbox-clone-pipe-observe-v3-20260821.service
+Running as unit: io24-sandbox-clone-pipe-observe-v3-20260821.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 45.935s
+             CPU time consumed: 4.559s
+                   Memory peak: 384.5M (swap: 0B)
+source_files=5097
+clone_files=5097
+source_symlinks=41
+clone_symlinks=41
+source_directories=708
+clone_directories=708
+source_special_files=0
+clone_special_files=0
+full_content_diff=PASS
+source_metadata_sha256=d1c2af06022e359547067641fc2a3fe609f739ead5a90bea47228587c65e3192
+clone_metadata_sha256=d1c2af06022e359547067641fc2a3fe609f739ead5a90bea47228587c65e3192
+independent_system_reg_inode=PASS
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821.partial/prefix/system.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.pipe-observe-v3-20260821.partial/out/live-service-usb.txt
+atomic_promotion=PASS

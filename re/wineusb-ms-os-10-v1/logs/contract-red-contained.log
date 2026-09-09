@@ -1,0 +1,19 @@
+CP31 Microsoft OS 1.0 contract RED against the unchanged CP29 Unix library
+Containment: bwrap unshare-all/unshare-net, read-only workspace, minimal /dev,
+             private /tmp and /run, no sysfs, 60-second timeout
+Scenario: valid
+Exit status: 1 (expected RED)
+
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=0 scoped=1 interfaces=3 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=3 scoped=1 interfaces=2 configuration_length=392.
+fixme:wineusb:add_usb_device Interface 5 has 2 alternate settings; using the first one.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=5 scoped=1 interfaces=1 configuration_length=392.
+fixme:wineusb:add_usb_device IO24_FUNCTION_SCOPE event=child root=6 scoped=1 interfaces=1 configuration_length=392.
+FAIL check_metadata:136: MI05 compatible ID is '', expected 'WINUSB'
+FAIL check_metadata:142: MI05 device-interface GUID differs
+FAIL check_metadata:144: MI05 vendor code is 0, expected 0xa5
+FAIL check_metadata:136: MI06 compatible ID is '', expected 'WINUSB'
+FAIL check_metadata:142: MI06 device-interface GUID differs
+FAIL check_metadata:144: MI06 vendor code is 0, expected 0xa5
+FAIL main:212: scenario valid made 0 descriptor request(s), expected 7
+7 Microsoft OS 1.0 contract check(s) failed in valid

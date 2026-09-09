@@ -1,0 +1,170 @@
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md	2026-08-23 22:21:50.396817198 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-report.md	2026-08-23 22:36:03.656172607 -0700
+@@ -351,3 +351,42 @@
+ No Task 1 correction blocker remains. This evidence establishes a complete
+ offline executable RED boundary; it does not claim CP33 GREEN, build
+ reproducibility, Wine runtime compatibility, or physical USB compatibility.
++
++## Round 5 `GetPipePolicy` returned-length correction
++
++The focused public `--policy` caller now supplies independently guarded
++eight-byte value storage and a valid input `ValueLength` capacity of 8. All
++eight storage bytes begin at sentinel `0x6d`; the surrounding 32-bit guards
++begin at `0xa5a5a5a5`. The existing fake Win32 boundary continues to author an
++exact four-byte policy response with value `0x13579bdf` and response
++`value_length` 4 through the typed 48-byte IOCTL response. It does not receive
++or mutate the public caller's `ValueLength` pointer.
++
++Immediately after the real dlsym-resolved `WinUsb_GetPipePolicy` call, the
++focused caller asserts the first four bytes as the independent expected value,
++returned `ValueLength == 4`, bytes 4 through 7 still equal `0x6d`, and both
++outer guards remain intact. If a production wrapper copies the policy value but
++omits the returned-length assignment, `ValueLength` remains 8 and this contract
++fails. The boundary independently asserts a typed request capacity of 8 and a
++typed response actual length of 4, including exact pipe, policy, header,
++response-value, response-size, and returned-byte fields.
++
++The frozen vendor path is unchanged: its real policy-8 call still supplies an
++exact four-byte input capacity, and its typed trace still requires request
++`value_length == 4`. Thus the focused case proves the shared wrapper's 8-to-4
++output-length propagation without changing vendor evidence.
++
++Fresh `-std=c11 -Wall -Wextra -Werror` public builds completed cleanly.
++Focused public `--policy`, `--vendor`, and `--red` each returned the intended
++feature RED exit 1; `--policy` reported target mask `0x18c0`, present mask
++`0x4`, and missing mask `0x18c0`. The regenerated round-5 evidence contains
++5/5 aggregate feature REDs at exit 1, 24/24 focused modes at exit 1, and 13/13
++usage/harness probes at exit 2. The CP32 seal verifies 72/72 entries, both
++production-clone diffs are empty, and the refreshed Task 1 checkpoint verifies
++11/11 entries.
++
++No production source, clone, plan, specification, ledger, review snapshot,
++handoff, or retained test was edited. No Wine process or prefix, USB/sysfs
++path, physical operation, application, or CP24 action was used. CP32 still
++lacks the CP33 public exports, so this is intentionally executable feature RED
++evidence and does not claim CP33 GREEN or runtime/device validation.
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/re/winusb-api-v1/logs/cp33-red.log .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/re/winusb-api-v1/logs/cp33-red.log
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/re/winusb-api-v1/logs/cp33-red.log	2026-08-23 22:21:50.394415626 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/re/winusb-api-v1/logs/cp33-red.log	2026-08-23 22:34:40.619889991 -0700
+@@ -1,4 +1,4 @@
+-CP33 TASK 1 CORRECTION ROUND 4 EXECUTED RED
++CP33 TASK 1 CORRECTION ROUND 5 EXECUTED RED
+ 
+ COMMAND public: tests/winusb_user_api_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source
+ CP33 public executed mode=--red target-mask=0x3fff present-mask=0x4 missing-mask=0x3ffb fake-events=0 submits=0 releases=0 completions=0 failures=21
+@@ -11,26 +11,26 @@
+ 
+ COMMAND lower: tests/wineusb_winusb_urb_contract.sh /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-api-v1/dev-source /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/winusb-function-binding-v1/build-a /home/ajuntanaga/Development/Experiments/PreSonus\ Revelator\ \|\ UniCont/.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0
+ err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7fffb71de2c8 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffb71de2c8 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7fffb71de478.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fffb71de2c8 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7fffb71de478 libusb_status=0 returned_status=0x103.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffb71de2c8 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7fffb71de478.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fffb71de2c8 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7fffb71de478 libusb_status=0 returned_status=0x103.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffb71de2c8 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7fffb71de478.
+-fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fffb71de2c8 header_length=88 interfaces=1 pipes=1.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fffb71de2c8 scope=all_interfaces root=0 interfaces=1 pipes=1.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7fffb71de2c8 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
+-fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fffb71de2c8 interfaces=1 pipes=1.
+-fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7fffb71de2d8 header_length=88 interfaces=1 pipes=0.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7fffb71de2d8 scope=all_interfaces root=0 interfaces=1 pipes=0.
+-fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7fffb71de2d8 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffc4ccd1b88 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4ccd1b88 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffc4ccd1d38.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4ccd1b88 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffc4ccd1d38 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4ccd1b88 handle=0x383 endpoint=0x83 type=3 route=interrupt length=32 buffer=0x7ffc4ccd1d38.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4ccd1b88 handle=0x383 endpoint=0x83 route=interrupt length=32 buffer=0x7ffc4ccd1d38 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4ccd1b88 handle=0x182 endpoint=0x82 type=1 route=invalid length=16 buffer=0x7ffc4ccd1d38.
++fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4ccd1b88 header_length=88 interfaces=1 pipes=1.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4ccd1b88 scope=all_interfaces root=0 interfaces=1 pipes=1.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=pipe_handle irp=0x7ffc4ccd1b88 interface_index=0 interface=5 pipe_index=0 endpoint=0x81 type=2 handle=0x281.
++fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4ccd1b88 interfaces=1 pipes=1.
++fixme:wineusb:validate_select_configuration IO24_HANDLE_POPULATION event=validated irp=0x7ffc4ccd1b98 header_length=88 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=select_configuration_backend irp=0x7ffc4ccd1b98 scope=all_interfaces root=0 interfaces=1 pipes=0.
++fixme:wineusb:usb_submit_urb IO24_HANDLE_POPULATION event=populated irp=0x7ffc4ccd1b98 interfaces=1 pipes=0.
+ fixme:wineusb:usb_submit_urb Unhandled function 0x1.
+ err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7fffb71de2d8 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffb71de088 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7fffb71de238.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fffb71de088 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7fffb71de238 libusb_status=0 returned_status=0x103.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7fffb71de2b8 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7fffb71de468.
+-fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7fffb71de2b8 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7fffb71de468 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=clear_halt irp=0x7ffc4ccd1b98 handle=0x281 endpoint=0x81 type=2 libusb_status=-5 returned_status=0.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4ccd1948 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffc4ccd1af8.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4ccd1948 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffc4ccd1af8 libusb_status=0 returned_status=0x103.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_route irp=0x7ffc4ccd1b78 handle=0x281 endpoint=0x81 type=2 route=bulk length=32 buffer=0x7ffc4ccd1d28.
++fixme:wineusb:usb_submit_urb IO24_PIPE_OBSERVE event=transfer_submit irp=0x7ffc4ccd1b78 handle=0x281 endpoint=0x81 route=bulk length=32 buffer=0x7ffc4ccd1d28 libusb_status=0 returned_status=0x103.
+ WineUSB pipe-observe fake-libusb behavior: pass
+ CP33 lower executed mode=--red completions=2 failures=8
+ EXIT: 1
+@@ -79,7 +79,7 @@
+ PROBE function_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+ PROBE lower_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+ PROBE cancel_invalid EXIT=2 DIAGNOSTIC=usage: unsupported MODE: --invalid 
+-PROBE public_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round4.LbryET/missing-source/include/winusb.h 
+-PROBE lower_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round4.LbryET/missing-libusb/libusb.h 
++PROBE public_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round5.xSP7Ep/missing-source/include/winusb.h 
++PROBE lower_missing_input EXIT=2 DIAGNOSTIC=HARNESS: missing input: /tmp/cp33-task1-round5.xSP7Ep/missing-libusb/libusb.h 
+ PROBE vendor_missing_tool EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 2] No such file or directory: 'objdump' 
+-PROBE vendor_unreadable_source EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 13] Permission denied: '/tmp/cp33-task1-round4.LbryET/unreadable-root/dlls/winusb/io.c' 
++PROBE vendor_unreadable_source EXIT=2 DIAGNOSTIC=HARNESS: vendor static/executable tool failure: [Errno 13] Permission denied: '/tmp/cp33-task1-round5.xSP7Ep/unreadable-root/dlls/winusb/io.c' 
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/re/winusb-api-v1/logs/task-01-red.sha256 .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/re/winusb-api-v1/logs/task-01-red.sha256
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/re/winusb-api-v1/logs/task-01-red.sha256	2026-08-23 22:21:50.395562634 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/re/winusb-api-v1/logs/task-01-red.sha256	2026-08-23 22:35:20.761543191 -0700
+@@ -1,4 +1,4 @@
+-b1653eba9ab7394088d2a06016aaed09706861cb0c3b62139cd147c9e671b08c  tests/winusb_user_api_contract.c
++5d99d161d44c3fb33baaf6911e42840d17a35a0df9aa08fd2c1800fc5f6853e2  tests/winusb_user_api_contract.c
+ 40e3cc94883c816b568f58bcc7b125b0ee65e094f694557a97a22845b2ee36f1  tests/winusb_user_api_contract.sh
+ c1fb99247b3ad7431e03196b57a1a2f72eb3a520439d04e7309aedcd2e9cb296  tests/winusb_function_io_contract.c
+ f856d211aadfa62021898ef5577cf57693d9a8bd523b17bf1eda3d03fb876759  tests/winusb_function_io_contract.sh
+@@ -8,4 +8,4 @@
+ 0d421f886f9f572cae3ddcc63921c02a74260a077ffd763962f408a2cc015fa3  tests/winusb_overlapped_cancel_contract.c
+ e07cb1399844e758ed29c016e7c62a3d75977a1ca7af6ab8d9662da8c37a27f3  tests/winusb_overlapped_cancel_contract.sh
+ c76fc4f6f5e11f4db87d0075dbc33ea5b2e106677659b0e525f558773a858552  tests/io24_winusb_vendor_profile_contract.py
+-dd5e3d766afdc68c5f73b4d74d7df1e38869aeda421b8b2a977f9d30aa7d1c2f  re/winusb-api-v1/logs/cp33-red.log
++a14974dbf8fdd4b6978acc360b7c06c99b2f056e3e13df98478d88a9f5d154a5  re/winusb-api-v1/logs/cp33-red.log
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-4-head/tests/winusb_user_api_contract.c	2026-08-23 22:21:50.379533369 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-1-round-5-head/tests/winusb_user_api_contract.c	2026-08-23 22:31:55.004320810 -0700
+@@ -33,6 +33,8 @@
+ #define IO24_GUARD_WORD UINT32_C(0xa5a5a5a5)
+ #define IO24_POLICY_RESPONSE_VALUE UINT32_C(0x13579bdf)
+ #define IO24_POLICY_RESPONSE_LENGTH 4u
++#define IO24_POLICY_CAPACITY 8u
++#define IO24_POLICY_STORAGE_SENTINEL UINT8_C(0x6d)
+ #define IO24_CONTROL_SYNC_LENGTH 5u
+ #define IO24_CONTROL_OVERLAPPED_LENGTH 7u
+ #define IO24_READ_SYNC_LENGTH 11u
+@@ -90,6 +92,7 @@
+ 
+ struct guarded_buffer { uint8_t before,bytes[32],after; };
+ struct guarded_ulong { uint32_t before;ULONG value;uint32_t after; };
++struct guarded_policy_value { uint32_t before;uint8_t bytes[IO24_POLICY_CAPACITY];uint32_t after; };
+ 
+ static struct fake_event *record_event(enum fake_event_kind kind)
+ {
+@@ -123,6 +126,10 @@
+ {
+     unsigned int i;for(i=0;i<fake.event_count;i++)if(fake.events[i].kind==kind&&(!pointer||fake.events[i].pointer==pointer))return i;return ~0u;
+ }
++static const struct fake_event *find_ioctl_after(unsigned int start,DWORD code)
++{
++    unsigned int i;for(i=start;i<fake.event_count;i++)if(fake.events[i].kind==EVENT_IOCTL&&fake.events[i].code==code)return &fake.events[i];return NULL;
++}
+ static size_t request_size_for_code(DWORD code)
+ {
+     switch(code)
+@@ -255,8 +262,10 @@
+ }
+ static void test_policy(const struct functions*f)
+ {
+-    static const struct{UCHAR pipe,policy;ULONG length,value;}q[]={{0,3,1,0},{0,9,1,0},{1,1,1,0},{0x81,2,1,0},{0x81,4,1,0},{0x81,5,1,0},{0x81,6,1,0},{0x81,7,1,1},{0x81,8,4,IO24_POLICY_RESPONSE_VALUE}};WINUSB_INTERFACE_HANDLE h;struct guarded_ulong v;unsigned int i,submits;ULONG n;BOOL ok;
+-    fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;for(i=0;i<9;i++)if(q[i].policy==8){v.before=IO24_GUARD_WORD;v.value=IO24_VALUE_SENTINEL;v.after=IO24_GUARD_WORD;n=sizeof(v.value);ok=f->get_policy&&f->get_policy(h,q[i].pipe,q[i].policy,&n,&v.value);IO24_CHECK(ok);IO24_CHECK(v.value==IO24_POLICY_RESPONSE_VALUE);IO24_CHECK(n==IO24_POLICY_RESPONSE_LENGTH);IO24_CHECK(v.before==IO24_GUARD_WORD&&v.after==IO24_GUARD_WORD);}else IO24_CHECK(f->set_policy&&f->set_policy(h,q[i].pipe,q[i].policy,q[i].length,(void*)&q[i].value));
++    static const struct{UCHAR pipe,policy;ULONG length,value;}q[]={{0,3,1,0},{0,9,1,0},{1,1,1,0},{0x81,2,1,0},{0x81,4,1,0},{0x81,5,1,0},{0x81,6,1,0},{0x81,7,1,1}};WINUSB_INTERFACE_HANDLE h;struct guarded_policy_value v;struct io24_wire_policy response;const struct fake_event *event;uint32_t actual;unsigned int i,submits,event_start;ULONG n;BOOL ok;
++    fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;for(i=0;i<sizeof(q)/sizeof(q[0]);i++)IO24_CHECK(f->set_policy&&f->set_policy(h,q[i].pipe,q[i].policy,q[i].length,(void*)&q[i].value));
++    v.before=IO24_GUARD_WORD;memset(v.bytes,IO24_POLICY_STORAGE_SENTINEL,sizeof(v.bytes));v.after=IO24_GUARD_WORD;n=sizeof(v.bytes);event_start=fake.event_count;ok=f->get_policy&&f->get_policy(h,0x81,8,&n,v.bytes);IO24_CHECK(ok);memcpy(&actual,v.bytes,sizeof(actual));IO24_CHECK(actual==IO24_POLICY_RESPONSE_VALUE);IO24_CHECK(n==IO24_POLICY_RESPONSE_LENGTH);IO24_CHECK(bytes_equal(v.bytes+sizeof(actual),sizeof(v.bytes)-sizeof(actual),IO24_POLICY_STORAGE_SENTINEL));IO24_CHECK(v.before==IO24_GUARD_WORD&&v.after==IO24_GUARD_WORD);
++    event=find_ioctl_after(event_start,IO24_IOCTL_GET_POLICY);IO24_CHECK(event!=NULL);if(event){check_header(event,sizeof(struct io24_wire_policy),UINT64_C(0x1122334455667788),0);IO24_CHECK(event->request.policy.pipe_id==0x81&&event->request.policy.policy_id==8&&event->request.policy.value_length==IO24_POLICY_CAPACITY&&event->request.policy.value==0&&event->request.policy.reserved==0);IO24_CHECK(event->out_length==sizeof(response)&&event->output_saved>=sizeof(response)&&event->returned_bytes==sizeof(response));if(event->output_saved>=sizeof(response)){memcpy(&response,event->output_after,sizeof(response));IO24_CHECK(response.header.size==sizeof(response)&&response.header.version==IO24_ABI_VERSION&&response.header.session==UINT64_C(0x1122334455667788)&&response.header.interface_index==0&&response.header.reserved==0);IO24_CHECK(response.pipe_id==0x81&&response.policy_id==8&&response.value_length==IO24_POLICY_RESPONSE_LENGTH&&response.value==IO24_POLICY_RESPONSE_VALUE&&response.reserved==0);}}
+     IO24_CHECK(f->set_alt&&f->set_alt(h,1));IO24_CHECK(counts.submits==submits+10);if(f->free_handle)f->free_handle(h);
+ }
+ static void test_transfer(const struct functions*f)

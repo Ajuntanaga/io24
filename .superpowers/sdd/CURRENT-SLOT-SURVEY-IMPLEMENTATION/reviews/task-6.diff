@@ -1,0 +1,446 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 05:16:47.500266333 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 05:30:55.396897643 -0700
+@@ -10,6 +10,9 @@
+ recommended correction path after the revision-1 final review; this amendment
+ does not authorize a live run.
+ 
++Revision-1 evidence protocol is rejected and superseded. Revision 2 remains
++pending fresh independent review; no offline fixture or seal is live authority.
++
+ ## Objective
+ 
+ Determine whether either currently selected front-panel preset produces a
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json	2026-08-29 05:16:47.511318835 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json	2026-08-29 05:30:55.407444143 -0700
+@@ -1,5 +1,6 @@
+ {
+-  "schema": "cp34-current-slot-survey-plan-v1",
++  "schema": "cp34-current-slot-survey-plan-v2",
++  "evidence_protocol": "cp34-current-slot-evidence-v2",
+   "run_id": "20260829T120000-0700-current-slot-survey",
+   "device_serial": "AB7C22200355",
+   "authorization_status": "NOT_AUTHORIZED",
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 05:16:47.516318794 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 05:30:55.411444110 -0700
+@@ -1,6 +1,6 @@
+-bf7484eb9257075259b77177d8f0ff00a1d281a97f0927bff0a3db6f897c753b  re/cp34_current_slot_survey.py
+-93df2c3f108575e14c404814f6cc4cf29f5209bc8279e6a4e6eadcaa5116e590  tests/test_cp34_current_slot_survey.py
+-8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-c96d0e8adec4274feb7c21ec06a2c994b45a32318f823e19b17fc3f91db04e01  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+-3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++dce1c67f549407d699f186821f287f77247c9397bec4d9c1ebea1d3aeb386855  re/cp34_current_slot_survey.py
++ee88165ba2f051b7a7560427d7cf4e861c19a79a32f9ce94b5cfb9b06e1cf30e  tests/test_cp34_current_slot_survey.py
++ac5acd57af526fe7ab7fe75222772f5ef6763d980aa483efed3c4653d396a629  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++b5d0392b2dc295c73dc483e64e7501182fa5e206bd2904f07c74bb9797ce9607  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
++b5540b3463ca625b2d07744e72e90fbe17a880e6c20a99dc74c9ac5ebd0f45dd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 05:16:47.507318867 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 05:30:55.403444175 -0700
+@@ -117,12 +117,14 @@
+ consistent lag, with the documented 96-sample cadence tolerance.
+ `UNAVAILABLE` means no toggle and no replacement scan of channels 1, 2, 5, or 6.
+ 
+-After `T2`, `P2`, and `S4` establish restored device state, replay the exact
+-external-source stimulus on the same controlled path and listen through the
+-separately authorized external monitoring path. Do not use io24 output playback
+-or io24 monitoring. Create `AUDIBLE-ATTESTATION.json` before A/B analysis. A
+-positive attestation records two active repeats heard and zero dry repeats heard;
+-a no/failed hearing records null counts and `operator_attested: false`.
++After `P2` and `S4`, restore and attest the physical connection before any
++audible work. Replay each of `S1` through `S4` frozen-channel mono derivatives
++individually through a separate non-io24 playback and monitoring path. Do not
++use io24 output playback, io24 monitoring, or a single external-stimulus replay
++as audible-attestation evidence. Attest that both active derivatives are heard
++and both dry derivatives are not heard. Create `AUDIBLE-ATTESTATION.json` only
++after those four post-restoration observations, then run A/B analysis. A
++no/failed hearing records null counts and `operator_attested: false`.
+ 
+ For an enabled `P0`, analyze the retained derivatives exactly as follows
+ (replace `N` with the already-frozen channel). Run it with the run directory as
+@@ -148,16 +150,16 @@
+ 
+ ## Restoration and sealing
+ 
+-After the listening/attestation and offline A/B analysis, restore the predeclared
+-physical connection and record its operator attestation. Seal an immutable,
+-candidate-scoped manifest at `RUN/ch1-slot1/EVIDENCE-SHA256SUMS` before invoking
++After the physical-restoration attestation, four-derivative replay attestation,
++and offline A/B analysis, seal an immutable candidate-scoped manifest at
++`RUN/ch1-slot1/EVIDENCE-SHA256SUMS` before invoking
+ the retained-file verifier. Its paths are run-relative and cover `PLAN.json`
+ plus every channel-1 verifier input, excluding the manifest itself and later
+ `RESTORATION.json`, `REPORT.md`, and `SHA256SUMS` outputs. Create it with
+ no-clobber semantics; never replace it.
+ 
+ ```text
+-(cd RUN && tmp=$(mktemp .ch1-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json; find ch1-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch1-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch1-slot1/EVIDENCE-SHA256SUMS)
++(cd RUN && set -o pipefail && tmp=$(mktemp .ch1-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json; find ch1-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch1-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch1-slot1/EVIDENCE-SHA256SUMS)
+ ```
+ 
+ ```text
+@@ -193,7 +195,7 @@
+ `RUN/ch2-slot1/RESTORATION.json`.
+ 
+ ```text
+-(cd RUN && tmp=$(mktemp .ch2-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json ch1-slot1/EVIDENCE-SHA256SUMS ch1-slot1/RESTORATION.json; find ch2-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch2-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch2-slot1/EVIDENCE-SHA256SUMS)
++(cd RUN && set -o pipefail && tmp=$(mktemp .ch2-evidence.XXXXXX) && trap 'rm -f "$tmp"' EXIT && { sha256sum PLAN.json ch1-slot1/EVIDENCE-SHA256SUMS ch1-slot1/RESTORATION.json; find ch2-slot1 -type f ! -name EVIDENCE-SHA256SUMS ! -name RESTORATION.json ! -name REPORT.md ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0r sha256sum --; } | LC_ALL=C sort > "$tmp" && ln "$tmp" ch2-slot1/EVIDENCE-SHA256SUMS && sha256sum -c ch2-slot1/EVIDENCE-SHA256SUMS)
+ ```
+ 
+ Only after the first positive or the terminal attempted candidate, write the
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 05:16:47.524318730 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 05:30:55.420444037 -0700
+@@ -556,3 +556,14 @@
+ `0f27703b9ba94b4af9807ca6bc1f9389f81deb31d12d8d14f435055d1d4b7b8f`.
+ No live action occurred. The final fix wave is ready only for scoped independent
+ re-review; it is not reviewed, final-approved, or live-authorized.
++
++### Revision-2 correction — pending independent review
++
++Revision 1 is rejected/superseded. Revision 2 accepts only
++`cp34-current-slot-survey-plan-v2` with
++`cp34-current-slot-evidence-v2`, emits validation/restoration v2 results, and
++rejects non-finite or float-overflow JaSt numbers deterministically before raw
++canonical serialization. Its procedure seals each candidate with `pipefail`
++before its first pipeline and requires physical restoration followed by separate
++non-io24 replay of all four derivatives before audible attestation and A/B.
++No live action occurred; this correction remains pending independent review.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 05:16:47.536318632 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 05:30:55.432443940 -0700
+@@ -274,3 +274,6 @@
+ the named live run. No validator, template, fixture, manifest, or offline
+ `SIGNATURE_PRESENT` result authorizes USB, ALSA, front-panel, preset/effect, or
+ other hardware action.
++
++Revision 1 is rejected/superseded by the v2 current-slot evidence protocol.
++Revision 2 is pending independent review and retains every no-live boundary.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 05:16:47.532318665 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 05:30:55.428443972 -0700
+@@ -169,6 +169,10 @@
+ authority. Channel 2 requires a sealed channel-1 result of exactly `RESTORED`
+ plus `INCONCLUSIVE`.
+ 
++Revision-1 plan/restoration schemas are rejected and superseded by v2. The
++revision-2 numeric, procedure, and candidate-seal correction is pending fresh
++independent review; no command in this record authorizes a live action.
++
+ The final fix wave has not received a clean review. The next gate is a scoped
+ independent offline re-review. Only after that review is clean
+ may a new separately exact authorization be requested for a named live run.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 05:16:47.539318608 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 05:30:55.437443899 -0700
+@@ -6,18 +6,18 @@
+ 89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d  re/uc_factory_presets.json
+ 6502fa83125fb519d61bd2bba40e9d10d81f0307bdbe104e2d0e38304b1d6fce  tests/fx_gate_probe.py
+ 2e71faaa046d1bd87a02c62fe36c8a5692e7e7f7007c2c6a11352c5db956bb6c  PROTOCOL.md
+-7115b815a708832b62eda06c69fd0c4d060904207f8f6dee1b40521c2bd52342  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
++dc32a3ff2cb209314748174ea4a4c43c7c72926aadc852871ac6d411cfbb7e7b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+ c6238bac7efb7eda37f3289be948eb2fc34455f44a1b3fbfd6cb7c55389f86e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CAPTURE-MANIFEST.md
+ 2267f83eb9eaec10ad493b2d0d520135d55ccba3e96e05ad70eb0a90d319f6b6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PRESTATE.md
+-89f426aa2ed34a2386ba09c05094e132c8fe51270c8b709c1e378847b950536a  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+-e753b54c346041e9e93265bc8a534df053de7b0357efb02e752b49867f1f2dd5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+-a0faf1d74ce94a02433513ebc92ccc5ebbf0152bbe357a915109004c0940c457  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+-84bb525ddca044bec3fbd3608e6e62b07c3b0fdde93f4e00dc3e9520c1e53684  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+-bf7484eb9257075259b77177d8f0ff00a1d281a97f0927bff0a3db6f897c753b  re/cp34_current_slot_survey.py
+-93df2c3f108575e14c404814f6cc4cf29f5209bc8279e6a4e6eadcaa5116e590  tests/test_cp34_current_slot_survey.py
+-8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-c96d0e8adec4274feb7c21ec06a2c994b45a32318f823e19b17fc3f91db04e01  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+-3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+-d713a3b880a226ad8f76876ef6f2bb9c458827bb6db6b332d955fb4efdce173b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
++a190bfe821a02cc0c7f61d6dfdd2b92dad94306113e6b25d82fcedb5e8dbf394  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
++2ddc276cb876ecfffd5a6509634cf1bfbb09743e2bc0c30c70ab7f5e46c2eb7f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
++1c3a79dd8a393d3e5dfdb6fc2adfa6acbe07e78c28851d45ddb19f728b674623  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
++6e717d125ae7317a45c61f2a56fd051f57c336f1b239478963bc6ee1613eccc3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++dce1c67f549407d699f186821f287f77247c9397bec4d9c1ebea1d3aeb386855  re/cp34_current_slot_survey.py
++ee88165ba2f051b7a7560427d7cf4e861c19a79a32f9ce94b5cfb9b06e1cf30e  tests/test_cp34_current_slot_survey.py
++ac5acd57af526fe7ab7fe75222772f5ef6763d980aa483efed3c4653d396a629  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++b5d0392b2dc295c73dc483e64e7501182fa5e206bd2904f07c74bb9797ce9607  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
++b5540b3463ca625b2d07744e72e90fbe17a880e6c20a99dc74c9ac5ebd0f45dd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++f1fd3d4ae29008384a36c21354ff203415f530b74cbfa46bbecf9b683acc899e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+ 567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 05:16:47.520318762 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 05:30:55.416444070 -0700
+@@ -101,3 +101,8 @@
+ only. This wave has not been independently re-reviewed. The next gate remains
+ a scoped independent re-review, followed only after a clean result by a
+ separately exact authorization.
++
++Revision 1 is rejected/superseded by evidence protocol v2. Revision 2 adds
++total JaSt numeric rejection, candidate-scoped `pipefail` seals, and the
++post-restoration four-derivative audible sequence; it is pending independent
++review and grants no live authority.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 05:16:47.528318697 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 05:30:55.424444005 -0700
+@@ -192,6 +192,10 @@
+    ordering. Obtain a scoped independent offline re-review of this corrected
+    stage; no clean final review is claimed yet.
+    Passing tools, templates, tests, or manifests does not authorize hardware.
++
++   Revision 1 is rejected/superseded. Revision 2 requires fresh independent
++   review of total JaSt numeric validation, candidate seals, and four-file
++   post-restoration audible attestation; it grants no live authority.
+ 2. Treat device-resident custom store/assignment as unsupported by this exact
+    host-module/firmware pair unless a new source artifact shows another io24
+    transport. Do not implement or probe a guessed sender.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/re/cp34_current_slot_survey.py	2026-08-29 05:16:47.483125880 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/re/cp34_current_slot_survey.py	2026-08-29 05:30:55.379841349 -0700
+@@ -62,7 +62,7 @@
+     "EVIDENCE-SHA256SUMS", "RESTORATION.json", "REPORT.md", "SHA256SUMS",
+ })
+ _PLAN_FIELDS = frozenset({
+-    "schema", "run_id", "device_serial", "authorization_status",
++    "schema", "evidence_protocol", "run_id", "device_serial", "authorization_status",
+     "stop_on_first_positive", "battery_stop_percent", "evidence_dir",
+     "source", "audio", "state_reads", "continuous_interface_claim",
+     "candidates", "prohibited_actions",
+@@ -333,7 +333,7 @@
+         except (UnicodeDecodeError, json.JSONDecodeError):
+             load_error = "plan_invalid_json"
+     result = {
+-        "schema": "cp34-current-slot-survey-plan-validation-v1",
++        "schema": "cp34-current-slot-survey-plan-validation-v2",
+         "plan_sha256": hashlib.sha256(raw).hexdigest(),
+         "status": "INVALID",
+         "reasons": [],
+@@ -349,8 +349,10 @@
+     reasons = result["reasons"]
+     if frozenset(plan) != _PLAN_FIELDS:
+         reasons.append("plan_has_unrecognized_fields")
+-    if plan.get("schema") != "cp34-current-slot-survey-plan-v1":
+-        reasons.append("schema_must_match_cp34_current_slot_survey_v1")
++    if plan.get("schema") != "cp34-current-slot-survey-plan-v2":
++        reasons.append("schema_must_match_cp34_current_slot_survey_v2")
++    if plan.get("evidence_protocol") != "cp34-current-slot-evidence-v2":
++        reasons.append("evidence_protocol_must_match_cp34_current_slot_evidence_v2")
+     if not isinstance(plan.get("run_id"), str) or not plan["run_id"].strip():
+         reasons.append("run_id_required")
+     if plan.get("device_serial") != EXPECTED_SERIAL:
+@@ -620,8 +622,7 @@
+             reasons.append("%s_%s_must_be_boolean" % (prefix, key))
+     for key in ("gain_1", "gain_2", "headphone", "main", "monitor_blend"):
+         value = state.get(key)
+-        if (not isinstance(value, (int, float)) or isinstance(value, bool)
+-                or not math.isfinite(value)):
++        if not _is_finite_numeric(value):
+             reasons.append("%s_%s_must_be_finite_numeric" % (prefix, key))
+     return reasons
+ 
+@@ -840,7 +841,7 @@
+         (item for item in EXPECTED_CANDIDATES if item["label"] == candidate), None,
+     )
+     result = {
+-        "schema": "cp34-current-slot-restoration-v1",
++        "schema": "cp34-current-slot-restoration-v2",
+         "status": "RESTORATION_FAILED",
+         "survey_outcome": "INCONCLUSIVE",
+         "candidate": candidate,
+@@ -944,11 +945,18 @@
+                         "schema", "checkpoint", "candidate", "channel",
+                         "enabled", *STABLE_STATE_KEYS,
+                     }
++                    raw_type_reasons = []
++                    if isinstance(raw_value, dict):
++                        raw_type_reasons = _state_type_reasons(
++                            raw_value, "%s_jast_raw" % checkpoint_prefix,
++                        )
++                        reasons.extend(raw_type_reasons)
+                     if (not isinstance(raw_value, dict)
+                             or set(raw_value) != raw_fields
+                             or raw_value.get("schema")
+                                != "cp34-current-slot-jast-raw-v1"
+                             or raw_value.get("checkpoint") != checkpoint
++                            or raw_type_reasons
+                             or _canonical_json_bytes(raw_value) != raw_bytes):
+                         reasons.append(
+                             "%s_jast_raw_noncanonical" % checkpoint_prefix,
+@@ -958,9 +966,6 @@
+                             raw_value, candidate_spec,
+                             "%s_jast_raw" % checkpoint_prefix,
+                         ))
+-                        reasons.extend(_state_type_reasons(
+-                            raw_value, "%s_jast_raw" % checkpoint_prefix,
+-                        ))
+                         expected_summary = _jast_summary_from_raw(
+                             raw_value, raw_path, raw_bytes,
+                         )
+@@ -1244,7 +1249,7 @@
+         result = verify_restoration(argv[1], argv[3])
+         print(json.dumps(result, sort_keys=True, allow_nan=False))
+         return 0 if result["status"] == "RESTORED" else 2
+-    result = {"schema": "cp34-current-slot-survey-plan-validation-v1", "status": "INVALID", "plan_sha256": hashlib.sha256(b"").hexdigest(), "reasons": ["usage: validate-plan PLAN.json | map-channel MAP.raw.wav --input-channel 1 | verify-restoration RUN_DIR --candidate ch1-slot1"], "candidates": []}
++    result = {"schema": "cp34-current-slot-survey-plan-validation-v2", "status": "INVALID", "plan_sha256": hashlib.sha256(b"").hexdigest(), "reasons": ["usage: validate-plan PLAN.json | map-channel MAP.raw.wav --input-channel 1 | verify-restoration RUN_DIR --candidate ch1-slot1"], "candidates": []}
+     print(json.dumps(result, sort_keys=True, allow_nan=False))
+     return 2
+ 
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-before/tests/test_cp34_current_slot_survey.py	2026-08-29 05:16:47.487228794 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-after/tests/test_cp34_current_slot_survey.py	2026-08-29 05:30:55.383952854 -0700
+@@ -68,7 +68,8 @@
+ 
+ def _valid_plan():
+     return {
+-        "schema": "cp34-current-slot-survey-plan-v1",
++        "schema": "cp34-current-slot-survey-plan-v2",
++        "evidence_protocol": "cp34-current-slot-evidence-v2",
+         "run_id": "20260829T120000-0700-current-slot-survey",
+         "device_serial": "AB7C22200355",
+         "authorization_status": "EXACT_AUTHORIZATION_RECORDED",
+@@ -397,7 +398,7 @@
+             and path.name != "EVIDENCE-SHA256SUMS"
+         }
+         (run_dir / "ch1-slot1" / "RESTORATION.json").write_text(json.dumps({
+-            "schema": "cp34-current-slot-restoration-v1",
++            "schema": "cp34-current-slot-restoration-v2",
+             "status": "RESTORED",
+             "survey_outcome": "INCONCLUSIVE",
+             "candidate": "ch1-slot1",
+@@ -439,7 +440,7 @@
+         completed = self._invoke(_valid_plan())
+         self.assertEqual(completed.returncode, 0)
+         result = json.loads(completed.stdout)
+-        self.assertEqual(result["schema"], "cp34-current-slot-survey-plan-validation-v1")
++        self.assertEqual(result["schema"], "cp34-current-slot-survey-plan-validation-v2")
+         self.assertEqual(result["status"], "VALID")
+         self.assertEqual(result["reasons"], [])
+         self.assertEqual(
+@@ -504,7 +505,7 @@
+ 
+     def test_rejects_unsafe_path_battery_floor_or_missing_prohibitions(self):
+         plan = _valid_plan(); plan["schema"] = "wrong"
+-        self._assert_invalid(plan, "schema_must_match_cp34_current_slot_survey_v1")
++        self._assert_invalid(plan, "schema_must_match_cp34_current_slot_survey_v2")
+         plan = _valid_plan(); plan["evidence_dir"] = "/tmp/outside"
+         self._assert_invalid(plan, "evidence_dir_must_be_under_active_runs")
+         plan = _valid_plan(); plan["battery_stop_percent"] = 9
+@@ -512,6 +513,13 @@
+         plan = _valid_plan(); plan["prohibited_actions"].remove("wine")
+         self._assert_invalid(plan, "prohibited_actions_must_match_complete_set")
+ 
++    def test_rejects_complete_revision_1_plan_and_missing_evidence_protocol(self):
++        plan = _valid_plan()
++        plan["schema"] = "cp34-current-slot-survey-plan-v1"
++        plan.pop("evidence_protocol")
++        self._assert_invalid(plan, "schema_must_match_cp34_current_slot_survey_v2")
++        self._assert_invalid(plan, "evidence_protocol_must_match_cp34_current_slot_evidence_v2")
++
+ 
+ class SurveyTemplateContractTests(unittest.TestCase):
+     def test_checked_in_template_is_rejected_as_unrecorded_and_unauthorized(self):
+@@ -537,6 +545,18 @@
+         self.assertIn("A null signal is `INCONCLUSIVE`, never a negative.", procedure)
+         self.assertIn("-print0 | LC_ALL=C sort -z | xargs -0r sha256sum --", procedure)
+         self.assertIn("set -o pipefail && find", procedure)
++        self.assertIn("(cd RUN && set -o pipefail && tmp=$(mktemp .ch1-evidence", procedure)
++        self.assertIn("(cd RUN && set -o pipefail && tmp=$(mktemp .ch2-evidence", procedure)
++        self.assertIn("tmpdir=$(mktemp -d .sha256sums", procedure)
++        self.assertLess(
++            procedure.index("restore and attest the physical connection"),
++            procedure.index("Replay each of `S1` through `S4`"),
++        )
++        self.assertLess(
++            procedure.index("Replay each of `S1` through `S4`"),
++            procedure.index("Create `AUDIBLE-ATTESTATION.json`"),
++        )
++        self.assertNotIn("external-source stimulus on the same controlled path", procedure)
+         self.assertIn('ln "$tmpdir/SHA256SUMS" SHA256SUMS', procedure)
+         self.assertNotIn("> SHA256SUMS", procedure)
+ 
+@@ -723,6 +743,56 @@
+             "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8",
+         )
+ 
++    def _cli_result(self, run_dir, candidate="ch1-slot1"):
++        completed = subprocess.run(
++            [sys.executable, str(CLI), "verify-restoration", str(run_dir),
++             "--candidate", candidate],
++            text=True, capture_output=True, check=False,
++        )
++        self.assertEqual(completed.returncode, 2)
++        self.assertNotIn("Traceback", completed.stderr)
++        result = json.loads(completed.stdout)
++        self.assertEqual(result["status"], "RESTORATION_FAILED")
++        return result
++
++    def test_oversized_summary_integer_fails_without_traceback(self):
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            summary = run_dir / "ch1-slot1" / "P0.json"
++            summary.write_text(summary.read_text(encoding="utf-8").replace(
++                '"gain_1": 37.0', '"gain_1": ' + "1" + "0" * 400,
++            ), encoding="utf-8")
++            result = self._cli_result(run_dir)
++        self.assertIn("p0_gain_1_must_be_finite_numeric", result["reasons"])
++
++    def test_oversized_raw_jast_integer_fails_before_canonicalization(self):
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            raw = run_dir / "ch1-slot1" / "P0.raw.jast"
++            raw.write_text(raw.read_text(encoding="utf-8").replace(
++                '"gain_1":37.0', '"gain_1":' + "1" + "0" * 400,
++            ), encoding="utf-8")
++            summary = run_dir / "ch1-slot1" / "P0.json"
++            self._mutate_json(summary, lambda value: value.update(
++                raw_snapshot_sha256=hashlib.sha256(raw.read_bytes()).hexdigest(),
++            ))
++            result = self._cli_result(run_dir)
++        self.assertIn("p0_jast_raw_gain_1_must_be_finite_numeric", result["reasons"])
++
++    def test_exponent_overflow_raw_jast_fails_without_traceback(self):
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            raw = run_dir / "ch1-slot1" / "P0.raw.jast"
++            raw.write_text(raw.read_text(encoding="utf-8").replace(
++                '"gain_1":37.0', '"gain_1":1e10000',
++            ), encoding="utf-8")
++            summary = run_dir / "ch1-slot1" / "P0.json"
++            self._mutate_json(summary, lambda value: value.update(
++                raw_snapshot_sha256=hashlib.sha256(raw.read_bytes()).hexdigest(),
++            ))
++            result = self._cli_result(run_dir)
++        self.assertIn("p0_jast_raw_gain_1_must_be_finite_numeric", result["reasons"])
++
+     def test_enabled_first_restores_with_signature_present(self):
+         with tempfile.TemporaryDirectory() as directory:
+             run_dir = _build_restoration_run(directory)
+@@ -767,7 +837,7 @@
+         self.assertEqual(after, before)
+         self.assertNotIn("Traceback", completed.stderr)
+         result = json.loads(completed.stdout)
+-        self.assertEqual(result["schema"], "cp34-current-slot-restoration-v1")
++        self.assertEqual(result["schema"], "cp34-current-slot-restoration-v2")
+         self.assertEqual(result["status"], "RESTORED")
+         self.assertEqual(result["survey_outcome"], "SIGNATURE_PRESENT")
+         self.assertEqual(result["frozen_mix_channel"], 3)
+@@ -1118,6 +1188,19 @@
+ 
+         with tempfile.TemporaryDirectory() as directory:
+             run_dir = _build_restoration_run(
++                directory, candidate="ch2-slot1", enabled=True,
++                outcome="INCONCLUSIVE", include_first_result=True,
++            )
++            first_result = run_dir / "ch1-slot1" / "RESTORATION.json"
++            self._mutate_json(first_result, lambda value: value.update(
++                schema="cp34-current-slot-restoration-v1",
++            ))
++            completed, result = self._result(run_dir, "ch2-slot1")
++        self.assertEqual(completed.returncode, 2)
++        self.assertIn("second_candidate_first_result_not_canonical", result["reasons"])
++
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(
+                 directory, candidate="ch2-slot1", enabled=True,
+                 outcome="INCONCLUSIVE", include_first_result=True,
+             )

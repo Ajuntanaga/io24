@@ -1,0 +1,4 @@
+runtime_entry_count=77
+runtime_seal_sha256=38061a271ece0f9d4d90d6c11ec467fdef79c7ca1e8395ac42ab0264ed1ec026  -
+regular_files=78 directories=7 symlinks=0 special=0
+root=. inode=6684799 mode=700 owner=1000:1000 mtime=2026-08-22 10:41:05.743947530 -0700

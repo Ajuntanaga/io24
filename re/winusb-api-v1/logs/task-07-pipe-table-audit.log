@@ -1,0 +1,35 @@
+Task 07 R99 pipe-table allocator audit
+Scope: isolated /tmp build only; actual frozen unixlib.c, macro-gated fake libusb,
+LD_PRELOAD allocator interposition. No workspace production/test source was edited.
+
+Frozen inputs (sha256)
+a8dda27c3a06b08ad89608997d7ac78f54e2656fd3cbac20ab57ab76ca9ff17e  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+0cdc52e1ac486cca1917e492cf17aa35ee983da8330fa0dfe91c717453b308d0  tests/wineusb_winusb_urb_contract.c
+d2e0d300209199307010edd44704586e741b987ce629dffd925771b85633fec6  tests/wineusb_winusb_urb_fake_libusb.c
+
+Mode/environment
+IO24_PIPE_TABLE_ALLOC_AUDIT=1
+LD_PRELOAD=/tmp/io24-r99-positive.kuZLJB/libusb-1.0.so.0
+mode=--claims
+
+Build/run command (source_root=.io24-build/winusb-api-v1/dev-source;
+build_root=.io24-build/winusb-function-binding-v1/build-a;
+libusb_include=.io24-build/wineusb-observe-v2/tools/usr/include/libusb-1.0)
+cc -std=c11 -Wall -Wextra -Werror -DIO24_PIPE_TABLE_ALLOC_AUDIT -fPIC -shared -I"$libusb_include" -Wl,-soname,libusb-1.0.so.0 tests/wineusb_winusb_urb_fake_libusb.c -o "$audit_dir/libusb-1.0.so.0"
+cc -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -DWINE_UNIX_LIB -D__WINESRC__ -I"$build_root/include" -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" -fPIC -c "$source_root/dlls/wineusb.sys/unixlib.c" -o "$audit_dir/unixlib.o"
+cc -shared -Wl,-Bsymbolic -Wl,-z,defs "$audit_dir/unixlib.o" "$build_root/dlls/ntdll/ntdll.so" -L"$audit_dir" -Wl,-l:libusb-1.0.so.0 -lpthread -o "$audit_dir/wineusb-contract.so"
+cc -std=c11 -Wall -Wextra -Werror -DIO24_PIPE_TABLE_ALLOC_AUDIT -DWINE_UNIX_LIB -D__WINESRC__ -Itests -I"$libusb_include" -I"$source_root/include" -I"$source_root/dlls/wineusb.sys" tests/wineusb_winusb_urb_contract.c -L"$audit_dir" -Wl,--no-as-needed -Wl,-rpath,"$audit_dir" -Wl,-l:libusb-1.0.so.0 -ldl -o "$audit_dir/contract"
+LD_LIBRARY_PATH="$audit_dir:$(dirname -- "$build_root/dlls/ntdll/ntdll.so")" LD_PRELOAD="$audit_dir/libusb-1.0.so.0" IO24_PIPE_TABLE_ALLOC_AUDIT=1 "$audit_dir/contract" "$audit_dir/wineusb-contract.so" --claims
+
+Three audited schedules accepted by the contract:
+1. explicit rollback: staged table 1 alloc / 1 free / 0 live before either close;
+   then child release interface 5 before parent close, and table free order < close order.
+2. unresolved staged destruction: exactly 1 alloc / 1 free / 0 live; child release
+   interface 5 before parent close; table free order < close order.
+3. committed destruction: exactly 1 alloc / 1 free / 0 live; child release interface 5
+   before parent close; table free order < close order.
+
+Terminal result
+WineUSB pipe-observe fake-libusb behavior: pass
+CP33 lower executed mode=--claims completions=0 failures=0
+EXIT=0

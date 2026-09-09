@@ -1,0 +1,100 @@
+{
+  "schema": "cp34-stat-channel-pair-routing-v1",
+  "status": "UNLINKED_CHANNEL2_ROUTE_SOURCE_BOUND_TO_SECOND_CHANNEL_STRIP_NOT_VOICEFX",
+  "firmware": {
+    "source": "UC 4.7.2 dspusbdevice.dll embedded io24 application",
+    "application_size": 1104448,
+    "application_sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a"
+  },
+  "live_state": {
+    "flags_word": 417,
+    "flags_hex": "0x1a1",
+    "stereo_link_bit": 12,
+    "stereo_linked": false,
+    "channel1": {
+      "slot": 0,
+      "enabled": false
+    },
+    "channel2": {
+      "slot": 3,
+      "enabled": true
+    }
+  },
+  "unlinked_dispatch": {
+    "link_flag_offsets": [
+      "0x42248",
+      "0x4224c",
+      "0x4224e",
+      "0x42250"
+    ],
+    "unlinked_branch_target": "0x424d6",
+    "slot_pair_collapse_offset": "0x424ea",
+    "r1_by_stat_slot": {
+      "0": 0,
+      "1": 0,
+      "2": 1,
+      "3": 1
+    },
+    "selector_argument_r3": 0,
+    "channel2_entry_path": "0x531e0 r1 nonzero -> 0x5338e alternate slot two",
+    "selected_table_slot": 2,
+    "selected_table_device_offset": "0x5e88",
+    "direct_voicefx_slot_one_route": false
+  },
+  "slot_two_identity": {
+    "first_channel_strip_owner_device_offset": "0x43a0",
+    "owner_stride": "0xcec",
+    "second_channel_strip_owner_device_offset": "0x508c",
+    "second_state_interface_device_offset": "0x5090",
+    "interface_vtable_raw_offset": "0x10cb18",
+    "state_apply_vtable_slot_raw_offset": "0x10cb1c",
+    "state_apply_adjustor_raw_offset": "0x52aec",
+    "state_apply_raw_offset": "0x52978",
+    "component_keys": [
+      "filt",
+      "gate",
+      "comp",
+      "eq  ",
+      "lim "
+    ],
+    "voicefx_component_201_present": false
+  },
+  "linked_positive_slot_candidate": {
+    "condition": "flags bit 12 set and Stat slot greater than zero on the existing r6-zero continuation",
+    "positive_slot_gate_offsets": [
+      "0x42254",
+      "0x42256",
+      "0x42258"
+    ],
+    "first_handoff": {
+      "call_raw_offset": "0x42266",
+      "r1": 0,
+      "r3": 1,
+      "path": "normal indexed component selector",
+      "voicefx_table_slot": 1,
+      "voicefx_table_device_offset": "0x5e80",
+      "selected_index": "DATA_DEPENDENT_UNRESOLVED"
+    },
+    "second_handoff": {
+      "call_raw_offset": "0x42280",
+      "r1": 1,
+      "r3": 0,
+      "path": "second channel strip"
+    },
+    "voicefx_status": "ELIGIBLE_NOT_PROVED_SELECTED"
+  },
+  "interpretation": {
+    "dry_observation": "EXPLAINED_BY_UNLINKED_CHANNEL2_DISPATCH_NOT_BY_HEADPHONE_PATH",
+    "stat_storage": "UNRESOLVED",
+    "physical_commit": "UNPROVED",
+    "audible_voicefx": "UNPROVED",
+    "next_discriminating_trial": "temporarily linked positive-slot recall",
+    "next_trial_authority": "BLOCKED_BY_CHANNEL1_UNTOUCHED_BOUNDARY"
+  },
+  "supersedes": [
+    "blanket claim that selected Stat always reaches block 201",
+    "alternate slot-two dynamic target unresolved",
+    "slot-two vtable unresolved"
+  ]
+}
+

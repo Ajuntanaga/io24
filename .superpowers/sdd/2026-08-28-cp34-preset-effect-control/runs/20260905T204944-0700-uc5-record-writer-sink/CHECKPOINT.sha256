@@ -1,0 +1,10 @@
+7a17be26fca17b09ab857f90bdc0cdadc895533f09c973d3382662e74825bdb0  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T204944-0700-uc5-record-writer-sink/SCOPE.md
+e32bd5633e6d5475473389afc58c357bd62ac8de57794b01c45fc5768dee91ea  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T204944-0700-uc5-record-writer-sink/PROGRESS.md
+905644fc5bb815c87821144403665c89d4f5b06bf1b9ff98c79229db1d7686a5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T204944-0700-uc5-record-writer-sink/OBSIDIAN.md
+49330f2ecd199b3f74468f117001361de88a0bc86aab94acefc8b7e07ba20893  re/cp34_uc5_record_writer_sink.py
+071cbe235a3a02f07b96547d61df0f63057579f0f230a662c918850f9ee0b240  tests/test_cp34_uc5_record_writer_sink.py
+991d3d5ece967c4ee0420e5f345d054f902eae0506ef5af18a0fba4f697bafee  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+4b941ee135da74f20108efa5e5a95fba353c3db83a0f45ba7cb340c3188283f9  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+060dae49d7f91c107a3e5f44c638bc2de0a1606297cb8cd56601061ea0797534  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T200005-0700-uc5-structured-state-serializer-comparison/CHECKPOINT.sha256
+83970ad8defbd935de7b25d67cf959e7826f04d8ca27a4c8305dfe06db66d596  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T202119-0700-firmware-stored-record-recall-framing/CHECKPOINT.sha256
+567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll

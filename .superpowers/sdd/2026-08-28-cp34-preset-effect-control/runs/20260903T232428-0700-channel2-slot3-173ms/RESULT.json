@@ -1,0 +1,118 @@
+{
+  "audibility": "DRY_ONLY",
+  "baseline": {
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 0,
+    "input1_slot_index": 0,
+    "input2_gain_db": 0.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 1,
+    "input2_slot_index": 2
+  },
+  "battery_percent": 94,
+  "channel1_unchanged": true,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "front_panel_recall": "UNPROVED",
+  "final_readonly_snapshot": {
+    "battery_percent": 95,
+    "input1_preset_enabled": false,
+    "input1_slot_index": 0,
+    "input2_preset_enabled": true,
+    "input2_slot_index": 3,
+    "jast_payload_sha256": "5554baa1483ecc56670c1f832f9c2d0693a2ced639978f0686716907459e5daa",
+    "status": "PASS"
+  },
+  "interface": {
+    "alternate_setting": 1,
+    "number": 5
+  },
+  "physical_commit": "UNPROVED",
+  "passive_audio_baseline": {
+    "input2_peak_dbfs": -24.139749440574803,
+    "path": "input2-passive-baseline.wav",
+    "sha256": "9849926ca9c4b324f361fb33fa831a45f4b5c01012f2fa0eb113a1d90ab3600c",
+    "status": "SIGNAL_PRESENT_NOT_CLASSIFIABLE"
+  },
+  "physical_audio_observation": {
+    "effect_absence": "UNPROVED",
+    "input_source": "operator finger touching the free patch-cable end feeding Input 2",
+    "possible_transient_delay": "UNCONFIRMED_SINGLE_EVENT_SHORTLY_AFTER_HOST_RESTART",
+    "report": "dry after the first native-host action",
+    "separate_repeat_about_173ms_heard": false,
+    "status": "INCONCLUSIVE_NEGATIVE"
+  },
+  "native_host_delay_action": {
+    "action_execution": "CONFIRMED",
+    "channel1_guard": "UNCHANGED",
+    "channel2_preset_enabled": true,
+    "channel2_slot_index": 3,
+    "delay_parameter_writes": 2,
+    "physical_report_after_controlled_repeat": "no audible difference; dry",
+    "physical_repeat_status": "CONTROLLED_REPEAT_DRY",
+    "result_path": "HOST-ACTION-RESULT.json",
+    "status": "HOST_DELAY_ARMED_CH2_REASSERTED"
+  },
+  "native_recall_edge": {
+    "channel": 2,
+    "direct_signal_present": true,
+    "final_global_slot": 3,
+    "physical_report": "dry only",
+    "selector_path": [
+      3,
+      2,
+      3
+    ],
+    "status": "RECALL_EDGE_COMPLETED_NO_AUDIBLE_VOICE_FX"
+  },
+  "factory_slap_echo_control": {
+    "audibility": "DRY_ONLY",
+    "battery_percent": 99,
+    "channel1_guard": "UNCHANGED",
+    "channel2_preset_enabled": true,
+    "channel2_slot_index": 3,
+    "host_action": "load-channel2-factory-slap-echo",
+    "record_bytes": 850,
+    "record_wire_sha256": "a6c3294b62cfb3a46122a82c93514ea2aeb836280fb5d1e458707a78634f87eb",
+    "physical_report": "dry all dry everytime",
+    "physical_status": "FACTORY_CONTROL_DRY",
+    "operator_excluded_headphone_channel_as_cause": true,
+    "remaining_fault_boundary": [
+      "DEVICE_SLOT_RECORD_STORAGE_UNPROVED",
+      "RECALL_DISPATCH_TO_BLOCK201_UNPROVED"
+    ],
+    "result_path": "FACTORY-SLAP-ECHO-RESULT.json",
+    "selector_path": [
+      3,
+      2,
+      3
+    ],
+    "status": "FACTORY_SLAP_ECHO_CH2_RECALL_SENT",
+    "transport_replies_received": 0
+  },
+  "post_state": {
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 0,
+    "input1_slot_index": 0,
+    "input2_gain_db": 0.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 1,
+    "input2_slot_index": 3
+  },
+  "record_bytes": 860,
+  "record_wire_sha256": "b609139abc514c67171f047252c554529287bd679cb5df416e391397fc49c3ed",
+  "schema": "cp34-channel2-slot-trial-v1",
+  "setp_empty_acks_received": 2,
+  "setp_replies_received": 0,
+  "stat_fragments_sent": 1,
+  "status": "WRITE_SENT_AND_SELECTED",
+  "target_slot": 3,
+  "write_frame_sha256": [
+    "c7c9bcfa17fa72d2862d1736b5c31b4871cf3e8e62293b325de59284a63fdc99",
+    "ace4e8c251aa5175950272951b7d035309b03c6fb6d08a8cb50d49ea4af7ca0c"
+  ]
+}

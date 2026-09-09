@@ -1,0 +1,139 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-base/tests/winusb_function_io_contract.c	2026-08-24 10:17:15.764418491 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_function_io_contract.c	2026-08-24 10:21:58.271928437 -0700
+@@ -112,6 +112,7 @@
+ #define IO24_CTL_CODE(type,function,method,access) (((type)<<16)|((access)<<14)|((function)<<2)|(method))
+ #define IO24_IOCTL_INITIALIZE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x800,2,0)
+ #define IO24_IOCTL_SET_ALTERNATE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x803,0,0)
++#define IO24_IOCTL_GET_POLICY IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x804,0,0)
+ #define IO24_IOCTL_SET_POLICY IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x805,0,0)
+ #define IO24_IOCTL_READ_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x808,2,0)
+ 
+@@ -1736,7 +1737,79 @@
+ #undef DISPATCH_ALTERNATE
+ }
+ static void group_policy(void)
+-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);g.request.value=7;if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_SET_POLICY);teardown(&d,&g,&file);return;}effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_POLICY,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before);IO24_CHECK(effect.complete_after==effect.complete_before+1);teardown(&d,&g,&file);}
++{
++    DRIVER_OBJECT d; DRIVER_EXTENSION e; DEVICE_OBJECT p; FILE_OBJECT file;
++    struct guarded_request g; struct dispatch_effect effect;
++    struct { UCHAR before[16]; struct wine_winusb_policy_request request; UCHAR after[16]; } input;
++    IRP irp; IO_STACK_LOCATION stack[2]; struct winusb_file *context;
++    ULONG input_length, output_length, lower_before; NTSTATUS status;
++
++#define POLICY_CALL(code) do { \
++    memset(&irp, 0, sizeof(irp)); memset(stack, 0, sizeof(stack)); \
++    stack[1].MajorFunction = IRP_MJ_DEVICE_CONTROL; stack[1].FileObject = &file; \
++    stack[1].Parameters.DeviceIoControl.IoControlCode = (code); \
++    stack[1].Parameters.DeviceIoControl.InputBufferLength = input_length; \
++    stack[1].Parameters.DeviceIoControl.OutputBufferLength = output_length; \
++    irp.AssociatedIrp.SystemBuffer = &input.request; irp.Tail.Overlay.CurrentStackLocation = &stack[1]; \
++    d.MajorFunction[IRP_MJ_DEVICE_CONTROL](last_fdo, &irp); status = irp.IoStatus.Status; \
++} while (0)
++
++    setup(&d, &e, &p, &g, &file);
++    if (!create_file(&d, &g, &file) || !initialize_session(&d, &g, &file)) { teardown(&d, &g, &file); return; }
++    context = file.FsContext;
++    memset(&input, GUARD_BYTE, sizeof(input)); memset(&input.request, 0, sizeof(input.request));
++    input.request.request.size = sizeof(input.request);
++    input.request.request.version = WINE_WINUSB_ABI_VERSION;
++    input.request.request.session = context->session;
++    input.request.request.interface_index = 0;
++    input.request.pipe_id = 0x81; input.request.policy_id = PIPE_TRANSFER_TIMEOUT;
++    input.request.value_length = sizeof(ULONG); input.request.value = 0;
++    input_length = sizeof(input.request); output_length = 0; lower_before = lower_calls;
++
++    /* Pipe ID zero is not a wildcard, and alternate zero exposes no pipes. */
++    input.request.pipe_id = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY);
++    IO24_CHECK(status == STATUS_INVALID_PARAMETER && lower_calls == lower_before);
++    input.request.pipe_id = 0x01; POLICY_CALL(IO24_IOCTL_SET_POLICY);
++    IO24_CHECK(status == STATUS_INVALID_PARAMETER && lower_calls == lower_before);
++    input.request.pipe_id = 0x81; POLICY_CALL(IO24_IOCTL_SET_POLICY);
++    IO24_CHECK(status == STATUS_INVALID_PARAMETER && lower_calls == lower_before);
++
++    memset(&g.request, 0, sizeof(g.request)); g.request.session = context->session; g.request.value = 1;
++    effect = dispatch_request(&d, last_fdo, IRP_MJ_DEVICE_CONTROL, IO24_IOCTL_SET_ALTERNATE, &g, &file);
++    IO24_CHECK(effect.status == STATUS_SUCCESS && effect.lower_after == effect.lower_before + 1);
++
++    /* Exact R95 matrix: current endpoints only; ULONG timeout/maximum, byte booleans. */
++    input.request.pipe_id = 0x01; input.request.policy_id = SHORT_PACKET_TERMINATE;
++    input.request.value_length = 1; input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.pipe_id = 0x81; input.request.policy_id = AUTO_CLEAR_STALL;
++    input.request.value_length = 1; input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = PIPE_TRANSFER_TIMEOUT; input.request.value_length = sizeof(ULONG);
++    input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = IGNORE_SHORT_PACKETS; input.request.value_length = 1;
++    input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = ALLOW_PARTIAL_READS; input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = AUTO_FLUSH; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = RAW_IO; input.request.value = 1; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.pipe_id = 0x01; input.request.policy_id = RESET_PIPE_ON_RESUME; input.request.value = 0; POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_SUCCESS);
++    input.request.policy_id = MAXIMUM_TRANSFER_SIZE; input.request.value_length = sizeof(ULONG);
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_INVALID_PARAMETER);
++    input.request.pipe_id = 0x81; input.request.policy_id = MAXIMUM_TRANSFER_SIZE; input.request.value = 0;
++    POLICY_CALL(IO24_IOCTL_GET_POLICY); IO24_CHECK(status == STATUS_SUCCESS && irp.IoStatus.Information == sizeof(input.request));
++
++    input.request.pipe_id = 0; input.request.policy_id = RAW_IO; input.request.value_length = 1; input.request.value = 1;
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_INVALID_PARAMETER);
++    input.request.pipe_id = 0x01; input.request.policy_id = RAW_IO;
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_INVALID_PARAMETER);
++    input.request.pipe_id = 0x81; input.request.policy_id = PIPE_TRANSFER_TIMEOUT; input.request.value_length = 1;
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_INVALID_PARAMETER);
++    input.request.value_length = sizeof(ULONG); input.request.value = 1;
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_NOT_SUPPORTED);
++    input.request.value = 0; input.request.policy_id = 10;
++    POLICY_CALL(IO24_IOCTL_SET_POLICY); IO24_CHECK(status == STATUS_INVALID_PARAMETER);
++    for (unsigned int i = 0; i < sizeof(input.before); ++i) IO24_CHECK(input.before[i] == GUARD_BYTE && input.after[i] == GUARD_BYTE);
++    teardown(&d, &g, &file);
++#undef POLICY_CALL
++}
+ static void group_transfer(void)
+ {DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_READ_PIPE);teardown(&d,&g,&file);return;}g.request.value=1;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1);effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g,&file);IO24_CHECK(effect.status==STATUS_PENDING);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before);teardown(&d,&g,&file);}
+ static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))group_initialize();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-base/tests/winusb_user_api_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_user_api_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-base/tests/winusb_user_api_contract.c	2026-08-24 10:17:15.958417076 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-8-red-head/tests/winusb_user_api_contract.c	2026-08-24 10:21:58.468356114 -0700
+@@ -851,11 +851,38 @@
+ }
+ static void test_policy(const struct functions*f)
+ {
+-    static const struct{UCHAR pipe,policy;ULONG length,value;}q[]={{0,3,1,0},{0,9,1,0},{1,1,1,0},{0x81,2,1,0},{0x81,4,1,0},{0x81,5,1,0},{0x81,6,1,0},{0x81,7,1,1}};WINUSB_INTERFACE_HANDLE h;struct guarded_policy_value v;struct io24_wire_policy response;const struct fake_event *event;uint32_t actual;unsigned int i,submits,event_start;ULONG n;BOOL ok;
+-    fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;for(i=0;i<sizeof(q)/sizeof(q[0]);i++)IO24_CHECK(f->set_policy&&f->set_policy(h,q[i].pipe,q[i].policy,q[i].length,(void*)&q[i].value));
+-    v.before=IO24_GUARD_WORD;memset(v.bytes,IO24_POLICY_STORAGE_SENTINEL,sizeof(v.bytes));v.after=IO24_GUARD_WORD;n=sizeof(v.bytes);event_start=fake.event_count;ok=f->get_policy&&f->get_policy(h,0x81,8,&n,v.bytes);IO24_CHECK(ok);memcpy(&actual,v.bytes,sizeof(actual));IO24_CHECK(actual==IO24_POLICY_RESPONSE_VALUE);IO24_CHECK(n==IO24_POLICY_RESPONSE_LENGTH);IO24_CHECK(bytes_equal(v.bytes+sizeof(actual),sizeof(v.bytes)-sizeof(actual),IO24_POLICY_STORAGE_SENTINEL));IO24_CHECK(v.before==IO24_GUARD_WORD&&v.after==IO24_GUARD_WORD);
+-    event=find_ioctl_after(event_start,IO24_IOCTL_GET_POLICY);IO24_CHECK(event!=NULL);if(event){check_header(event,sizeof(struct io24_wire_policy),UINT64_C(0x1122334455667788),0);IO24_CHECK(event->bytes_returned_pointer!=&n);IO24_CHECK(event->request.policy.pipe_id==0x81&&event->request.policy.policy_id==8&&event->request.policy.value_length==IO24_POLICY_PROBE_CAPACITY&&event->request.policy.value==0);IO24_CHECK(event->out_length==sizeof(response)&&event->output_saved>=sizeof(response)&&event->returned_bytes==sizeof(response));if(event->output_saved>=sizeof(response)){memcpy(&response,event->output_after,sizeof(response));IO24_CHECK(response.request.size==sizeof(response)&&response.request.version==IO24_ABI_VERSION&&response.request.session==UINT64_C(0x1122334455667788)&&response.request.interface_index==0&&response.request.reserved==0);IO24_CHECK(response.pipe_id==0x81&&response.policy_id==8&&response.value_length==IO24_POLICY_RESPONSE_LENGTH&&response.value==IO24_POLICY_RESPONSE_VALUE);}}
+-    IO24_CHECK(f->set_alt&&f->set_alt(h,1));IO24_CHECK(counts.submits==submits+10);if(f->free_handle)f->free_handle(h);
++    static const struct { UCHAR pipe, policy; ULONG length, value; } q[] = {
++        {0x01, SHORT_PACKET_TERMINATE, 1, 0}, {0x81, AUTO_CLEAR_STALL, 1, 0},
++        {0x81, PIPE_TRANSFER_TIMEOUT, 4, 0}, {0x81, IGNORE_SHORT_PACKETS, 1, 0},
++        {0x81, ALLOW_PARTIAL_READS, 1, 0}, {0x81, AUTO_FLUSH, 1, 0},
++        {0x81, RAW_IO, 1, 1}, {0x01, RESET_PIPE_ON_RESUME, 1, 0}
++    }; WINUSB_INTERFACE_HANDLE h; struct guarded_policy_value v; const struct fake_event *event;
++    unsigned int i, submits, event_start; ULONG n; BOOL ok;
++    if (!f->initialize || !f->free_handle || !f->set_alt || !f->set_policy || !f->get_policy)
++    {
++        WINUSB_INTERFACE_HANDLE preflight = NULL;
++        fake_reset();
++        IO24_CHECK(initialize_handle(f, &preflight));
++        IO24_CHECK(f->set_alt && f->set_alt(preflight, 1) && counts.submits > 1);
++        IO24_CHECK(f->free_handle(preflight));
++        IO24_CHECK(f->initialize && f->free_handle && f->set_alt && f->set_policy && f->get_policy);
++        return;
++    }
++    fake_reset(); if (!initialize_handle(f, &h)) return; submits = counts.submits;
++    for (i = 0; i < 3; ++i) { n = 1; memset(v.bytes, IO24_POLICY_STORAGE_SENTINEL, sizeof(v.bytes));
++        IO24_CHECK(!f->set_policy(h, (UCHAR[]){0, 0x01, 0x81}[i], RAW_IO, n, v.bytes) &&
++                fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits); }
++    IO24_CHECK(f->set_alt(h, 1));
++    for (i = 0; i < sizeof(q)/sizeof(q[0]); ++i) IO24_CHECK(f->set_policy(h, q[i].pipe, q[i].policy, q[i].length, (void *)&q[i].value));
++    n = 1; memset(v.bytes, IO24_POLICY_STORAGE_SENTINEL, sizeof(v.bytes));
++    IO24_CHECK(!f->get_policy(h, 0x81, MAXIMUM_TRANSFER_SIZE, &n, v.bytes) && fake.last_error == ERROR_INSUFFICIENT_BUFFER && n == 4 && bytes_equal(v.bytes, sizeof(v.bytes), IO24_POLICY_STORAGE_SENTINEL));
++    n = 4; event_start = fake.event_count; ok = f->get_policy(h, 0x81, MAXIMUM_TRANSFER_SIZE, &n, v.bytes);
++    IO24_CHECK(ok && n == 4); event = find_ioctl_after(event_start, IO24_IOCTL_GET_POLICY);
++    IO24_CHECK(event && event->typed_request && event->request.policy.pipe_id == 0x81 && event->request.policy.policy_id == MAXIMUM_TRANSFER_SIZE && event->request.policy.value_length == 4);
++    IO24_CHECK(!f->set_policy(h, 0x01, RAW_IO, 1, v.bytes) && fake.last_error == ERROR_INVALID_PARAMETER);
++    IO24_CHECK(!f->set_policy(h, 0x81, PIPE_TRANSFER_TIMEOUT, 1, v.bytes) && fake.last_error == ERROR_INVALID_PARAMETER);
++    ((ULONG *)v.bytes)[0] = 1; IO24_CHECK(!f->set_policy(h, 0x81, PIPE_TRANSFER_TIMEOUT, 4, v.bytes) && fake.last_error == ERROR_NOT_SUPPORTED);
++    if (f->free_handle) f->free_handle(h);
+ }
+ static void test_transfer(const struct functions*f)
+ {

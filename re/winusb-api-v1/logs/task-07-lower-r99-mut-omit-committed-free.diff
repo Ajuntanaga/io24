@@ -1,0 +1,10 @@
+--- frozen/unixlib.c
++++ mutant/omit-committed-free.c
+@@ -1771,7 +1771,7 @@
+         free(device->pending_claim_transaction);
+         device->pending_claim_transaction = NULL;
+     }
+-    free(device->pipe_table);
++    /* R99 mutant: intentionally omit committed-table release. */
+     device->pipe_table = NULL;
+     if (device->function)

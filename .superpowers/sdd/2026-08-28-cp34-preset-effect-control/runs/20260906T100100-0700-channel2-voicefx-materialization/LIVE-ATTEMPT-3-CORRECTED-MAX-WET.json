@@ -1,0 +1,155 @@
+{
+  "assigned_state": {
+    "channel_linked": false,
+    "flags_word": 417,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 0,
+    "voicefx_assigned_physical_input": 2
+  },
+  "assignment_action": "VALIDATED_AND_REASSERTED_SAME_VALUE",
+  "assignment_changed": false,
+  "audibility": "UNPROVED",
+  "audio_capture": false,
+  "baseline": {
+    "channel_linked": false,
+    "flags_word": 417,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 0,
+    "voicefx_assigned_physical_input": 2
+  },
+  "battery_percent": 45,
+  "commands_if_executed": [
+    "read and validate the exposed baseline",
+    "require the independent Voice FX assignment to already be Ch2",
+    "reassert Assign Voice FX to Ch2 without remapping preset controls",
+    "bypass physical Channel 2 through preset control channel 2",
+    "normalize physical Channel 2 to slot 2 before the slot-3 write",
+    "select/instantiate VoiceFX model 0, then apply its known state",
+    "write one complete UC tagged MemP/Stat(3) record",
+    "set the unit to two visible preset blocks",
+    "select slot 3 and enable physical Channel 2 through channel 2",
+    "read and verify exposed slot, enable, link, and assignment state"
+  ],
+  "custom_firmware": "DEFERRED_UNTIL_AFTER_INITIAL_GITHUB_PUBLICATION",
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "direct_voicefx_apply": {
+    "activation": "UNPROVED",
+    "audibility": "UNPROVED",
+    "enabled": true,
+    "model": "transformer",
+    "parameter_writes": 4,
+    "selection_order": "MODEL_BEFORE_STATE"
+  },
+  "direct_voicefx_parameter_write": true,
+  "dislodged_from_active_target": false,
+  "hotkey_interpretation": "full-channel host snapshot transition, not a separate device slot",
+  "left_saved_for_standalone_test": true,
+  "memp_fragments": 1,
+  "memp_payload_sha256": [
+    "d8ea35050b33484444e48c3d54cf1716bce35265a0b2b92f26939ea7bdf92c1f"
+  ],
+  "physical_commit": "UNPROVED",
+  "post_state": {
+    "channel_linked": false,
+    "flags_word": 417,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 3,
+    "voicefx_assigned_physical_input": 2
+  },
+  "power_cycle": false,
+  "preset_mode_command": "DUAL_TWO_BLOCKS",
+  "preset_mode_readback": "UNAVAILABLE_CONFIRM_ON_UNIT_SCREEN",
+  "prewrite_state": {
+    "channel_linked": false,
+    "flags_word": 481,
+    "input1_gain_db": 37.0,
+    "input1_preset_enabled": false,
+    "input1_processing_channel": 1,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.0,
+    "input2_preset_enabled": false,
+    "input2_processing_channel": 0,
+    "input2_slot_index": 2,
+    "voicefx_assigned_physical_input": 2
+  },
+  "record": {
+    "bytes": 842,
+    "preset_name": "Reverb",
+    "sha256": "191a5048c4995355932609e9d5ae225f37c50d8f112966f685a11b3f2a08e79c",
+    "target_profile": "FACTORY_DERIVED_MAXIMUM_WET",
+    "voicefx": {
+      "__classid": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+      "lows": 0.06,
+      "mix": 1.0,
+      "on": 1,
+      "width": 0.405
+    },
+    "wire_prefix_hex": "7b"
+  },
+  "record_write_attempted": true,
+  "restoration_available": "NO_EXACT_CURRENT_SLOT_BODY",
+  "schema": "cp34-channel2-voicefx-materialization-stage-v1",
+  "slot_content_backup_available": false,
+  "slot_zero_targeted": false,
+  "standalone_audibility": "REQUIRES_USER_LISTENING_AFTER_STAGE",
+  "standalone_preset_button": "CHANNEL_2",
+  "standalone_recall": "UNPROVED",
+  "status": "STAGED_FOR_STANDALONE_LISTENING",
+  "stereo_link_change": false,
+  "target_channel": 2,
+  "target_physical_channel": 2,
+  "target_preset_control_channel": 2,
+  "target_slot": 3,
+  "target_slot_before_normalization": 0,
+  "target_slot_normalized": true,
+  "transport": {
+    "fragments_sent": 1,
+    "replies_received": 0,
+    "slot": 3
+  },
+  "uc_voicefx_assignment": {
+    "assigned_physical_input": 2,
+    "firmware_slot_side_effect": "swap the two active slot indexes when assignment changes",
+    "label": "Ch2",
+    "preset_control_namespace": "INDEPENDENT_PHYSICAL_CHANNELS",
+    "property": "line/ch1/processingChannel",
+    "reassert_same_assignment_before_model": true,
+    "value": 1,
+    "wire_control": "Pari/12 index 0"
+  },
+  "voicefx_apply": {
+    "audibility": "UNPROVED",
+    "enabled": true,
+    "model": "transformer",
+    "processing_gate": "UNPROVED",
+    "selection_order": "MODEL_BEFORE_STATE",
+    "wire_message_sha256": [
+      "6f93bc2cd158c84cd019f1f0d5813a4ed07f89d5bc447c7b91d5d0c399e662d6",
+      "e1f3d0cb6bb53f04771c4a2781eeceafd5fdbfa4bbfce2d459d73ecc345cd0ae",
+      "d006ae3b704fb6caf98abd9a5636b3d6a95ff6b2a0b32d51e7550969545876a6",
+      "92c475598b12dd7b3418da6846016e0f23d93c0255436c1185d9938fb1ad8dc7"
+    ],
+    "wire_messages": 4
+  }
+}

@@ -1,0 +1,15 @@
+e1db7366f2ab9f4f94705272089b227bba2f6d48d9f571d566ebaa752faaae29  ../MANIFEST.md
+b8c3cf0591c9b30492c038f36e865084f88bdc1a46b65cca887df7a10c418003  CP25_IMMEDIATE_SUBMIT_CLEANUP_DEVELOPMENT.md
+6b64ba27b2804d1ca34a5982629cdb8eec020c1df9299bb8a8eb1aad5f06a774  CP26_REPRODUCIBLE_BUILDS.md
+081975cfffea75a2a6058836829ceb5c1508e8c52e8b98065ba9e9a153f7b876  ../../wine-11.15-wineusb-immediate-submit-cleanup-v1.patch
+c84d9a5693949da36af8d1ed1329c04fa68b9beec3a8d7aad184eba398a3a352  ../../../tests/wineusb_immediate_submit_cleanup_contract.c
+ff2384e028fd2325eaaf61c69de613b42c084f8988a50be1205d2495176ce755  ../../../tests/wineusb_immediate_submit_cleanup_contract.sh
+6d4f31ada0350d2ae63382b77d653e586a32ce90b05ab6885dce1feca814e30c  ../../wine-ntoskrnl-mdl-nonpaged-v1/checkpoints/CP24_SHA256SUMS
+f08d7c20e084ecfc736818aa7a38bd72b5964652802590cde4ae419ef826b0eb  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/source-a/dlls/wineusb.sys/unixlib.c
+f08d7c20e084ecfc736818aa7a38bd72b5964652802590cde4ae419ef826b0eb  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/source-b/dlls/wineusb.sys/unixlib.c
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-a/dlls/wineusb.sys/wineusb.sys.so
+93a30fce04fc59fb034d9c88b6becd9931c56892cf97f5eca7f27db99aa68264  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-a/dlls/wineusb.sys/wineusb.so
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-b/dlls/wineusb.sys/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-b/dlls/wineusb.sys/wineusb.sys.so
+93a30fce04fc59fb034d9c88b6becd9931c56892cf97f5eca7f27db99aa68264  ../../../.io24-build/wineusb-immediate-submit-cleanup-v1/build-b/dlls/wineusb.sys/wineusb.so

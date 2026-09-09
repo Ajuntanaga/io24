@@ -1,0 +1,30 @@
+{
+  "schema": "cp34-channel2-reverb-slot-stage-live-attempt-v1",
+  "recorded_at": "2026-09-06T07:34:16-07:00",
+  "attempt_time_exact": "UNAVAILABLE_FROM_NONRETAINED_STDOUT",
+  "status": "STAGE_FAILED_SAFE_BEFORE_RECORD_WRITE",
+  "device": {
+    "serial": "AB7C22200355",
+    "bcd_device": "0128",
+    "identity_gate": "PASS"
+  },
+  "battery_gate": "PASS_ABOVE_10_PERCENT_EXACT_VALUE_NOT_RETAINED",
+  "failed_stage": "voicefx_assignment",
+  "reported_error": "StageError: Channel 2 left its bypassed staging slot",
+  "assignment_readback": "ASSIGN_VOICE_FX_CH2_CONFIRMED",
+  "record_write_attempted": false,
+  "target_slot_record_replaced": false,
+  "slot_zero_record_write_attempted": false,
+  "failure_channel2_bypass": "WRITE_SENT_NOT_READABLE",
+  "cleanup_interpretation": "the old runner sent wire channel 2 after assignment; because the assignment had exchanged the processing map, this does not prove physical Channel 2 was bypassed",
+  "interface_closed": true,
+  "offline_resolution": {
+    "cause": "the runner incorrectly assumed active slot indexes stay attached to their processing-chain indexes",
+    "firmware_behavior": "when Pari/12 changes the processing permutation, firmware 1.28 replays Pari/16 for both chains with the two active slot indexes exchanged",
+    "meaning": "after Assign Voice FX = Ch2, physical Input 2 and its slot-2/3 family are served through processing chain 1",
+    "correct_target_after_assignment": "wire channel 1 / processing chain 1, physical Channel 2, global slot 3"
+  },
+  "physical_commit": "NOT_ATTEMPTED",
+  "standalone_recall": "UNPROVED",
+  "audibility": "UNPROVED"
+}

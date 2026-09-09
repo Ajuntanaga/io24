@@ -1,0 +1,10 @@
+timestamp=2026-08-21T02:56:27-07:00
+patch_sha256=461f68de736ddba876cfaa4d0e385c8eaa0002bd22df05932987ad3f4fe7fe8f
+baseline=Wine 11.15 plus USB-DI v1 plus observation v2, before class-IN v1
+fuzz=0
+exit=0
+
+patching file dlls/wineusb.sys/unixlib.h
+patching file dlls/wineusb.sys/wineusb.c
+patching file dlls/wineusb.sys/unixlib.c
+v2 zero-fuzz apply and source byte comparison: pass

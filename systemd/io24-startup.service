@@ -1,0 +1,39 @@
+# Re-apply your saved settings whenever the io24 appears.
+#
+# The device contains factory presets, but its custom-slot writer is not
+# reachable through this driver's decoded direct protocol, and ordinary DSP
+# writes do not survive a power cycle. This unit is the host-side stand-in: save
+# the state you want once with
+#   io24.py startup save
+# and it is restored every time the interface is plugged in or the machine boots,
+# so in daily use the low cut, EQ, dynamics and routing are simply always there.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/io24-startup.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable io24-startup
+#
+# For plug-in (not just boot) triggering, add this to the udev rule:
+#   TAG+="systemd", ENV{SYSTEMD_USER_WANTS}+="io24-startup.service"
+[Unit]
+Description=Apply the saved io24 startup preset
+After=sound.target
+# Not Requires=: a missing device makes this attempt fail and retry; it does not
+# make the user service depend on a permanently present interface.
+StartLimitIntervalSec=15
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+# Enumeration and udev ordering need not be exact: a premature attempt fails,
+# then Restart below retries subject to the explicit unit limit above.
+ExecStart=/usr/bin/env python3 %h/.local/share/io24/io24.py startup apply
+# Applying a preset is a burst of control writes; if the device is mid-enumeration
+# the first attempt can fail harmlessly. The unit limit permits that attempt plus
+# two retries in a 15-second window.
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

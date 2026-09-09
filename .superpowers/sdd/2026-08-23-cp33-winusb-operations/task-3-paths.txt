@@ -1,0 +1,10 @@
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.c
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+tests/wineusb_winusb_busif_contract.c
+tests/wineusb_winusb_busif_contract.sh
+tests/winusb_function_io_contract.c
+tests/winusb_function_binding_contract.c
+re/winusb-api-v1/logs/task-03-lifecycle.sha256

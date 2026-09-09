@@ -1,0 +1,5 @@
+cwd /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont
+mutation speed-tail-overrun
+command timeout 20s bash tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/task-5-mutations/speed-tail-overrun --descriptors
+CP33 public executed mode=--descriptors target-mask=0x190 present-mask=0x19c missing-mask=0 fake-events=17 submits=3 releases=1 completions=0 failures=2
+exit_code 1

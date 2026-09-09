@@ -1,0 +1,73 @@
+{
+  "capture": {
+    "channels": 6,
+    "duration_seconds": 14.0,
+    "frames": 672000,
+    "peak_dbfs": -76.07168067360095,
+    "rate_hz": 48000,
+    "sample_width_bytes": 4,
+    "sha256": "9f2307056e44b909668deb4226ec2b191d1e23ade12d641996fc9669e4beafda"
+  },
+  "capture_tap": "DOWNSTREAM_GATE_OBSERVABLE",
+  "effect_conclusion": "LINKED_PATH_NEGATIVE_STORAGE_UNRESOLVED",
+  "monitor_channels": [
+    {
+      "channel": 3,
+      "direct_coefficient": 0.7079456086934385,
+      "gate_delta_db": 48.14208492604959,
+      "gate_off_rms_dbfs": -100.2950132280917,
+      "gate_on_rms_dbfs": -148.4370981541413,
+      "lag150_coefficient": 1.0097438767516016e-05,
+      "lag150_over_direct": 1.4263014903293945e-05,
+      "lag300_coefficient": 3.503253259954714e-06,
+      "model_correlation": 0.9999954230245298
+    },
+    {
+      "channel": 4,
+      "direct_coefficient": 0.7079456110010675,
+      "gate_delta_db": 48.14208495433317,
+      "gate_off_rms_dbfs": -100.29501319980812,
+      "gate_on_rms_dbfs": -148.4370981541413,
+      "lag150_coefficient": 1.0095847097191177e-05,
+      "lag150_over_direct": 1.4260766562158904e-05,
+      "lag300_coefficient": 3.501332869452629e-06,
+      "model_correlation": 0.9999954230225724
+    },
+    {
+      "channel": 5,
+      "direct_coefficient": 0.7079456086934385,
+      "gate_delta_db": 48.14208492604959,
+      "gate_off_rms_dbfs": -100.2950132280917,
+      "gate_on_rms_dbfs": -148.4370981541413,
+      "lag150_coefficient": 1.0097438767516016e-05,
+      "lag150_over_direct": 1.4263014903293945e-05,
+      "lag300_coefficient": 3.503253259954714e-06,
+      "model_correlation": 0.9999954230245298
+    },
+    {
+      "channel": 6,
+      "direct_coefficient": 0.7079456110010675,
+      "gate_delta_db": 48.14208495433317,
+      "gate_off_rms_dbfs": -100.29501319980812,
+      "gate_on_rms_dbfs": -148.4370981541413,
+      "lag150_coefficient": 1.0095847097191177e-05,
+      "lag150_over_direct": 1.4260766562158904e-05,
+      "lag300_coefficient": 3.501332869452629e-06,
+      "model_correlation": 0.9999954230225724
+    }
+  ],
+  "reasons": [],
+  "repeat_result": "NO_REPEAT_DOWNSTREAM_GATE_OFF",
+  "schema": "cp34-gate-transition-audio-analysis-v1",
+  "status": "VALID",
+  "windows": {
+    "gate_off_seconds": [
+      4.8571349999999995,
+      7.257942
+    ],
+    "gate_on_seconds": [
+      3.506414,
+      4.257135
+    ]
+  }
+}

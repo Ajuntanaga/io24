@@ -1,0 +1,79 @@
+2026-08-22T10:31:50-07:00
+battery=62% status=Charging
+[cp20-seal]
+CP20_REPRODUCIBLE_BUILDS.md: OK
+CP20_MANIFEST_SNAPSHOT.md: OK
+CP19_SHA256SUMS: OK
+../../wine-11.15-wineusb-multi-interface-handles-v1.patch: OK
+../logs/cp20-artifact-comparison.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/build-a-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/build-a.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/build-b-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/build-b.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a-bison-datadir-red-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a-bison-datadir-red.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a-m4-red-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a-m4-red.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-a.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-b-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/configure-b.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-a-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-a.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-a.normalized.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-b-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-b.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/contracts-b.normalized.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/source-a-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/source-a.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/source-b-resource.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/source-b.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/logs/source-comparison.txt: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a-configure-failed-bison-datadir/config.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a-configure-failed-m4/config.log: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/source-a/dlls/wineusb.sys/unixlib.c: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/source-b/dlls/wineusb.sys/unixlib.c: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a/Makefile: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-b/Makefile: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a/compile_commands.json: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-b/compile_commands.json: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a/dlls/wineusb.sys/x86_64-windows/wineusb.sys: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a/dlls/wineusb.sys/wineusb.sys.so: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-a/dlls/wineusb.sys/wineusb.so: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-b/dlls/wineusb.sys/x86_64-windows/wineusb.sys: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-b/dlls/wineusb.sys/wineusb.sys.so: OK
+../../../.io24-build/wineusb-multi-interface-handles-v1/build-b/dlls/wineusb.sys/wineusb.so: OK
+../../../tests/wineusb_multi_interface_handles_contract.c: OK
+../../../tests/wineusb_multi_interface_handles_contract.sh: OK
+../CP20_HARNESS_SNAPSHOT.sh: OK
+[current-selector]
+908d9c900c0f4e9bb0cb2c2b68b2d1af478a6295eb4019de2dc321f65ecc02f5  /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/tests/uc_wine_sandbox.sh
+88efc2f8b56724f4a36e82de97715d26d988960ea86d8ae92e62082b2286fba9  /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/tests/uc_wine_sandbox_multi_interface_handles_v1_selector_contract.sh
+io24 Wine sandbox multi-interface-handles-v1 selector contract: pass
+[staged-artifacts]
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-multi-interface-handles-v1/x86_64-windows/wineusb.sys
+f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835  /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.sys.so
+96f5a63a76d5f0e9a73425717d81e17d1fd6883c7a909508e703897a22fe4039  /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/re/wineusb-multi-interface-handles-v1/x86_64-unix/wineusb.so
+[device]
+sysfs=3-1 bus=3 devnum=4 config=1 serial=AB7C22200355
+node=/dev/bus/usb/003/004 accessible=rw
+interface=3-1:1.0 alt=0 driver=snd-usb-audio
+interface=3-1:1.1 alt=0 driver=snd-usb-audio
+interface=3-1:1.2 alt=0 driver=snd-usb-audio
+interface=3-1:1.3 alt=0 driver=snd-usb-audio
+interface=3-1:1.4 alt=0 driver=snd-usb-audio
+interface=3-1:1.5 alt=0 driver=none
+interface=3-1:1.6 alt=0 driver=none
+[process-and-unit-gates]
+active_test_units=none
+candidate_processes=none
+[prefix-and-capture-gates]
+clone inode=6684797 mode=700 owner=1000:1000 mtime=2026-08-22 10:29:42.139124227 -0700
+protected inode=3427833 mode=775 owner=1000:1000 mtime=2026-08-12 00:31:35.825186221 -0700
+adecbb1610a9d6024bae3c8397f783c3e70cd10ec1d7a4212787cc40673720f5  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/system.reg
+c3294ad194b741317d8b8d54ead74ceb70008f2f6af68c1cb38dcee5e0f7d43e  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/prefix/user.reg
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.observe-v2-20260819/out/live-service-usb.txt
+f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/out/inherited-live-service-usb-observe-v2-20260819T194220PDT.txt
+0c15d826572435c788d06e7f525d8750492ac53426a421d42db8fa8aaf813074  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/prefix/system.reg
+e390c966bcc3ef29d66b0e4ae590c8c93aa0e4df321af3cf6aa9bdb396554e14  /home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.multi-interface-handles-v1-20260822/prefix/user.reg
+LIVE_PREFLIGHT_1=PASS

@@ -1,0 +1,16 @@
+11355cf591c7e0b45316d63079396f4f7ffdc1386294e381a26d084870cf4185  README.md
+e9dd55a32393ea8e51d3f58a30563a7ec45527029e0a99b4b6609bae97e86918  PROTOCOL.md
+7f8a15733911efcee0ae71f0bf6547cbca9caf47266ba849373b36f82f97f68e  re/cp34_readonly_preflight.py
+eed18dfd27e67dae7e984904abeef37b0a8d46debbc00abccc1701fd0e5837a4  tests/test_cp34_readonly_preflight.py
+cd32256b7cec50c24b935b421679694d5cf7ee01ebb809f915d66887a947a1f1  re/cp34_lane_control_firmware_static.py
+73203ecb543d5f8fc328335ccb7d0927732d8e492f59be8bde0f9519193c9c49  tests/test_cp34_lane_control_firmware_static.py
+155983bae7424be5edfc6a6e2384f5232fe338a8393420be5805b405fac02f75  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+25be8052113e6edc0298c555ec69a40c6a31333b6d4f2e1bc0424e03b7cf6275  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+f35759f25eb61cf777ad777a69c5299ed34a6906255594552290ba4280a6e5c8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T015915-0700-unlinked-channel2-stat-routing/SCOPE.md
+07b0af637459cb0f229c9cd7768ebf811f085986e8af6f357f7ab1c2635ad945  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T015915-0700-unlinked-channel2-stat-routing/LIVE-PREFLIGHT.json
+1803ba0442fa6b7076cddd37b148d60df6dfc3eff42d6179ed4e0809f3fb76e7  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T015915-0700-unlinked-channel2-stat-routing/ROUTING-RESULT.json
+d42c03fb4f007e67d0f1e1e9b226abd9fe49a92312e7352f62f1c8ee12810f8d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T015915-0700-unlinked-channel2-stat-routing/PROGRESS.md
+cc00e53753b14494bb1c32a8a9d50472541a74292aefbd46eee7174ee29c3409  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260904T015915-0700-unlinked-channel2-stat-routing/OBSIDIAN.md
+28663fe89d2d91ce5564c1c911708e53d7a9b76103e377c6e9e25721dd4a82dc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T232428-0700-channel2-slot3-173ms/RESULT.json
+2422f4ddad758eccb5d9e14f7bd5f20babd591a0bfce91163eef8461355bf193  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T232428-0700-channel2-slot3-173ms/RECALL-EDGE-RESULT.json
+d419cff47ea42fc560f0904ad8525ece4dd83357a07b372f8ca69a8163f0c39b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260903T232428-0700-channel2-slot3-173ms/FACTORY-SLAP-ECHO-RESULT.json

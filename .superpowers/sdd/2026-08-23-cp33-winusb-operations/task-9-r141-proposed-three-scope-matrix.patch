@@ -1,0 +1,180 @@
+diff --git a/tests/wineusb_winusb_urb_contract.c b/tests/wineusb_winusb_urb_contract.c
+index 707507f..9c4b21b 100644
+--- a/tests/wineusb_winusb_urb_contract.c
++++ b/tests/wineusb_winusb_urb_contract.c
+@@ -964,6 +964,73 @@ static void expect_control_reject(struct io24_control_fixture *f)
+     IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0]==NULL); check_forbidden();
+ }
+ 
++static void add_range_scope_interfaces(struct io24_control_fixture *f)
++{
++    IO24_CHECK(f->device.function && f->device.function_interface_count == 1);
++    IO24_CHECK(f->device.function_interfaces[0] == (1u << 5));
++    f->device.function_interfaces[0] |= (1u << 0) | (1u << 1);
++    f->device.function_interface_count += 2;
++}
++
++static void expect_exact_range_success(struct io24_control_fixture *f,
++        const unsigned char *captured, size_t captured_length)
++{
++    size_t i;
++
++    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_SUCCESS);
++    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_SUCCESS &&
++            f->urb.UrbControlTransfer.TransferBufferLength == (ULONG)captured_length);
++    IO24_CHECK(!memcmp(f->storage + 1, captured, captured_length));
++    IO24_CHECK(f->storage[0] == GUARD_BYTE);
++    for (i = captured_length + 1; i < sizeof(f->storage); ++i)
++        IO24_CHECK(f->storage[i] == GUARD_BYTE);
++    IO24_CHECK(io24_fake_libusb_alloc_attempts() == 0 &&
++            io24_fake_libusb_alloc_count() == 0 &&
++            io24_fake_libusb_free_count() == 0 &&
++            io24_fake_libusb_submit_attempts() == 0 &&
++            io24_fake_libusb_buffer_alloc_count() == 0 &&
++            io24_fake_libusb_buffer_free_count() == 0 &&
++            io24_fake_libusb_free_buffer_flag_count() == 0 &&
++            !io24_fake_libusb_has_pending() &&
++            f->irp.Tail.Overlay.DriverContext[0] == NULL);
++    check_forbidden();
++}
++
++static void expect_control_scope_reject(struct io24_control_fixture *f)
++{
++    unsigned char before[sizeof(f->storage)];
++    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
++
++    memcpy(before, f->storage, sizeof(before));
++    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_INVALID_PARAMETER);
++    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_INVALID_PARAMETER);
++    IO24_CHECK(f->urb.UrbControlTransfer.TransferBufferLength == length);
++    IO24_CHECK(!memcmp(f->storage, before, sizeof(f->storage)));
++    IO24_CHECK(io24_fake_libusb_counts()->control == 0 &&
++            io24_fake_libusb_alloc_attempts() == 0 &&
++            io24_fake_libusb_alloc_count() == 0 &&
++            io24_fake_libusb_free_count() == 0 &&
++            io24_fake_libusb_submit_attempts() == 0 &&
++            io24_fake_libusb_buffer_alloc_count() == 0 &&
++            io24_fake_libusb_buffer_free_count() == 0 &&
++            io24_fake_libusb_free_buffer_flag_count() == 0 &&
++            !io24_fake_libusb_has_pending() &&
++            f->irp.Tail.Overlay.DriverContext[0] == NULL);
++    check_forbidden();
++}
++
++static void expect_control_generic_no_range(struct io24_control_fixture *f,
++        BOOL out, const unsigned char *captured, size_t captured_length)
++{
++    const unsigned char *setup = f->urb.UrbControlTransfer.SetupPacket;
++    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
++
++    expect_control_pending(f, setup[0], setup[1], setup[2] | (setup[3] << 8),
++            setup[4] | (setup[5] << 8), length, out);
++    IO24_CHECK(memcmp(f->storage + 1, captured, captured_length));
++    discard_control_pending();
++}
++
+ /* The generic RANGE tuple is a response optimization, not an admission
+  * bypass.  Each malformed request below must be rejected before either the
+  * captured payload or the backend observes it. */
+@@ -1057,14 +1124,13 @@ static void group_control_descriptor(void)
+     /* Exact generic RANGE is the same shared synthetic answer as the legacy
+      * class-interface request: no allocation, submission, or pending IRP. */
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+-    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f.params)==STATUS_SUCCESS);
+-    IO24_CHECK(f.urb.UrbHeader.Status==USBD_STATUS_SUCCESS && f.urb.UrbControlTransfer.TransferBufferLength==sizeof(captured_range));
+-    IO24_CHECK(!memcmp(f.storage+1,captured_range,sizeof(captured_range)));
+-    for(i=sizeof(captured_range)+1;i<sizeof(f.storage);++i) IO24_CHECK(f.storage[i]==GUARD_BYTE);
+-    IO24_CHECK(io24_fake_libusb_alloc_count()==0 && io24_fake_libusb_free_count()==0 &&
+-            io24_fake_libusb_submit_attempts()==0 && !io24_fake_libusb_has_pending() &&
+-            f.irp.Tail.Overlay.DriverContext[0]==NULL);
+-    check_forbidden();
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    f.device.function=FALSE;
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
+     /* The RANGE fast path is reached only after generic URB admission.  The
+      * fixed tuple may never turn malformed headers or mismatched/undersized
+      * caller declarations into a synthetic response. */
+@@ -1093,31 +1159,67 @@ static void group_control_descriptor(void)
+         expect_exact_range_admission_reject(&f, sizeof(captured_range)-1, before);
+     }
+     expect_exact_range_null_buffer_reject();
+-    /* Every one-field RANGE miss must take ordinary generic routing and must
+-     * not write the captured answer before its natural completion.  Run the
+-     * interface-recipient predicate mutants without function scoping so the
+-     * RANGE predicate, rather than an unrelated low-wIndex scope rejection,
+-     * remains the only changed admission fact. */
++    /* Exercise the exact positive and every one-field RANGE miss under the
++     * same three device-scope classes: non-function, function/out-of-scope,
++     * and function/in-scope with the consistent {0,1,5} interface set.
++     * Out-of-scope interface misses reject without backend activity; all
++     * other misses route generically without synthesizing captured bytes. */
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
++    expect_control_scope_reject(&f);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
++    f.device.function=FALSE;
++    expect_control_generic_no_range(&f, TRUE, captured_range, sizeof(captured_range));
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, TRUE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    expect_control_scope_reject(&f);
++    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,TRUE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],3,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0101,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0501,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
++    expect_control_scope_reject(&f);
+     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
+     f.device.function=FALSE;
+-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,255,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
++    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
++    add_range_scope_interfaces(&f);
++    expect_control_generic_no_range(&f, FALSE, captured_range, sizeof(captured_range));
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 3, 0xabcd, 0x81, 16);
+     expect_control_pending(&f, f.urb.UrbControlTransfer.SetupPacket[0], 3, 0xabcd, 0x81, 16, FALSE); io24_fake_libusb_discard_pending();
+     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT, 3, 0xabcd, 0x01, 16);

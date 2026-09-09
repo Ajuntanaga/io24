@@ -1,0 +1,865 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 05:55:19.168341852 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 06:10:01.783500833 -0700
+@@ -51,8 +51,19 @@
+     uint16_t configuration_length;
+     uint8_t function_root;
+     unsigned char function_interfaces[32];
++    unsigned char claimed_interfaces[32];
++    struct claim_transaction *pending_claim_transaction;
+ };
+ 
++struct claim_transaction
++{
++    USBD_CONFIGURATION_HANDLE token;
++    uint8_t interfaces[256];
++    uint16_t count;
++};
++
++static uintptr_t next_claim_transaction_token;
++
+ static bool function_has_interface(bool function, const unsigned char interfaces[32],
+         uint8_t interface)
+ {
+@@ -70,6 +81,30 @@
+     ++device->function_interface_count;
+ }
+ 
++static bool interface_in_set(const unsigned char interfaces[32], uint8_t interface)
++{
++    return interfaces[interface / 8] & (1u << (interface % 8));
++}
++
++static void add_interface_to_set(unsigned char interfaces[32], uint8_t interface)
++{
++    interfaces[interface / 8] |= 1u << (interface % 8);
++}
++
++static void release_claim_transaction(struct unix_device *device,
++        struct claim_transaction *transaction)
++{
++    while (transaction->count)
++        libusb_release_interface(device->handle,
++                transaction->interfaces[--transaction->count]);
++}
++
++static USBD_CONFIGURATION_HANDLE allocate_claim_transaction_token(void)
++{
++    if (!(++next_claim_transaction_token)) ++next_claim_transaction_token;
++    return (void *)next_claim_transaction_token;
++}
++
+ #define MS_OS_10_STRING_LENGTH 18
+ #define MS_OS_10_COMPAT_HEADER_LENGTH 16
+ #define MS_OS_10_COMPAT_FUNCTION_LENGTH 24
+@@ -1253,8 +1288,11 @@
+         {
+             struct _URB_SELECT_CONFIGURATION *req = &urb->UrbSelectConfiguration;
+             unsigned char *cursor, *end;
++            unsigned char required_interfaces[32] = {0};
+             unsigned int interface_count, pipe_count, interface_index = 0;
++            struct claim_transaction *transaction = NULL;
+             NTSTATUS status;
++            unsigned int interface_number;
+ 
+             /* FIXME: In theory, we'd call libusb_set_configuration() here, but
+              * the CASIO FX-9750GII (which has only one configuration) goes into
+@@ -1262,11 +1300,58 @@
+              * we should skip setting that if and only if the configuration is
+              * already active? */
+ 
++            if (params->device->function && params->device->pending_claim_transaction)
++            {
++                req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                return STATUS_INVALID_DEVICE_STATE;
++            }
++
+             status = validate_select_configuration(params->device, irp, req,
+                     &interface_count, &pipe_count);
+             if (status != STATUS_SUCCESS)
+                 return status;
+ 
++            if (params->device->function)
++            {
++                cursor = (unsigned char *)&req->Interface;
++                end = (unsigned char *)req + req->Hdr.Length;
++                while (cursor < end)
++                {
++                    USBD_INTERFACE_INFORMATION *interface = (void *)cursor;
++                    add_interface_to_set(required_interfaces,
++                            interface->InterfaceNumber);
++                    cursor += interface->Length;
++                }
++
++                if (!(transaction = calloc(1, sizeof(*transaction))))
++                {
++                    req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                    return STATUS_NO_MEMORY;
++                }
++                transaction->token = allocate_claim_transaction_token();
++                for (interface_number = 0; interface_number < 256; ++interface_number)
++                {
++                    int claim_status;
++
++                    if (!interface_in_set(required_interfaces, interface_number) ||
++                            interface_in_set(params->device->claimed_interfaces,
++                            interface_number))
++                        continue;
++                    if ((claim_status = libusb_claim_interface(handle,
++                            interface_number)) < 0)
++                    {
++                        release_claim_transaction(params->device, transaction);
++                        free(transaction);
++                        req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                        return claim_status == LIBUSB_ERROR_BUSY ? STATUS_DEVICE_BUSY :
++                                STATUS_UNSUCCESSFUL;
++                    }
++                    transaction->interfaces[transaction->count++] = interface_number;
++                }
++                params->device->pending_claim_transaction = transaction;
++                req->ConfigurationHandle = transaction->token;
++            }
++
+             FIXME("IO24_PIPE_OBSERVE event=select_configuration_backend irp=%p "
+                     "scope=%s root=%u interfaces=%u pipes=%u.\n", irp,
+                     params->device->function ? "function" : "all_interfaces",
+@@ -1302,6 +1387,37 @@
+             return STATUS_SUCCESS;
+         }
+ 
++        case WINEUSB_URB_FUNCTION_CLAIM_TRANSACTION:
++        {
++            struct wineusb_claim_transaction_request *req =
++                    (struct wineusb_claim_transaction_request *)urb;
++            struct claim_transaction *transaction =
++                    params->device->pending_claim_transaction;
++            unsigned int i;
++
++            if (!params->device->function || req->Hdr.Length != sizeof(*req) ||
++                    !req->Transaction || req->Reserved ||
++                    (req->Operation != WINEUSB_CLAIM_TRANSACTION_COMMIT &&
++                    req->Operation != WINEUSB_CLAIM_TRANSACTION_ROLLBACK) ||
++                    !transaction || transaction->token != req->Transaction)
++            {
++                req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                return STATUS_INVALID_PARAMETER;
++            }
++
++            params->device->pending_claim_transaction = NULL;
++            if (req->Operation == WINEUSB_CLAIM_TRANSACTION_COMMIT)
++            {
++                for (i = 0; i < transaction->count; ++i)
++                    add_interface_to_set(params->device->claimed_interfaces,
++                            transaction->interfaces[i]);
++            }
++            else release_claim_transaction(params->device, transaction);
++            free(transaction);
++            req->Hdr.Status = USBD_STATUS_SUCCESS;
++            return STATUS_SUCCESS;
++        }
++
+         case URB_FUNCTION_CLASS_INTERFACE:
+         {
+             struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
+@@ -1426,6 +1542,21 @@
+ 
+     pthread_mutex_unlock(&device_mutex);
+ 
++    if (device->pending_claim_transaction)
++    {
++        release_claim_transaction(device, device->pending_claim_transaction);
++        free(device->pending_claim_transaction);
++        device->pending_claim_transaction = NULL;
++    }
++    if (device->function)
++    {
++        unsigned int interface;
++
++        for (interface = 256; interface; --interface)
++            if (interface_in_set(device->claimed_interfaces, interface - 1))
++                libusb_release_interface(device->handle, interface - 1);
++    }
++
+     if (device->parent)
+         decref_device(device->parent);
+     else
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c	2026-08-24 05:55:19.168213551 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c	2026-08-24 06:10:01.783361848 -0700
+@@ -791,6 +791,7 @@
+         case URB_FUNCTION_VENDOR_INTERFACE:
+         case URB_FUNCTION_VENDOR_ENDPOINT:
+         case URB_FUNCTION_CLASS_INTERFACE:
++        case WINEUSB_URB_FUNCTION_CLAIM_TRANSACTION:
+         {
+             struct usb_submit_urb_params params =
+             {
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h	2026-08-24 05:55:19.168127924 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/winusb_busif.h	2026-08-24 06:10:01.783276082 -0700
+@@ -16,6 +16,7 @@
+ #include "windef.h"
+ #include "winternl.h"
+ #include "ddk/wdm.h"
++#include "ddk/usb.h"
+ 
+ #include "msos_id.h"
+ 
+@@ -25,6 +26,18 @@
+ #define WINEUSB_MS_OS_10_METADATA_INTERFACE_INIT \
+     {0xa6523832, 0x2ca5, 0x42ff, {0xaa, 0x70, 0xc7, 0x60, 0xf0, 0x6a, 0x8e, 0x73}}
+ 
++#define WINEUSB_URB_FUNCTION_CLAIM_TRANSACTION 0x002f
++#define WINEUSB_CLAIM_TRANSACTION_COMMIT 1
++#define WINEUSB_CLAIM_TRANSACTION_ROLLBACK 2
++
++struct wineusb_claim_transaction_request
++{
++    struct _URB_HEADER Hdr;
++    USBD_CONFIGURATION_HANDLE Transaction;
++    ULONG Operation;
++    ULONG Reserved;
++};
++
+ struct wineusb_ms_os_10_metadata_source
+ {
+     char compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE];
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 05:55:19.168467778 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c	2026-08-24 06:10:01.783621309 -0700
+@@ -23,6 +23,7 @@
+ #include "ddk/usbioctl.h"
+ 
+ #include "winusb_private.h"
++#include "winusb_busif.h"
+ 
+ struct parsed_configuration
+ {
+@@ -97,6 +98,19 @@
+     return STATUS_SUCCESS;
+ }
+ 
++static NTSTATUS finalize_claim_transaction(struct winusb_device *device,
++        USBD_CONFIGURATION_HANDLE transaction, ULONG operation)
++{
++    struct wineusb_claim_transaction_request request;
++
++    memset(&request, 0, sizeof(request));
++    request.Hdr.Length = sizeof(request);
++    request.Hdr.Function = WINEUSB_URB_FUNCTION_CLAIM_TRANSACTION;
++    request.Transaction = transaction;
++    request.Operation = operation;
++    return submit_urb(device, (URB *)&request);
++}
++
+ static NTSTATUS read_descriptor(struct winusb_device *device, UCHAR type,
+         void *buffer, ULONG requested, ULONG *returned)
+ {
+@@ -610,6 +624,7 @@
+     SIZE_T mapped_end, interfaces_size, select_size;
+     ULONG returned, configuration_size = 0;
+     UINT64 cookie;
++    USBD_CONFIGURATION_HANDLE claim_transaction = NULL;
+     NTSTATUS status = STATUS_INVALID_PARAMETER;
+     KIRQL device_irql, file_irql;
+     BOOL reserved = FALSE, committed = FALSE;
+@@ -763,6 +778,11 @@
+         goto done;
+     }
+     if (!NT_SUCCESS(status = submit_urb(device, (URB *)select))) goto done;
++    if (!(claim_transaction = select->ConfigurationHandle))
++    {
++        status = STATUS_UNSUCCESSFUL;
++        goto done;
++    }
+ 
+     cookie = allocate_session_cookie();
+     KeAcquireSpinLock(&device->lock, &device_irql);
+@@ -774,20 +794,60 @@
+     else
+     {
+         ((struct wine_winusb_snapshot *)snapshot)->session = cookie;
+-        memcpy(output, snapshot, parsed.total_size);
+         file->snapshot = snapshot;
+         file->snapshot_size = parsed.total_size;
+         file->interfaces = interfaces;
+         file->interface_count = parsed.interface_count;
+         file->session = cookie;
+         file->state = WINUSB_FILE_INITIALIZED;
+-        *information = parsed.total_size;
+         committed = TRUE;
+         status = STATUS_SUCCESS;
+     }
+     KeReleaseSpinLock(&file->lock, file_irql);
+     KeReleaseSpinLock(&device->lock, device_irql);
+ 
++    if (!committed)
++    {
++        NTSTATUS rollback_status = finalize_claim_transaction(device,
++                claim_transaction, WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
++
++        claim_transaction = NULL;
++        if (!NT_SUCCESS(rollback_status)) status = rollback_status;
++        goto done;
++    }
++
++    status = finalize_claim_transaction(device, claim_transaction,
++            WINEUSB_CLAIM_TRANSACTION_COMMIT);
++    if (!NT_SUCCESS(status))
++    {
++        KIRQL undo_device_irql, undo_file_irql;
++
++        finalize_claim_transaction(device, claim_transaction,
++                WINEUSB_CLAIM_TRANSACTION_ROLLBACK);
++
++        KeAcquireSpinLock(&device->lock, &undo_device_irql);
++        KeAcquireSpinLock(&file->lock, &undo_file_irql);
++        if (file->snapshot == snapshot && file->interfaces == interfaces &&
++                file->session == cookie)
++        {
++            file->state = WINUSB_FILE_UNINITIALIZED;
++            file->session = 0;
++            file->snapshot = NULL;
++            file->snapshot_size = 0;
++            file->interfaces = NULL;
++            file->interface_count = 0;
++            committed = FALSE;
++        }
++        KeReleaseSpinLock(&file->lock, undo_file_irql);
++        KeReleaseSpinLock(&device->lock, undo_device_irql);
++        claim_transaction = NULL;
++        goto done;
++    }
++    claim_transaction = NULL;
++    memcpy(output, snapshot, parsed.total_size);
++    *information = parsed.total_size;
++    status = STATUS_SUCCESS;
++
+ done:
+     if (select) ExFreePool(select);
+     if (!committed && interfaces) ExFreePool(interfaces);
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_function_scope_fake_libusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_function_scope_fake_libusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_function_scope_fake_libusb.c	2026-08-24 06:06:28.827119122 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_function_scope_fake_libusb.c	2026-08-24 06:10:01.783951940 -0700
+@@ -296,6 +296,21 @@
+     return LIBUSB_ERROR_NOT_SUPPORTED;
+ }
+ 
++int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *handle,
++        uint8_t request_type, uint8_t request, uint16_t value, uint16_t index,
++        unsigned char *data, uint16_t length, unsigned int timeout)
++{
++    (void)handle;
++    (void)request_type;
++    (void)request;
++    (void)value;
++    (void)index;
++    (void)data;
++    (void)length;
++    (void)timeout;
++    return LIBUSB_ERROR_NOT_SUPPORTED;
++}
++
+ int LIBUSB_CALL libusb_open(libusb_device *device, libusb_device_handle **handle)
+ {
+     if (device != fake_device) return LIBUSB_ERROR_NO_DEVICE;
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_pipe_observe_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_pipe_observe_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_pipe_observe_contract.c	2026-08-24 05:55:19.168670391 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_pipe_observe_contract.c	2026-08-24 06:10:01.783825666 -0700
+@@ -55,6 +55,13 @@
+     libusb_device_handle *handle;
+     void *parent;
+     unsigned int refcount;
++    bool function;
++    uint8_t function_interface_count;
++    uint16_t configuration_length;
++    uint8_t function_root;
++    unsigned char function_interfaces[32];
++    unsigned char claimed_interfaces[32];
++    void *pending_claim_transaction;
+ };
+ 
+ struct io24_pipe
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_winusb_urb_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_winusb_urb_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_winusb_urb_contract.c	2026-08-24 05:55:19.168561297 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_winusb_urb_contract.c	2026-08-24 06:10:01.783712732 -0700
+@@ -12,14 +12,29 @@
+ const struct io24_fake_counts *io24_fake_libusb_counts(void);
+ const struct io24_fake_record *io24_fake_libusb_record(void);
+ void io24_fake_libusb_set_claim_result(int);
++void io24_fake_libusb_set_claim_failure(unsigned int,int);
+ void io24_fake_libusb_set_alternate_result(int);
+ int io24_fake_libusb_complete(enum libusb_transfer_status,const unsigned char*,size_t,int);
++int io24_fake_libusb_claim_at(unsigned int);
++int io24_fake_libusb_release_at(unsigned int);
++
++#define IO24_URB_FUNCTION_CLAIM_TRANSACTION 0x002f
++#define IO24_CLAIM_TRANSACTION_COMMIT 1
++#define IO24_CLAIM_TRANSACTION_ROLLBACK 2
++struct io24_claim_transaction_request
++{
++    struct _URB_HEADER Hdr;
++    USBD_CONFIGURATION_HANDLE Transaction;
++    ULONG Operation;
++    ULONG Reserved;
++};
+ 
+ struct io24_function_device
+ {
+     struct list entry; libusb_device_handle *handle; void *parent; unsigned int refcount;
+     bool function; uint8_t function_interface_count; uint16_t configuration_length;
+     uint8_t function_root; unsigned char function_interfaces[32];
++    unsigned char claimed_interfaces[32]; void *pending_claim_transaction;
+ };
+ 
+ static void check_forbidden(void)
+@@ -27,12 +42,207 @@
+     const struct io24_fake_counts *c=io24_fake_libusb_counts();
+     IO24_CHECK(c->detach==0&&c->auto_detach==0&&c->set_configuration==0);
+ }
++
++static void initialize_function_device(struct io24_function_device *device,
++        struct io24_function_device *parent, const unsigned char *interfaces,
++        size_t interface_count)
++{
++    size_t i;
++
++    memset(device,0,sizeof(*device));
++    list_init(&device->entry);
++    device->handle=(void*)(uintptr_t)0x12340000;
++    device->parent=parent;
++    device->refcount=1;
++    device->function=true;
++    device->function_root=interfaces[0];
++    for(i=0;i<interface_count;++i)
++    {
++        device->function_interfaces[interfaces[i]/8]|=1u<<(interfaces[i]%8);
++        device->function_interface_count++;
++    }
++}
++
++static NTSTATUS submit_request(struct io24_function_device *device, void *request)
++{
++    IRP irp;
++    IO_STACK_LOCATION stack;
++    struct usb_submit_urb_params params;
++
++    memset(&irp,0,sizeof(irp));memset(&stack,0,sizeof(stack));memset(&params,0,sizeof(params));
++    irp.Tail.Overlay.CurrentStackLocation=&stack;
++    stack.Parameters.Others.Argument1=request;
++    params.device=(struct unix_device*)device;
++    params.irp=&irp;
++    return unix_calls[unix_usb_submit_urb](&params);
++}
++
++static struct _URB_SELECT_CONFIGURATION *build_select(unsigned char buffer[256],
++        const unsigned char *interfaces, size_t interface_count)
++{
++    struct _URB_SELECT_CONFIGURATION *select=(void*)buffer;
++    size_t cursor=offsetof(struct _URB_SELECT_CONFIGURATION,Interface),i;
++
++    memset(buffer,0,256);
++    select->Hdr.Function=URB_FUNCTION_SELECT_CONFIGURATION;
++    for(i=0;i<interface_count;++i)
++    {
++        USBD_INTERFACE_INFORMATION *information=(void*)(buffer+cursor);
++        information->Length=offsetof(USBD_INTERFACE_INFORMATION,Pipes);
++        information->InterfaceNumber=interfaces[i];
++        information->AlternateSetting=0;
++        cursor+=information->Length;
++    }
++    select->Hdr.Length=cursor;
++    return select;
++}
++
++static NTSTATUS finalize_claim(struct io24_function_device *device,
++        USBD_CONFIGURATION_HANDLE token, ULONG operation,
++        struct io24_claim_transaction_request *request)
++{
++    memset(request,0,sizeof(*request));
++    request->Hdr.Length=sizeof(*request);
++    request->Hdr.Function=IO24_URB_FUNCTION_CLAIM_TRANSACTION;
++    request->Hdr.Status=USBD_STATUS_NOT_ACCESSED;
++    request->Transaction=token;
++    request->Operation=operation;
++    return submit_request(device,request);
++}
++
+ static void group_claims(void)
+ {
+-    struct fixture f; struct _URB_SELECT_CONFIGURATION *r; const struct io24_fake_counts*c;
+-    reset_fixture(&f,URB_FUNCTION_SELECT_CONFIGURATION); r=&f.urb.UrbSelectConfiguration;
+-    r->Hdr.Length=sizeof(*r);r->Interface.Length=sizeof(r->Interface);r->Interface.InterfaceNumber=5;r->Interface.AlternateSetting=0;r->Interface.NumberOfPipes=0;
+-    IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->claim==1&&c->release==0);check_forbidden();
++    static const unsigned char mi05[]={5}, multi[]={7,2,5}, bad_scope[]={2,9};
++    struct io24_function_device device;
++    struct io24_claim_transaction_request finalize;
++    struct _URB_SELECT_CONFIGURATION *select;
++    const struct io24_fake_counts *c;
++    USBD_CONFIGURATION_HANDLE first,second;
++    unsigned char buffer[256];
++
++    io24_fake_libusb_reset();
++    initialize_function_device(&device,NULL,mi05,ARRAY_SIZE(mi05));
++    select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
++    IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++    first=select->ConfigurationHandle;
++    c=io24_fake_libusb_counts();
++    IO24_CHECK(first!=NULL&&select->Hdr.Status==USBD_STATUS_SUCCESS);
++    IO24_CHECK(c->claim==1&&c->release==0&&io24_fake_libusb_claim_at(0)==5);
++    check_forbidden();
++
++    select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
++    IO24_CHECK(submit_request(&device,select)==STATUS_INVALID_DEVICE_STATE);
++    IO24_CHECK(select->Hdr.Status==USBD_STATUS_REQUEST_FAILED);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
++
++    memset(&finalize,0,sizeof(finalize));finalize.Hdr.Length=sizeof(finalize)-1;
++    finalize.Hdr.Function=IO24_URB_FUNCTION_CLAIM_TRANSACTION;
++    finalize.Transaction=first;finalize.Operation=IO24_CLAIM_TRANSACTION_COMMIT;
++    IO24_CHECK(submit_request(&device,&finalize)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(finalize_claim(&device,(void*)(uintptr_t)0x5a5a,
++            IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(finalize_claim(&device,first,IO24_CLAIM_TRANSACTION_COMMIT,
++            &finalize)==STATUS_SUCCESS);
++    IO24_CHECK(finalize.Hdr.Status==USBD_STATUS_SUCCESS);
++    IO24_CHECK(finalize_claim(&device,first,IO24_CLAIM_TRANSACTION_ROLLBACK,
++            &finalize)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
++
++    select=build_select(buffer,mi05,ARRAY_SIZE(mi05));
++    IO24_CHECK(submit_request(&device,select)==STATUS_SUCCESS);
++    second=select->ConfigurationHandle;
++    IO24_CHECK(second&&second!=first&&io24_fake_libusb_counts()->claim==1);
++    IO24_CHECK(finalize_claim(&device,second,IO24_CLAIM_TRANSACTION_COMMIT,
++            &finalize)==STATUS_SUCCESS);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
++
++    io24_fake_libusb_reset();
++    initialize_function_device(&device,NULL,multi,ARRAY_SIZE(multi));
++    select=build_select(buffer,bad_scope,ARRAY_SIZE(bad_scope));
++    IO24_CHECK(submit_request(&device,select)==STATUS_INVALID_PARAMETER);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==0&&io24_fake_libusb_counts()->release==0);
++    select=build_select(buffer,multi,ARRAY_SIZE(multi));
++    io24_fake_libusb_set_claim_failure(2,LIBUSB_ERROR_IO);
++    IO24_CHECK(submit_request(&device,select)==STATUS_UNSUCCESSFUL);
++    c=io24_fake_libusb_counts();
++    IO24_CHECK(select->Hdr.Status==USBD_STATUS_REQUEST_FAILED);
++    IO24_CHECK(c->claim==2&&io24_fake_libusb_claim_at(0)==2&&io24_fake_libusb_claim_at(1)==5);
++    IO24_CHECK(c->release==1&&io24_fake_libusb_release_at(0)==2);
++    check_forbidden();
++
++    io24_fake_libusb_reset();
++    initialize_function_device(&device,NULL,multi,ARRAY_SIZE(multi));
++    select=build_select(buffer,multi,ARRAY_SIZE(multi));
++    io24_fake_libusb_set_claim_failure(1,LIBUSB_ERROR_BUSY);
++    IO24_CHECK(submit_request(&device,select)==STATUS_DEVICE_BUSY);
++    IO24_CHECK(select->Hdr.Status==USBD_STATUS_REQUEST_FAILED);
++    IO24_CHECK(io24_fake_libusb_counts()->claim==1&&io24_fake_libusb_counts()->release==0);
++    check_forbidden();
++
++    io24_fake_libusb_reset();
++    {
++        struct io24_function_device *parent=calloc(1,sizeof(*parent));
++        struct io24_function_device *left=calloc(1,sizeof(*left));
++        struct io24_function_device *right=calloc(1,sizeof(*right));
++        static const unsigned char left_interfaces[]={5},right_interfaces[]={7};
++        struct usb_destroy_device_params destroy;
++
++        IO24_CHECK(parent&&left&&right);
++        if(!parent||!left||!right){free(parent);free(left);free(right);return;}
++        list_init(&parent->entry);parent->handle=(void*)(uintptr_t)0x12340000;parent->refcount=3;
++        initialize_function_device(left,parent,left_interfaces,ARRAY_SIZE(left_interfaces));
++        initialize_function_device(right,parent,right_interfaces,ARRAY_SIZE(right_interfaces));
++        select=build_select(buffer,left_interfaces,ARRAY_SIZE(left_interfaces));
++        IO24_CHECK(submit_request(left,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(left,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++        select=build_select(buffer,right_interfaces,ARRAY_SIZE(right_interfaces));
++        IO24_CHECK(submit_request(right,select)==STATUS_SUCCESS);
++        IO24_CHECK(finalize_claim(right,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_COMMIT,&finalize)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==2&&
++                io24_fake_libusb_claim_at(0)==5&&io24_fake_libusb_claim_at(1)==7);
++        destroy.device=(struct unix_device*)left;
++        IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS);
++        IO24_CHECK(parent->refcount==2&&io24_fake_libusb_counts()->release==1&&
++                io24_fake_libusb_release_at(0)==5&&io24_fake_libusb_counts()->close==0);
++        select=build_select(buffer,right_interfaces,ARRAY_SIZE(right_interfaces));
++        IO24_CHECK(submit_request(right,select)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->claim==2);
++        IO24_CHECK(finalize_claim(right,select->ConfigurationHandle,
++                IO24_CLAIM_TRANSACTION_ROLLBACK,&finalize)==STATUS_SUCCESS);
++        destroy.device=(struct unix_device*)right;
++        IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS);
++        IO24_CHECK(parent->refcount==1&&io24_fake_libusb_counts()->release==2&&
++                io24_fake_libusb_release_at(1)==7&&io24_fake_libusb_counts()->close==0);
++        destroy.device=(struct unix_device*)parent;
++        IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->close==1);
++        check_forbidden();
++    }
++
++    io24_fake_libusb_reset();
++    {
++        struct io24_function_device *parent=calloc(1,sizeof(*parent));
++        struct io24_function_device *child=calloc(1,sizeof(*child));
++        static const unsigned char pending_interfaces[]={2,5};
++        struct usb_destroy_device_params destroy;
++
++        IO24_CHECK(parent&&child);
++        if(!parent||!child){free(parent);free(child);return;}
++        list_init(&parent->entry);parent->handle=(void*)(uintptr_t)0x12340000;parent->refcount=2;
++        initialize_function_device(child,parent,pending_interfaces,ARRAY_SIZE(pending_interfaces));
++        select=build_select(buffer,pending_interfaces,ARRAY_SIZE(pending_interfaces));
++        IO24_CHECK(submit_request(child,select)==STATUS_SUCCESS);
++        destroy.device=(struct unix_device*)child;
++        IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS);
++        IO24_CHECK(parent->refcount==1&&io24_fake_libusb_counts()->release==2&&
++                io24_fake_libusb_release_at(0)==5&&io24_fake_libusb_release_at(1)==2);
++        destroy.device=(struct unix_device*)parent;
++        IO24_CHECK(unix_calls[unix_usb_destroy_device](&destroy)==STATUS_SUCCESS);
++        IO24_CHECK(io24_fake_libusb_counts()->close==1);
++        check_forbidden();
++    }
+ }
+ static void group_alternate(void)
+ {
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_winusb_urb_fake_libusb.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_winusb_urb_fake_libusb.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-24 05:55:19.168615565 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/wineusb_winusb_urb_fake_libusb.c	2026-08-24 06:10:01.783770421 -0700
+@@ -8,17 +8,20 @@
+ struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; };
+ static struct io24_fake_counts counts;
+ static struct io24_fake_record record;
++static int claim_journal[256], release_journal[256];
+ static struct libusb_transfer *pending;
+ static int submit_result,clear_halt_result,claim_result,alternate_result,control_result;
++static unsigned int claim_failure_call;
+ static unsigned int alloc_count;
+ static const unsigned char mi05[]={9,2,41,0,1,1,0,0x80,0xfa,9,4,5,0,0,0xff,0,0,6,9,4,5,1,2,0xff,0,0,6,7,5,0x81,2,0,2,0,7,5,0x01,2,0,2,0};
+ 
+-void io24_fake_libusb_reset(void){if(pending){libusb_free_transfer(pending);pending=NULL;}memset(&counts,0,sizeof(counts));memset(&record,0,sizeof(record));alloc_count=0;submit_result=0;clear_halt_result=0;claim_result=0;alternate_result=0;control_result=0;}
++void io24_fake_libusb_reset(void){if(pending){libusb_free_transfer(pending);pending=NULL;}memset(&counts,0,sizeof(counts));memset(&record,0,sizeof(record));memset(claim_journal,0,sizeof(claim_journal));memset(release_journal,0,sizeof(release_journal));alloc_count=0;submit_result=0;clear_halt_result=0;claim_result=0;claim_failure_call=0;alternate_result=0;control_result=0;}
+ const struct io24_fake_counts *io24_fake_libusb_counts(void){return &counts;}
+ const struct io24_fake_record *io24_fake_libusb_record(void){return &record;}
+ const unsigned char *io24_fake_mi05(size_t*size){*size=sizeof(mi05);return mi05;}
+ void io24_fake_libusb_set_submit_result(int r){submit_result=r;} void io24_fake_libusb_set_clear_halt_result(int r){clear_halt_result=r;}
+-void io24_fake_libusb_set_claim_result(int r){claim_result=r;} void io24_fake_libusb_set_alternate_result(int r){alternate_result=r;} void io24_fake_libusb_set_control_result(int r){control_result=r;}
++void io24_fake_libusb_set_claim_result(int r){claim_result=r;claim_failure_call=r?1:0;} void io24_fake_libusb_set_claim_failure(unsigned int call,int r){claim_failure_call=call;claim_result=r;} void io24_fake_libusb_set_alternate_result(int r){alternate_result=r;} void io24_fake_libusb_set_control_result(int r){control_result=r;}
++int io24_fake_libusb_claim_at(unsigned int i){return i<counts.claim?claim_journal[i]:-1;} int io24_fake_libusb_release_at(unsigned int i){return i<counts.release?release_journal[i]:-1;}
+ int io24_fake_libusb_has_pending(void){return pending!=NULL;} int io24_fake_libusb_pending_type(void){return pending?pending->type:-1;} int io24_fake_libusb_pending_endpoint(void){return pending?pending->endpoint:-1;} int io24_fake_libusb_pending_length(void){return pending?pending->length:-1;} int io24_fake_libusb_pending_flags(void){return pending?pending->flags:-1;}
+ unsigned int io24_fake_libusb_alloc_count(void){return alloc_count;} unsigned int io24_fake_libusb_free_count(void){return counts.transfer_free;} unsigned int io24_fake_libusb_buffer_free_count(void){return 0;} unsigned int io24_fake_libusb_submit_count(void){return counts.bulk+counts.interrupt+counts.control;} unsigned int io24_fake_libusb_cancel_count(void){return counts.cancel;} unsigned int io24_fake_libusb_clear_halt_count(void){return counts.clear_halt;} unsigned char io24_fake_libusb_clear_halt_endpoint(void){return record.endpoint;}
+ int io24_fake_libusb_get_setup(unsigned char setup[LIBUSB_CONTROL_SETUP_SIZE]){if(!pending||pending->type!=LIBUSB_TRANSFER_TYPE_CONTROL)return -1;memcpy(setup,pending->buffer,LIBUSB_CONTROL_SETUP_SIZE);return 0;}
+@@ -35,6 +38,6 @@
+ uint8_t libusb_get_bus_number(libusb_device*d){(void)d;return 1;} uint8_t libusb_get_port_number(libusb_device*d){(void)d;return 1;} int libusb_get_device_speed(libusb_device*d){(void)d;return LIBUSB_SPEED_HIGH;}
+ int libusb_get_device_descriptor(libusb_device*d,struct libusb_device_descriptor*x){(void)d;memset(x,0,sizeof(*x));return 0;} int libusb_open(libusb_device*d,libusb_device_handle**h){(void)d;if(h)*h=(void*)(uintptr_t)0x2000;return 0;} libusb_device *libusb_get_device(libusb_device_handle*h){(void)h;return (void*)(uintptr_t)0x3000;} void libusb_close(libusb_device_handle*h){(void)h;counts.close++;}
+ int libusb_get_active_config_descriptor(libusb_device*d,struct libusb_config_descriptor**c){(void)d;if(c)*c=NULL;return LIBUSB_ERROR_NOT_FOUND;} void libusb_free_config_descriptor(struct libusb_config_descriptor*c){free(c);} int libusb_get_active_interface_association_descriptors(libusb_device*d,struct libusb_interface_association_descriptor_array**a){(void)d;if(a)*a=NULL;return LIBUSB_ERROR_NOT_SUPPORTED;} void libusb_free_interface_association_descriptors(struct libusb_interface_association_descriptor_array*a){free(a);}
+-int libusb_claim_interface(libusb_device_handle*h,int i){(void)h;counts.claim++;record.interface_number=i;return claim_result;} int libusb_release_interface(libusb_device_handle*h,int i){(void)h;counts.release++;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
++int libusb_claim_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.claim;claim_journal[call-1]=i;record.interface_number=i;return claim_failure_call==call?claim_result:0;} int libusb_release_interface(libusb_device_handle*h,int i){unsigned int call;(void)h;call=++counts.release;release_journal[call-1]=i;record.interface_number=i;return 0;} int libusb_detach_kernel_driver(libusb_device_handle*h,int i){(void)h;(void)i;counts.detach++;return 0;} int libusb_set_auto_detach_kernel_driver(libusb_device_handle*h,int e){(void)h;(void)e;counts.auto_detach++;return 0;} int libusb_set_configuration(libusb_device_handle*h,int c){(void)h;counts.set_configuration++;record.configuration=c;return 0;} int libusb_set_interface_alt_setting(libusb_device_handle*h,int i,int a){(void)h;counts.set_alternate++;record.interface_number=i;record.alternate=a;return alternate_result;}
+ int libusb_control_transfer(libusb_device_handle*h,uint8_t rt,uint8_t r,uint16_t v,uint16_t i,unsigned char*d,uint16_t l,unsigned int t){(void)h;(void)d;(void)t;counts.control++;record.request_type=rt;record.request=r;record.value=v;record.index=i;record.length=l;return control_result<0?control_result:l;} int libusb_bulk_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.bulk++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;} int libusb_interrupt_transfer(libusb_device_handle*h,unsigned char e,unsigned char*d,int l,int*x,unsigned int t){(void)h;(void)d;(void)t;counts.interrupt++;record.endpoint=e;record.length=l;if(x)*x=l;return 0;}
+ const char *libusb_strerror(int e){(void)e;return "io24 fake libusb";}
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/winusb_function_io_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/winusb_function_io_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-base/tests/winusb_function_io_contract.c	2026-08-24 05:55:19.168725148 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-6-head/tests/winusb_function_io_contract.c	2026-08-24 06:10:01.783878257 -0700
+@@ -88,6 +88,11 @@
+ static BOOL descriptor_writes_urb_status, select_writes_urb_status;
+ static BOOL lower_returns_pending;
+ static unsigned int descriptor_reads, select_calls;
++static unsigned int finalize_calls, finalize_commit_calls, finalize_rollback_calls;
++static BOOL mutate_after_select, rollback_saw_unpublished;
++static BOOL lower_claim_pending, lower_claim_committed, lower_selected_state;
++static unsigned char *active_initialize_output;
++static USBD_CONFIGURATION_HANDLE lower_transaction_token;
+ static unsigned int urb_builds, fail_urb_build;
+ static unsigned int builder_allocations, builder_frees;
+ static ULONG expected_select_pipes;
+@@ -96,6 +101,17 @@
+ static USHORT expected_select_packet_size;
+ static FILE_OBJECT *active_session_file;
+ 
++#define IO24_URB_FUNCTION_CLAIM_TRANSACTION 0x002f
++#define IO24_CLAIM_TRANSACTION_COMMIT 1
++#define IO24_CLAIM_TRANSACTION_ROLLBACK 2
++struct io24_claim_transaction_request
++{
++    struct _URB_HEADER Hdr;
++    USBD_CONFIGURATION_HANDLE Transaction;
++    ULONG Operation;
++    ULONG Reserved;
++};
++
+ struct session_irp_allocation
+ {
+     IRP irp;
+@@ -117,6 +133,10 @@
+     descriptor_writes_urb_status = select_writes_urb_status = TRUE;
+     lower_returns_pending = FALSE;
+     descriptor_reads = select_calls = urb_builds = fail_urb_build = 0;
++    finalize_calls = finalize_commit_calls = finalize_rollback_calls = 0;
++    mutate_after_select = rollback_saw_unpublished = FALSE;
++    lower_claim_pending = lower_claim_committed = lower_selected_state = FALSE;
++    lower_transaction_token = (void *)(UINT_PTR)0x13570001;
+     builder_allocations = builder_frees = 0;
+     expected_select_pipes = 0;
+     expected_select_endpoint = 0;
+@@ -251,6 +271,52 @@
+         status = select_nt_status;
+         if (select_writes_urb_status)
+             request->Hdr.Status = select_urb_status;
++        if (NT_SUCCESS(status) && select_writes_urb_status &&
++                select_urb_status == USBD_STATUS_SUCCESS)
++        {
++            request->ConfigurationHandle = lower_transaction_token;
++            lower_claim_pending = TRUE;
++            lower_selected_state = TRUE;
++            if (mutate_after_select && active_session_file && active_session_file->FsContext)
++                ((struct winusb_file *)active_session_file->FsContext)->state =
++                        WINUSB_FILE_CLOSING;
++        }
++    }
++    else if (urb->UrbHeader.Function == IO24_URB_FUNCTION_CLAIM_TRANSACTION)
++    {
++        struct io24_claim_transaction_request *request = (void *)urb;
++        unsigned int i;
++
++        finalize_calls++;
++        IO24_CHECK(request->Hdr.Length == sizeof(*request));
++        IO24_CHECK(request->Transaction == lower_transaction_token);
++        IO24_CHECK(request->Reserved == 0);
++        IO24_CHECK(lower_claim_pending);
++        if (request->Operation == IO24_CLAIM_TRANSACTION_COMMIT)
++        {
++            finalize_commit_calls++;
++            lower_claim_committed = TRUE;
++        }
++        else if (request->Operation == IO24_CLAIM_TRANSACTION_ROLLBACK)
++        {
++            const struct winusb_file *file = active_session_file ?
++                    active_session_file->FsContext : NULL;
++
++            finalize_rollback_calls++;
++            IO24_CHECK(file != NULL);
++            IO24_CHECK(file && file->session == 0 && file->snapshot == NULL &&
++                    file->interfaces == NULL);
++            rollback_saw_unpublished = active_initialize_output != NULL;
++            for (i = 0; active_initialize_output && i < 211; ++i)
++                if (active_initialize_output[i] != GUARD_BYTE)
++                    rollback_saw_unpublished = FALSE;
++            lower_claim_committed = FALSE;
++            lower_selected_state = FALSE;
++        }
++        else IO24_CHECK(FALSE);
++        lower_claim_pending = FALSE;
++        request->Hdr.Status = USBD_STATUS_SUCCESS;
++        status = STATUS_SUCCESS;
+     }
+     else
+     {
+@@ -355,8 +421,10 @@
+     effect.complete_before = completes;
+     counts.submits++;
+     active_session_file = file;
++    active_initialize_output = mapped_address == (PVOID)(UINT_PTR)1 ? NULL : mapped_address;
+     driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
+     active_session_file = NULL;
++    active_initialize_output = NULL;
+     IO24_CHECK(builder_allocations == builder_frees);
+     if (file && file->FsContext)
+     {
+@@ -774,7 +842,9 @@
+             &input.request, output.bytes);
+     memcpy(&snapshot, output.bytes, sizeof(snapshot)); first_session = snapshot.session;
+     IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 211);
+-    IO24_CHECK(effect.lower_after == effect.lower_before + 4 && descriptor_reads == 3 && select_calls == 1);
++    IO24_CHECK(effect.lower_after == effect.lower_before + 5 && descriptor_reads == 3 && select_calls == 1);
++    IO24_CHECK(finalize_calls == 1 && finalize_commit_calls == 1 &&
++            finalize_rollback_calls == 0 && !lower_claim_pending && lower_claim_committed);
+     IO24_CHECK(session_allocation_calls == 6 && first_session != 0);
+     check_exact_snapshot(&output, first_session);
+     IO24_CHECK(context->state == WINUSB_FILE_INITIALIZED && context->session == first_session);
+@@ -875,7 +945,8 @@
+     memcpy(&alternate, output.bytes + 131, sizeof(alternate));
+     memcpy(&endpoint, output.bytes + 147, sizeof(endpoint));
+     IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 163);
+-    IO24_CHECK(descriptor_reads == 3 && select_calls == 1);
++    IO24_CHECK(descriptor_reads == 3 && select_calls == 1 &&
++            finalize_calls == 1 && finalize_commit_calls == 1);
+     IO24_CHECK(snapshot.total_size == 163 && snapshot.interfaces_offset == 115 &&
+             snapshot.alternates_offset == 131 && snapshot.endpoints_offset == 147);
+     IO24_CHECK(interface.interface_number == 5 && interface.first_alternate == 0 &&
+@@ -977,14 +1048,55 @@
+         effect = call_initialize(&driver, &file, &input, &output, 211, 211,
+                 &input.request, output.bytes);
+         IO24_CHECK(effect.status == STATUS_SUCCESS && effect.information == 211);
+-        IO24_CHECK(descriptor_reads == 3 && select_calls == 1);
+-        IO24_CHECK(builder_allocations == 4 && builder_frees == 4);
++        IO24_CHECK(descriptor_reads == 3 && select_calls == 1 &&
++                finalize_calls == 1 && finalize_commit_calls == 1);
++        IO24_CHECK(builder_allocations == 5 && builder_frees == 5);
+         teardown(&driver, &retained, &file);
+     }
+ }
+ 
+ static void test_initialized_remove_after_outstanding_drain(void);
+ 
++static void test_initialize_post_select_transaction_finalization(void)
++{
++    DRIVER_OBJECT driver; DRIVER_EXTENSION extension; DEVICE_OBJECT pdo;
++    FILE_OBJECT file; struct guarded_request retained;
++    struct guarded_initialize input; struct guarded_snapshot output, before;
++    struct dispatch_effect effect;
++    struct winusb_file *context;
++
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    context=file.FsContext;
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();before=output;
++    mutate_after_select=TRUE;session_allocation_calls=0;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_INVALID_DEVICE_STATE&&effect.information==0);
++    IO24_CHECK(effect.lower_after==effect.lower_before+5);
++    IO24_CHECK(descriptor_reads==3&&select_calls==1&&finalize_calls==1);
++    IO24_CHECK(finalize_commit_calls==0&&finalize_rollback_calls==1);
++    IO24_CHECK(rollback_saw_unpublished&&!lower_claim_pending&&!lower_claim_committed&&
++            !lower_selected_state);
++    IO24_CHECK(context->session==0&&context->snapshot==NULL&&context->interfaces==NULL);
++    IO24_CHECK(!memcmp(&output,&before,sizeof(output)));
++    teardown(&driver,&retained,&file);
++
++    setup(&driver,&extension,&pdo,&retained,&file);
++    IO24_CHECK(create_file(&driver,&retained,&file));
++    reset_initialize_buffers(&input,&output);reset_initialize_lower();session_allocation_calls=0;
++    effect=call_initialize(&driver,&file,&input,&output,211,211,
++            &input.request,output.bytes);
++    IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.information==211);
++    IO24_CHECK(effect.lower_after==effect.lower_before+5);
++    IO24_CHECK(finalize_calls==1&&finalize_commit_calls==1&&finalize_rollback_calls==0);
++    IO24_CHECK(!lower_claim_pending&&lower_claim_committed&&lower_selected_state);
++    context=file.FsContext;
++    IO24_CHECK(context->state==WINUSB_FILE_INITIALIZED&&context->session!=0&&
++            context->snapshot!=NULL&&context->interfaces!=NULL);
++    teardown(&driver,&retained,&file);
++}
++
+ static void group_initialize(void)
+ {
+     test_initialize_input_and_buffer_rejections();
+@@ -992,6 +1104,7 @@
+     test_initialize_size_full_release_reinitialize();
+     test_initialize_default_endpoint_select_layout();
+     test_initialize_allocation_and_lower_failures();
++    test_initialize_post_select_transaction_finalization();
+     test_initialized_remove_after_outstanding_drain();
+ }
+ 
+@@ -1002,7 +1115,7 @@
+     reset_initialize_buffers(&input,&output);reset_initialize_lower();session_allocation_calls=0;
+     effect=call_initialize(d,file,&input,&output,211,211,&input.request,output.bytes);
+     memcpy(&snapshot,output.bytes,sizeof(snapshot));g->request.session=snapshot.session;
+-    IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+4);IO24_CHECK(effect.complete_after==effect.complete_before+1);
++    IO24_CHECK(effect.status==STATUS_SUCCESS);IO24_CHECK(effect.lower_after==effect.lower_before+5);IO24_CHECK(effect.complete_after==effect.complete_before+1);
+     IO24_CHECK(effect.information==211);IO24_CHECK(g->request.session!=0);
+     return effect.status==STATUS_SUCCESS&&g->request.session!=0;
+ }

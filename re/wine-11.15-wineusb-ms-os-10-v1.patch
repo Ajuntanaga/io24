@@ -1,0 +1,590 @@
+diff -ruN a/dlls/wineusb.sys/Makefile.in b/dlls/wineusb.sys/Makefile.in
+--- a/dlls/wineusb.sys/Makefile.in	2026-08-22 10:09:47.297004844 -0700
++++ b/dlls/wineusb.sys/Makefile.in	2026-08-22 23:35:41.469091669 -0700
+@@ -8,6 +8,7 @@
+ 
+ SOURCES = \
+ 	unixlib.c \
++	msos_id.c \
+ 	usbdi.c \
+ 	wineusb.c \
+ 	wineusb.rc
+diff -ruN a/dlls/wineusb.sys/msos_id.c b/dlls/wineusb.sys/msos_id.c
+--- a/dlls/wineusb.sys/msos_id.c	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/wineusb.sys/msos_id.c	2026-08-22 23:35:19.174293917 -0700
+@@ -0,0 +1,90 @@
++/*
++ * Microsoft OS 1.0 compatible-ID formatting for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include <stdbool.h>
++#include <string.h>
++
++#include "msos_id.h"
++
++static bool id_character(unsigned char value)
++{
++    return (value >= 'A' && value <= 'Z') ||
++            (value >= '0' && value <= '9') || value == '_';
++}
++
++static bool validate_id(const char source[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],
++        bool required, size_t *length)
++{
++    bool terminated = false;
++    size_t i;
++
++    *length = 0;
++    if (source[WINEUSB_MS_OS_10_SOURCE_ID_SIZE - 1]) return false;
++    for (i = 0; i + 1 < WINEUSB_MS_OS_10_SOURCE_ID_SIZE; ++i)
++    {
++        unsigned char value = source[i];
++
++        if (!value)
++        {
++            terminated = true;
++            continue;
++        }
++        if (terminated || !id_character(value)) return false;
++        ++*length;
++    }
++    return !required || *length;
++}
++
++static WCHAR *append_wide(WCHAR *cursor, const WCHAR *source)
++{
++    while (*source) *cursor++ = *source++;
++    return cursor;
++}
++
++static WCHAR *append_id(WCHAR *cursor, const char *source, size_t length)
++{
++    size_t i;
++
++    for (i = 0; i < length; ++i) *cursor++ = (unsigned char)source[i];
++    return cursor;
++}
++
++bool wineusb_ms_os_10_build_pnp_ids(
++        const char compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],
++        const char sub_compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],
++        struct wineusb_ms_os_10_pnp_ids *ids)
++{
++    static const WCHAR compatible_prefix[] = L"USB\\MS_COMP_";
++    static const WCHAR sub_compatible_prefix[] = L"&MS_SUBCOMP_";
++    size_t compatible_length, sub_compatible_length;
++    WCHAR *cursor;
++
++    memset(ids, 0, sizeof(*ids));
++    if (!validate_id(compatible_id, true, &compatible_length) ||
++            !validate_id(sub_compatible_id, false, &sub_compatible_length))
++        return false;
++
++    if (sub_compatible_length)
++    {
++        cursor = append_wide(ids->ids[ids->count], compatible_prefix);
++        cursor = append_id(cursor, compatible_id, compatible_length);
++        cursor = append_wide(cursor, sub_compatible_prefix);
++        cursor = append_id(cursor, sub_compatible_id, sub_compatible_length);
++        *cursor = 0;
++        ++ids->count;
++    }
++
++    cursor = append_wide(ids->ids[ids->count], compatible_prefix);
++    cursor = append_id(cursor, compatible_id, compatible_length);
++    *cursor = 0;
++    ++ids->count;
++    return true;
++}
+diff -ruN a/dlls/wineusb.sys/msos_id.h b/dlls/wineusb.sys/msos_id.h
+--- a/dlls/wineusb.sys/msos_id.h	1969-12-31 16:00:00.000000000 -0800
++++ b/dlls/wineusb.sys/msos_id.h	2026-08-22 23:35:19.173293926 -0700
+@@ -0,0 +1,33 @@
++/*
++ * Microsoft OS 1.0 compatible-ID formatting for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#ifndef __WINE_WINEUSB_MSOS_ID_H
++#define __WINE_WINEUSB_MSOS_ID_H
++
++#include <stdbool.h>
++
++#include "windef.h"
++
++#define WINEUSB_MS_OS_10_SOURCE_ID_SIZE 9
++#define WINEUSB_MS_OS_10_PNP_ID_SIZE 41
++
++struct wineusb_ms_os_10_pnp_ids
++{
++    unsigned int count;
++    WCHAR ids[2][WINEUSB_MS_OS_10_PNP_ID_SIZE];
++};
++
++bool wineusb_ms_os_10_build_pnp_ids(
++        const char compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],
++        const char sub_compatible_id[WINEUSB_MS_OS_10_SOURCE_ID_SIZE],
++        struct wineusb_ms_os_10_pnp_ids *ids);
++
++#endif /* __WINE_WINEUSB_MSOS_ID_H */
+diff -ruN a/dlls/wineusb.sys/unixlib.c b/dlls/wineusb.sys/unixlib.c
+--- a/dlls/wineusb.sys/unixlib.c	2026-08-22 17:54:37.261387694 -0700
++++ b/dlls/wineusb.sys/unixlib.c	2026-08-22 23:48:12.717276683 -0700
+@@ -70,6 +70,291 @@
+     ++device->function_interface_count;
+ }
+ 
++#define MS_OS_10_STRING_LENGTH 18
++#define MS_OS_10_COMPAT_HEADER_LENGTH 16
++#define MS_OS_10_COMPAT_FUNCTION_LENGTH 24
++#define MS_OS_10_PROPERTIES_HEADER_LENGTH 10
++#define MS_OS_10_MAX_DESCRIPTOR_LENGTH 4096
++#define MS_OS_10_TIMEOUT_MS 1000
++
++struct ms_os_10_function_metadata
++{
++    uint8_t vendor_code;
++    char compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++    char sub_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++    WCHAR device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE];
++};
++
++static uint16_t get_u16(const unsigned char *buffer)
++{
++    return buffer[0] | ((uint16_t)buffer[1] << 8);
++}
++
++static uint32_t get_u32(const unsigned char *buffer)
++{
++    return buffer[0] | ((uint32_t)buffer[1] << 8) |
++            ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24);
++}
++
++static bool bytes_are_zero(const unsigned char *buffer, size_t length)
++{
++    size_t i;
++
++    for (i = 0; i < length; ++i)
++        if (buffer[i]) return false;
++    return true;
++}
++
++static bool ms_os_10_id_character(unsigned char value)
++{
++    return (value >= 'A' && value <= 'Z') ||
++            (value >= '0' && value <= '9') || value == '_';
++}
++
++static bool parse_ms_os_10_id(const unsigned char source[8],
++        char destination[WINEUSB_MS_OS_10_ID_SIZE])
++{
++    bool terminated = false;
++    size_t i, length = 0;
++
++    memset(destination, 0, WINEUSB_MS_OS_10_ID_SIZE);
++    for (i = 0; i < 8; ++i)
++    {
++        if (!source[i])
++        {
++            terminated = true;
++            continue;
++        }
++        if (terminated || !ms_os_10_id_character(source[i])) return false;
++        destination[length++] = source[i];
++    }
++    return true;
++}
++
++static bool parse_ms_os_10_string(const unsigned char *buffer, size_t length,
++        uint8_t *vendor_code)
++{
++    static const unsigned char signature[14] =
++        {'M', 0, 'S', 0, 'F', 0, 'T', 0, '1', 0, '0', 0, '0', 0};
++
++    if (length != MS_OS_10_STRING_LENGTH || buffer[0] != MS_OS_10_STRING_LENGTH ||
++            buffer[1] != LIBUSB_DT_STRING || memcmp(buffer + 2, signature, sizeof(signature)) ||
++            buffer[17])
++        return false;
++    *vendor_code = buffer[16];
++    return true;
++}
++
++static bool validate_ms_os_10_compatible_header(const unsigned char *header,
++        size_t *descriptor_length)
++{
++    size_t expected_length;
++
++    *descriptor_length = get_u32(header);
++    expected_length = MS_OS_10_COMPAT_HEADER_LENGTH +
++            (size_t)header[8] * MS_OS_10_COMPAT_FUNCTION_LENGTH;
++    return get_u16(header + 4) == 0x0100 && get_u16(header + 6) == 0x0004 &&
++            bytes_are_zero(header + 9, 7) &&
++            *descriptor_length == expected_length &&
++            *descriptor_length <= MS_OS_10_MAX_DESCRIPTOR_LENGTH;
++}
++
++static bool parse_ms_os_10_compatible_ids(const unsigned char *buffer, size_t length,
++        struct ms_os_10_function_metadata functions[256])
++{
++    bool used_interfaces[256] = {0};
++    size_t descriptor_length, offset;
++    unsigned int i;
++
++    memset(functions, 0, 256 * sizeof(*functions));
++    if (length < MS_OS_10_COMPAT_HEADER_LENGTH ||
++            !validate_ms_os_10_compatible_header(buffer, &descriptor_length) ||
++            descriptor_length != length)
++        return false;
++
++    for (i = 0, offset = MS_OS_10_COMPAT_HEADER_LENGTH; i < buffer[8];
++            ++i, offset += MS_OS_10_COMPAT_FUNCTION_LENGTH)
++    {
++        const unsigned char *section = buffer + offset;
++        unsigned int interface = section[0];
++
++        if (section[1] != 1 || used_interfaces[interface] ||
++                !bytes_are_zero(section + 18, 6) ||
++                !parse_ms_os_10_id(section + 2, functions[interface].compatible_id) ||
++                !parse_ms_os_10_id(section + 10, functions[interface].sub_compatible_id))
++            return false;
++        used_interfaces[interface] = true;
++    }
++    return true;
++}
++
++static bool utf16le_equals_ascii(const unsigned char *buffer, size_t length,
++        const char *ascii)
++{
++    size_t i, expected_length = 2 * (strlen(ascii) + 1);
++
++    if (length != expected_length) return false;
++    for (i = 0; i < expected_length / 2; ++i)
++        if (buffer[2 * i] != (unsigned char)ascii[i] || buffer[2 * i + 1]) return false;
++    return true;
++}
++
++static bool guid_character(unsigned int index, unsigned char value)
++{
++    if (index == 0) return value == '{';
++    if (index == 9 || index == 14 || index == 19 || index == 24) return value == '-';
++    if (index == 37) return value == '}';
++    return (value >= '0' && value <= '9') ||
++            (value >= 'a' && value <= 'f') || (value >= 'A' && value <= 'F');
++}
++
++static bool parse_device_interface_guid(const unsigned char *buffer, size_t length,
++        WCHAR guid[WINEUSB_MS_OS_10_GUID_SIZE])
++{
++    WCHAR parsed[WINEUSB_MS_OS_10_GUID_SIZE];
++    unsigned int i;
++
++    if (length != 2 * WINEUSB_MS_OS_10_GUID_SIZE) return false;
++    for (i = 0; i < WINEUSB_MS_OS_10_GUID_SIZE; ++i)
++    {
++        if (buffer[2 * i + 1]) return false;
++        parsed[i] = buffer[2 * i];
++        if (i + 1 == WINEUSB_MS_OS_10_GUID_SIZE)
++        {
++            if (parsed[i]) return false;
++        }
++        else if (!guid_character(i, parsed[i])) return false;
++    }
++    memcpy(guid, parsed, sizeof(parsed));
++    return true;
++}
++
++static bool parse_ms_os_10_properties(const unsigned char *buffer, size_t length,
++        WCHAR guid[WINEUSB_MS_OS_10_GUID_SIZE])
++{
++    WCHAR parsed_guid[WINEUSB_MS_OS_10_GUID_SIZE] = {0};
++    bool found_guid = false;
++    size_t offset = MS_OS_10_PROPERTIES_HEADER_LENGTH;
++    unsigned int i;
++
++    memset(guid, 0, WINEUSB_MS_OS_10_GUID_SIZE * sizeof(*guid));
++    if (length < MS_OS_10_PROPERTIES_HEADER_LENGTH || get_u32(buffer) != length ||
++            get_u16(buffer + 4) != 0x0100 || get_u16(buffer + 6) != 0x0005)
++        return false;
++
++    for (i = 0; i < get_u16(buffer + 8); ++i)
++    {
++        const unsigned char *section;
++        size_t section_length, name_length, data_length;
++
++        if (length - offset < 14) return false;
++        section = buffer + offset;
++        section_length = get_u32(section);
++        name_length = get_u16(section + 8);
++        if (section_length < 14 || section_length > length - offset ||
++                name_length < 2 || name_length & 1 || 14 + name_length > section_length)
++            return false;
++        data_length = get_u32(section + 10 + name_length);
++        if (data_length != section_length - 14 - name_length) return false;
++
++        if (utf16le_equals_ascii(section + 10, name_length, "DeviceInterfaceGUID"))
++        {
++            if (found_guid || get_u32(section + 4) != 1 ||
++                    !parse_device_interface_guid(section + 14 + name_length,
++                            data_length, parsed_guid))
++                return false;
++            found_guid = true;
++        }
++        offset += section_length;
++    }
++    if (offset != length) return false;
++    if (found_guid) memcpy(guid, parsed_guid, sizeof(parsed_guid));
++    return true;
++}
++
++static int get_ms_os_10_descriptor(libusb_device_handle *handle, uint8_t request_type,
++        uint8_t request, uint16_t value, uint16_t index, unsigned char *buffer,
++        uint16_t length)
++{
++    return libusb_control_transfer(handle, request_type, request, value, index,
++            buffer, length, MS_OS_10_TIMEOUT_MS);
++}
++
++static bool get_ms_os_10_compatible_ids(libusb_device_handle *handle,
++        uint8_t vendor_code, struct ms_os_10_function_metadata functions[256])
++{
++    unsigned char header[MS_OS_10_COMPAT_HEADER_LENGTH], *descriptor;
++    size_t descriptor_length;
++    bool ret;
++
++    if (get_ms_os_10_descriptor(handle, 0xc0, vendor_code, 0, 4, header,
++            sizeof(header)) != sizeof(header) ||
++            !validate_ms_os_10_compatible_header(header, &descriptor_length))
++        return false;
++    if (descriptor_length == sizeof(header))
++        return parse_ms_os_10_compatible_ids(header, sizeof(header), functions);
++    if (!(descriptor = malloc(descriptor_length))) return false;
++    if (get_ms_os_10_descriptor(handle, 0xc0, vendor_code, 0, 4, descriptor,
++            descriptor_length) != descriptor_length)
++        ret = false;
++    else
++        ret = parse_ms_os_10_compatible_ids(descriptor, descriptor_length, functions);
++    free(descriptor);
++    return ret;
++}
++
++static bool get_ms_os_10_properties(libusb_device_handle *handle, uint8_t vendor_code,
++        uint8_t interface, WCHAR guid[WINEUSB_MS_OS_10_GUID_SIZE])
++{
++    unsigned char header[MS_OS_10_PROPERTIES_HEADER_LENGTH], *descriptor;
++    size_t descriptor_length;
++    bool ret;
++
++    if (get_ms_os_10_descriptor(handle, 0xc1, vendor_code, interface << 8, 5,
++            header, sizeof(header)) != sizeof(header))
++        return false;
++    descriptor_length = get_u32(header);
++    if (get_u16(header + 4) != 0x0100 || get_u16(header + 6) != 0x0005 ||
++            descriptor_length < sizeof(header) ||
++            descriptor_length > MS_OS_10_MAX_DESCRIPTOR_LENGTH)
++        return false;
++    if (descriptor_length == sizeof(header))
++        return parse_ms_os_10_properties(header, sizeof(header), guid);
++    if (!(descriptor = malloc(descriptor_length))) return false;
++    if (get_ms_os_10_descriptor(handle, 0xc1, vendor_code, interface << 8, 5,
++            descriptor, descriptor_length) != descriptor_length)
++        ret = false;
++    else
++        ret = parse_ms_os_10_properties(descriptor, descriptor_length, guid);
++    free(descriptor);
++    return ret;
++}
++
++static void discover_ms_os_10(libusb_device_handle *handle,
++        struct ms_os_10_function_metadata functions[256])
++{
++    unsigned char string[MS_OS_10_STRING_LENGTH];
++    uint8_t vendor_code;
++    unsigned int i;
++
++    memset(functions, 0, 256 * sizeof(*functions));
++    if (get_ms_os_10_descriptor(handle, 0x80, LIBUSB_REQUEST_GET_DESCRIPTOR,
++            0x03ee, 0, string, sizeof(string)) != sizeof(string) ||
++            !parse_ms_os_10_string(string, sizeof(string), &vendor_code))
++        return;
++    if (!get_ms_os_10_compatible_ids(handle, vendor_code, functions))
++    {
++        memset(functions, 0, 256 * sizeof(*functions));
++        return;
++    }
++
++    for (i = 0; i < 256; ++i)
++    {
++        if (!functions[i].compatible_id[0]) continue;
++        functions[i].vendor_code = vendor_code;
++    }
++}
++
+ static bool assign_function_range(uint8_t roots[256], const bool present[256],
+         bool grouped[256], uint8_t root, uint8_t count)
+ {
+@@ -234,10 +519,30 @@
+     return true;
+ }
+ 
++static void set_event_ms_os_10(struct usb_event *event, libusb_device_handle *handle,
++        uint8_t interface, struct ms_os_10_function_metadata *metadata)
++{
++    if (metadata->compatible_id[0])
++    {
++        get_ms_os_10_properties(handle, metadata->vendor_code, interface,
++                metadata->device_interface_guid);
++        TRACE("Microsoft OS 1.0 interface %u compatible ID %s, sub-compatible ID %s.\n",
++                interface, metadata->compatible_id, metadata->sub_compatible_id);
++    }
++    event->u.added_device.ms_vendor_code = metadata->vendor_code;
++    memcpy(event->u.added_device.ms_compatible_id, metadata->compatible_id,
++            sizeof(event->u.added_device.ms_compatible_id));
++    memcpy(event->u.added_device.ms_sub_compatible_id, metadata->sub_compatible_id,
++            sizeof(event->u.added_device.ms_sub_compatible_id));
++    memcpy(event->u.added_device.device_interface_guid, metadata->device_interface_guid,
++            sizeof(event->u.added_device.device_interface_guid));
++}
++
+ static void add_usb_device(libusb_device *libusb_device)
+ {
+     struct libusb_config_descriptor *config_desc;
+     struct libusb_device_descriptor device_desc;
++    struct ms_os_10_function_metadata ms_os_10_functions[256];
+     struct unix_device *unix_device;
+     struct usb_event usb_event;
+     int ret;
+@@ -257,11 +562,13 @@
+         return;
+     }
+     unix_device->refcount = 1;
++    discover_ms_os_10(unix_device->handle, ms_os_10_functions);
+ 
+     pthread_mutex_lock(&device_mutex);
+     list_add_tail(&device_list, &unix_device->entry);
+     pthread_mutex_unlock(&device_mutex);
+ 
++    memset(&usb_event, 0, sizeof(usb_event));
+     usb_event.type = USB_EVENT_ADD_DEVICE;
+     usb_event.u.added_device.device = unix_device;
+     usb_event.u.added_device.vendor = device_desc.idVendor;
+@@ -298,6 +605,9 @@
+             usb_event.u.added_device.subclass = iface_desc->bInterfaceSubClass;
+             usb_event.u.added_device.protocol = iface_desc->bInterfaceProtocol;
+             usb_event.u.added_device.interface_index = iface_desc->bInterfaceNumber;
++            set_event_ms_os_10(&usb_event, unix_device->handle,
++                    iface_desc->bInterfaceNumber,
++                    &ms_os_10_functions[iface_desc->bInterfaceNumber]);
+         }
+         queue_event(&usb_event);
+ 
+@@ -357,6 +667,9 @@
+                 usb_event.u.added_device.protocol = iface_desc->bInterfaceProtocol;
+                 usb_event.u.added_device.interface = true;
+                 usb_event.u.added_device.interface_index = iface_desc->bInterfaceNumber;
++                set_event_ms_os_10(&usb_event, unix_device->handle,
++                        iface_desc->bInterfaceNumber,
++                        &ms_os_10_functions[iface_desc->bInterfaceNumber]);
+                 FIXME("IO24_FUNCTION_SCOPE event=child root=%u scoped=%u interfaces=%u "
+                         "configuration_length=%u.\n", iface_desc->bInterfaceNumber,
+                         function_scoped, unix_iface->function_interface_count,
+diff -ruN a/dlls/wineusb.sys/unixlib.h b/dlls/wineusb.sys/unixlib.h
+--- a/dlls/wineusb.sys/unixlib.h	2026-08-22 10:09:47.302480480 -0700
++++ b/dlls/wineusb.sys/unixlib.h	2026-08-22 23:38:34.641520726 -0700
+@@ -27,9 +27,14 @@
+ #include "ddk/usb.h"
+ #include "wine/unixlib.h"
+ 
++#include "msos_id.h"
++
+ #define WINEUSB_IO24_CLASS_INTERFACE_FLAGS \
+     (USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK)
+ 
++#define WINEUSB_MS_OS_10_ID_SIZE WINEUSB_MS_OS_10_SOURCE_ID_SIZE
++#define WINEUSB_MS_OS_10_GUID_SIZE 39
++
+ static inline bool wineusb_io24_class_interface_in_supported(
+         const struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req)
+ {
+@@ -63,6 +68,10 @@
+             UINT8 class, subclass, protocol, busnum, portnum;
+             bool interface, high_speed;
+             INT16 interface_index;
++            UINT8 ms_vendor_code;
++            char ms_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++            char ms_sub_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++            WCHAR device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE];
+         } added_device;
+         struct unix_device *removed_device;
+         IRP *completed_irp;
+diff -ruN a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
+--- a/dlls/wineusb.sys/wineusb.c	2026-08-22 10:09:47.303962165 -0700
++++ b/dlls/wineusb.sys/wineusb.c	2026-08-22 23:35:41.470091660 -0700
+@@ -36,6 +36,7 @@
+ #include "wine/list.h"
+ 
+ #include "usbdi.h"
++#include "msos_id.h"
+ #include "unixlib.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wineusb);
+@@ -82,6 +83,11 @@
+ 
+     uint16_t vendor, product, revision, usbver;
+ 
++    uint8_t ms_vendor_code;
++    char ms_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++    char ms_sub_compatible_id[WINEUSB_MS_OS_10_ID_SIZE];
++    WCHAR device_interface_guid[WINEUSB_MS_OS_10_GUID_SIZE];
++
+     struct unix_device *unix_device;
+ 
+     LIST_ENTRY irp_list;
+@@ -221,6 +227,13 @@
+     device->revision = event->revision;
+     device->usbver = event->usbver;
+     device->high_speed = event->high_speed;
++    device->ms_vendor_code = event->ms_vendor_code;
++    memcpy(device->ms_compatible_id, event->ms_compatible_id,
++            sizeof(device->ms_compatible_id));
++    memcpy(device->ms_sub_compatible_id, event->ms_sub_compatible_id,
++            sizeof(device->ms_sub_compatible_id));
++    memcpy(device->device_interface_guid, event->device_interface_guid,
++            sizeof(device->device_interface_guid));
+ 
+     EnterCriticalSection(&wineusb_cs);
+     list_add_tail(&device_list, &device->entry);
+@@ -468,8 +481,21 @@
+     append_id(buffer, L"");
+ }
+ 
++static void append_ms_os_10_compatible_ids(const struct usb_device *device,
++        struct string_buffer *buffer)
++{
++    struct wineusb_ms_os_10_pnp_ids ids;
++    unsigned int i;
++
++    if (!wineusb_ms_os_10_build_pnp_ids(device->ms_compatible_id,
++            device->ms_sub_compatible_id, &ids))
++        return;
++    for (i = 0; i < ids.count; ++i) append_id(buffer, L"%ls", ids.ids[i]);
++}
++
+ static void get_compatible_ids(const struct usb_device *device, struct string_buffer *buffer)
+ {
++    append_ms_os_10_compatible_ids(device, buffer);
+     if (device->interface_index != -1)
+     {
+         append_id(buffer, L"USB\\Class_%02x&SubClass_%02x&Prot_%02x",

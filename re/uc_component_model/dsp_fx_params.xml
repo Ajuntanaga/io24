@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<uc:ComponentModel xmlns:uc="http://www.presonus.com/xml/uc"
+				   namespace="Presonus:Dsp">
+	
+	<uc:Definitions>		
+	</uc:Definitions>
+
+	<uc:Parameters>
+
+		<!-- DSP controller parameter list for GEQ -->
+		<uc:ParamList id="GEQ">
+			<uc:Param id="gain1" name="GEQ Band 1 Gain" short="20 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain2" name="GEQ Band 2 Gain" short="25 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain3" name="GEQ Band 3 Gain" short="32 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain4" name="GEQ Band 4 Gain" short="40 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain5" name="GEQ Band 5 Gain" short="50 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain6" name="GEQ Band 6 Gain" short="63 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain7" name="GEQ Band 7 Gain" short="80 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain8" name="GEQ Band 8 Gain" short="100 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain9" name="GEQ Band 9 Gain" short="125 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain10" name="GEQ Band 10 Gain" short="160 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain11" name="GEQ Band 11 Gain" short="200 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain12" name="GEQ Band 12 Gain" short="250 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain13" name="GEQ Band 13 Gain" short="315 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain14" name="GEQ Band 14 Gain" short="400 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain15" name="GEQ Band 15 Gain" short="500 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain16" name="GEQ Band 16 Gain" short="630 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain17" name="GEQ Band 17 Gain" short="800 Hz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain18" name="GEQ Band 18 Gain" short="1 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain19" name="GEQ Band 19 Gain" short="1.25 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain20" name="GEQ Band 20 Gain" short="1.6 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain21" name="GEQ Band 21 Gain" short="2 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain22" name="GEQ Band 22 Gain" short="2.5 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain23" name="GEQ Band 23 Gain" short="3.15 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain24" name="GEQ Band 24 Gain" short="4 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain25" name="GEQ Band 25 Gain" short="5 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain26" name="GEQ Band 26 Gain" short="6.3 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain27" name="GEQ Band 27 Gain" short="8 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain28" name="GEQ Band 28 Gain" short="10 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain29" name="GEQ Band 29 Gain" short="12.5 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain30" name="GEQ Band 30 Gain" short="16 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />
+			<uc:Param id="gain31" name="GEQ Band 31 Gain" short="20 kHz" type="float" min="-12.0" max="12.0" def="0.0" curve="linear" units="gain.1.value"
+			flags="storable linkable bipolar user1" />			
+			<uc:Param id="on" name="GEQ On/Off" type="toggle" def="0" flags="storable linkable user1" />
+			<uc:Param id="ston" name="GEQ Stereo On/Off" type="toggle" def="1" flags="storable linkable" />
+		</uc:ParamList>
+		
+	</uc:Parameters>
+		
+</uc:ComponentModel>
+
+
+
+
+
+
+
+
+
+
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<uc:ComponentModel xmlns:uc="http://www.presonus.com/xml/uc"
+				   namespace="Presonus:Dsp">
+	
+	<uc:Definitions>			
+		<uc:StringList id="Carriers">
+			<uc:String text="Noise"/>
+			<uc:String text="Sawtooth"/>
+			<uc:String text="Rect"/>
+		</uc:StringList>	
+
+		<uc:StringList id="VocoderMode">
+			<uc:String text="cheapo"/>
+			<uc:String text="rms follow"/>
+		</uc:StringList>
+		
+		<uc:StringList id="VocDetectorMode">
+			<uc:String text="off"/>
+			<uc:String text="Voiced/Unvoiced"/>
+		</uc:StringList>	
+
+		<uc:StringList id="TuneList">
+			<uc:String text="-8"/>
+			<uc:String text="-7"/>
+			<uc:String text="-6"/>
+			<uc:String text="-5"/>
+			<uc:String text="-4"/>
+			<uc:String text="-3"/>
+			<uc:String text="-2"/>
+			<uc:String text="-1"/>
+			<uc:String text="0"/>			
+		</uc:StringList>
+	
+	</uc:Definitions>
+	
+	<uc:Parameters>
+
+
+		<!-- ******************************************************************************************** -->
+		<!-- InsertFX - VoiceFX modules -->
+		<!-- ******************************************************************************************** -->
+
+		<!-- Doubler -->
+		<uc:ParamList id="VoiceOfGod">
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>		
+			<uc:Param id="lows" name="Lows" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="width" name="Width" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>			
+		</uc:ParamList>	
+		
+		<!-- De-Tuner -->
+		<uc:ParamList id="DarthVoice">
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>
+			<uc:Param id="detune" name="Detune" type="list" def="4" units="TuneList" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+		</uc:ParamList>
+		
+		<!-- Vocoder -->
+		<uc:ParamList id="RobotVoiceA"> 
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>			
+			<uc:Param id="avol" name="Volume" type="float" min="0" max="1" def="1" units="percent" flags="storable"/>
+			<uc:Param id="acarriertype" name="Carrier Type" type="list" def="1" units="Carriers" flags="storable"/>
+			<uc:Param id="acarrierfreq" name="Carrier Frequency" type="float" min="50" max="500.0" curve="skew" mid="100" def="80" units="freq" flags="storable"/>
+			<uc:Param id="avoiced" name="Voiced" type="float" min="0.0" max="1.0" flags="readonly"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+		</uc:ParamList>	
+
+		<!-- Ring Modulator -->
+		<uc:ParamList id="RobotVoiceB"> 
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>		
+			<uc:Param id="bcarrierfreq" name="Frequency" type="float" min="0.1" max="2000.0" curve="skew" mid="30" def="30" units="freq" flags="storable"/>
+			<uc:Param id="bcarrier2" name="Sub Carrier" type="toggle" flags="storable"/>
+			<uc:Param id="bcarrier2freq" name="Sub Carrier Frequency" type="float" min="0.1" max="2000.0" curve="skew" mid="30" def="50" units="freq" flags="storable"/>
+			<uc:Param id="bdist" name="Distortion" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="bvol" name="Volume" type="float" min="0" max="1" def="1" units="percent" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+		</uc:ParamList>	
+
+		<!-- Filters -->
+		<uc:ParamList id="RobotVoiceC"> 
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>
+			<uc:Param id="ctune" name="Pitch" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="cfb" name="Regeneration" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="cdamp" name="Damping" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="cdist" name="Distortion" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="cvol" name="Volume" type="float" min="0" max="1" def="1" units="percent" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+		</uc:ParamList>			
+
+		<!-- Delay -->
+		<uc:ParamList id="VocalEcho">
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>		
+			<uc:Param id="time" name="Time" type="float" min="0.0001" max="0.25" mid="0.125" def="0.125" units="time" flags="storable"/>
+			<uc:Param id="feedback" name="Feedback" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+		</uc:ParamList>
+
+		<!-- ******************************************************************************************** -->
+		<!-- SendFX - Reverb -->
+		<!-- ******************************************************************************************** -->
+		
+		<!-- Reverb -->
+		<uc:ParamList id="VocalReverb">
+			<uc:Param id="on" name="On" type="toggle" flags="storable"/>
+			<uc:Param id="size" name="Size" type="float" min="0" max="1" def="0.15" units="percent" flags="storable"/>
+			<uc:Param id="mix" name="WetDry" type="float" min="0" max="1" def="0.5" units="percent" flags="storable"/>
+			<uc:Param id="hp_freq" name="HPF (high pass filter)" type="float" min="0" max="500.0" mid="250" def="200" units="freq" flags="storable"/>
+			<uc:Param id="predelay" name="Predelay" type="float" min="0.0001" max="0.25" mid="0.125" def="0.02" units="time/off" flags="storable"/>
+		</uc:ParamList>
+		
+
+	</uc:Parameters>
+
+	<uc:Templates>
+
+		<!-- Templates used to build Voice FX components in remote apps -->
+		<!-- need to match class IDs from voicefxshared.h -->
+		<uc:Template id="{66A10093-D461-4CAC-A80C-91F6A1BB37E5}" paramlist="VoiceOfGod" classname="VoiceOfGodComponent"/>
+		<uc:Template id="{509018B0-0DE1-4D26-9DDF-D782476D3C98}" paramlist="DarthVoice" classname="DarthVoiceComponent"/>
+		<uc:Template id="{981F8B8F-D1D8-4634-BB04-2148AF2123E3}" paramlist="RobotVoiceA" classname="RobotVoiceAComponent"/>
+		<uc:Template id="{4B4CAD90-7709-451F-A7DD-AF6F0E954F57}" paramlist="RobotVoiceB" classname="RobotVoiceBComponent"/>
+		<uc:Template id="{491FED97-6761-4FF6-91E1-E155891291AA}" paramlist="RobotVoiceC" classname="RobotVoiceCComponent"/>
+		<uc:Template id="{98A527BA-2D6E-4B35-BB26-251EC081A067}" paramlist="VocalEcho" classname="VocalEchoComponent"/>
+
+		<uc:Template id="{E857B5E3-C40B-47C5-B180-C13ADB24D20D}" paramlist="DarthVoice" classname="DeTunerProComponent"/>
+		<uc:Template id="{A8438FC4-9A2C-45E6-9386-0BC9DED0C501}" paramlist="VoiceOfGod" classname="VoiceOfGodProComponent"/>
+		<uc:Template id="{586A62A2-5454-461A-885D-5398A89354BD}" paramlist="RobotVoiceB" classname="RingModProComponent"/>
+		<uc:Template id="{548B1AB2-91B4-4F7B-AD39-E18DDA000E76}" paramlist="RobotVoiceA" classname="VocoderProComponent"/>
+
+
+	</uc:Templates>
+
+</uc:ComponentModel>
+<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
+<assembly xmlns='urn:schemas-microsoft-com:asm.v1' manifestVersion='1.0'>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level='asInvoker' uiAccess='false' />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>

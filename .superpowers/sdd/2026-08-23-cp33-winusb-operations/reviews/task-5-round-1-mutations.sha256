@@ -1,0 +1,16 @@
+c8e010fcb9dc3ffe982eb5e9a664a64f91df6bb0bdbeb5e5acf6391f326e5138  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/pre-registry-deref.diff
+f631872459782bcbfd91182d6d75a3c81255a898e6ac08e151d6fff49fe83e7a  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/missing-final-wait.diff
+37e374ff8b8eb85a2aab8f2c7ef6efdd0d946bcbcd7761a9a8248f70edabd317  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/associated-no-plus-one.diff
+e11b68131a556ccd8586768183e37042d6e6a2382d21442e1c6387a1457f95a3  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/partial-short-copy.diff
+a31efd2a4911a508b6541c6d9586510bb32df0cf66a2ffccf7ef3c038ad712d2  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/speed-tail-overrun.diff
+e6ed6dbda2258b15d525854ca4f3851424d39fbaf1455b9bedb62555962bbf52  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/no-retired-reclaim.diff
+a85cbf5755f64bac64b0af692ffa5201c513044db6b89bd2943ca4101aec6688  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/token-reuse.diff
+2a2eaeb507643e1c9b56c900d32ec5a6375b2277740c539b076e2937fbd0dd1b  .superpowers/sdd/2026-08-23-cp33-winusb-operations/reviews/task-5-round-1-mutations/invalid-token-wrap.diff
+d858e75a8fe13bc7730ca11b7a8c467568dd875ef0e0d742923b5e1880564e67  re/winusb-api-v1/logs/gate-1-round-1-mutation-pre-registry-deref.log
+614465ebe7ce3581d31c09c34a2f52064616adc9ec8f9a1dec53bf1bb0dfa9f5  re/winusb-api-v1/logs/gate-1-round-1-mutation-missing-final-wait.log
+f49e47896cd3fa948c591d58fbf57253b818799fa3ce3ba558941f1bedf86ef9  re/winusb-api-v1/logs/gate-1-round-1-mutation-associated-no-plus-one.log
+5e39a4dad907d0725dde9e23ec6e370fa2d5c0404974d42508b7672f2f0a700b  re/winusb-api-v1/logs/gate-1-round-1-mutation-partial-short-copy.log
+c589e1536109c231bfee8f8c3a01d67d042ebbade2b29640b478f2e27837e898  re/winusb-api-v1/logs/gate-1-round-1-mutation-speed-tail-overrun.log
+d7ed7437282fa4bb02b0c81e7540bc92491d1f4156f795e507621100803869ed  re/winusb-api-v1/logs/gate-1-round-1-mutation-no-retired-reclaim.log
+c62a524023feaa990a5dc252d41052e6dcdcc18c7b92982b095867c961ffc225  re/winusb-api-v1/logs/gate-1-round-1-mutation-token-reuse.log
+a7b81a4622e4cd0111b80f3169841e72cbdee232f5f1db0353c2c9b1d928ea79  re/winusb-api-v1/logs/gate-1-round-1-mutation-invalid-token-wrap.log

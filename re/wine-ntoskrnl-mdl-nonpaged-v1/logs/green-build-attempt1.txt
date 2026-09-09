@@ -1,0 +1,24 @@
+make: 'dlls/ntoskrnl.exe/tests/ntoskrnl.exe_test.exe.so' is up to date.
+gcc -m64 -c -o dlls/ntoskrnl.exe/ntoskrnl.o /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c -Idlls/ntoskrnl.exe \
+  -I/run/io24-source/dlls/ntoskrnl.exe -Iinclude -I/run/io24-source/include \
+  -I/run/io24-source/include/msvcrt -D_MSVCR_VER=0 -D__WINESRC__ -Wall -pipe -fcf-protection=none \
+  -fvisibility=hidden -fno-stack-protector -fno-strict-aliasing -Wdeclaration-after-statement \
+  -Wempty-body -Wignored-qualifiers -Winit-self -Wlogical-op -Wno-packed-not-aligned -Wpointer-arith \
+  -Wshift-overflow=2 -Wstrict-prototypes -Wtype-limits -Wunused-but-set-parameter -Wvla \
+  -Wwrite-strings -Wno-misleading-indentation -gdwarf-4 -fPIC -fasynchronous-unwind-tables -D_WIN32 \
+  -mlong-double-64 -fno-builtin -fshort-wchar -Wno-format -mabi=ms -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c: In function ‘MmBuildMdlForNonPagedPool’:
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c:2955:33: error: implicit declaration of function ‘MmGetPhysicalAddress’ [-Wimplicit-function-declaration]
+ 2955 |         pages[i] = (PFN_NUMBER)(MmGetPhysicalAddress(base + i * PAGE_SIZE).QuadPart >> PAGE_SHIFT);
+      |                                 ^~~~~~~~~~~~~~~~~~~~
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c:2955:75: error: request for member ‘QuadPart’ in something not a structure or union
+ 2955 |         pages[i] = (PFN_NUMBER)(MmGetPhysicalAddress(base + i * PAGE_SIZE).QuadPart >> PAGE_SHIFT);
+      |                                                                           ^
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c: At top level:
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c:3003:25: error: conflicting types for ‘MmGetPhysicalAddress’; have ‘PHYSICAL_ADDRESS(void *)’ {aka ‘union _LARGE_INTEGER(void *)’}
+ 3003 | PHYSICAL_ADDRESS WINAPI MmGetPhysicalAddress(void *virtual_address)
+      |                         ^~~~~~~~~~~~~~~~~~~~
+/run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.c:2955:33: note: previous implicit declaration of ‘MmGetPhysicalAddress’ with type ‘int()’
+ 2955 |         pages[i] = (PFN_NUMBER)(MmGetPhysicalAddress(base + i * PAGE_SIZE).QuadPart >> PAGE_SHIFT);
+      |                                 ^~~~~~~~~~~~~~~~~~~~
+make: *** [Makefile:186428: dlls/ntoskrnl.exe/ntoskrnl.o] Error 1

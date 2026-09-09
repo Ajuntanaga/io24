@@ -1,0 +1,23 @@
+	Command being timed: "bwrap --die-with-parent --unshare-all --unshare-net --ro-bind /usr /usr --ro-bind /etc /etc --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/sbin /sbin --proc /proc --dev /dev --tmpfs /tmp --tmpfs /sys --tmpfs /run --dir /run/io24-source --dir /run/io24-build --dir /run/io24-tools --ro-bind /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/.io24-build/wineusb-function-scope-v1/source-b /run/io24-source --bind /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/.io24-build/wineusb-function-scope-v1/build-b /run/io24-build --ro-bind /home/ajuntanaga/Development/Experiments/PreSonus Revelator | UniCont/.io24-build/wineusb-observe-v2/tools /run/io24-tools --chdir /run/io24-build --setenv HOME /tmp/io24-home --setenv LC_ALL C --setenv PATH /run/io24-tools/usr/bin:/usr/bin:/bin --setenv BISON /run/io24-tools/usr/bin/bison --setenv BISON_PKGDATADIR /run/io24-tools/usr/share/bison --setenv FLEX /run/io24-tools/usr/bin/flex --setenv M4 /run/io24-tools/usr/bin/m4 --setenv SOURCE_DATE_EPOCH 1787101002 /usr/bin/timeout --signal=TERM --kill-after=10s 180s /usr/bin/nice -n 10 /usr/bin/ionice -c 2 -n 7 /usr/bin/make -j1 dlls/wineusb.sys/all"
+	User time (seconds): 0.00
+	System time (seconds): 0.00
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:15.23
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2176
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 126
+	Voluntary context switches: 2
+	Involuntary context switches: 1
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

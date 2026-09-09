@@ -1,0 +1,42 @@
+CP31 clean contained build record
+Date: 2026-08-23
+Source: separately patch-checked CP29 clone, mounted read-only at
+        /run/io24-source
+Tools: sealed flex/bison/m4/libusb header mirror, mounted read-only at
+       /run/io24-tools
+Network: unshared
+Jobs: make -j1
+Target: dlls/wineusb.sys/all
+SOURCE_DATE_EPOCH: 1787101002
+
+Configure:
+  --enable-win64 --without-mingw --without-x --without-freetype --with-usb
+  USB_CFLAGS=-I/run/io24-tools/usr/include/libusb-1.0
+  USB_LIBS=/usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0
+
+Build A started from an empty build root. Its first resumed build invocations
+exposed containment-only tool-path omissions: the mirror path was initially
+wrong, Bison's data directory was absent, its compiled /usr/bin/m4 path was
+absent, and /bin/sh was omitted from the overlay. No production source or
+compiled translation unit failed. Supplying the same read-only sealed tools
+allowed make to resume and exit 0.
+
+Build B started from a second empty root. A failed configure attempt caused by
+an absent read-only /etc/alternatives path was preserved separately as
+build-b-config-attempt. A new empty build-b root then configured and built in
+one contained invocation with /etc mounted read-only. Configure and make both
+exited 0. Expected optional-component warnings were limited to gettext,
+GnuTLS development files, and no sound system; no WineUSB warning appeared.
+
+Clean A and clean B are byte-identical at every deliverable:
+  b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  x86_64-windows/wineusb.sys  2560 bytes
+  13669869e34219947862da6dc46e94fb3a3aaf03902b84cca86cbbee663bff94  wineusb.sys.so                  209216 bytes
+  228cf6b8006714887d6adeb0bc7dff040fba201f84cae1265a292cc115b517c9  wineusb.so                      147056 bytes
+
+The incremental development wineusb.so hash is
+4b90f59831f1878cb7bc3a473a0de055efcad2dcd49530595161ee532607bf5c
+(147048 bytes), because it retained predecessor build/debug metadata. Its
+selected runtime sections (.text, .rodata, .data, dynamic symbols/strings,
+relocations, PLT, GOT) are byte-identical to clean A and hash to
+78fe34e251354acadd4bcba1d3d9a1d7e4852955e092de370963865cbd6c39f0.
+The seal uses the two independent clean outputs, not the incremental hash.

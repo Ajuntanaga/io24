@@ -1,0 +1,6 @@
+second-admission/r135-control compile=0 run=1 failures=203 retained=0 direct=0 helper=0 summary=1 bad-markers=0
+second-admission/r136 compile=0 run=1 failures=204 retained=1 direct=0 helper=0 summary=1 bad-markers=0
+second-completion/hook-bypass compile=0 run=1 failures=203 retained=0 direct=0 helper=0 summary=1 bad-markers=0
+second-completion/r136 compile=0 run=1 failures=204 retained=1 direct=0 helper=0 summary=1 bad-markers=0
+second-admission normalized-delta=exact
+second-completion normalized-delta=exact

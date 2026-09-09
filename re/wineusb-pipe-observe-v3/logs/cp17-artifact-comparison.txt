@@ -1,0 +1,14 @@
+CP17 byte reproducibility comparison
+2026-08-21T05:24:23-07:00
+identical sha256=b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e size=2560 path=dlls/wineusb.sys/x86_64-windows/wineusb.sys
+identical sha256=f355a7d3e228c5376bcf00d5d0b1e971273cdcfdb9a5362ff0ab77a3badd6835 size=202392 path=dlls/wineusb.sys/wineusb.sys.so
+identical sha256=90d060571d9f8a56aea8d91485802fe500920f741fb5787543a8c141ae104eb9 size=92328 path=dlls/wineusb.sys/wineusb.so
+identical sha256=27e8b14ea57d3746c03dcbd8108e4195333e39a5e72a671170b99fd5f48e0808 size=30034918 path=Makefile
+identical sha256=05c20c62104f2dbb01467d1580d60528a1897261ed164401416101afb8feb213 size=4615242 path=compile_commands.json
+configure_stdout_stderr=identical
+build_stdout_stderr=identical
+builtin_build_id=0857e44f13501e673ba64c795a297fe8a757feb9
+unixlib_build_id=8a975849185b8c68b22e8f1d136ec8e58c9814be
+modified_unit_warnings_a=0
+modified_unit_warnings_b=0
+source_tree_compare=identical

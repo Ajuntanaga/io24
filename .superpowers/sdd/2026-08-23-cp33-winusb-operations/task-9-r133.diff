@@ -1,0 +1,474 @@
+--- task-9-r132-head/tests/winusb_function_io_contract.c
++++ task-9-r133-head/tests/winusb_function_io_contract.c
+@@ -81,6 +81,7 @@
+ };
+ static struct control_pool_allocation control_pool_allocations[4];
+ static BOOL control_pool_observing;
++static BOOL control_pool_tracking_frees;
+ static BOOL control_retirement_observing;
+ static unsigned int control_pool_attempts, control_pool_count;
+ static unsigned int control_pool_fail_ordinal;
+@@ -158,7 +159,7 @@
+         if (session_pool_allocations[i].pointer == pointer)
+         {
+             session_pool_allocations[i].pointer = NULL;
+-            if (control_pool_observing)
++            if (control_pool_tracking_frees)
+                 for (unsigned int control_i = 0; control_i < control_pool_count; ++control_i)
+                     if (control_pool_allocations[control_i].pointer == pointer)
+                     {
+@@ -180,14 +181,50 @@
+     control_pool_attempts = control_pool_count = 0;
+     control_pool_fail_ordinal = fail_ordinal;
+     control_pool_observing = TRUE;
++    control_pool_tracking_frees = TRUE;
+ }
+ 
+ static void control_pool_end(void)
+ {
+     control_pool_observing = FALSE;
++    control_pool_tracking_frees = FALSE;
+     control_pool_fail_ordinal = 0;
+ }
+ 
++static void control_pool_pause_allocations(void)
++{
++    control_pool_observing = FALSE;
++    control_pool_fail_ordinal = 0;
++}
++
++static struct control_pool_allocation *control_pool_find(PVOID pointer)
++{
++    for (unsigned int i = 0; i < control_pool_count; ++i)
++        if (control_pool_allocations[i].pointer == pointer)
++            return &control_pool_allocations[i];
++    return NULL;
++}
++
++static void control_pool_check_pointer(PVOID pointer, SIZE_T size, unsigned int frees)
++{
++    struct control_pool_allocation *allocation = control_pool_find(pointer);
++
++    IO24_CHECK(allocation != NULL);
++    if (allocation)
++    {
++        IO24_CHECK(allocation->size == size);
++        IO24_CHECK(allocation->frees == frees);
++    }
++}
++
++static SIZE_T control_pool_pointer_size(PVOID pointer)
++{
++    struct control_pool_allocation *allocation = control_pool_find(pointer);
++
++    IO24_CHECK(allocation != NULL);
++    return allocation ? allocation->size : 0;
++}
++
+ static void control_pool_check_complete(unsigned int expected_attempts,
+         unsigned int expected_allocations)
+ {
+@@ -208,6 +245,8 @@
+     }
+     if (expected_allocations == 2)
+         IO24_CHECK(urb_allocations == 1); /* one URB plus one upper record */
++    else if (expected_allocations == 4)
++        IO24_CHECK(urb_allocations == 2); /* two distinct URBs plus two records */
+ }
+ 
+ __attribute__((noinline)) static void poison_alternate_stack(void)
+@@ -311,9 +350,13 @@
+ static PIRP control_pending_irp;
+ static IO_STACK_LOCATION *control_pending_stack;
+ static PDEVICE_OBJECT control_pending_device;
++static PVOID control_pending_context;
++static URB *control_pending_urb;
+ static PIRP control_pending_next_irp;
+ static IO_STACK_LOCATION *control_pending_next_stack;
+ static PDEVICE_OBJECT control_pending_next_device;
++static PVOID control_pending_next_context;
++static URB *control_pending_next_urb;
+ static unsigned int control_pending_count;
+ static unsigned int control_lower_completions, control_upper_completions;
+ static unsigned int control_duplicate_completion_attempts;
+@@ -450,7 +493,8 @@
+ }
+ 
+ static void complete_task9_original_irp(PDEVICE_OBJECT device, PIRP irp,
+-        IO_STACK_LOCATION *stack, LONG outstanding_before)
++        IO_STACK_LOCATION *stack, LONG outstanding_before,
++        PVOID expected_context, URB *expected_urb)
+ {
+     struct winusb_file *file = control_expected_file ?
+             control_expected_file->FsContext : NULL;
+@@ -463,7 +507,9 @@
+     IO24_CHECK(file && file->transfers.Flink != &file->transfers &&
+             file->transfers.Blink != &file->transfers);
+     IO24_CHECK(stack->CompletionRoutine != NULL);
+-    IO24_CHECK(stack->Context != NULL); /* upper record/URB ownership only */
++    IO24_CHECK(expected_context != NULL && stack->Context == expected_context);
++    IO24_CHECK(expected_urb != NULL &&
++            stack->Parameters.Others.Argument1 == expected_urb);
+     IO24_CHECK((stack->Control & (SL_INVOKE_ON_SUCCESS | SL_INVOKE_ON_ERROR | SL_INVOKE_ON_CANCEL)) ==
+             (SL_INVOKE_ON_SUCCESS | SL_INVOKE_ON_ERROR | SL_INVOKE_ON_CANCEL));
+     IO24_CHECK(control_file_references == control_file_dereferences + outstanding_before);
+@@ -501,6 +547,8 @@
+     PIRP irp = control_pending_irp;
+     IO_STACK_LOCATION *stack = control_pending_stack;
+     PDEVICE_OBJECT device = control_pending_device;
++    PVOID context = control_pending_context;
++    URB *urb = control_pending_urb;
+     unsigned int pending_before = control_pending_count;
+ 
+     if (!irp || !stack)
+@@ -511,13 +559,17 @@
+     control_pending_irp = control_pending_next_irp;
+     control_pending_stack = control_pending_next_stack;
+     control_pending_device = control_pending_next_device;
++    control_pending_context = control_pending_next_context;
++    control_pending_urb = control_pending_next_urb;
+     control_pending_next_irp = NULL;
+     control_pending_next_stack = NULL;
+     control_pending_next_device = NULL;
++    control_pending_next_context = NULL;
++    control_pending_next_urb = NULL;
+     --control_pending_count;
+     control_expected_irp = irp;
+     control_lower_slot0_installed = TRUE;
+-    complete_task9_original_irp(device, irp, stack, pending_before);
++    complete_task9_original_irp(device, irp, stack, pending_before, context, urb);
+     control_lower_slot0_installed = FALSE;
+     return TRUE;
+ }
+@@ -572,9 +624,13 @@
+     control_pending_irp = NULL;
+     control_pending_stack = NULL;
+     control_pending_device = NULL;
++    control_pending_context = NULL;
++    control_pending_urb = NULL;
+     control_pending_next_irp = NULL;
+     control_pending_next_stack = NULL;
+     control_pending_next_device = NULL;
++    control_pending_next_context = NULL;
++    control_pending_next_urb = NULL;
+     control_pending_count = 0;
+     control_lower_completions = control_upper_completions = 0;
+     control_duplicate_completion_attempts = 0;
+@@ -586,6 +642,7 @@
+     poisoned_two_interface_state_allocations = 0;
+     control_retirement_observing = FALSE;
+     control_retirement_events = 0;
++    control_pool_tracking_frees = FALSE;
+     descriptor_unmapped_mdl = FALSE;
+     memset(control_retirement_order, 0, sizeof(control_retirement_order));
+     memset(builder_irps, 0, sizeof(builder_irps));
+@@ -940,12 +997,16 @@
+                 control_pending_irp = irp;
+                 control_pending_stack = next;
+                 control_pending_device = device;
++                control_pending_context = next->Context;
++                control_pending_urb = urb;
+             }
+             else if (control_pending_count == 1)
+             {
+                 control_pending_next_irp = irp;
+                 control_pending_next_stack = next;
+                 control_pending_next_device = device;
++                control_pending_next_context = next->Context;
++                control_pending_next_urb = urb;
+             }
+             else
+             {
+@@ -955,7 +1016,7 @@
+             ++control_pending_count;
+             return STATUS_PENDING;
+         }
+-        complete_task9_original_irp(device, irp, next, 1);
++        complete_task9_original_irp(device, irp, next, 1, next->Context, urb);
+         return status;
+     }
+     IO24_CHECK(allocation != NULL);
+@@ -3261,6 +3322,9 @@
+         IRP pending_irps[2];
+         IO_STACK_LOCATION pending_stacks[2][2];
+         MDL pending_mdls[2];
++        PVOID pending_contexts[2];
++        URB *pending_urbs[2];
++        SIZE_T pending_context_sizes[2];
+         unsigned int lower_before;
+ 
+         CONTROL_SEED(); control.request.request.interface_index = 1;
+@@ -3271,15 +3335,42 @@
+         pending_controls[0] = control;
+         pending_controls[1] = control;
+         control_returns_pending = TRUE;
++        control_nt_status = STATUS_SUCCESS;
++        control_urb_status = USBD_STATUS_SUCCESS;
++        control_pool_begin(0);
+         effect = begin_pending_control(&d, last_fdo, &pending_controls[0], &file,
+                 &pending_irps[0], pending_stacks[0], &pending_mdls[0]);
++        pending_contexts[0] = pending_stacks[0][0].Context;
++        pending_urbs[0] = pending_stacks[0][0].Parameters.Others.Argument1;
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
+                 control_pending_irp == &pending_irps[0] && control_pending_count == 1);
++        control_urb_status = USBD_STATUS_TIMEOUT;
+         effect = begin_pending_control(&d, last_fdo, &pending_controls[1], &file,
+                 &pending_irps[1], pending_stacks[1], &pending_mdls[1]);
++        pending_contexts[1] = pending_stacks[1][0].Context;
++        pending_urbs[1] = pending_stacks[1][0].Parameters.Others.Argument1;
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
+                 control_pending_irp == &pending_irps[0] &&
+                 control_pending_next_irp == &pending_irps[1] && control_pending_count == 2);
++        IO24_CHECK(pending_contexts[0] && pending_contexts[1] &&
++                pending_contexts[0] != pending_contexts[1]);
++        IO24_CHECK(pending_urbs[0] && pending_urbs[1] && pending_urbs[0] != pending_urbs[1]);
++        IO24_CHECK(control_pool_attempts == 4 && control_pool_count == 4);
++        pending_context_sizes[0] = control_pool_pointer_size(pending_contexts[0]);
++        pending_context_sizes[1] = control_pool_pointer_size(pending_contexts[1]);
++        IO24_CHECK(pending_context_sizes[0] &&
++                pending_context_sizes[0] == pending_context_sizes[1] &&
++                pending_context_sizes[0] != sizeof(URB));
++        control_pool_check_pointer(pending_contexts[0], pending_context_sizes[0], 0);
++        control_pool_check_pointer(pending_urbs[0], sizeof(URB), 0);
++        control_pool_check_pointer(pending_contexts[1], pending_context_sizes[1], 0);
++        control_pool_check_pointer(pending_urbs[1], sizeof(URB), 0);
++        IO24_CHECK(pending_stacks[0][0].Context == pending_contexts[0] &&
++                pending_stacks[0][0].Parameters.Others.Argument1 == pending_urbs[0]);
++        IO24_CHECK(pending_stacks[1][0].Context == pending_contexts[1] &&
++                pending_stacks[1][0].Parameters.Others.Argument1 == pending_urbs[1]);
++        control_pool_pause_allocations();
++        control_urb_status = USBD_STATUS_SUCCESS;
+         expected_alternate_interface = 5; expected_alternate_setting = 0;
+         expected_alternate_pipes = 0;
+         expected_session_urb_outstanding = 3;
+@@ -3296,6 +3387,12 @@
+         IO24_CHECK(complete_pending_task9_irp());
+         IO24_CHECK(io24_completed_irp_count == 1 &&
+                 io24_last_completed_irp == &pending_irps[0] && control_pending_count == 1);
++        IO24_CHECK(pending_irps[0].IoStatus.Status == STATUS_SUCCESS &&
++                pending_irps[0].IoStatus.Information == 0);
++        control_pool_check_pointer(pending_contexts[0], pending_context_sizes[0], 1);
++        control_pool_check_pointer(pending_urbs[0], sizeof(URB), 1);
++        control_pool_check_pointer(pending_contexts[1], pending_context_sizes[1], 0);
++        control_pool_check_pointer(pending_urbs[1], sizeof(URB), 0);
+         expected_session_urb_outstanding = 2;
+         lower_before = lower_calls;
+         IO24_CHECK(select_control_alternate_status(&d, last_fdo, &file, 1, 1) ==
+@@ -3305,6 +3402,14 @@
+         IO24_CHECK(complete_pending_task9_irp());
+         IO24_CHECK(io24_completed_irp_count == 1 &&
+                 io24_last_completed_irp == &pending_irps[1] && !control_pending_count);
++        IO24_CHECK(pending_irps[1].IoStatus.Status == STATUS_IO_TIMEOUT &&
++                pending_irps[1].IoStatus.Information == 0);
++        control_pool_check_pointer(pending_contexts[0], pending_context_sizes[0], 1);
++        control_pool_check_pointer(pending_urbs[0], sizeof(URB), 1);
++        control_pool_check_pointer(pending_contexts[1], pending_context_sizes[1], 1);
++        control_pool_check_pointer(pending_urbs[1], sizeof(URB), 1);
++        control_pool_check_complete(4, 4);
++        control_pool_end();
+         control_expected_irp = NULL; control_returns_pending = FALSE;
+         expected_session_urb_outstanding = 1;
+         IO24_CHECK(NT_SUCCESS(select_control_alternate_status(&d, last_fdo, &file, 1, 1)));
+@@ -3358,8 +3463,10 @@
+             control_file_dereferences - object_dereferences_before); \
+     IO24_CHECK(control_file_references == control_file_dereferences); \
+     IO24_CHECK(!control_pending_irp && !control_pending_stack && !control_pending_device && \
++            !control_pending_context && !control_pending_urb && \
+             !control_pending_next_irp && !control_pending_next_stack && \
+-            !control_pending_next_device && !control_pending_count && \
++            !control_pending_next_device && !control_pending_next_context && \
++            !control_pending_next_urb && !control_pending_count && \
+             !control_lower_slot0_installed); \
+ } while (0)
+ #define DESCRIPTOR_ACCEPT(expected, expected_information) do { \
+@@ -3411,8 +3518,10 @@
+             control_file_dereferences - object_dereferences_before); \
+     IO24_CHECK(control_file_references == control_file_dereferences); \
+     IO24_CHECK(!control_pending_irp && !control_pending_stack && !control_pending_device && \
++            !control_pending_context && !control_pending_urb && \
+             !control_pending_next_irp && !control_pending_next_stack && \
+-            !control_pending_next_device && !control_pending_count && \
++            !control_pending_next_device && !control_pending_next_context && \
++            !control_pending_next_urb && !control_pending_count && \
+             !control_lower_slot0_installed); \
+     control_pool_check_complete((ordinal), (ordinal) - 1); \
+ } while (0)
+--- task-9-r132-head/tests/wineusb_winusb_busif_contract.c
++++ task-9-r133-head/tests/wineusb_winusb_busif_contract.c
+@@ -17,7 +17,14 @@
+ #define ERR(...) ((void)0)
+ #define FIXME(...) ((void)0)
+ #undef DEVICE_TYPE
++static void io24_InsertTailList(LIST_ENTRY *head, LIST_ENTRY *entry);
++#undef InsertTailList
++#define InsertTailList io24_InsertTailList
+ #include "wineusb.c"
++#undef InsertTailList
++#define InsertTailList(le,e) do { PLIST_ENTRY io24_b = (le)->Blink; \
++    (e)->Flink = (le); (e)->Blink = io24_b; io24_b->Flink = (e); \
++    (le)->Blink = (e); } while (0)
+ 
+ static unsigned int failures, references, dereferences;
+ static void *expected_callback_context = (void *)0x12345678;
+@@ -28,6 +35,23 @@
+ static IO_STACK_LOCATION *lower_last_stack;
+ static FILE_OBJECT *lower_last_file;
+ static URB lower_last_urb;
++static LIST_ENTRY *busy_select_entry;
++static BOOL busy_select_insertion_armed;
++static unsigned int busy_select_insert_attempts;
++
++/* Interpose only the actual included production calls.  Test-fixture list
++ * setup below continues to use the retained WDM InsertTailList directly. */
++static void io24_InsertTailList(LIST_ENTRY *head, LIST_ENTRY *entry)
++{
++    LIST_ENTRY *back = head->Blink;
++
++    if (busy_select_insertion_armed && entry == busy_select_entry)
++        ++busy_select_insert_attempts;
++    entry->Flink = head;
++    entry->Blink = back;
++    back->Flink = entry;
++    head->Blink = entry;
++}
+ 
+ unixlib_handle_t __wine_unixlib_handle;
+ static NTSTATUS WINAPI lower_dispatch(unixlib_handle_t handle, unsigned int code, void *args)
+@@ -349,8 +373,11 @@
+ 
+ static struct usb_device *critical_injection_device;
+ static IRP *critical_injection_irp;
++static URB *critical_injection_urb;
++static unsigned char critical_injection_setup_before[8];
+ static BOOL critical_injection_armed, critical_injection_active;
+ static BOOL critical_injection_enter_seen, critical_injection_leave_seen;
++static BOOL critical_injection_fields_invalidated, critical_post_unlock_conflict;
+ 
+ /* The one-shot entry exists only between entry to and exit from the exact
+  * production wineusb_cs.  This catches pre-lock list classification without
+@@ -363,6 +390,12 @@
+                 "locked-list injection was not fully configured");
+         if (critical_injection_device && critical_injection_irp)
+         {
++            CHECK(critical_injection_urb != NULL,
++                    "locked-list injection has no classification URB");
++            if (critical_injection_urb)
++                memcpy(critical_injection_setup_before,
++                        critical_injection_urb->UrbControlTransfer.SetupPacket,
++                        sizeof(critical_injection_setup_before));
+             InsertTailList(&critical_injection_device->irp_list,
+                     &critical_injection_irp->Tail.Overlay.ListEntry);
+             critical_injection_active = TRUE;
+@@ -379,6 +412,20 @@
+         RemoveEntryList(&critical_injection_irp->Tail.Overlay.ListEntry);
+         critical_injection_irp->Tail.Overlay.ListEntry.Flink = NULL;
+         critical_injection_irp->Tail.Overlay.ListEntry.Blink = NULL;
++        /* Once wineusb_cs is released, the fixture-owned IRP stays alive but
++         * no longer describes a root-5 conflict.  An unlocked pointer capture
++         * therefore cannot reclassify the removed entry as conflicting. */
++        if (critical_injection_urb)
++        {
++            critical_injection_urb->UrbControlTransfer.SetupPacket[0] = 0x81;
++            critical_injection_urb->UrbControlTransfer.SetupPacket[4] = 6;
++            critical_injection_urb->UrbControlTransfer.SetupPacket[5] = 0;
++            critical_injection_fields_invalidated = TRUE;
++            critical_post_unlock_conflict =
++                    critical_injection_urb->UrbHeader.Function ==
++                            URB_FUNCTION_CONTROL_TRANSFER &&
++                    (critical_injection_urb->UrbControlTransfer.SetupPacket[0] & 0x1f) == 0;
++        }
+         critical_injection_active = FALSE;
+         critical_injection_leave_seen = TRUE;
+     }
+@@ -406,7 +453,11 @@
+     urb.UrbHeader.Length = sizeof(urb.UrbSelectInterface);
+     InsertTailList(&device.irp_list, &child.Tail.Overlay.ListEntry);
+     lower_submit_calls = 0;
++    busy_select_entry = &request.Tail.Overlay.ListEntry;
++    busy_select_insert_attempts = 0;
++    busy_select_insertion_armed = TRUE;
+     status = usb_submit_urb(&device, &request);
++    busy_select_insertion_armed = FALSE;
+     CHECK(status == STATUS_DEVICE_BUSY, "pending SELECT_INTERFACE returned %#lx", (long)status);
+     CHECK(urb.UrbHeader.Status == USBD_STATUS_REQUEST_FAILED, "pending request status %#x", urb.UrbHeader.Status);
+     CHECK(!lower_submit_calls, "pending SELECT_INTERFACE reached Unix %u times", lower_submit_calls);
+@@ -417,6 +468,10 @@
+             "busy SELECT changed prior list order or membership");
+     CHECK(!request.Tail.Overlay.ListEntry.Flink && !request.Tail.Overlay.ListEntry.Blink,
+             "busy SELECT queued its own IRP");
++    CHECK(!busy_select_insert_attempts,
++            "busy SELECT transiently queued its own IRP %u time(s)",
++            busy_select_insert_attempts);
++    busy_select_entry = NULL;
+     RemoveEntryList(&child.Tail.Overlay.ListEntry);
+ }
+ 
+@@ -531,7 +586,11 @@
+     CHECK(entry == &device->irp_list, "%s prior list exceeded fixture bound", name);
+     memset(&file, 0, sizeof(file));
+     setup_select_interface_request(&select, &stack, &urb, &file, interface_number);
++    busy_select_entry = &select.Tail.Overlay.ListEntry;
++    busy_select_insert_attempts = 0;
++    busy_select_insertion_armed = expect_busy;
+     status = usb_submit_urb(device, &select);
++    busy_select_insertion_armed = FALSE;
+     for (entry = device->irp_list.Flink; entry != &device->irp_list && after_count < ARRAY_SIZE(after);
+             entry = entry->Flink)
+     {
+@@ -547,6 +606,9 @@
+                 lower_submit_calls);
+         CHECK(urb.UrbHeader.Status == USBD_STATUS_REQUEST_FAILED,
+                 "%s target %u status %#x", name, interface_number, urb.UrbHeader.Status);
++        CHECK(!busy_select_insert_attempts,
++                "%s busy target %u transiently queued its SELECT %u time(s)",
++                name, interface_number, busy_select_insert_attempts);
+         exact = after_count == before_count && select_count == 0;
+         for (unsigned int i = 0; exact && i < before_count; ++i)
+             exact = after[i] == before[i];
+@@ -574,6 +636,7 @@
+      * fixture owns when it appeared once.  This is safe local cleanup, not a
+      * cancellation or production teardown claim. */
+     if (select_count == 1) remove_pending_test_irp(&select);
++    busy_select_entry = NULL;
+ }
+ 
+ static void setup_pending_scope_irp(enum pending_scope_kind kind, IRP *request,
+@@ -684,6 +747,13 @@
+             PENDING_SCOPE_DEVICE_ROOT, PENDING_SCOPE_INTERFACE_SIX, 6);
+     run_complete_list_case("interface-6 then later root conflict",
+             PENDING_SCOPE_INTERFACE_SIX, PENDING_SCOPE_DEVICE_ROOT, 5);
++    /* Mirror each target with its conflict first and a nonconflicting tail.
++     * A multi-entry classifier that reads only irp_list.Blink must permit
++     * these SELECTs and is therefore caught. */
++    run_complete_list_case("interface-6 conflict then root tail",
++            PENDING_SCOPE_INTERFACE_SIX, PENDING_SCOPE_DEVICE_ROOT, 6);
++    run_complete_list_case("root conflict then interface-6 tail",
++            PENDING_SCOPE_DEVICE_ROOT, PENDING_SCOPE_INTERFACE_SIX, 5);
+ 
+     /* The conflicting caller-owned root entry is visible only while the exact
+      * wineusb_cs is held.  Pre-lock classification therefore false-greens. */
+@@ -694,16 +764,24 @@
+     reset_lower_observation();
+     critical_injection_device = &device;
+     critical_injection_irp = &conflict;
++    critical_injection_urb = &urb;
+     critical_injection_enter_seen = critical_injection_leave_seen = FALSE;
++    critical_injection_fields_invalidated = critical_post_unlock_conflict = FALSE;
+     critical_injection_active = FALSE;
+     critical_injection_armed = TRUE;
+     check_pending_scope_select("wineusb_cs-scoped root conflict", &device, 5, TRUE);
+     CHECK(critical_injection_enter_seen && critical_injection_leave_seen &&
+             !critical_injection_armed && !critical_injection_active,
+             "locked-list injection did not span the exact critical section");
++    CHECK(critical_injection_fields_invalidated && !critical_post_unlock_conflict,
++            "removed conflict remained classifiable after wineusb_cs release");
+     CHECK(IsListEmpty(&device.irp_list), "locked-list fixture retained an entry");
++    memcpy(urb.UrbControlTransfer.SetupPacket, critical_injection_setup_before,
++            sizeof(critical_injection_setup_before));
+     critical_injection_device = NULL;
+     critical_injection_irp = NULL;
++    critical_injection_urb = NULL;
++    critical_injection_fields_invalidated = critical_post_unlock_conflict = FALSE;
+ }
+ 
+ static void run_pending_scope_case(const char *name, enum pending_scope_kind kind,

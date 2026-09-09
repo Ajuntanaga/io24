@@ -1,0 +1,6 @@
+The snapshot was read-only and captured valid USB, capture, source, candidate,
+and protected-prefix evidence. Its active-unit formatter placed an awk field
+inside a double-quoted inner-shell expression under set -u, so `$3` expanded
+as an unset shell positional parameter. That also concatenated the following
+process and device labels. The device was not opened. A corrected passive
+snapshot follows in cp24-final-postflight.log.

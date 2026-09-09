@@ -1,0 +1,6 @@
+verification=sha256sum -c SHA256SUMS
+entries=110
+ok=110
+failed=0
+status=0
+SHA256SUMS_sha256=2717a3f6cabfaf65acccbc03a6b8b1e540620cce82e9ecc0b7dbd0b688591807

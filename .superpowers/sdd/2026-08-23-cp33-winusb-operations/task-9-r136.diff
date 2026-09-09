@@ -1,0 +1,142 @@
+--- r136-base/tests/winusb_function_io_contract.c
++++ r136-head/tests/winusb_function_io_contract.c
+@@ -5,13 +5,16 @@
+ static _Atomic(void *) io24_mutex_block_target;
+ static atomic_bool io24_mutex_block_seen;
+ void io24_mutex_yield(void *mutex);
++static void io24_retained_pool_attempt(void);
+ #define main io24_retained_cp32_main
+ #define ExAllocatePool io24_retained_ExAllocatePool
+ #define ExFreePool io24_retained_ExFreePool
+ #define IoCallDriver io24_retained_IoCallDriver
++#define IO24_RETAINED_POOL_ATTEMPT_HOOK() io24_retained_pool_attempt()
+ #define thrd_yield() io24_mutex_yield(mutex)
+ #include "winusb_function_binding_contract.c"
+ #undef thrd_yield
++#undef IO24_RETAINED_POOL_ATTEMPT_HOOK
+ #undef IoCallDriver
+ #undef ExFreePool
+ #undef ExAllocatePool
+@@ -83,10 +86,11 @@
+ static BOOL control_pool_observing;
+ static BOOL control_pool_tracking_frees;
+ static BOOL control_completion_allocation_observing;
++static BOOL control_completion_allocation_attempted;
++static BOOL control_retained_allocation_observing;
++static BOOL control_retained_allocation_attempted;
+ static BOOL control_retirement_observing;
+ static unsigned int control_pool_attempts, control_pool_count;
+-static unsigned int control_completion_allocation_attempts;
+-static unsigned int control_completion_pool_allocations_before;
+ static unsigned int control_pool_fail_ordinal;
+ static void control_note_free(PVOID pointer);
+ #define IO24_CHECK(expr) do { if (!(expr)) { \
+@@ -101,7 +105,7 @@
+ 
+     (void)type;
+     if (control_completion_allocation_observing)
+-        ++control_completion_allocation_attempts;
++        control_completion_allocation_attempted = TRUE;
+     session_allocation_calls++;
+     if (session_fail_allocation == session_allocation_calls) return NULL;
+     if (control_pool_observing)
+@@ -202,22 +206,41 @@
+     control_pool_fail_ordinal = 0;
+ }
+ 
++static void io24_retained_pool_attempt(void)
++{
++    if (control_retained_allocation_observing)
++        control_retained_allocation_attempted = TRUE;
++}
++
++static void control_retained_allocation_begin(void)
++{
++    IO24_CHECK(!control_retained_allocation_observing);
++    control_retained_allocation_attempted = FALSE;
++    control_retained_allocation_observing = TRUE;
++}
++
++static void control_retained_allocation_end(void)
++{
++    control_retained_allocation_observing = FALSE;
++    IO24_CHECK(!control_retained_allocation_attempted);
++}
++
+ /* This observer is deliberately independent of the admission allocation
+  * journal.  Its interval is only one pending completion, so intervening
+  * alternate-selection allocations cannot hide a completion-time clone. */
+ static void control_completion_allocation_begin(void)
+ {
+     IO24_CHECK(!control_completion_allocation_observing);
+-    control_completion_allocation_attempts = 0;
+-    control_completion_pool_allocations_before = pool_allocations;
++    control_completion_allocation_attempted = FALSE;
+     control_completion_allocation_observing = TRUE;
++    control_retained_allocation_begin();
+ }
+ 
+ static void control_completion_allocation_end(void)
+ {
+     control_completion_allocation_observing = FALSE;
+-    IO24_CHECK(control_completion_allocation_attempts == 0);
+-    IO24_CHECK(pool_allocations == control_completion_pool_allocations_before);
++    IO24_CHECK(!control_completion_allocation_attempted);
++    control_retained_allocation_end();
+ }
+ 
+ static struct control_pool_allocation *control_pool_find(PVOID pointer)
+@@ -667,8 +690,9 @@
+     control_retirement_events = 0;
+     control_pool_tracking_frees = FALSE;
+     control_completion_allocation_observing = FALSE;
+-    control_completion_allocation_attempts = 0;
+-    control_completion_pool_allocations_before = 0;
++    control_completion_allocation_attempted = FALSE;
++    control_retained_allocation_observing = FALSE;
++    control_retained_allocation_attempted = FALSE;
+     descriptor_unmapped_mdl = FALSE;
+     memset(control_retirement_order, 0, sizeof(control_retirement_order));
+     memset(builder_irps, 0, sizeof(builder_irps));
+@@ -3364,15 +3388,19 @@
+         control_nt_status = STATUS_SUCCESS;
+         control_urb_status = USBD_STATUS_SUCCESS;
+         control_pool_begin(0);
++        control_retained_allocation_begin();
+         effect = begin_pending_control(&d, last_fdo, &pending_controls[0], &file,
+                 &pending_irps[0], pending_stacks[0], &pending_mdls[0]);
++        control_retained_allocation_end();
+         pending_contexts[0] = pending_stacks[0][0].Context;
+         pending_urbs[0] = pending_stacks[0][0].Parameters.Others.Argument1;
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
+                 control_pending_irp == &pending_irps[0] && control_pending_count == 1);
+         control_urb_status = USBD_STATUS_TIMEOUT;
++        control_retained_allocation_begin();
+         effect = begin_pending_control(&d, last_fdo, &pending_controls[1], &file,
+                 &pending_irps[1], pending_stacks[1], &pending_mdls[1]);
++        control_retained_allocation_end();
+         pending_contexts[1] = pending_stacks[1][0].Context;
+         pending_urbs[1] = pending_stacks[1][0].Parameters.Others.Argument1;
+         IO24_CHECK(effect.dispatch_status == STATUS_PENDING &&
+--- r136-base/tests/winusb_function_binding_contract.c
++++ r136-head/tests/winusb_function_binding_contract.c
+@@ -51,6 +51,10 @@
+     fprintf(stderr, __VA_ARGS__); fputc('\n', stderr); failures++; } } while (0)
+ #define RECORD(x) do { strcat(trace, x ","); } while (0)
+ 
++#ifndef IO24_RETAINED_POOL_ATTEMPT_HOOK
++#define IO24_RETAINED_POOL_ATTEMPT_HOOK() ((void)0)
++#endif
++
+ static void WINAPI metadata_ref(void *context) { CHECK(context == current_pdo, "wrong metadata context"); references++; RECORD("ref"); }
+ static void WINAPI metadata_deref(void *context) { CHECK(context == current_pdo, "wrong metadata context"); dereferences++; RECORD("deref"); }
+ static NTSTATUS WINAPI get_guid(void *context, GUID *guid)
+@@ -161,7 +165,7 @@
+ }
+ PVOID WINAPI ExAllocatePool(POOL_TYPE type, SIZE_T size)
+ {
+-    (void)type; pool_allocations++;
++    (void)type; IO24_RETAINED_POOL_ATTEMPT_HOOK(); pool_allocations++;
+     if (fail_next_pool_allocation) { fail_next_pool_allocation = 0; return NULL; }
+     return calloc(1, size);
+ }

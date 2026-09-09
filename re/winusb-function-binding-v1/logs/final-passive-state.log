@@ -1,0 +1,21 @@
+CP32 final passive safety-state snapshot
+Captured: 2026-08-23T03:54:16-07:00
+Method: cached sysfs attributes, driver symlink names, process table names, and prefix-directory stat only.
+No USB node was opened and no USB request, Wine process, driver load, or prefix-content access occurred.
+
+BAT0 capacity=100 status=Full
+
+USB device 194f:0422 serial=AB7C22200355 sysfs=1-2 authorized=1 speed=480 configuration=1
+interface 0 driver=snd-usb-audio
+interface 1 driver=snd-usb-audio
+interface 2 driver=snd-usb-audio
+interface 3 driver=snd-usb-audio
+interface 4 driver=snd-usb-audio
+interface 5 driver=unclaimed
+interface 6 driver=unclaimed
+
+Relevant process names:
+NONE
+
+Protected prefix directory metadata only:
+/home/ajuntanaga/.wine-io24 mtime=2026-08-12 00:31:35.825186221 -0700

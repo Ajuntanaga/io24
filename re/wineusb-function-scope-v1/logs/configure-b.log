@@ -1,0 +1,6 @@
+
+configure: WARNING: gettext tools not found (or too old), translations won't be built.
+
+configure: WARNING: libgnutls 64-bit development files not found, no schannel support.
+
+configure: WARNING: No sound system was found. Windows applications will be silent.

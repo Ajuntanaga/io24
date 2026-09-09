@@ -1,0 +1,25 @@
+Evidence source:
+  .io24-build/wineusb-multi-interface-handles-v1/source-a/dlls/wineusb.sys/unixlib.c
+  lines 538-600 at seal time
+
+Observed bulk/interrupt control flow:
+  1. allocate transfer_ctx
+  2. allocate libusb_transfer
+  3. store transfer in irp->Tail.Overlay.DriverContext[0]
+  4. fill bulk or interrupt transfer
+  5. set LIBUSB_TRANSFER_FREE_TRANSFER
+  6. call libusb_submit_transfer
+  7. on ret < 0, log only
+  8. unconditionally return STATUS_PENDING
+
+Missing immediate-failure work:
+  - clear DriverContext[0]
+  - set an unsuccessful USBD status
+  - free the libusb transfer
+  - free transfer_ctx
+  - return a non-pending NTSTATUS
+
+The class-interface IN path already performs those cleanup/status steps on
+immediate submit failure. GET_DESCRIPTOR and vendor-control paths contain the
+same log-and-return-pending pattern as bulk and must be audited in the next
+offline, test-first checkpoint. No fix was implemented in CP24.

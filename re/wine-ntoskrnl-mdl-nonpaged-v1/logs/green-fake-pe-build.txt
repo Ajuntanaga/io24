@@ -1,0 +1,3 @@
+tools/winegcc/winegcc -o dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe --wine-objdir . --cc-cmd="gcc -m64" -m64 -mno-cygwin -fPIC \
+  -fasynchronous-unwind-tables -Wb,--fake-module -shared \
+  /run/io24-source/dlls/ntoskrnl.exe/ntoskrnl.exe.spec dlls/ntoskrnl.exe/version.res

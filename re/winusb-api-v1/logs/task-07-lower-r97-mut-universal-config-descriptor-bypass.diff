@@ -1,0 +1,11 @@
+--- .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 07:49:10.184288452 -0700
++++ /tmp/io24-r97-mut-universal-desc.tfEaWv/dev-source/dlls/wineusb.sys/unixlib.c	2026-08-24 08:16:46.786155218 -0700
+@@ -1190,7 +1190,7 @@
+ 
+         /* The request is only a proposed map.  Never mint a token from its
+          * metadata unless the active configuration agrees exactly. */
+-        if (!validate_active_interface(device->handle, interface))
++        if (false && !validate_active_interface(device->handle, interface))
+         {
+             reason = "active_descriptor_mismatch";
+             available = interface->InterfaceNumber;

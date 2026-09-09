@@ -1,0 +1,11 @@
+7f7d46cc11022d92d16299ed36f8ceaa99955aa3c9f2925d2ee60798d7e16df8  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb.spec
+279a06067a07ef7847cf556a595b55904de67f532c352cf0785a8af3a128499e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.io24-build/winusb-api-v1/dev-source/include/Makefile.in
+1296e8a54fe3f3181f8a91564ee03e08b3a86b24898b0a9c1264292bf346f37d  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.io24-build/winusb-api-v1/dev-source/include/wine/winusb.h
+d2dd960fbbb3522e715b37b3d9a1d1cd1cc0c098a52cebb0bb7dbf999335d6e1  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.io24-build/winusb-api-v1/dev-source/include/winusb.h
+369cf1501210d71dde189257446a181aba5674a7512f2aac200a1d8e526527a4  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.io24-build/winusb-api-v1/dev-source/include/winusbio.h
+d518c1bb81e29e6377f12f73fad9a4e7d02672e6a81c9dae265539ce68a2f782  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md
+049afb59966dd679dab6270b99ee5437b9a04775319a3d86c33d6f71ea14fc82  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/re/winusb-api-v1/logs/task-02-abi.patch
+d15d4508f17437c9793b150b96dd3e662a4b1a3f8780a03100f090ef248606f1  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/re/winusb-api-v1/logs/task-02-abi.sha256
+c599bcae6d9f33042da2e9fb8f2a1636ea6f7ce30ce32d994ea2f37c1929a2ad  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/tests/winusb_function_io_contract.c
+571af7f73bbc454a746607a8f52afabd4752e38952cd77f1769ffb8bf1d87a2e  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/tests/winusb_user_api_contract.c
+a1c8321eb593bb03c960f8c9c6a9ba7524c2bfe4b77a49a28807b6f205d4a9fd  .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/tests/winusb_user_api_contract.sh

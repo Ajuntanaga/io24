@@ -1,0 +1,11 @@
+# CP34 top-level state-apply caller-construction checkpoint, 2026-09-01T09:54:06-07:00.
+# Run `sha256sum -c <this file>` from the workspace root.
+# Scope: static-only context of the two existing 0x5545c entry literals. No
+# image, device, Wine, network, or hardware action is authorized by this file.
+
+0ba2a5b3f9a993ece0c7a2076ed33710d158e39635a2b6b711ca4b62e84d277d  re/cp34_lane_control_firmware_static.py
+5d6a4f13b8ece0c0cf3ddef0a414d9ad48f988403939efc09b8974f835feffa1  tests/test_cp34_lane_control_firmware_static.py
+d6c793eb8a24ea2ef5c96d46bce8058538bcea3c9cc50d2913af59c936df00c5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+9f6527c90f29ce944a82cf0d53b403e2a2c18144fc9f97b99f5a6c3bef3d9102  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T094641-0700-state-apply-caller-construction/SCOPE.md
+fdb84a173affd95c52081ace8acf2c23c98d48779437b745930ded4b9bf8ab8c  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T094641-0700-state-apply-caller-construction/PROGRESS.md
+6599c51c7e0157941ae05398bd7ceaa8ee3b3c63a6ffab7286a5580732be57be  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260901T094641-0700-state-apply-caller-construction/OBSIDIAN.md

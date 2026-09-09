@@ -1,0 +1,17 @@
+window=2026-08-22 14:49:30-07:00..2026-08-22 14:51:30-07:00
+unit=io24-wine-live-read-197499.service
+invocation=8f9790c96bc84b8a9d331c11949d15e4
+started=2026-08-22T14:49:50-07:00
+ended=2026-08-22T14:50:20-07:00
+result=exit-code
+main_status=1/FAILURE
+wall=29.906s
+cpu=5.654s
+memory_peak=102.8M
+swap=0B
+sandbox=unshare-user,pid,net,ipc,uts,cgroup; cap-drop ALL; private run and home
+usb_exposure=sysfs 3-1; /dev/bus/usb/003/002 only
+kernel_overlay=/run/io24-ntoskrnl-mdl-nonpaged-v1
+wineusb_overlay=/run/io24-wineusb-multi-interface-handles-v1
+WINEDLLPATH=/run/io24-ntoskrnl-mdl-nonpaged-v1/x86_64-unix:/run/io24-wineusb-multi-interface-handles-v1/x86_64-unix
+WINEDLLOVERRIDES=ntoskrnl.exe=b;wineusb.sys=b;winemenubuilder.exe=d

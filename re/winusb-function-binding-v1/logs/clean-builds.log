@@ -1,0 +1,66 @@
+CP32 clean contained build record
+Date: 2026-08-23
+Source: separately patch-checked sealed-CP31 clone, mounted read-only at
+        /run/io24-source
+Tools: sealed flex/bison/m4/libusb header mirror, mounted read-only at
+       /run/io24-tools
+Build roots: independent initially empty build-a and build-b roots, each
+             mounted alone at /run/io24-build
+
+Containment:
+  bubblewrap --unshare-all --unshare-net
+  read-only source and tools
+  empty /sys
+  minimal private /dev
+  private /home, /run, and /tmp
+  only the selected build root writable
+  ulimit -v 2097152
+  timeout 300 seconds
+  nice/ionice low priority
+  make -s -j1
+
+Pinned environment and configure recipe:
+  PATH=/run/io24-tools/usr/bin:/usr/bin:/bin
+  BISON=/run/io24-tools/usr/bin/bison
+  BISON_PKGDATADIR=/run/io24-tools/usr/share/bison
+  FLEX=/run/io24-tools/usr/bin/flex
+  M4=/run/io24-tools/usr/bin/m4
+  SOURCE_DATE_EPOCH=1787101002
+  /run/io24-source/configure --quiet --enable-win64 --without-mingw \
+    --without-x --without-freetype --with-usb \
+    USB_CFLAGS=-I/run/io24-tools/usr/include/libusb-1.0 \
+    USB_LIBS=/usr/lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0
+
+Both configure invocations exited zero. Both one-job builds exited zero. The
+only output was the same expected optional gettext/GnuTLS/no-sound warnings
+and Wine's inherited WRC five-shift/reduce-conflict notice. No wineusb.sys or
+winusb.sys translation-unit warning or error occurred.
+
+The complete predecessor-plus-CP32 contract matrix then ran independently
+against each clean source/build side in the same networkless, empty-sysfs
+containment. Both matrices reached all three final CP32 pass lines and exited
+zero. A convenience wrapper attempted to summarize both completed logs using
+rg, which was intentionally absent from the minimal container, and returned
+127 after the matrices had finished. This was a summary-command issue only;
+the retained logs are complete and their terminal pass lines were confirmed
+outside the container.
+
+Clean A and clean B are byte-identical at every selected deliverable:
+  b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  wineusb.sys fake PE  2,560 bytes
+  28617460085c0a2f8ae4782f3147bcad8a475a5b01daebba72b64380c118808e  wineusb.sys.so     213,840 bytes
+  1edd11b0336a241c1ac8c667fb1d21db3bfac08b0ebdc8f672aa2931785490d9  wineusb.so         147,016 bytes
+  b4e48cfca26754279ece31bfd285bfd8ce248acac7ab0967fadfc1b70d57720c  wineusb.res
+  bacee6355cda7eb6bb19a7c8f73d2b8babfc4a22d19b47c31cffc1985f7427eb  winusb.sys fake PE   2,560 bytes
+  dd1f3f199999546ff64ea7c1daa1306fba0a5958f7c1102df3b49ebfca20be46  winusb.sys.so      137,368 bytes
+  d63357cb4ce680b4ed6500ad30c235065c5c8ef9fbed28cd54af4c8acaa5f23f  winusb.res             552 bytes
+
+Build IDs:
+  wineusb.sys.so  b4a791abfd282baa306eaae3fae91c3a199c6243
+  wineusb.so      fc1f9fb7f02492a67d4203fc9cea27bfd9b39a6b
+  winusb.sys.so   5c192b2f7ac26224eff1afef26d1656886ae7248
+
+Top-level Makefile, config.status, include/config.h, configure output, and
+build output are byte-identical. Raw config.log files differ only in eight
+compiler-generated /tmp/cc<random>.o basenames from expected failed feature
+probes; replacing those basenames produces byte-identical logs with SHA-256
+dcd89f073af5002e2ca60c30246c1f8758b67e8b886dd3a6d3b3b2d9468e7156.

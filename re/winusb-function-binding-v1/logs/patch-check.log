@@ -1,0 +1,47 @@
+CP32 patch replay and source-equivalence audit
+Baseline: sealed CP31 patch-check source
+Patch: re/wine-11.15-winusb-function-binding-v1.patch
+
+7df4011ea20fa36bf80f4bc0ba409c9dca812b7d76b00f19f1709774eebf75bb  re/wine-11.15-winusb-function-binding-v1.patch
+
+Forward dry-run against sealed CP31, --fuzz=0:
+checking file configure
+checking file configure.ac
+checking file dlls/wineusb.sys/Makefile.in
+checking file dlls/wineusb.sys/unixlib.h
+checking file dlls/wineusb.sys/wineusb.c
+checking file dlls/wineusb.sys/winusb_busif.c
+checking file dlls/wineusb.sys/winusb_busif.h
+checking file dlls/winusb.sys/Makefile.in
+checking file dlls/winusb.sys/main.c
+checking file dlls/winusb.sys/winusb.inf
+checking file dlls/winusb.sys/winusb.rc
+checking file loader/wine.inf.in
+
+Reverse dry-run against CP32 patch-check source, --fuzz=0:
+checking file configure
+checking file configure.ac
+checking file dlls/wineusb.sys/Makefile.in
+checking file dlls/wineusb.sys/unixlib.h
+checking file dlls/wineusb.sys/wineusb.c
+checking file dlls/wineusb.sys/winusb_busif.c
+checking file dlls/wineusb.sys/winusb_busif.h
+checking file dlls/winusb.sys/Makefile.in
+checking file dlls/winusb.sys/main.c
+checking file dlls/winusb.sys/winusb.inf
+checking file dlls/winusb.sys/winusb.rc
+checking file loader/wine.inf.in
+
+Development vs patch-check tree:
+IDENTICAL
+
+Regular-file counts:
+12453
+12453
+
+Symlink counts:
+0
+0
+
+Rejected/original patch leftovers:
+NONE

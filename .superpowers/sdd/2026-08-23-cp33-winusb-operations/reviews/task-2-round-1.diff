@@ -1,0 +1,419 @@
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md	2026-08-23 23:06:48.760897471 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/.superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-report.md	2026-08-23 23:32:05.495248960 -0700
+@@ -228,3 +228,186 @@
+ installed. Public/function runtime operations remain intentionally
+ unimplemented for later CP33 tasks; Task 2 proves declarations, layouts,
+ exports, and retained CP32 compatibility only.
++
++## Fix round 1: review Important findings
++
++Fix base: sealed `task-2-head`. Production was not changed. The two deferred
++minor findings were not addressed.
++
++### Finding 1: harness failures could masquerade as feature RED
++
++Changed only `tests/winusb_user_api_contract.sh`:
++
++- Added availability checks for `awk`, `cc`, `dirname`, `find`, `grep`,
++  `mktemp`, and `rmdir` before use, plus functional known-good baselines for
++  `grep` and `awk`.
++- Added `include/Makefile.in` to the regular/readable required-input preflight.
++  Existing ABI inputs must also be regular and readable; absent
++  not-yet-implemented ABI inputs remain a genuine feature condition.
++- Wrapped every `grep` and `awk`: no-match is feature exit 1, while tool/read
++  failure is HARNESS exit 2.
++- Added a known-good native compiler/standard-header/Wine-header baseline.
++  Missing/broken compilers, absent standard headers, and failed baselines are
++  HARNESS exit 2.
++- Candidate status 1 is feature rejection only with a recognized compiler
++  diagnostic. Abnormal status, internal tool failures, unreadable diagnostics,
++  and diagnostic-free failure are HARNESS exit 2.
++- Applied the same distinction to optional `-m32`: known missing multilib
++  headers/options mean unavailable; abnormal probe failure is HARNESS exit 2.
++
++Normal surface command:
++
++```bash
++tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/dev-source --surface-only
++```
++
++```text
++CP33 surface-only passed layouts=native m32=unavailable exports=14 stubs=8
++```
++
++Exit: 0.
++
++The historical pre-production RED remains reproducible:
++
++```bash
++tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/patch-check-source
++```
++
++```text
++FEATURE: missing public/private ABI input: .io24-build/winusb-api-v1/patch-check-source/include/winusbio.h
++FEATURE: missing public/private ABI input: .io24-build/winusb-api-v1/patch-check-source/include/wine/winusb.h
++FEATURE: WINUSB_SETUP_PACKET is absent
++FEATURE: export counts real=1 stub=21 expected=14/8
++FEATURE: winusbio.h is not publicly installed
++```
++
++Exit: 1, never HARNESS 2.
++
++Current default public feature behavior is unchanged:
++
++```bash
++tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/dev-source
++```
++
++```text
++CP33 surface-only passed layouts=native m32=unavailable exports=14 stubs=8
++CP33 public executed mode=--red target-mask=0x3fff present-mask=0x4 missing-mask=0x3ffb fake-events=0 submits=0 releases=0 completions=0 failures=21
++```
++
++Exit: 1.
++
++Fresh `/tmp` missing-compiler PATH fixture:
++
++```text
++NO_CC_EXIT=2
++HARNESS: required tool unavailable: cc
++```
++
++Executable but broken baseline `cc` fixture:
++
++```text
++BROKEN_CC_EXIT=2
++HARNESS: native compiler/standard-header baseline failed with status 1
++synthetic compiler failure
++```
++
++Broken `grep` and `awk` executable fixtures are also HARNESS 2:
++
++```text
++BROKEN_GREP_EXIT=2
++HARNESS: grep baseline failed with status 1
++BROKEN_AWK_EXIT=2
++HARNESS: awk baseline failed with status 1
++```
++
++Compiler fixture that delegates the baseline to `/usr/bin/cc`, then exits 3
++for the candidate:
++
++```text
++ABNORMAL_CANDIDATE_EXIT=2
++HARNESS: native candidate compiler exited abnormally with status 3
++synthetic abnormal candidate compiler failure
++```
++
++Unreadable required-input fixture command and result:
++
++```bash
++chmod 000 "$fixture_root/unreadable/include/Makefile.in"
++tests/winusb_user_api_contract.sh "$fixture_root/unreadable" --surface-only
++```
++
++```text
++UNREADABLE_INPUT_EXIT=2
++HARNESS: unreadable required input: /tmp/io24-task2-harness.*/unreadable/include/Makefile.in
++```
++
++Each fixture used `mktemp -d -p /tmp`, asserted its exact exit class, and was
++removed by deleting only its explicit fixture contents and root.
++
++### Finding 2: compatible aliases could evade `_Generic`
++
++Added an independent token-level schema to the wrapper. `awk` extracts every
++`struct wine_winusb_*` declaration, normalizes whitespace only, and compares
++it line-for-line with the exact R14 schema. It enforces all ten struct names,
++member order, exact `UINT8`/`UINT32`/`UINT64` tokens used by this ABI, array
++spellings, and only the explicitly embedded
++`struct wine_winusb_request request`. Existing C size, offset, `_Generic`,
++IOCTL, constant, and prototype assertions were not weakened.
++
++Disposable compatible-alias mutation:
++
++```bash
++alias_root=$(mktemp -d -p /tmp io24-task2-alias.XXXXXX)
++cp -a --reflink=auto .io24-build/winusb-api-v1/dev-source "$alias_root/source"
++sed -i '0,/UINT32 size;/s//ULONG size;/' "$alias_root/source/include/wine/winusb.h"
++tests/winusb_user_api_contract.sh "$alias_root/source" --surface-only
++```
++
++```text
++COMPATIBLE_ALIAS_EXIT=1
++FEATURE: private ABI declaration schema mismatch at line 3: actual='ULONG size;' expected='UINT32 size;'
++```
++
++Because `ULONG` is compatible with `UINT32` here, this rejection specifically
++proves the token schema closes the review gap. The copy was removed afterward.
++
++### Round-1 regression and evidence results
++
++R11 focused policy remains feature RED exit 1:
++
++```text
++CP33 public executed mode=--policy target-mask=0x18c0 present-mask=0x4 missing-mask=0x18c0 fake-events=0 submits=0 releases=0 completions=0 failures=5
++```
++
++Function mode remains feature RED exit 1, not HARNESS 2:
++
++```text
++CP32 winusb function-binding lifecycle checks passed
++CP33 function executed mode=--red dispatches=3 mode-ioctls=2 last-ioctl=0x222022 last-status=0xffffffffc00000bb failures=27
++```
++
++All retained CP32 checks remain exit 0:
++
++```text
++WineUSB WinUSB metadata bus-interface contract: pass
++CP32 winusb function-binding lifecycle checks passed
++CP32 WinUSB function-binding INF contract: pass
++```
++
++The five-production-path patch is byte-identical to `task-2-head`; only the
++test seal changed:
++
++```text
++049afb59966dd679dab6270b99ee5437b9a04775319a3d86c33d6f71ea14fc82  re/winusb-api-v1/logs/task-02-abi.patch
++55c98069a62727d8902af327c9543df486d2dd77ab4c2ccd00e85eef9eab0c99  re/winusb-api-v1/logs/task-02-abi.sha256
++```
++
++```text
++re/winusb-api-v1/logs/task-02-abi.patch: OK
++tests/winusb_user_api_contract.c: OK
++tests/winusb_function_io_contract.c: OK
++tests/winusb_user_api_contract.sh: OK
++```
++
++Round-1 concern: none. Optional `-m32` remains unavailable for the known
++multilib-header reason; native baseline and candidate checks pass.
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/re/winusb-api-v1/logs/task-02-abi.sha256 .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/re/winusb-api-v1/logs/task-02-abi.sha256
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/re/winusb-api-v1/logs/task-02-abi.sha256	2026-08-23 23:05:36.815538437 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/re/winusb-api-v1/logs/task-02-abi.sha256	2026-08-23 23:31:59.015300425 -0700
+@@ -1,4 +1,4 @@
+ 049afb59966dd679dab6270b99ee5437b9a04775319a3d86c33d6f71ea14fc82  re/winusb-api-v1/logs/task-02-abi.patch
+ 571af7f73bbc454a746607a8f52afabd4752e38952cd77f1769ffb8bf1d87a2e  tests/winusb_user_api_contract.c
+ c599bcae6d9f33042da2e9fb8f2a1636ea6f7ce30ce32d994ea2f37c1929a2ad  tests/winusb_function_io_contract.c
+-a1c8321eb593bb03c960f8c9c6a9ba7524c2bfe4b77a49a28807b6f205d4a9fd  tests/winusb_user_api_contract.sh
++73f9afe7db74fa380ced37c7fdcc05f68512f3f9d9fb5203e5c50616f61e10dd  tests/winusb_user_api_contract.sh
+diff -urN --no-dereference .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/tests/winusb_user_api_contract.sh .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/tests/winusb_user_api_contract.sh
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-head/tests/winusb_user_api_contract.sh	2026-08-23 22:59:17.039921879 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-2-round-1-head/tests/winusb_user_api_contract.sh	2026-08-23 23:30:40.987920141 -0700
+@@ -3,19 +3,113 @@
+ if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
+ readonly source_root=$1 mode=${2:---red}
+ case "$mode" in --red|--surface-only|--initialize|--handles|--descriptors|--policy|--transfer|--cancel|--vendor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
++required_tools=(awk cc dirname find grep mktemp rmdir)
++for tool in "${required_tools[@]}"; do
++    command -v "$tool" >/dev/null 2>&1 || { echo "HARNESS: required tool unavailable: $tool" >&2; exit 2; }
++done
+ readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+-for input in "$source_root/include/winusb.h" "$source_root/dlls/winusb/main.c" "$source_root/dlls/winusb/winusb.spec" "$test_dir/winusb_user_api_contract.c"; do [[ -f "$input" ]] || { echo "HARNESS: missing input: $input" >&2; exit 2; }; done
++for input in "$source_root/include/winusb.h" "$source_root/include/Makefile.in" "$source_root/dlls/winusb/main.c" "$source_root/dlls/winusb/winusb.spec" "$test_dir/winusb_user_api_contract.c"; do
++    [[ -f "$input" ]] || { echo "HARNESS: missing or non-regular required input: $input" >&2; exit 2; }
++    [[ -r "$input" ]] || { echo "HARNESS: unreadable required input: $input" >&2; exit 2; }
++done
+ build_dir=$(mktemp -d -p /tmp io24-winusb-user-api.XXXXXX) || { echo 'HARNESS: mktemp failed' >&2; exit 2; }
+ trap 'find "$build_dir" -mindepth 1 -delete; rmdir "$build_dir"' EXIT INT TERM
++
++print_log()
++{
++    local line
++    while IFS= read -r line; do printf '%s\n' "$line" >&2; done < "$1"
++}
++
++printf '%s\n' 'io24-tool-baseline' > "$build_dir/tool-baseline.txt"
++grep -Fqx 'io24-tool-baseline' "$build_dir/tool-baseline.txt" >"$build_dir/grep-baseline.log" 2>&1
++tool_status=$?
++if (( tool_status != 0 )); then echo "HARNESS: grep baseline failed with status $tool_status" >&2; print_log "$build_dir/grep-baseline.log"; exit 2; fi
++grep -Fqx 'io24-tool-absent' "$build_dir/tool-baseline.txt" >"$build_dir/grep-negative.log" 2>&1
++tool_status=$?
++if (( tool_status != 1 )); then echo "HARNESS: grep negative baseline returned status $tool_status instead of 1" >&2; print_log "$build_dir/grep-negative.log"; exit 2; fi
++awk '{ print NR ":" $0 }' "$build_dir/tool-baseline.txt" >"$build_dir/awk-baseline.out" 2>"$build_dir/awk-baseline.log"
++tool_status=$?
++if (( tool_status != 0 )); then echo "HARNESS: awk baseline failed with status $tool_status" >&2; print_log "$build_dir/awk-baseline.log"; exit 2; fi
++mapfile -t awk_baseline < "$build_dir/awk-baseline.out"
++if (( ${#awk_baseline[@]} != 1 )) || [[ "${awk_baseline[0]}" != '1:io24-tool-baseline' ]]; then echo 'HARNESS: awk baseline produced incorrect output' >&2; exit 2; fi
++
++require_feature_match()
++{
++    local description=$1 status
++    shift
++    grep "$@" >/dev/null 2>"$build_dir/grep.log"
++    status=$?
++    if (( status == 0 )); then return 0; fi
++    if (( status == 1 )); then echo "FEATURE: $description" >&2; feature_fail=1; return 0; fi
++    echo "HARNESS: grep failed while checking $description" >&2
++    print_log "$build_dir/grep.log"
++    exit 2
++}
++
++compiler_failure_class()
++{
++    local label=$1 status=$2 log=$3 grep_status
++    if (( status != 1 )); then
++        echo "HARNESS: $label compiler exited abnormally with status $status" >&2
++        print_log "$log"
++        return 2
++    fi
++    grep -Eiq 'internal compiler error|segmentation fault|cannot execute|exec format error|killed signal|out of memory' "$log"
++    grep_status=$?
++    if (( grep_status == 0 )); then
++        echo "HARNESS: $label compiler reported an internal/tool failure" >&2
++        print_log "$log"
++        return 2
++    elif (( grep_status > 1 )); then
++        echo "HARNESS: could not read $label compiler diagnostics" >&2
++        return 2
++    fi
++    grep -Eq '(^|[[:space:]])(error:|fatal error:)|static assertion failed' "$log"
++    grep_status=$?
++    if (( grep_status == 0 )); then
++        print_log "$log"
++        return 1
++    elif (( grep_status > 1 )); then
++        echo "HARNESS: could not read $label compiler diagnostics" >&2
++        return 2
++    fi
++    echo "HARNESS: $label compiler failed without a valid rejection diagnostic" >&2
++    print_log "$log"
++    return 2
++}
++
++printf '%s\n' \
++    '#include <dlfcn.h>' \
++    '#include <stdint.h>' \
++    '#include <stddef.h>' \
++    '#include <stdio.h>' \
++    '#include <stdlib.h>' \
++    '#include <string.h>' \
++    '#include "windef.h"' \
++    '#include "winbase.h"' \
++    '#include "wine/debug.h"' \
++    'int io24_compiler_baseline;' > "$build_dir/compiler-baseline.c"
++cc -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -c "$build_dir/compiler-baseline.c" -o "$build_dir/compiler-baseline.o" >"$build_dir/compiler-baseline.log" 2>&1
++baseline_status=$?
++if (( baseline_status != 0 )); then
++    echo "HARNESS: native compiler/standard-header baseline failed with status $baseline_status" >&2
++    print_log "$build_dir/compiler-baseline.log"
++    exit 2
++fi
++[[ -s "$build_dir/compiler-baseline.o" ]] || { echo 'HARNESS: native compiler baseline produced no object' >&2; exit 2; }
++
+ if [[ "$mode" == --surface-only || "$mode" == --red ]]; then
+     feature_fail=0
+     for input in "$source_root/include/winusbio.h" "$source_root/include/wine/winusb.h"; do
+-        if [[ ! -f "$input" ]]; then echo "FEATURE: missing public/private ABI input: $input" >&2; feature_fail=1; fi
++        if [[ ! -e "$input" ]]; then echo "FEATURE: missing public/private ABI input: $input" >&2; feature_fail=1; continue; fi
++        [[ -f "$input" ]] || { echo "HARNESS: non-regular ABI input: $input" >&2; exit 2; }
++        [[ -r "$input" ]] || { echo "HARNESS: unreadable ABI input: $input" >&2; exit 2; }
+     done
+     public_symbols=(WinUsb_AbortPipe WinUsb_ControlTransfer WinUsb_Free WinUsb_GetAssociatedInterface WinUsb_GetDescriptor WinUsb_GetOverlappedResult WinUsb_GetPipePolicy WinUsb_Initialize WinUsb_QueryDeviceInformation WinUsb_ReadPipe WinUsb_ResetPipe WinUsb_SetCurrentAlternateSetting WinUsb_SetPipePolicy WinUsb_WritePipe)
+-    if ! grep -q 'WINUSB_SETUP_PACKET' "$source_root/include/winusb.h"; then echo 'FEATURE: WINUSB_SETUP_PACKET is absent' >&2; feature_fail=1; fi
++    require_feature_match 'WINUSB_SETUP_PACKET is absent' -q 'WINUSB_SETUP_PACKET' "$source_root/include/winusb.h"
+     for symbol in "${public_symbols[@]}"; do
+-        if ! grep -q "${symbol}(" "$source_root/include/winusb.h"; then echo "FEATURE: public prototype absent: $symbol" >&2; feature_fail=1; fi
++        require_feature_match "public prototype absent: $symbol" -q "${symbol}(" "$source_root/include/winusb.h"
+     done
+     real_exports=(
+         '@ stdcall WinUsb_AbortPipe(ptr long)'
+@@ -35,22 +129,91 @@
+     )
+     stub_exports=(WinUsb_FlushPipe WinUsb_GetCurrentAlternateSetting WinUsb_GetPowerPolicy WinUsb_ParseConfigurationDescriptor WinUsb_ParseDescriptors WinUsb_QueryInterfaceSettings WinUsb_QueryPipe WinUsb_SetPowerPolicy)
+     for export in "${real_exports[@]}"; do
+-        if ! grep -Fqx "$export" "$source_root/dlls/winusb/winusb.spec"; then echo "FEATURE: real export absent: $export" >&2; feature_fail=1; fi
++        require_feature_match "real export absent: $export" -Fqx "$export" "$source_root/dlls/winusb/winusb.spec"
+     done
+     for symbol in "${stub_exports[@]}"; do
+-        if ! grep -Fqx "@ stub $symbol" "$source_root/dlls/winusb/winusb.spec"; then echo "FEATURE: explicit stub absent: $symbol" >&2; feature_fail=1; fi
++        require_feature_match "explicit stub absent: $symbol" -Fqx "@ stub $symbol" "$source_root/dlls/winusb/winusb.spec"
+     done
+     real_count=$(awk '$2 == "stdcall" { count++ } END { print count + 0 }' "$source_root/dlls/winusb/winusb.spec")
++    awk_status=$?
++    (( awk_status == 0 )) || { echo "HARNESS: awk failed while counting real exports with status $awk_status" >&2; exit 2; }
+     stub_count=$(awk '$2 == "stub" { count++ } END { print count + 0 }' "$source_root/dlls/winusb/winusb.spec")
++    awk_status=$?
++    (( awk_status == 0 )) || { echo "HARNESS: awk failed while counting stub exports with status $awk_status" >&2; exit 2; }
+     if [[ "$real_count" != 14 || "$stub_count" != 8 ]]; then echo "FEATURE: export counts real=$real_count stub=$stub_count expected=14/8" >&2; feature_fail=1; fi
+-    if ! grep -Eq '^[[:space:]]*winusbio\.h[[:space:]]*\\' "$source_root/include/Makefile.in"; then echo 'FEATURE: winusbio.h is not publicly installed' >&2; feature_fail=1; fi
++    require_feature_match 'winusbio.h is not publicly installed' -Eq '^[[:space:]]*winusbio\.h[[:space:]]*\\' "$source_root/include/Makefile.in"
++
++    if [[ -f "$source_root/include/wine/winusb.h" && -r "$source_root/include/wine/winusb.h" ]]; then
++        expected_schema=(
++            'struct wine_winusb_request' '{' 'UINT32 size;' 'UINT32 version;' 'UINT64 session;' 'UINT32 interface_index;' 'UINT32 reserved;' '};'
++            'struct wine_winusb_snapshot' '{' 'UINT32 size;' 'UINT32 version;' 'UINT64 session;' 'UINT32 speed;' 'UINT32 total_size;' 'UINT32 device_offset;' 'UINT32 device_length;' 'UINT32 configuration_offset;' 'UINT32 configuration_length;' 'UINT32 interfaces_offset;' 'UINT32 interface_count;' 'UINT32 alternates_offset;' 'UINT32 alternate_count;' 'UINT32 endpoints_offset;' 'UINT32 endpoint_count;' 'UINT32 reserved[2];' '};'
++            'struct wine_winusb_interface_snapshot' '{' 'UINT32 interface_number;' 'UINT32 first_alternate;' 'UINT32 alternate_count;' 'UINT32 reserved;' '};'
++            'struct wine_winusb_alternate_snapshot' '{' 'UINT32 interface_index;' 'UINT32 alternate_setting;' 'UINT32 first_endpoint;' 'UINT32 endpoint_count;' '};'
++            'struct wine_winusb_endpoint_snapshot' '{' 'UINT32 alternate_index;' 'UINT32 pipe_id;' 'UINT32 pipe_type;' 'UINT32 maximum_packet_size;' '};'
++            'struct wine_winusb_alternate_request' '{' 'struct wine_winusb_request request;' 'UINT32 alternate_setting;' 'UINT32 reserved;' '};'
++            'struct wine_winusb_pipe_request' '{' 'struct wine_winusb_request request;' 'UINT32 pipe_id;' 'UINT32 transfer_length;' '};'
++            'struct wine_winusb_descriptor_request' '{' 'struct wine_winusb_request request;' 'UINT32 type;' 'UINT32 index;' 'UINT32 language;' 'UINT32 length;' '};'
++            'struct wine_winusb_policy_request' '{' 'struct wine_winusb_request request;' 'UINT32 pipe_id;' 'UINT32 policy_id;' 'UINT32 value_length;' 'UINT32 value;' '};'
++            'struct wine_winusb_control_request' '{' 'struct wine_winusb_request request;' 'UINT8 setup[8];' 'UINT32 transfer_length;' 'UINT32 reserved;' '};'
++        )
++        awk '
++            function normalize(line) {
++                sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line);
++                gsub(/[[:space:]]+/, " ", line); return line;
++            }
++            /^[[:space:]]*struct wine_winusb_[[:alnum:]_]+[[:space:]]*$/ { active=1; print normalize($0); next }
++            active { line=normalize($0); if (line != "") print line; if (line == "};") active=0 }
++        ' "$source_root/include/wine/winusb.h" > "$build_dir/private-schema.actual"
++        awk_status=$?
++        if (( awk_status != 0 )); then echo "HARNESS: awk failed while parsing private ABI schema with status $awk_status" >&2; exit 2; fi
++        mapfile -t actual_schema < "$build_dir/private-schema.actual"
++        if (( ${#actual_schema[@]} != ${#expected_schema[@]} )); then
++            echo "FEATURE: private ABI declaration schema line count=${#actual_schema[@]} expected=${#expected_schema[@]}" >&2
++            feature_fail=1
++        else
++            for ((schema_index=0; schema_index<${#expected_schema[@]}; schema_index++)); do
++                if [[ "${actual_schema[schema_index]}" != "${expected_schema[schema_index]}" ]]; then
++                    echo "FEATURE: private ABI declaration schema mismatch at line $((schema_index + 1)): actual='${actual_schema[schema_index]}' expected='${expected_schema[schema_index]}'" >&2
++                    feature_fail=1
++                    break
++                fi
++            done
++        fi
++    fi
+     (( feature_fail == 0 )) || exit 1
+-    if ! cc -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -fsyntax-only "$test_dir/winusb_user_api_contract.c"; then echo 'FEATURE: public/private surface compile-time contract failed' >&2; exit 1; fi
+-    if printf '#include <stdint.h>\nint probe;\n' | cc -m32 -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only - >/dev/null 2>&1; then
+-        if ! cc -m32 -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -fsyntax-only "$test_dir/winusb_user_api_contract.c"; then echo 'FEATURE: -m32 public/private layout contract failed' >&2; exit 1; fi
++    cc -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -fsyntax-only "$test_dir/winusb_user_api_contract.c" >"$build_dir/native-candidate.log" 2>&1
++    candidate_status=$?
++    if (( candidate_status != 0 )); then
++        compiler_failure_class 'native candidate' "$candidate_status" "$build_dir/native-candidate.log"
++        failure_class=$?
++        if (( failure_class == 1 )); then echo 'FEATURE: public/private surface compile-time contract failed' >&2; exit 1; fi
++        exit 2
++    fi
++    cc -m32 -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -fsyntax-only "$build_dir/compiler-baseline.c" >"$build_dir/m32-baseline.log" 2>&1
++    m32_status=$?
++    if (( m32_status == 0 )); then
++        cc -m32 -std=c11 -Wall -Wextra -Werror -D__WINESRC__ -I"$source_root/include" -fsyntax-only "$test_dir/winusb_user_api_contract.c" >"$build_dir/m32-candidate.log" 2>&1
++        candidate_status=$?
++        if (( candidate_status != 0 )); then
++            compiler_failure_class '-m32 candidate' "$candidate_status" "$build_dir/m32-candidate.log"
++            failure_class=$?
++            if (( failure_class == 1 )); then echo 'FEATURE: -m32 public/private layout contract failed' >&2; exit 1; fi
++            exit 2
++        fi
+         echo 'CP33 surface-only passed layouts=native,m32 exports=14 stubs=8'
+     else
+-        echo 'CP33 surface-only passed layouts=native m32=unavailable exports=14 stubs=8'
++        grep -Eq 'fatal error:.*(bits/|gnu/|sys/|stdint|stddef|stdio|stdlib|string|dlfcn).*No such file or directory|unrecognized command-line option.*-m32|unsupported option.*-m32' "$build_dir/m32-baseline.log"
++        m32_probe_class=$?
++        if (( m32_probe_class == 0 )); then
++            echo 'CP33 surface-only passed layouts=native m32=unavailable exports=14 stubs=8'
++        elif (( m32_probe_class > 1 )); then
++            echo 'HARNESS: could not read -m32 compiler diagnostics' >&2
++            exit 2
++        else
++            echo "HARNESS: -m32 compiler probe failed abnormally with status $m32_status" >&2
++            print_log "$build_dir/m32-baseline.log"
++            exit 2
++        fi
+     fi
+     [[ "$mode" != --surface-only ]] || exit 0
+ fi

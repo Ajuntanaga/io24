@@ -1,0 +1,16 @@
+b906ca0df0f6233a8669290158ace61afecfd81650e84ff08320cb6633da65aa  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/SCOPE.md
+0627a96040e6f7820024b27c6dd54991a8f567900c3e4de04ae67c163c25ec80  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/MODULES.json
+358cdae7eaff602390897ca9e633b03f1946ca97c060d9ebd2ec568fbf6e1b3e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/ANALYSIS.json
+a5a7a17c6e622f1f05e0dc715a97d0c6598b63b9e3b3a6fc1f7c39c00bd0d860  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/TESTS.md
+e0364d25aee860eb70242c35e3a3bd7b6defa33315938e7cb0faa1727595e140  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/PROGRESS.md
+52e48cb1453b815abc4b55fd0232131e11115d1aceb2eb0ed899750db6c08dd8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/extracted/Plugins/studiolivepanel.dll
+b8e97749f44a610aa621b3325303ce992096c7046cbb635694c115d3fcd8ee71  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/extracted/PreSonusHardwareAccessService.exe
+27f9fe550b466c9d783e3432d6663bb02af9aa001b23165985a56c96005e1a96  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/extracted/Universal Control.exe
+61aeda721584b7111a5ae5c296ac6ab824d0cd3d1f4306b9fcb8d796fdda32de  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T010449-0700-uc472-save-assign-ui-route/extracted/ucnet.dll
+1b5ddd6fd3ad4b93529caf8e5933bcd52b13194bdfa62652292b46ddcd980b95  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/PreSonus_Universal_Control_v4_7_2-108537.exe
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/extracted/hwaccess/dspusbdevice.dll
+3830fed82f4d1ad7a3bc6c8acf7139bf1dda02e1316804d023b05d8d03e44671  re/cp34_uc472_save_assign_ui_route.py
+502caf69bd09d172cc42adfc9fb9af93f473bd187f4a378bb6f2a1c385bfa89d  tests/test_cp34_uc472_save_assign_ui_route.py
+c58acb211ba6b47b9ba5ca5fc70cb68ace554588da3ff8dfc907feaaa3beed55  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+d416938fb283e07697965951fa3ccce42db9daac47a3df48d0c1331c7be11114  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+431298c61a58ec9c730362b05541cdc49d39f16c31050b68a7a6ccc13fa493cc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/CHECKPOINT.sha256

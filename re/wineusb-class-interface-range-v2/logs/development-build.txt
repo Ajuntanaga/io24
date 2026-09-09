@@ -1,0 +1,14 @@
+timestamp=2026-08-21T02:56:27-07:00
+phase=CP11_DEVELOPMENT_BUILD
+isolation=Bubblewrap user/pid/net/ipc/uts/cgroup namespaces, all capabilities dropped, private dev, empty host home/sys/run, network unshared
+limits=2 GiB virtual memory, 300 CPU seconds, 300 wall seconds, idle IO, nice 15, make -j1
+modified_unit=dlls/wineusb.sys/unixlib.c
+exit=0
+warnings_in_modified_unit=0
+
+b16b8d2ab2104dbf98b6a171546258db3dc22c11a4688170710c022e1068f30e  x86_64-windows/wineusb.sys
+404a07ffccb44e4fc34dd5b42df0aef8e96eb44ad2878ffc417f7a75e409abaa  wineusb.sys.so
+9518320f495ace5cabc27ef4e740f182b3840700fba3e9371b36b7e12538dea2  wineusb.so
+
+These were development outputs only and were not staged. The v1 development
+workspace was restored after patch extraction.

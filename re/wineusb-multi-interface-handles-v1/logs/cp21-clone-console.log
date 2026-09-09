@@ -1,0 +1,6 @@
+Running as unit: io24-sandbox-clone-handles-v1-20260822.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 5.182s
+             CPU time consumed: 1.595s
+                   Memory peak: 768M (swap: 0B)

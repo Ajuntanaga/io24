@@ -1,0 +1,18 @@
+CP31 retained-harness invocation diagnosis
+Date: 2026-08-22
+
+Observed artifact:
+  A first retained function-scope run with WINEDEBUG=-all terminated with
+  SIGSEGV before the contract body.
+
+Diagnosis:
+  GDB placed the fault in Wine ntdll init_options(), reading main_argv[1]. The
+  retained contract is a dlopen-only process and does not initialize Wine's
+  normal argv path. The unchanged CP29 binary reproduces the same fault under
+  WINEDEBUG=-all. Both unchanged CP29 and the CP31 candidate pass under the
+  contract's original environment.
+
+Conclusion:
+  WINEDEBUG=-all is outside this dlopen harness's valid invocation contract.
+  It was removed from the matrix. This is an invocation artifact, not a CP31
+  source regression. No production change was made in response.

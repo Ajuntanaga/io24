@@ -1,0 +1,3 @@
+$ tests/winusb_user_api_contract.sh .io24-build/winusb-api-v1/dev-source --policy
+CP33 public executed mode=--policy target-mask=0x18c0 present-mask=0x19dc missing-mask=0 fake-events=38 submits=8 releases=1 completions=0 failures=0
+EXIT=0

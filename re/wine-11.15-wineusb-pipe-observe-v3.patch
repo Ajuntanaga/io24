@@ -1,0 +1,183 @@
+--- a/dlls/wineusb.sys/wineusb.c
++++ b/dlls/wineusb.sys/wineusb.c
+@@ -90,6 +90,86 @@
+ static DRIVER_OBJECT *driver_obj;
+ static DEVICE_OBJECT *bus_fdo, *bus_pdo;
+ 
++static void io24_observe_select_configuration(IRP *irp,
++        const struct _URB_SELECT_CONFIGURATION *req, const char *phase)
++{
++    const size_t request_header_size = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++    const size_t interface_header_size = offsetof(USBD_INTERFACE_INFORMATION, Pipes);
++    const BYTE *cursor, *end;
++    unsigned int interface_index = 0;
++
++    FIXME("IO24_PIPE_OBSERVE event=select_configuration_header phase=%s irp=%p "
++            "header_length=%u status=%#x configuration_handle=%p.\n",
++            phase, irp, req->Hdr.Length, (unsigned int)req->Hdr.Status,
++            req->ConfigurationHandle);
++
++    if (req->Hdr.Length < request_header_size)
++    {
++        FIXME("IO24_PIPE_OBSERVE event=select_configuration_malformed phase=%s irp=%p "
++                "reason=short_request_header available=%u required=%lu.\n",
++                phase, irp, req->Hdr.Length, (unsigned long)request_header_size);
++        return;
++    }
++
++    cursor = (const BYTE *)&req->Interface;
++    end = (const BYTE *)req + req->Hdr.Length;
++    while (cursor < end)
++    {
++        const USBD_INTERFACE_INFORMATION *iface;
++        size_t remaining = end - cursor, available_pipes;
++        ULONG pipe_count, i;
++
++        if (remaining < interface_header_size)
++        {
++            FIXME("IO24_PIPE_OBSERVE event=select_configuration_malformed phase=%s irp=%p "
++                    "reason=short_interface_header interface_index=%u available=%lu required=%lu.\n",
++                    phase, irp, interface_index, (unsigned long)remaining,
++                    (unsigned long)interface_header_size);
++            return;
++        }
++
++        iface = (const USBD_INTERFACE_INFORMATION *)cursor;
++        if (iface->Length < interface_header_size || iface->Length > remaining)
++        {
++            FIXME("IO24_PIPE_OBSERVE event=select_configuration_malformed phase=%s irp=%p "
++                    "reason=invalid_interface_length interface_index=%u length=%u available=%lu "
++                    "minimum=%lu.\n", phase, irp, interface_index, iface->Length,
++                    (unsigned long)remaining, (unsigned long)interface_header_size);
++            return;
++        }
++
++        available_pipes = (iface->Length - interface_header_size) / sizeof(iface->Pipes[0]);
++        pipe_count = iface->NumberOfPipes < available_pipes
++                ? iface->NumberOfPipes : available_pipes;
++        FIXME("IO24_PIPE_OBSERVE event=select_interface phase=%s irp=%p interface_index=%u "
++                "interface=%u alternate=%u class=%u subclass=%u protocol=%u length=%u "
++                "declared_pipes=%u visible_pipes=%u.\n", phase, irp, interface_index,
++                iface->InterfaceNumber, iface->AlternateSetting, iface->Class,
++                iface->SubClass, iface->Protocol, iface->Length,
++                (unsigned int)iface->NumberOfPipes, (unsigned int)pipe_count);
++
++        for (i = 0; i < pipe_count; ++i)
++        {
++            const USBD_PIPE_INFORMATION *pipe = &iface->Pipes[i];
++            FIXME("IO24_PIPE_OBSERVE event=select_pipe phase=%s irp=%p interface_index=%u "
++                    "pipe_index=%u endpoint=%#x type=%u max_packet=%u interval=%u "
++                    "max_transfer=%u flags=%#x handle=%p.\n", phase, irp, interface_index,
++                    (unsigned int)i, pipe->EndpointAddress, (unsigned int)pipe->PipeType,
++                    pipe->MaximumPacketSize, pipe->Interval, pipe->MaximumTransferSize,
++                    (unsigned int)pipe->PipeFlags, pipe->PipeHandle);
++        }
++
++        if (pipe_count != iface->NumberOfPipes)
++            FIXME("IO24_PIPE_OBSERVE event=select_configuration_malformed phase=%s irp=%p "
++                    "reason=truncated_pipe_array interface_index=%u declared_pipes=%u "
++                    "visible_pipes=%u.\n", phase, irp, interface_index,
++                    (unsigned int)iface->NumberOfPipes, (unsigned int)pipe_count);
++
++        cursor += iface->Length;
++        ++interface_index;
++    }
++}
++
+ static void destroy_unix_device(struct unix_device *unix_device)
+ {
+     struct usb_destroy_device_params params =
+@@ -655,6 +735,13 @@
+                         params.transfer_buffer = MmGetSystemAddressForMdlSafe(req->TransferBufferMDL, NormalPagePriority);
+                     else
+                         params.transfer_buffer = req->TransferBuffer;
++                    FIXME("IO24_PIPE_OBSERVE event=transfer_map irp=%p handle=%p flags=%#x "
++                            "length=%u mdl=%p direct_buffer=%p mapped_buffer=%p source=%s "
++                            "mapped_ok=%u.\n", irp, req->PipeHandle,
++                            (unsigned int)req->TransferFlags, req->TransferBufferLength,
++                            req->TransferBufferMDL, req->TransferBuffer, params.transfer_buffer,
++                            req->TransferBufferMDL ? "mdl" : "direct",
++                            params.transfer_buffer != NULL);
+                     break;
+                 }
+ 
+@@ -717,6 +804,8 @@
+              * similarly hold it in complete_irp(). That way, if libusb reports
+              * completion between submitting and queuing, we won't try to
+              * dequeue the IRP until it's actually been queued. */
++            if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_CONFIGURATION)
++                io24_observe_select_configuration(irp, &urb->UrbSelectConfiguration, "pre");
+             EnterCriticalSection(&wineusb_cs);
+             status = WINE_UNIX_CALL(unix_usb_submit_urb, &params);
+             if (status == STATUS_PENDING)
+@@ -725,6 +814,8 @@
+                 InsertTailList(&device->irp_list, &irp->Tail.Overlay.ListEntry);
+             }
+             LeaveCriticalSection(&wineusb_cs);
++            if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_CONFIGURATION)
++                io24_observe_select_configuration(irp, &urb->UrbSelectConfiguration, "post");
+ 
+             return status;
+         }
+--- a/dlls/wineusb.sys/unixlib.c
++++ b/dlls/wineusb.sys/unixlib.c
+@@ -444,6 +444,10 @@
+ 
+             if ((ret = libusb_clear_halt(handle, pipe.endpoint)) < 0)
+                 ERR("Failed to clear halt: %s\n", libusb_strerror(ret));
++            FIXME("IO24_PIPE_OBSERVE event=clear_halt irp=%p handle=%p endpoint=%#x "
++                    "type=%u libusb_status=%d returned_status=%#x.\n", irp,
++                    req->PipeHandle, pipe.endpoint, pipe.type, ret,
++                    (unsigned int)STATUS_SUCCESS);
+ 
+             return STATUS_SUCCESS;
+         }
+@@ -453,6 +457,13 @@
+             struct _URB_BULK_OR_INTERRUPT_TRANSFER *req = &urb->UrbBulkOrInterruptTransfer;
+             struct pipe pipe = get_pipe(req->PipeHandle);
+             struct transfer_ctx *transfer_ctx;
++            const char *route = pipe.type == UsbdPipeTypeBulk ? "bulk" :
++                    pipe.type == UsbdPipeTypeInterrupt ? "interrupt" : "invalid";
++
++            FIXME("IO24_PIPE_OBSERVE event=transfer_route irp=%p handle=%p endpoint=%#x "
++                    "type=%u route=%s length=%u buffer=%p.\n", irp, req->PipeHandle,
++                    pipe.endpoint, pipe.type, route, req->TransferBufferLength,
++                    params->transfer_buffer);
+ 
+             if (!(transfer_ctx = calloc(1, sizeof(*transfer_ctx))))
+                 return STATUS_NO_MEMORY;
+@@ -488,6 +499,10 @@
+             ret = libusb_submit_transfer(transfer);
+             if (ret < 0)
+                 ERR("Failed to submit bulk transfer: %s\n", libusb_strerror(ret));
++            FIXME("IO24_PIPE_OBSERVE event=transfer_submit irp=%p handle=%p endpoint=%#x "
++                    "route=%s length=%u buffer=%p libusb_status=%d returned_status=%#x.\n",
++                    irp, req->PipeHandle, pipe.endpoint, route, req->TransferBufferLength,
++                    params->transfer_buffer, ret, (unsigned int)STATUS_PENDING);
+ 
+             return STATUS_PENDING;
+         }
+@@ -535,6 +550,11 @@
+             struct _URB_SELECT_CONFIGURATION *req = &urb->UrbSelectConfiguration;
+             ULONG i;
+ 
++            FIXME("IO24_PIPE_OBSERVE event=select_configuration_backend irp=%p "
++                    "scope=first_interface interface=%u alternate=%u pipes=%u.\n", irp,
++                    req->Interface.InterfaceNumber, req->Interface.AlternateSetting,
++                    (unsigned int)req->Interface.NumberOfPipes);
++
+             /* FIXME: In theory, we'd call libusb_set_configuration() here, but
+              * the CASIO FX-9750GII (which has only one configuration) goes into
+              * an error state if it receives a SET_CONFIGURATION request. Maybe
+@@ -545,6 +565,11 @@
+             {
+                 USBD_PIPE_INFORMATION *pipe = &req->Interface.Pipes[i];
+                 pipe->PipeHandle = make_pipe_handle(pipe->EndpointAddress, pipe->PipeType);
++                FIXME("IO24_PIPE_OBSERVE event=pipe_handle irp=%p interface=%u pipe_index=%u "
++                        "endpoint=%#x type=%u handle=%p.\n", irp,
++                        req->Interface.InterfaceNumber, (unsigned int)i,
++                        pipe->EndpointAddress, (unsigned int)pipe->PipeType,
++                        pipe->PipeHandle);
+             }
+ 
+             return STATUS_SUCCESS;

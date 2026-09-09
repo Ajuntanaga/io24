@@ -1,0 +1,464 @@
+--- a/dlls/wineusb.sys/unixlib.c
++++ b/dlls/wineusb.sys/unixlib.c
+@@ -46,8 +46,137 @@
+     libusb_device_handle *handle;
+     struct unix_device *parent;
+     unsigned int refcount;
++    bool function;
++    uint8_t function_interface_count;
++    uint16_t configuration_length;
++    uint8_t function_root;
++    unsigned char function_interfaces[32];
+ };
+ 
++static bool function_has_interface(bool function, const unsigned char interfaces[32],
++        uint8_t interface)
++{
++    return !function || (interfaces[interface / 8] & (1u << (interface % 8)));
++}
++
++static bool device_has_interface(const struct unix_device *device, uint8_t interface)
++{
++    return function_has_interface(device->function, device->function_interfaces, interface);
++}
++
++static void device_add_interface(struct unix_device *device, uint8_t interface)
++{
++    device->function_interfaces[interface / 8] |= 1u << (interface % 8);
++    ++device->function_interface_count;
++}
++
++static bool assign_function_range(uint8_t roots[256], const bool present[256],
++        bool grouped[256], uint8_t root, uint8_t count)
++{
++    unsigned int i;
++
++    if (count < 2 || (unsigned int)root + count > 256)
++        return false;
++    for (i = root; i < (unsigned int)root + count; ++i)
++        if (!present[i] || grouped[i]) return false;
++    for (i = root; i < (unsigned int)root + count; ++i)
++    {
++        roots[i] = root;
++        grouped[i] = true;
++    }
++    return true;
++}
++
++static bool assign_audio_function(uint8_t roots[256], const bool present[256],
++        bool grouped[256], uint8_t root, const unsigned char *interfaces,
++        uint8_t interface_count)
++{
++    unsigned int i;
++
++    if (!interface_count || !present[root] || grouped[root]) return false;
++    for (i = 0; i < interface_count; ++i)
++        if (!present[interfaces[i]] || grouped[interfaces[i]]) return false;
++
++    roots[root] = root;
++    grouped[root] = true;
++    for (i = 0; i < interface_count; ++i)
++    {
++        roots[interfaces[i]] = root;
++        grouped[interfaces[i]] = true;
++    }
++    return true;
++}
++
++static bool build_function_roots(libusb_device *device,
++        const struct libusb_config_descriptor *config, uint8_t roots[256],
++        bool present[256])
++{
++    struct libusb_interface_association_descriptor_array *associations = NULL;
++    bool grouped[256] = {0}, found = false;
++    unsigned int i, j;
++    int ret;
++
++    for (i = 0; i < 256; ++i) roots[i] = i;
++    for (i = 0; i < config->bNumInterfaces; ++i)
++    {
++        const struct libusb_interface *interface = &config->interface[i];
++
++        if (interface->num_altsetting > 0)
++            present[interface->altsetting[0].bInterfaceNumber] = true;
++    }
++
++    ret = libusb_get_active_interface_association_descriptors(device, &associations);
++    if (!ret)
++    {
++        for (i = 0; i < (unsigned int)associations->length; ++i)
++        {
++            const struct libusb_interface_association_descriptor *association =
++                    &associations->iad[i];
++
++            if (assign_function_range(roots, present, grouped,
++                    association->bFirstInterface, association->bInterfaceCount))
++                found = true;
++        }
++        libusb_free_interface_association_descriptors(associations);
++    }
++    else if (ret != LIBUSB_ERROR_NOT_FOUND)
++    {
++        WARN("Failed to get interface associations: %s\n", libusb_strerror(ret));
++    }
++
++    for (i = 0; i < config->bNumInterfaces; ++i)
++    {
++        const struct libusb_interface *interface = &config->interface[i];
++
++        for (j = 0; j < (unsigned int)interface->num_altsetting; ++j)
++        {
++            const struct libusb_interface_descriptor *descriptor = &interface->altsetting[j];
++            const unsigned char *cursor = descriptor->extra;
++            size_t remaining = descriptor->extra_length;
++
++            if (descriptor->bInterfaceClass != LIBUSB_CLASS_AUDIO ||
++                    descriptor->bInterfaceSubClass != 1 || descriptor->bInterfaceProtocol != 0)
++                continue;
++
++            while (remaining >= 2)
++            {
++                uint8_t length = cursor[0];
++
++                if (length < 2 || length > remaining) break;
++                if (cursor[1] == 0x24 && length >= 8 && cursor[2] == 1 &&
++                        length >= 8u + cursor[7] &&
++                        assign_audio_function(roots, present, grouped,
++                                descriptor->bInterfaceNumber, cursor + 8, cursor[7]))
++                    found = true;
++                cursor += length;
++                remaining -= length;
++            }
++        }
++    }
++
++    return found;
++}
++
+ static libusb_hotplug_callback_handle hotplug_cb_handle;
+ 
+ static volatile bool thread_shutdown;
+@@ -153,6 +282,9 @@
+     {
+         const struct libusb_interface *interface;
+         const struct libusb_interface_descriptor *iface_desc;
++        uint8_t function_roots[256];
++        bool present[256] = {0};
++        bool function_scoped = false;
+ 
+         if (config_desc->bNumInterfaces == 1)
+         {
+@@ -169,29 +301,35 @@
+         }
+         queue_event(&usb_event);
+ 
+-        /* Create new devices for interfaces of composite devices.
++        /* Create new devices for functions of composite devices.
+          *
+          * On Windows this is the job of usbccgp.sys, a separate driver that
+          * layers on top of the base USB driver. While we could take this
+          * approach as well, implementing usbccgp is a lot more work, whereas
+          * interface support is effectively built into libusb.
+-         *
+-         * FIXME: usbccgp does not create separate interfaces in some cases,
+-         * e.g. when there is an interface association descriptor available.
+          */
+         if (config_desc->bNumInterfaces > 1)
+         {
+             uint8_t i;
+ 
++            if (device_desc.bNumConfigurations == 1)
++                function_scoped = build_function_roots(libusb_device,
++                        config_desc, function_roots, present);
++
+             for (i = 0; i < config_desc->bNumInterfaces; ++i)
+             {
+                 struct unix_device *unix_iface;
++                unsigned int number;
+ 
+                 interface = &config_desc->interface[i];
++                if (interface->num_altsetting <= 0) continue;
+                 if (interface->num_altsetting != 1)
+                     FIXME("Interface %u has %u alternate settings; using the first one.\n",
+-                            i, interface->num_altsetting);
++                            interface->altsetting[0].bInterfaceNumber, interface->num_altsetting);
+                 iface_desc = &interface->altsetting[0];
++                if (function_scoped && function_roots[iface_desc->bInterfaceNumber] !=
++                        iface_desc->bInterfaceNumber)
++                    continue;
+ 
+                 if (!(unix_iface = calloc(1, sizeof(*unix_iface))))
+                     return;
+@@ -200,6 +338,15 @@
+                 unix_iface->refcount = 1;
+                 unix_iface->handle = unix_device->handle;
+                 unix_iface->parent = unix_device;
++                unix_iface->function = function_scoped;
++                unix_iface->configuration_length = config_desc->wTotalLength;
++                unix_iface->function_root = iface_desc->bInterfaceNumber;
++                if (function_scoped)
++                {
++                    for (number = 0; number < 256; ++number)
++                        if (present[number] && function_roots[number] == iface_desc->bInterfaceNumber)
++                            device_add_interface(unix_iface, number);
++                }
+                 pthread_mutex_lock(&device_mutex);
+                 list_add_tail(&device_list, &unix_iface->entry);
+                 pthread_mutex_unlock(&device_mutex);
+@@ -210,6 +357,10 @@
+                 usb_event.u.added_device.protocol = iface_desc->bInterfaceProtocol;
+                 usb_event.u.added_device.interface = true;
+                 usb_event.u.added_device.interface_index = iface_desc->bInterfaceNumber;
++                FIXME("IO24_FUNCTION_SCOPE event=child root=%u scoped=%u interfaces=%u "
++                        "configuration_length=%u.\n", iface_desc->bInterfaceNumber,
++                        function_scoped, unix_iface->function_interface_count,
++                        unix_iface->configuration_length);
+                 queue_event(&usb_event);
+             }
+         }
+@@ -332,8 +483,93 @@
+ {
+     IRP *irp;
+     void *transfer_buffer;
++    size_t transfer_buffer_length;
++    bool function;
++    uint8_t function_interface_count;
++    uint8_t function_root;
++    unsigned char function_interfaces[32];
+ };
+ 
++static void append_projected_descriptor(unsigned char *output, size_t output_capacity,
++        size_t *output_length, const unsigned char *descriptor, size_t descriptor_length)
++{
++    size_t copy_length = 0;
++
++    if (*output_length < output_capacity)
++    {
++        copy_length = output_capacity - *output_length;
++        if (copy_length > descriptor_length) copy_length = descriptor_length;
++        memcpy(output + *output_length, descriptor, copy_length);
++    }
++    *output_length += descriptor_length;
++}
++
++static bool project_configuration_descriptor(const struct transfer_ctx *transfer_ctx,
++        const unsigned char *input, size_t input_length, unsigned char *output,
++        size_t output_capacity, size_t *returned_length)
++{
++    size_t offset, projected_length = 0, total_length;
++    bool have_interface = false, include_interface = false;
++
++    if (input_length < LIBUSB_DT_CONFIG_SIZE || input[0] < LIBUSB_DT_CONFIG_SIZE ||
++            input[0] > input_length || input[1] != LIBUSB_DT_CONFIG)
++        return false;
++    total_length = input[2] | ((size_t)input[3] << 8);
++    if (total_length < input[0] || total_length > input_length)
++        return false;
++
++    append_projected_descriptor(output, output_capacity, &projected_length, input, input[0]);
++    offset = input[0];
++    while (offset < total_length)
++    {
++        const unsigned char *descriptor = input + offset;
++        uint8_t length, type;
++        bool include;
++
++        if (total_length - offset < 2) return false;
++        length = descriptor[0];
++        type = descriptor[1];
++        if (length < 2 || length > total_length - offset) return false;
++
++        if (type == LIBUSB_DT_INTERFACE_ASSOCIATION)
++        {
++            unsigned int i;
++
++            if (length < LIBUSB_DT_INTERFACE_ASSOCIATION_SIZE) return false;
++            include = false;
++            for (i = descriptor[2]; i < (unsigned int)descriptor[2] + descriptor[3] && i < 256; ++i)
++                if (function_has_interface(transfer_ctx->function,
++                        transfer_ctx->function_interfaces, i)) include = true;
++            have_interface = false;
++            include_interface = false;
++        }
++        else if (type == LIBUSB_DT_INTERFACE)
++        {
++            if (length < LIBUSB_DT_INTERFACE_SIZE) return false;
++            include_interface = function_has_interface(transfer_ctx->function,
++                    transfer_ctx->function_interfaces, descriptor[2]);
++            have_interface = true;
++            include = include_interface;
++        }
++        else
++        {
++            include = !have_interface || include_interface;
++        }
++
++        if (include)
++            append_projected_descriptor(output, output_capacity, &projected_length,
++                    descriptor, length);
++        offset += length;
++    }
++
++    if (projected_length > UINT16_MAX) return false;
++    if (output_capacity > 2) output[2] = projected_length;
++    if (output_capacity > 3) output[3] = projected_length >> 8;
++    if (output_capacity > 4) output[4] = transfer_ctx->function_interface_count;
++    *returned_length = projected_length < output_capacity ? projected_length : output_capacity;
++    return true;
++}
++
+ static void LIBUSB_CALL transfer_cb(struct libusb_transfer *transfer)
+ {
+     struct transfer_ctx *transfer_ctx = transfer->user_data;
+@@ -344,7 +580,6 @@
+ 
+     TRACE("Completing IRP %p, status %#x.\n", irp, transfer->status);
+ 
+-    free(transfer_ctx);
+     urb->UrbHeader.Status = usbd_status_from_libusb(transfer->status);
+     if (transfer->status == LIBUSB_TRANSFER_COMPLETED)
+     {
+@@ -357,8 +592,33 @@
+             case URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE:
+             {
+                 struct _URB_CONTROL_DESCRIPTOR_REQUEST *req = &urb->UrbControlDescriptorRequest;
+-                req->TransferBufferLength = transfer->actual_length;
+-                memcpy(transfer_buffer, libusb_control_transfer_get_data(transfer), transfer->actual_length);
++                size_t returned_length;
++
++                if (transfer_ctx->function && req->DescriptorType == LIBUSB_DT_CONFIG)
++                {
++                    if (!project_configuration_descriptor(transfer_ctx,
++                            libusb_control_transfer_get_data(transfer), transfer->actual_length,
++                            transfer_buffer, transfer_ctx->transfer_buffer_length, &returned_length))
++                    {
++                        req->Hdr.Status = USBD_STATUS_REQUEST_FAILED;
++                        req->TransferBufferLength = 0;
++                        break;
++                    }
++                    req->TransferBufferLength = returned_length;
++                    FIXME("IO24_FUNCTION_SCOPE event=descriptor root=%u root_interfaces=%u "
++                            "physical_length=%d returned_length=%u.\n",
++                            transfer_ctx->function_root,
++                            transfer_ctx->function_interface_count,
++                            transfer->actual_length, req->TransferBufferLength);
++                }
++                else
++                {
++                    returned_length = transfer->actual_length;
++                    if (returned_length > transfer_ctx->transfer_buffer_length)
++                        returned_length = transfer_ctx->transfer_buffer_length;
++                    req->TransferBufferLength = returned_length;
++                    memcpy(transfer_buffer, libusb_control_transfer_get_data(transfer), returned_length);
++                }
+                 break;
+             }
+ 
+@@ -378,6 +638,8 @@
+         }
+     }
+ 
++    free(transfer_ctx);
++
+     event.type = USB_EVENT_TRANSFER_COMPLETE;
+     event.u.completed_irp = irp;
+     queue_event(&event);
+@@ -414,7 +676,7 @@
+     return u.pipe;
+ }
+ 
+-static NTSTATUS validate_select_configuration(IRP *irp,
++static NTSTATUS validate_select_configuration(const struct unix_device *device, IRP *irp,
+         struct _URB_SELECT_CONFIGURATION *req, unsigned int *interface_count,
+         unsigned int *pipe_count)
+ {
+@@ -465,6 +727,13 @@
+             required = interface->Length;
+             goto invalid;
+         }
++        if (!device_has_interface(device, interface->InterfaceNumber))
++        {
++            reason = "interface_out_of_scope";
++            available = interface->InterfaceNumber;
++            required = 0;
++            goto invalid;
++        }
+ 
+         available_pipes = (interface->Length - interface_header_size) /
+                 sizeof(interface->Pipes[0]);
+@@ -563,6 +832,7 @@
+                 return STATUS_NO_MEMORY;
+             transfer_ctx->irp = irp;
+             transfer_ctx->transfer_buffer = params->transfer_buffer;
++            transfer_ctx->transfer_buffer_length = req->TransferBufferLength;
+ 
+             if (!(transfer = libusb_alloc_transfer(0)))
+             {
+@@ -614,11 +884,22 @@
+             struct _URB_CONTROL_DESCRIPTOR_REQUEST *req = &urb->UrbControlDescriptorRequest;
+             struct transfer_ctx *transfer_ctx;
+             unsigned char *buffer;
++            size_t transfer_length = req->TransferBufferLength;
+ 
+             if (!(transfer_ctx = calloc(1, sizeof(*transfer_ctx))))
+                 return STATUS_NO_MEMORY;
+             transfer_ctx->irp = irp;
+             transfer_ctx->transfer_buffer = params->transfer_buffer;
++            transfer_ctx->transfer_buffer_length = req->TransferBufferLength;
++            transfer_ctx->function = params->device->function;
++            transfer_ctx->function_interface_count = params->device->function_interface_count;
++            transfer_ctx->function_root = params->device->function_root;
++            memcpy(transfer_ctx->function_interfaces, params->device->function_interfaces,
++                    sizeof(transfer_ctx->function_interfaces));
++
++            if (params->device->function && req->DescriptorType == LIBUSB_DT_CONFIG &&
++                    transfer_length < params->device->configuration_length)
++                transfer_length = params->device->configuration_length;
+ 
+             if (!(transfer = libusb_alloc_transfer(0)))
+             {
+@@ -627,7 +908,7 @@
+             }
+             irp->Tail.Overlay.DriverContext[0] = transfer;
+ 
+-            if (!(buffer = malloc(sizeof(struct libusb_control_setup) + req->TransferBufferLength)))
++            if (!(buffer = malloc(sizeof(struct libusb_control_setup) + transfer_length)))
+             {
+                 irp->Tail.Overlay.DriverContext[0] = NULL;
+                 free(transfer_ctx);
+@@ -638,7 +919,7 @@
+             libusb_fill_control_setup(buffer,
+                     LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_STANDARD | LIBUSB_RECIPIENT_DEVICE,
+                     LIBUSB_REQUEST_GET_DESCRIPTOR, (req->DescriptorType << 8) | req->Index,
+-                    req->LanguageId, req->TransferBufferLength);
++                    req->LanguageId, transfer_length);
+             libusb_fill_control_transfer(transfer, handle, buffer, transfer_cb, transfer_ctx, 0);
+             transfer->flags = LIBUSB_TRANSFER_FREE_BUFFER | LIBUSB_TRANSFER_FREE_TRANSFER;
+             ret = libusb_submit_transfer(transfer);
+@@ -668,12 +949,15 @@
+              * we should skip setting that if and only if the configuration is
+              * already active? */
+ 
+-            status = validate_select_configuration(irp, req, &interface_count, &pipe_count);
++            status = validate_select_configuration(params->device, irp, req,
++                    &interface_count, &pipe_count);
+             if (status != STATUS_SUCCESS)
+                 return status;
+ 
+             FIXME("IO24_PIPE_OBSERVE event=select_configuration_backend irp=%p "
+-                    "scope=all_interfaces interfaces=%u pipes=%u.\n", irp,
++                    "scope=%s root=%u interfaces=%u pipes=%u.\n", irp,
++                    params->device->function ? "function" : "all_interfaces",
++                    params->device->function ? params->device->function_root : 0,
+                     interface_count, pipe_count);
+ 
+             cursor = (unsigned char *)&req->Interface;
+@@ -747,6 +1031,7 @@
+                 return STATUS_NO_MEMORY;
+             transfer_ctx->irp = irp;
+             transfer_ctx->transfer_buffer = params->transfer_buffer;
++            transfer_ctx->transfer_buffer_length = req->TransferBufferLength;
+ 
+             if (urb->UrbHeader.Function == URB_FUNCTION_VENDOR_DEVICE)
+                 req_type |= LIBUSB_RECIPIENT_DEVICE;
+

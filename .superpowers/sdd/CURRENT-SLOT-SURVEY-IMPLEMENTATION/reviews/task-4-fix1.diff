@@ -1,0 +1,90 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:37:28.952355877 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 03:40:29.563058811 -0700
+@@ -1,6 +1,6 @@
+ 1bb029a18181a85c602a84f42fbbf57602dbce321a5ae39727c14b9828a74ff3  re/cp34_current_slot_survey.py
+-2325bf438b18462455fc18a42e2b8869f8bb4b467ef23a5ac06709c2dcccecde  tests/test_cp34_current_slot_survey.py
++e371c89d1fe9aa30114cee2085118aeb4bdd93fea05d6cf461ebe600e1b36aa2  tests/test_cp34_current_slot_survey.py
+ 8e5beb5b13da09cfa66b15908adf0189053c2861908822912e2d3ca860e52b28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-72e8b2116271edad71afc77808abd1eab930a6398cee064de8117381e4e457cd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++78983f3a33903d5cd896965f63b3a10913a455fecc028f94d873f63b2e9d4641  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 3288d3be80f125e2a66f9be71e18fc213a5c6070fe1e99150d3e87cc80b72ac3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+ 7d24b3d3e6de5f0fc519768c9732cfdd08e49268cbb6024e4b43a299cc9f8e49  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 03:37:28.952281845 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 03:40:29.562976258 -0700
+@@ -56,10 +56,6 @@
+ may permit adjustment of the external source; it never permits an io24 setting
+ change.
+ 
+-ALSA capture streams and interface-5 claims never overlap. Close every ALSA
+-stream before a bounded interface-5 JaSt read, then release the claim before
+-the next capture. There is no continuous interface-5 claim.
+-
+ ## Per-candidate sequence
+ 
+ For the attempted candidate, preserve each raw JaSt snapshot and bind its
+@@ -86,6 +82,10 @@
+    equal `P0`.
+ 9. `S4`: capture and hash the restored-initial-state raw WAV.
+ 
++ALSA capture streams and interface-5 claims never overlap. Close every ALSA
++stream before a bounded interface-5 JaSt read, then release the claim before
++the next capture. There is no continuous interface-5 claim.
++
+ Create post-close mono derivatives with the frozen map result only. Their names
+ are deterministic: `S1.mixN.mono.wav`, `S2.mixN.mono.wav`,
+ `S3.mixN.mono.wav`, and `S4.mixN.mono.wav`, where `N` is the frozen Mix A
+@@ -141,18 +141,20 @@
+ make the final retained-file seal and verify it:
+ 
+ ```text
+-(cd RUN && sha256sum $(find . -type f ! -name SHA256SUMS -printf '%P\n' | sort) > SHA256SUMS && sha256sum -c SHA256SUMS)
++(cd RUN && tmpdir=$(mktemp -d .sha256sums.XXXXXX) && trap 'rm -rf "$tmpdir"' EXIT && find . -type f ! -name SHA256SUMS ! -path "./$tmpdir/SHA256SUMS" -print0 | LC_ALL=C sort -z | xargs -0r sha256sum -- > "$tmpdir/SHA256SUMS" && ln "$tmpdir/SHA256SUMS" SHA256SUMS && sha256sum -c SHA256SUMS)
+ ```
+ 
++The atomic `ln` fails if `SHA256SUMS` already exists; do not replace or remove
++that file. The temporary manifest is excluded from its own NUL-safe enumeration.
+ This final SHA-256 command is an offline seal of retained files, not authority
+ for further operation.
+ 
+ ## Outcome and candidate rules
+ 
+ `SIGNATURE_PRESENT` is positive only after `RESTORED`; stop after that first
+-positive. `INCONCLUSIVE` means no distinctive signature, non-specific late
+-tail, or failed audible attestation after successful restoration; it is not a
+-negative result. Only a restored `INCONCLUSIVE` result for `ch1-slot1` makes
++positive. A null signal is `INCONCLUSIVE`, never a negative. `INCONCLUSIVE`
++means no distinctive signature, non-specific late tail, or failed audible
++attestation after successful restoration. Only a restored `INCONCLUSIVE` result for `ch1-slot1` makes
+ `ch2-slot1` eligible. `UNAVAILABLE` is a pre-mutation identity, battery, level,
+ map, or capture failure and does not permit channel 2. `RESTORATION_FAILED` is
+ an unresolved post-mutation state or physical restoration mismatch and does not
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-before/tests/test_cp34_current_slot_survey.py	2026-08-29 03:37:28.952111710 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-4-fix1-after/tests/test_cp34_current_slot_survey.py	2026-08-29 03:40:29.562810664 -0700
+@@ -398,6 +398,9 @@
+     def test_checked_in_template_is_rejected_as_unrecorded_and_unauthorized(self):
+         """Catches accidental shipment of a live-ready survey template."""
+         template = ROOT / ".superpowers" / "sdd" / "2026-08-28-cp34-preset-effect-control" / "CURRENT-SLOT-SURVEY-PLAN.template.json"
++        procedure = (ROOT / ".superpowers" / "sdd"
++                     / "2026-08-28-cp34-preset-effect-control"
++                     / "CURRENT-SLOT-SURVEY.md").read_text(encoding="utf-8")
+         completed = subprocess.run(
+             [sys.executable, str(CLI), "validate-plan", str(template)],
+             text=True, capture_output=True, check=False,
+@@ -408,6 +411,14 @@
+         self.assertEqual(result["status"], "INVALID")
+         self.assertTrue(any("authorization_status" in reason for reason in result["reasons"]))
+         self.assertTrue(any("UNRECORDED" in reason.upper() for reason in result["reasons"]))
++        self.assertLess(
++            procedure.index("1. `P0`:"),
++            procedure.index("ALSA capture streams and interface-5 claims never overlap."),
++        )
++        self.assertIn("A null signal is `INCONCLUSIVE`, never a negative.", procedure)
++        self.assertIn("-print0 | LC_ALL=C sort -z | xargs -0r sha256sum --", procedure)
++        self.assertIn('ln "$tmpdir/SHA256SUMS" SHA256SUMS', procedure)
++        self.assertNotIn("> SHA256SUMS", procedure)
+ 
+ 
+ class MappingAnalyzerTests(unittest.TestCase):

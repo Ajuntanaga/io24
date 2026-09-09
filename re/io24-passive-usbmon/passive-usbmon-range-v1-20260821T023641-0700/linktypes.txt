@@ -1,0 +1,2 @@
+Data link types for usbmon3 (use option -y to set):
+  USB_LINUX_MMAPPED (USB with padded Linux header)

@@ -1,0 +1,22 @@
+CP24_LIVE_ANALYSIS_ASSERTIONS=PASS
+capture_sha256=ab998beda7e6544cf56d574b66212ee3129d17e4f7b97cf3378582d5ef105da8
+validated=2 expected=2
+populated=2 expected=2
+rejected=0 expected=0
+mdl_nonpaged_build=24 expected=24
+mapped_ok=8 expected=8
+mapped_null=0 expected=0
+bulk_routes=8 expected=8
+bulk_submit_attempts=8 expected=8
+bulk_submit_immediate_failures=8 expected=8
+bulk_submit_returned_pending=8 expected=8
+bulk_bus_transactions=0 expected=0
+control_in_submissions=109 expected=109
+control_in_completions=109 expected=109
+control_in_nonzero_completions=0 expected=0
+clear_halt_attempts=4 expected=4
+kernel_interface4_not_claimed=12 expected=12
+KeInsertQueueDpc=0 expected=0
+claim_release_detach_alt_config_calls=0 expected=0
+ucnet_DA=0 expected=0
+synchronize_json=0 expected=0

@@ -1,0 +1,20 @@
+started=2026-08-21T02:36:41,427486563-07:00
+authorization=explicit-user-proceed-passive-usbmon
+script_sha256=a6a28e878c12049bcc0aa9905331ce4b51a06922f9a9c199676622a424e337cb
+capture_filter=link[9] == 2
+capture_scope=control-urbs-only
+snaplen=512
+max_packets=20000
+max_seconds=120
+device=3-1 bus=3 dev=3 serial=AB7C22200355 vidpid=194f:0422
+interface=1.0 driver=snd-usb-audio
+interface=1.1 driver=snd-usb-audio
+interface=1.2 driver=snd-usb-audio
+interface=1.3 driver=snd-usb-audio
+interface=1.4 driver=snd-usb-audio
+interface=1.5 driver=unclaimed
+interface=1.6 driver=unclaimed
+bus_device=3-1 vidpid=194f:0422 serial=AB7C22200355
+bus_device=3-4 vidpid=0489:e0cd serial=000000000
+bus_device=usb3 vidpid=1d6b:0002 serial=0000:04:00.4
+usbmon_module=loaded-by-script

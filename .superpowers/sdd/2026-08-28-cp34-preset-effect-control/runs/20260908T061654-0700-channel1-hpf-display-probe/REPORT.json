@@ -1,0 +1,34 @@
+{
+  "baseline": {
+    "channel_linked": false,
+    "flags_word": 385,
+    "input1_gain_db": 30.0,
+    "input1_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 1,
+    "input2_slot_index": 2
+  },
+  "battery_percent": 100,
+  "error": "TimeoutError: human observation timed out",
+  "failed_stage": "observe_40_hz",
+  "observations": [],
+  "post_state": {
+    "channel_linked": false,
+    "flags_word": 385,
+    "input1_gain_db": 33.0,
+    "input1_preset_enabled": true,
+    "input1_processing_channel": 0,
+    "input1_slot_index": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_preset_enabled": true,
+    "input2_processing_channel": 1,
+    "input2_slot_index": 2
+  },
+  "restore": "EXACT_24_HZ_BYPASS_WRITE_SENT",
+  "schema": "cp34-channel1-hpf-display-probe-v1",
+  "slot_operations": 0,
+  "status": "PROBE_FAILED"
+}

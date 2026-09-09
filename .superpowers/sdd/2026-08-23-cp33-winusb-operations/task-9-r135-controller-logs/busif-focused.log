@@ -1,0 +1,13 @@
+FAIL check_pending_scope_select:620: descriptor root 5 target 6 returned 0xffffffff80000011/1
+FAIL check_pending_scope_select:623: descriptor root 5 target 6 did not reach Unix as select-interface
+FAIL check_pending_scope_select:626: descriptor root 5 target 6 did not retain pending state
+FAIL check_pending_scope_select:632: descriptor root 5 target 6 did not append its SELECT exactly once after prior entries
+FAIL check_pending_scope_select:620: device control root 5 target 6 returned 0xffffffff80000011/1
+FAIL check_pending_scope_select:623: device control root 5 target 6 did not reach Unix as select-interface
+FAIL check_pending_scope_select:626: device control root 5 target 6 did not retain pending state
+FAIL check_pending_scope_select:632: device control root 5 target 6 did not append its SELECT exactly once after prior entries
+FAIL check_pending_scope_select:620: interface control 6 target 5 returned 0xffffffff80000011/1
+FAIL check_pending_scope_select:623: interface control 6 target 5 did not reach Unix as select-interface
+FAIL check_pending_scope_select:626: interface control 6 target 5 did not retain pending state
+FAIL check_pending_scope_select:632: interface control 6 target 5 did not append its SELECT exactly once after prior entries
+12 WineUSB metadata bus-interface check(s) failed

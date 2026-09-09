@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Paint smoke test: launch the GTK app against a STUB device, cycle every page.
+
+Run it with the interface UNPLUGGED:  python3 tests/paint_smoke.py
+Exits non-zero if any draw callback raised.
+
+Why a stub: main() exits when no io24 is present, so the app cannot be launched
+unplugged. Why unplugged at all: the ch page starts the spectrum, which opens the
+sound card — the condition associated with the device dropping to its bootloader.
+With no device there is no card to open, so every paint path can be exercised at
+zero risk to the hardware.
+
+What this actually tests: GTK swallows exceptions raised inside a draw callback,
+which is exactly why 13 stale attribute reads in EQCurve/CompCurve/Rack went
+unnoticed for so long — the frames just came out half-drawn. Python still prints
+the traceback to stderr, so cycling every page and watching stderr is a real
+regression test for that whole class of bug.
+"""
+import os
+import struct
+import sys
+import threading
+from pathlib import Path
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+os.chdir(ROOT)
+
+import io24gtk as G                                          # noqa: E402
+from gi.repository import GLib, Graphene, Gsk, Gtk          # noqa: E402
+
+
+def bits(v):
+    """An int bit pattern as the float the device would have put in that slot."""
+    return struct.unpack("<f", struct.pack("<I", v))[0]
+
+
+class FakeInner:
+    """Stands in for Io24: plausible state, and every setter is a no-op."""
+
+    def read_state(self, n=0x7EC):
+        return b"\x00" * 2040
+
+    def floats(self, rsp):
+        f = [0.0] * 512
+        f[4], f[6] = 0.06, 0.03                    # input meters
+        f[12] = f[13] = 0.12                       # main L/R
+        f[14] = f[15] = 0.09                       # mix A
+        f[16] = f[17] = 0.02                       # mix B
+        f[40] = bits(0)                            # selected slot / preset slot
+        f[41] = bits(1)
+        f[42] = bits(0x0181)                       # the slot-42 flag bitfield
+        f[43], f[44], f[45] = 0.55, 0.43, 0.50     # hp vol, main vol, blend
+        f[46], f[47] = 33.0, 12.0                  # preamp gains
+        f[50] = bits(0x0000)                       # phantom off both
+        return f
+
+    def read_reduction(self, block, channel=1):
+        return [1.0, 0.87]
+
+    def read_params(self):
+        return {"flags": 0x0181, "hpVolume": 0.55, "mainVolume": 0.43,
+                "monitorMix": 0.5, "input1Gain": 33.0, "input2Gain": 12.0,
+                "input1Level": 0.06, "input2Level": 0.03,
+                "input1PhantomPower": 0.0, "input2PhantomPower": 0.0,
+                "input1ProcessingChannel": 1, "input2ProcessingChannel": 2,
+                "input1SlotIndex": 0, "input2SlotIndex": 0}
+
+    def channel_names(self):
+        return {0: "Input 1", 1: "Monitor Left"}
+
+    def bus_master(self, _bus):
+        return 0.0
+
+    def __getattr__(self, name):
+        # every setter/getter the UI reaches for that is not modelled above
+        return lambda *a, **k: None
+
+
+class FakeDev:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.dev = FakeInner()
+
+    def close(self):
+        pass
+
+
+class FakeSpectrum:
+    """Paint data without ever opening ALSA during a visual-only review."""
+
+    def __init__(self, *_args, **_kwargs):
+        self.mag = [None, None]
+        self.ok = False
+        self.error = None
+        self.running = False
+        self.last_data = 0.0
+
+    def start(self):
+        self.running = True
+
+    def pause(self):
+        self.running = False
+
+    def stop(self):
+        self.running = False
+
+    def stalled(self):
+        return False
+
+
+def capture_window(win, output_path):
+    """Render the realized GTK window to PNG without a desktop screenshot API."""
+    content = win.get_content()
+    width, height = content.get_width(), content.get_height()
+    paintable = Gtk.WidgetPaintable.new(content)
+    snapshot = Gtk.Snapshot()
+    paintable.snapshot(snapshot, float(width), float(height))
+    node = snapshot.to_node()
+    if node is None:
+        raise RuntimeError("GTK produced no render node")
+    renderer = Gsk.Renderer.new_for_surface(win.get_surface())
+    try:
+        texture = renderer.render_texture(
+            node, Graphene.Rect().init(0, 0, width, height))
+        if not texture.save_to_png(str(output_path)):
+            raise RuntimeError("GTK could not save %s" % output_path)
+    finally:
+        renderer.unrealize()
+
+
+def main():
+    # This harness exists to inspect rendering, not audio capture. Keeping the
+    # real Spectrum constructor here would make visiting the Channel page open
+    # ALSA whenever an interface happened to be attached.
+    G.Spectrum = FakeSpectrum
+    ctl = G.Ctl(FakeDev())
+    app = G.App(ctl)
+    # A unique id per run: sharing org.io24.Mixer with an already-running
+    # copy makes GTK forward the activation to that instance, so
+    # do_activate never fires here and the test reports success having
+    # drawn nothing at all. That silently invalidated a whole evening of
+    # 'passes' while a preview window happened to be open.
+    app.set_application_id('org.io24.PaintSmoke%d' % os.getpid())
+
+    state = {"i": 0, "pages": None, "seen": [], "capture_pending": None}
+    capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
+    if capture_dir:
+        capture_dir = Path(capture_dir)
+        capture_dir.mkdir(parents=True, exist_ok=True)
+
+    def drive():
+        win = app.win
+        if win is None:
+            return True
+        st = win.stack
+        if state["pages"] is None:
+            state["pages"] = [c.get_name() for c in st.get_pages()] \
+                if hasattr(st, "get_pages") else None
+            if not state["pages"]:
+                state["pages"] = ["mix", "ch", "fx", "route", "dev", "presets"]
+            print("PAGES: %s" % state["pages"], flush=True)
+        pending = state["capture_pending"]
+        if pending is not None:
+            page_number, page_name = pending
+            for _ in range(3):
+                win.queue_draw()
+                while GLib.MainContext.default().pending():
+                    GLib.MainContext.default().iteration(False)
+            if capture_dir:
+                path = capture_dir / (
+                    "%02d-%s.png" % (page_number, page_name))
+                capture_window(win, path)
+                print("CAPTURE -> %s" % path, flush=True)
+            state["capture_pending"] = None
+        i = state["i"]
+        if i >= len(state["pages"]):
+            print("CYCLED ALL PAGES", flush=True)
+            app.quit()
+            return False
+        name = state["pages"][i]
+        state["i"] += 1
+        try:
+            st.set_visible_child_name(name)
+            state["seen"].append(name)
+            state["capture_pending"] = (i + 1, name)
+            print("PAGE -> %s" % name, flush=True)
+        except Exception as e:
+            print("PAGE %s failed: %s" % (name, e), flush=True)
+        # force every canvas on screen to repaint a few times
+        for _ in range(3):
+            win.queue_draw()
+            while GLib.MainContext.default().pending():
+                GLib.MainContext.default().iteration(False)
+        return True
+
+    GLib.timeout_add(1200, drive)
+    GLib.timeout_add(40000, lambda: (app.quit(), False)[1])   # hard stop
+    rc = app.run([])
+    ctl.close()
+    print("VISITED: %s" % state["seen"], flush=True)
+    if not state["seen"]:
+        print("FAIL: no page was ever shown", flush=True)
+        return 1
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

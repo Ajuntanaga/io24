@@ -1,0 +1,39 @@
+diff --git a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
+--- a/dlls/wineusb.sys/wineusb.c
++++ b/dlls/wineusb.sys/wineusb.c
+@@ -696,6 +696,35 @@ static NTSTATUS usb_submit_urb(struct usb_device *device, IRP *irp)
+             return status;
+         }
+ 
++        case URB_FUNCTION_CLASS_INTERFACE:
++        {
++            struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST *req = &urb->UrbControlVendorClassRequest;
++
++            FIXME("IO24_OBSERVE class-interface: header-length %#x, status %#x, flags %#x, "
++                    "transfer-length %u, request-type %#x, request %#x, value %#x, index %#x; "
++                    "returning STATUS_NOT_IMPLEMENTED.\n",
++                    req->Hdr.Length, (unsigned int)req->Hdr.Status,
++                    (unsigned int)req->TransferFlags, (unsigned int)req->TransferBufferLength,
++                    req->RequestTypeReservedBits, req->Request, req->Value, req->Index);
++            break;
++        }
++
++        case URB_FUNCTION_SELECT_INTERFACE:
++        {
++            struct _URB_SELECT_INTERFACE *req = &urb->UrbSelectInterface;
++            USBD_INTERFACE_INFORMATION *iface = &req->Interface;
++
++            FIXME("IO24_OBSERVE select-interface: header-length %#x, status %#x, "
++                    "configuration-handle %p, interface-length %#x, interface %#x, alternate %#x, "
++                    "class %#x, subclass %#x, protocol %#x, pipes %u; "
++                    "returning STATUS_NOT_IMPLEMENTED.\n",
++                    req->Hdr.Length, (unsigned int)req->Hdr.Status, req->ConfigurationHandle,
++                    iface->Length, iface->InterfaceNumber, iface->AlternateSetting,
++                    iface->Class, iface->SubClass, iface->Protocol,
++                    (unsigned int)iface->NumberOfPipes);
++            break;
++        }
++
+         default:
+             FIXME("Unhandled function %#x.\n", urb->UrbHeader.Function);
+     }

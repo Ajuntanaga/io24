@@ -1,0 +1,4 @@
+2026-08-22T10:33:15-07:00
+battery=63% status=Charging
+authorization=single bounded non-mutating live-read
+serial=AB7C22200355

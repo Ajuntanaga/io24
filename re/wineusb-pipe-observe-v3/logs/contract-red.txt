@@ -1,0 +1,3 @@
+err:wineusb:usb_submit_urb Failed to clear halt: io24 fake libusb
+WineUSB pipe-observe fake-libusb behavior: pass
+FAIL: missing marker 'IO24_PIPE_OBSERVE event=clear_halt' in /tmp/io24-wineusb-pipe-observe-contract.IG0kqw/runtime.log

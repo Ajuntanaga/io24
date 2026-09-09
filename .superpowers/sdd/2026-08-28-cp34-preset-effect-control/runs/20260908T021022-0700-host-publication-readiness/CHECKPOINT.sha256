@@ -1,0 +1,5 @@
+243e431bf1e636e320ebb64a861f7f5fc8b94f45f37b04f1116740413231c143  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260908T021022-0700-host-publication-readiness/SCOPE.md
+fe9dde3e7af596152d37bfa3d2dbbfcb34e257059fdcb8df7295c8de788045d0  .superpowers/sdd/FULL-PARAMETER-VERIFICATION-PLAN/task-5-brief.md
+6ad1c7061278fbb47a08973e7d180b37d6a3d3dc3d5b7ca18b3e27f807cfa766  pyproject.toml
+27607584ffa2854f7c05a9ebf60802ba57b777bac724137c9f0f8768b65bf171  README.md
+bef5f7e14ea6fd4c30d221ff1f72ed179db8cd5ef0e16787ca851e5055e7b8d6  tests/test_io24_release_package.py

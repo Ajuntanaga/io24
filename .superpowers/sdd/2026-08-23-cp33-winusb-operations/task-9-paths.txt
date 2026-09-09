@@ -1,0 +1,16 @@
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/transfer.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/io.c
+tests/winusb_function_io_contract.c
+tests/wineusb_winusb_urb_contract.c
+tests/winusb_user_api_contract.c
+tests/winusb_function_io_contract.sh
+tests/winusb_user_api_contract.sh
+tests/wineusb_winusb_urb_fake_libusb.c
+tests/wineusb_winusb_busif_contract.c
+tests/wineusb_winusb_busif_contract.sh

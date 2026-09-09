@@ -1,0 +1,274 @@
+diff --git a/dlls/wineusb.sys/Makefile.in b/dlls/wineusb.sys/Makefile.in
+--- a/dlls/wineusb.sys/Makefile.in
++++ b/dlls/wineusb.sys/Makefile.in
+@@ -8,5 +8,6 @@ EXTRADLLFLAGS = -Wl,--subsystem,native
+ 
+ SOURCES = \
+ 	unixlib.c \
++	usbdi.c \
+ 	wineusb.c \
+ 	wineusb.rc
+diff --git a/dlls/wineusb.sys/unixlib.c b/dlls/wineusb.sys/unixlib.c
+--- a/dlls/wineusb.sys/unixlib.c
++++ b/dlls/wineusb.sys/unixlib.c
+@@ -145,6 +145,8 @@ static void add_usb_device(libusb_device *libusb_device)
+     usb_event.u.added_device.busnum = libusb_get_bus_number(libusb_device);
+     usb_event.u.added_device.portnum = libusb_get_port_number(libusb_device);
+     usb_event.u.added_device.interface = false;
++    usb_event.u.added_device.high_speed =
++            libusb_get_device_speed(libusb_device) >= LIBUSB_SPEED_HIGH;
+     usb_event.u.added_device.interface_index = -1;
+ 
+     if (!(ret = libusb_get_active_config_descriptor(libusb_device, &config_desc)))
+diff --git a/dlls/wineusb.sys/unixlib.h b/dlls/wineusb.sys/unixlib.h
+--- a/dlls/wineusb.sys/unixlib.h
++++ b/dlls/wineusb.sys/unixlib.h
+@@ -44,7 +44,7 @@ struct usb_event
+             struct unix_device *device;
+             UINT16 vendor, product, revision, usbver;
+             UINT8 class, subclass, protocol, busnum, portnum;
+-            bool interface;
++            bool interface, high_speed;
+             INT16 interface_index;
+         } added_device;
+         struct unix_device *removed_device;
+diff --git a/dlls/wineusb.sys/usbdi.c b/dlls/wineusb.sys/usbdi.c
+new file mode 100644
+--- /dev/null
++++ b/dlls/wineusb.sys/usbdi.c
+@@ -0,0 +1,55 @@
++/*
++ * USB bus interface support for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include <string.h>
++
++#include "usbdi.h"
++
++static const GUID usb_bus_interface_usbdi =
++    {0xb1a96a13, 0x3de0, 0x4574, {0x9b, 0x01, 0xc0, 0x8f, 0xea, 0xb3, 0x18, 0xd6}};
++
++NTSTATUS wineusb_query_usbdi_interface(const GUID *interface_type, USHORT size,
++        USHORT version, INTERFACE *interface, void *context,
++        const struct wineusb_usbdi_routines *routines)
++{
++    struct wineusb_usb_bus_interface_usbdi_v1 *usbdi;
++
++    if (!interface_type || !interface || !routines ||
++            !IsEqualGUID(interface_type, &usb_bus_interface_usbdi))
++        return STATUS_NOT_SUPPORTED;
++
++    if (version != WINEUSB_USB_BUSIF_USBDI_VERSION_1 ||
++            size < sizeof(*usbdi))
++        return STATUS_NOT_SUPPORTED;
++
++    if (!routines->InterfaceReference || !routines->InterfaceDereference ||
++            !routines->GetUSBDIVersion || !routines->QueryBusTime ||
++            !routines->SubmitIsoOutUrb || !routines->QueryBusInformation ||
++            !routines->IsDeviceHighSpeed)
++        return STATUS_NOT_SUPPORTED;
++
++    usbdi = (struct wineusb_usb_bus_interface_usbdi_v1 *)interface;
++    *usbdi = (struct wineusb_usb_bus_interface_usbdi_v1)
++    {
++        sizeof(*usbdi),
++        WINEUSB_USB_BUSIF_USBDI_VERSION_1,
++        context,
++        routines->InterfaceReference,
++        routines->InterfaceDereference,
++        routines->GetUSBDIVersion,
++        routines->QueryBusTime,
++        routines->SubmitIsoOutUrb,
++        routines->QueryBusInformation,
++        routines->IsDeviceHighSpeed,
++    };
++    routines->InterfaceReference(context);
++    return STATUS_SUCCESS;
++}
+diff --git a/dlls/wineusb.sys/usbdi.h b/dlls/wineusb.sys/usbdi.h
+new file mode 100644
+--- /dev/null
++++ b/dlls/wineusb.sys/usbdi.h
+@@ -0,0 +1,62 @@
++/*
++ * USB bus interface support for wineusb
++ *
++ * Copyright 2026 the Wine project
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#ifndef __WINE_WINEUSB_USBDI_H
++#define __WINE_WINEUSB_USBDI_H
++
++#include "ntstatus.h"
++#include "windef.h"
++#include "winternl.h"
++#include "ddk/wdm.h"
++#include "ddk/usb.h"
++
++#define WINEUSB_USB_BUSIF_USBDI_VERSION_1 1
++
++typedef void (WINAPI *wineusb_usbdi_get_version)(void *context,
++        USBD_VERSION_INFORMATION *version, ULONG *capabilities);
++typedef NTSTATUS (WINAPI *wineusb_usbdi_query_bus_time)(void *context,
++        ULONG *current_frame);
++typedef NTSTATUS (WINAPI *wineusb_usbdi_submit_iso_out_urb)(void *context,
++        URB *urb);
++typedef NTSTATUS (WINAPI *wineusb_usbdi_query_bus_information)(void *context,
++        ULONG level, void *buffer, ULONG *buffer_length, ULONG *actual_length);
++typedef BOOLEAN (WINAPI *wineusb_usbdi_is_device_high_speed)(void *context);
++
++struct wineusb_usb_bus_interface_usbdi_v1
++{
++    USHORT Size;
++    USHORT Version;
++    void *BusContext;
++    PINTERFACE_REFERENCE InterfaceReference;
++    PINTERFACE_DEREFERENCE InterfaceDereference;
++    wineusb_usbdi_get_version GetUSBDIVersion;
++    wineusb_usbdi_query_bus_time QueryBusTime;
++    wineusb_usbdi_submit_iso_out_urb SubmitIsoOutUrb;
++    wineusb_usbdi_query_bus_information QueryBusInformation;
++    wineusb_usbdi_is_device_high_speed IsDeviceHighSpeed;
++};
++
++struct wineusb_usbdi_routines
++{
++    PINTERFACE_REFERENCE InterfaceReference;
++    PINTERFACE_DEREFERENCE InterfaceDereference;
++    wineusb_usbdi_get_version GetUSBDIVersion;
++    wineusb_usbdi_query_bus_time QueryBusTime;
++    wineusb_usbdi_submit_iso_out_urb SubmitIsoOutUrb;
++    wineusb_usbdi_query_bus_information QueryBusInformation;
++    wineusb_usbdi_is_device_high_speed IsDeviceHighSpeed;
++};
++
++NTSTATUS wineusb_query_usbdi_interface(const GUID *interface_type, USHORT size,
++        USHORT version, INTERFACE *interface, void *context,
++        const struct wineusb_usbdi_routines *routines);
++
++#endif /* __WINE_WINEUSB_USBDI_H */
+diff --git a/dlls/wineusb.sys/wineusb.c b/dlls/wineusb.sys/wineusb.c
+--- a/dlls/wineusb.sys/wineusb.c
++++ b/dlls/wineusb.sys/wineusb.c
+@@ -35,6 +35,7 @@
+ #include "wine/debug.h"
+ #include "wine/list.h"
+ 
++#include "usbdi.h"
+ #include "unixlib.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(wineusb);
+@@ -74,7 +75,7 @@ struct usb_device
+ 
+     DEVICE_OBJECT *device_obj;
+ 
+-    bool interface;
++    bool interface, high_speed;
+     int16_t interface_index;
+ 
+     uint8_t class, subclass, protocol, busnum, portnum;
+@@ -139,6 +140,7 @@ static void add_unix_device(const struct usb_add_device_event *event)
+     device->product = event->product;
+     device->revision = event->revision;
+     device->usbver = event->usbver;
++    device->high_speed = event->high_speed;
+ 
+     EnterCriticalSection(&wineusb_cs);
+     list_add_tail(&device_list, &device->entry);
+@@ -455,6 +457,68 @@ static void remove_pending_irps(struct usb_device *device)
+     }
+ }
+ 
++static void WINAPI usbdi_reference(void *context)
++{
++    TRACE("context %p.\n", context);
++}
++
++static void WINAPI usbdi_dereference(void *context)
++{
++    TRACE("context %p.\n", context);
++}
++
++static void WINAPI usbdi_get_version(void *context,
++        USBD_VERSION_INFORMATION *version, ULONG *capabilities)
++{
++    const struct usb_device *device = context;
++
++    if (version)
++    {
++        version->USBDI_Version = 0x600;
++        version->Supported_USB_Version = device->usbver;
++    }
++    if (capabilities) *capabilities = 0;
++}
++
++static NTSTATUS WINAPI usbdi_query_bus_time(void *context, ULONG *current_frame)
++{
++    TRACE("context %p, current_frame %p: not supported.\n", context, current_frame);
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS WINAPI usbdi_submit_iso_out_urb(void *context, URB *urb)
++{
++    TRACE("context %p, urb %p: not supported.\n", context, urb);
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS WINAPI usbdi_query_bus_information(void *context, ULONG level,
++        void *buffer, ULONG *buffer_length, ULONG *actual_length)
++{
++    TRACE("context %p, level %lu, buffer %p, buffer_length %p: not supported.\n",
++            context, level, buffer, buffer_length);
++    if (actual_length) *actual_length = 0;
++    return STATUS_NOT_SUPPORTED;
++}
++
++static BOOLEAN WINAPI usbdi_is_device_high_speed(void *context)
++{
++    const struct usb_device *device = context;
++
++    return device->high_speed;
++}
++
++static const struct wineusb_usbdi_routines usbdi_routines =
++{
++    usbdi_reference,
++    usbdi_dereference,
++    usbdi_get_version,
++    usbdi_query_bus_time,
++    usbdi_submit_iso_out_urb,
++    usbdi_query_bus_information,
++    usbdi_is_device_high_speed,
++};
++
+ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device_obj, IRP *irp)
+ {
+     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
+@@ -465,6 +529,15 @@ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device_obj, IRP *irp)
+ 
+     switch (stack->MinorFunction)
+     {
++        case IRP_MN_QUERY_INTERFACE:
++            ret = wineusb_query_usbdi_interface(
++                    stack->Parameters.QueryInterface.InterfaceType,
++                    stack->Parameters.QueryInterface.Size,
++                    stack->Parameters.QueryInterface.Version,
++                    stack->Parameters.QueryInterface.Interface,
++                    device, &usbdi_routines);
++            break;
++
+         case IRP_MN_QUERY_ID:
+             ret = query_id(device, irp, stack->Parameters.QueryId.IdType);
+             break;

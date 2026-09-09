@@ -1,0 +1,8 @@
+timestamp=2026-08-21T02:56:27-07:00
+phase=CP11_GREEN_CAPTURED_RANGE
+isolation=Bubblewrap user/pid/net/ipc/uts/cgroup namespaces, all capabilities dropped, private dev, empty host home/sys/run/tmp, project read-only
+limits=1 GiB virtual memory, 60 CPU seconds, 60 wall seconds
+exit=0
+
+WineUSB captured-RANGE fake-libusb contract: pass
+WineUSB captured-RANGE source/binary contract: pass

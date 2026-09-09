@@ -1,0 +1,14 @@
+--- production-main.c
++++ no-retired-reclaim-main.c
+@@ -144,10 +144,7 @@
+             root->interface_handles[object->interface_index] == object)
+         root->interface_handles[object->interface_index] = NULL;
+     --root->live_handles;
+-    if (object->api_references)
+-        list_add_tail(&root->retired_handles, &object->entry);
+-    else
+-        HeapFree(GetProcessHeap(), 0, object);
++    list_add_tail(&root->retired_handles, &object->entry);
+     --root->references;
+     final = !root->live_handles;
+     if (final) root->retiring = TRUE;

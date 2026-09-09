@@ -1,0 +1,572 @@
+#!/usr/bin/env python3
+"""
+io24_presets — Universal Control's own factory Fat Channel presets.
+
+These are not imitations. They are the real preset records, recovered from the
+Universal Control installer (see re/extract_presets.py) and applied through the
+reverse-engineered DSP calls. Every value lands inside the ranges recovered
+independently from the host's parameter descriptors, which is what says the
+decode is right rather than plausible-looking.
+
+    python3 io24_presets.py                 list them
+    python3 io24_presets.py "Vocal" 1       apply one to channel 1
+    python3 io24_presets.py --voicefx "Reverb" 2
+
+The preset data itself is PreSonus's, not mine and not under this project's
+licence. It lives in re/uc_factory_presets.json, which IS committed — see the
+licence section of the README for why, and for what to strip if you are
+repackaging. If you would rather not have it, delete that file and regenerate it
+from your own copy of the installer with re/extract_presets.py; everything except
+this browser works without it.
+
+A preset names seven modules. Six map onto DSP this driver drives:
+
+    opt      swapcompeq            -> set_comp_eq_order
+    filter   hpf                   -> set_highpass_freq
+    gate     8 parameters          -> set_gate
+    comp     input/output/ratio    -> set_compressor, FET model
+    eq       4 bands x 5 fields    -> set_eq_band
+    limit    limiteron, threshold  -> set_limiter
+
+The seventh, `voicefx`, is record-resident Voice FX state for block 201. The
+ordinary live setter replay omits it unless ``with_fx=True`` is explicitly
+requested. That opt-in assigns the singleton Voice FX layer to the requested
+physical input, resolves UC's saved class id, selects/instantiates the model,
+and then applies only that model's state. It still does not claim that the
+stock processing gate is open or that the result is audible.
+``Io24.save_device_slot()`` preserves the same object inside the complete tagged
+``MemP/Stat`` record. UC separately assigns the singleton Voice FX engine to
+Channel 1 or Channel 2 with ``processingChannel``.
+"""
+import json
+import math
+import os
+import sys
+
+import io24_dsp
+import io24_fx
+
+_CACHE = None
+PRESET_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "re", "uc_factory_presets.json")
+
+# eqbandopN is literally named "Low Shelf" / "High Shelf" in UC 4.7.2's
+# fatchannelxt.xml. Bands 2 and 3 carry no usable op field and are always
+# peaking; a true outer-band toggle selects the shelf shape.
+_SHELF = {1: "lowshelf", 4: "highshelf"}
+
+EQ_CLASSES = {
+    "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}": "standard",
+    "{C0730CBB-5135-4558-9222-C40BDBA036ED}": "passive",
+    "{E1C5E024-C5CD-473C-B08A-6EC177812E01}": "vintage",
+}
+
+COMP_CLASSES = {
+    "{870D04F7-212E-4F9C-ADBB-39A97216433F}": "standard",
+    "{7F8A4262-D377-48E3-9D48-15D82C400A71}": "tube",
+    "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}": "fet",
+}
+
+
+class UnsupportedPresetModel(ValueError):
+    """A stored model has no exact direct-live implementation."""
+
+
+def _model(component, classes, signatures, label):
+    """Resolve a UC class id, with field inference only when it is absent."""
+    if not component:
+        return None
+    class_id = component.get("__classid")
+    if class_id is not None:
+        try:
+            return classes[class_id]
+        except KeyError:
+            raise ValueError("unknown %s class id: %s" % (label, class_id))
+    matches = [name for name, fields in signatures.items()
+               if any(field in component for field in fields)]
+    if len(matches) != 1:
+        raise ValueError("%s model is missing an unambiguous class id" % label)
+    return matches[0]
+
+
+def eq_model(eq):
+    return _model(eq, EQ_CLASSES, {
+        "standard": ("eqfreq1", "eqgain1", "eqq1"),
+        "passive": ("bboost", "batten", "bfreq", "mboost", "bbwidth"),
+        "vintage": ("lowgain", "lowfreq", "lowmidgain", "himidgain"),
+    }, "EQ")
+
+
+def compressor_model(comp):
+    return _model(comp, COMP_CLASSES, {
+        "standard": ("threshold", "softknee", "automode"),
+        "tube": ("peak", "mode"),
+        "fet": ("input", "output"),
+    }, "compressor")
+
+
+def _require(component, fields, label):
+    missing = [field for field in fields if field not in component]
+    if missing:
+        raise ValueError("%s missing field%s: %s" %
+                         (label, "s" if len(missing) != 1 else "",
+                          ", ".join(missing)))
+
+
+def _finite_in_range(component, field, low, high, label):
+    value = component[field]
+    if isinstance(value, bool):
+        raise ValueError("%s %s must be a finite number" % (label, field))
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("%s %s must be a finite number" % (label, field))
+    if not math.isfinite(number):
+        raise ValueError("%s %s must be finite" % (label, field))
+    if not low <= number <= high:
+        raise ValueError("%s %s must be in [%s, %s]" %
+                         (label, field, low, high))
+    return number
+
+
+def _toggle(component, field, label):
+    value = component[field]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and math.isfinite(float(value)) and \
+            float(value) in (0.0, 1.0):
+        return bool(value)
+    raise ValueError("%s %s must be boolean or 0/1" % (label, field))
+
+
+def _index(component, field, low, high, label):
+    value = _finite_in_range(component, field, low, high, label)
+    if not value.is_integer():
+        raise ValueError("%s %s must be an integer in [%d, %d]" %
+                         (label, field, low, high))
+    return int(value)
+
+
+def _keyfilter(component, off_sentinel, label):
+    """Accept only this model's exact off value or its documented live range."""
+    value = _finite_in_range(component, "keyfilter", 0.0, 16000.0, label)
+    if value != off_sentinel and value < 40.0:
+        raise ValueError(
+            "%s keyfilter must equal the %.1f Hz off sentinel or in "
+            "[40.0, 16000.0]" % (label, off_sentinel))
+    return value
+
+
+def _compressor_call(comp):
+    """Validate and serialize the exact selected compressor before any write."""
+    model = compressor_model(comp)
+    if model is None:
+        return None
+    common = ("on", "keyfilter", "keylisten")
+    if model == "standard":
+        label = "Standard compressor"
+        _require(comp, common + ("threshold", "ratio", "attack", "release",
+                                 "gain", "softknee", "automode"),
+                 label)
+        index = 0
+        kwargs = dict(
+            on=_toggle(comp, "on", label),
+            threshold_db=_finite_in_range(comp, "threshold", -56.0, 0.0, label),
+            ratio=_finite_in_range(comp, "ratio", 1.0, 20.0, label),
+            attack_s=_finite_in_range(comp, "attack", 0.0002, 0.15, label),
+            release_s=_finite_in_range(comp, "release", 0.0025, 0.9, label),
+            gain_db=_finite_in_range(comp, "gain", 0.0, 28.0, label),
+            softknee=_toggle(comp, "softknee", label),
+            automode=_toggle(comp, "automode", label),
+            keyfilter_hz=_keyfilter(comp, 20.0, label),
+            keylisten=_toggle(comp, "keylisten", label))
+        builder = io24_dsp.cpxt_comp
+    elif model == "tube":
+        label = "Tube compressor"
+        _require(comp, common + ("peak", "gain", "mode"), label)
+        index = 1
+        kwargs = dict(
+            on=_toggle(comp, "on", label),
+            peak=_finite_in_range(comp, "peak", 0.0, 100.0, label),
+            gain=_finite_in_range(comp, "gain", 0.0, 100.0, label),
+            limit_mode=_toggle(comp, "mode", label),
+            keyfilter_hz=_keyfilter(comp, 0.0, label),
+            keylisten=_toggle(comp, "keylisten", label))
+        builder = io24_dsp.cpxt_tube
+    else:
+        label = "FET compressor"
+        _require(comp, common + ("input", "output", "attack", "release", "ratio"),
+                 label)
+        index = 2
+        kwargs = dict(
+            on=_toggle(comp, "on", label),
+            input_db=_finite_in_range(comp, "input", -56.0, 0.0, label),
+            output_db=_finite_in_range(comp, "output", -56.0, 0.0, label),
+            attack_s=_finite_in_range(comp, "attack", 0.000021, 0.0008, label),
+            release_s=_finite_in_range(comp, "release", 0.05, 1.1, label),
+            ratio_index=_index(comp, "ratio", 0, 4, label),
+            keyfilter_hz=_keyfilter(comp, 20.0, label),
+            keylisten=_toggle(comp, "keylisten", label))
+        builder = io24_dsp.cpxt_fet
+
+    blob = builder(index=0, fs=48000.0, **kwargs)
+    if not isinstance(blob, bytes) or len(blob) != 0x40:
+        raise ValueError("%s builder did not serialize a 64-byte cpxt blob" % label)
+    return index, kwargs
+
+
+def _standard_eq_bands(eq):
+    """Validate and decode all four Standard bands before any device write."""
+    _require(eq, ("eqallon",) +
+             tuple("eqbandon%d" % band for band in range(1, 5)) +
+             tuple("eqfreq%d" % band for band in range(1, 5)) +
+             tuple("eqgain%d" % band for band in range(1, 5)) +
+             tuple("eqq%d" % band for band in range(1, 5)) +
+             ("eqbandop1", "eqbandop4"), "Standard EQ")
+    bands = []
+    for band in range(1, 5):
+        shape = "off"
+        if bool(eq["eqallon"]) and bool(eq["eqbandon%d" % band]):
+            shape = _SHELF[band] if band in _SHELF and \
+                bool(eq["eqbandop%d" % band]) else "peaking"
+        bands.append({
+            "shape": shape,
+            "freq": float(eq["eqfreq%d" % band]),
+            "gain": float(eq["eqgain%d" % band]),
+            "q": float(eq["eqq%d" % band]),
+        })
+    return bands
+
+
+def direct_apply_support(preset):
+    """Whether a factory record has an exact direct-live Host mapping."""
+    try:
+        comp = preset.get("comp") or {}
+        if comp:
+            _compressor_call(comp)
+        eq = preset.get("eq") or {}
+        model = eq_model(eq)
+        if model in ("passive", "vintage"):
+            return False, "%s EQ is device-slot only; exact live builder pending" % \
+                model.title()
+        if model == "standard":
+            _standard_eq_bands(eq)
+    except ValueError as error:
+        return False, str(error)
+    return True, "exact direct-live mapping"
+
+
+def load(path=None):
+    """Every factory preset, de-duplicated by content, keyed by name."""
+    global _CACHE
+    if _CACHE is not None and path is None:
+        return _CACHE
+    p = path or PRESET_JSON
+    if not os.path.exists(p):
+        raise SystemExit(
+            "no preset data at %s\n"
+            "Generate it from your own installer:\n"
+            "  python3 re/extract_presets.py <nsis_payload.bin> %s" % (p, p))
+    with open(p) as stream:
+        raw = json.load(stream)
+    out, seen = {}, set()
+    for r in raw:
+        body = json.dumps({k: v for k, v in r.items() if k != "_offset"},
+                          sort_keys=True)
+        if body in seen:
+            continue
+        seen.add(body)
+        name = r["preset_name"]
+        n, base = name, name
+        k = 2
+        while n in out:                       # a few names recur per product
+            n = "%s (%d)" % (base, k)
+            k += 1
+        out[n] = r
+    if path is None:
+        _CACHE = out
+    return out
+
+
+def names():
+    return sorted(load())
+
+
+def describe(p):
+    """A one-line summary, for a UI list."""
+    bits = []
+    if p.get("gate", {}).get("on"):
+        bits.append("gate")
+    if p.get("comp", {}).get("on"):
+        try:
+            bits.append("%s comp" % compressor_model(p["comp"]).title())
+        except ValueError:
+            bits.append("unknown comp")
+    if p.get("eq", {}).get("eqallon"):
+        try:
+            model = eq_model(p["eq"])
+            bits.append("%s EQ%s" %
+                        (model.title(), " (device-slot only)"
+                         if model in ("passive", "vintage") else ""))
+        except ValueError:
+            bits.append("unknown EQ")
+    if p.get("limit", {}).get("limiteron"):
+        bits.append("limiter")
+    if p.get("voicefx", {}).get("on"):
+        bits.append("Voice FX (device-slot)")
+    return ", ".join(bits) or "flat"
+
+
+def apply_preset(dev, preset, channel=1, with_fx=False):
+    """Send a factory preset to a channel. Returns a list of what was applied.
+
+    ``with_fx`` is an explicit opt-in to the source-bound UC component replay:
+    assign the singleton VoiceFX layer to physical ``channel``, select the
+    saved model, and then apply its fields. The assignment is separate from
+    the preset-control namespace: all Fat Channel and preset calls continue to
+    address the same physical ``channel``.
+    """
+    if isinstance(preset, str):
+        preset = load()[preset]
+    fx = preset.get("voicefx") or {}
+    # Validate the complete VoiceFX object before changing any Fat Channel
+    # state. A malformed opt-in must fail atomically at the host boundary.
+    fx_call = io24_fx.voicefx_preset_call(fx) if with_fx and fx else None
+    comp = preset.get("comp") or {}
+    comp_call = _compressor_call(comp) if comp else None
+    eq = preset.get("eq") or {}
+    eq_kind = eq_model(eq)
+    if eq_kind in ("passive", "vintage"):
+        raise UnsupportedPresetModel(
+            "%s EQ has no exact direct-live builder; use the complete device-slot "
+            "record instead" % eq_kind.title())
+    eq_bands = _standard_eq_bands(eq) if eq_kind == "standard" else None
+    done = []
+
+    opt = preset.get("opt") or {}
+    if "swapcompeq" in opt:
+        dev.set_comp_eq_order(channel, bool(opt["swapcompeq"]))
+        done.append("order=%s" % ("eq-first" if opt["swapcompeq"] else "comp-first"))
+
+    filt = preset.get("filter") or {}
+    if "hpf" in filt:
+        dev.set_highpass_freq(channel, float(filt["hpf"]))
+        done.append("hpf=%.0fHz" % filt["hpf"])
+
+    g = preset.get("gate") or {}
+    if g:
+        if g.get("on"):
+            dev.set_gate(channel, on=True,
+                         threshold_db=float(g.get("threshold", -40)),
+                         range_db=float(g.get("range", -60)),
+                         attack_s=float(g.get("attack", 0.005)),
+                         release_s=float(g.get("release", 0.3)),
+                         keyfilter_hz=float(g.get("keyfilter", 0.0)),
+                         expander=bool(g.get("expander", 1)),
+                         keylisten=bool(g.get("keylisten", 0)))
+            done.append("gate")
+        else:
+            dev.gate_off(channel)
+
+    if comp_call is not None:
+        comp_index, comp_kwargs = comp_call
+        if comp_kwargs["on"]:
+            dev.set_compressor(channel, model=comp_index, **comp_kwargs)
+            done.append("comp(%s)" % compressor_model(comp).title())
+        else:
+            dev.compressor_off(channel)
+
+    if eq_bands is not None:
+        if bool(eq["eqallon"]):
+            for band, values in enumerate(eq_bands):
+                dev.set_eq_band(channel, band, values["shape"],
+                                freq_hz=values["freq"],
+                                gain_db=values["gain"], q=values["q"])
+            done.append("eq(4)")
+        else:
+            dev.eq_off(channel)
+
+    lm = preset.get("limit") or {}
+    if lm:
+        dev.set_limiter(channel, bool(lm.get("limiteron")),
+                        float(lm.get("threshold", -28)))
+        if lm.get("limiteron"):
+            done.append("limiter")
+
+    if fx_call is not None:
+        model, kwargs = fx_call
+        # UC evaluates processingChannel ownership before activating/selecting
+        # fxmodel. Mirror that layer explicitly; never reinterpret ``channel``
+        # as a processing-chain or preset-control index.
+        dev.set_voicefx_channel(channel)
+        writes = dev.set_fx(model, **kwargs)
+        state = "" if kwargs["on"] else " off"
+        done.append("voicefx=%s%s (%d writes; activation unresolved)" %
+                    (model, state, writes))
+    elif fx.get("on"):
+        done.append("[voicefx retained for device-slot save; direct replay omitted]")
+    return done
+
+
+def to_bands(preset):
+    """The preset's four EQ bands in this driver's own shape, for the UI."""
+    eq = preset.get("eq") or {}
+    model = eq_model(eq)
+    if model in ("passive", "vintage"):
+        raise UnsupportedPresetModel(
+            "%s EQ cannot be represented as four Standard bands" % model.title())
+    if model is None:
+        return [{"shape": "off", "freq": freq, "gain": 0.0, "q": 0.7}
+                for freq in (120.0, 600.0, 2500.0, 8000.0)]
+    return _standard_eq_bands(eq)
+
+
+def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
+                        gate, compressor_model, compressor, limiter,
+                        voicefx_model, voicefx):
+    """Overlay current Host controls onto one explicit complete slot base.
+
+    The base supplies archive sections that the live UI does not model.  Every
+    Fat Channel and Voice FX field that the UI *does* own is replaced, never
+    merged with a stale model.  The result remains a complete-body candidate;
+    it does not imply device readback, selection, recall, or audibility.
+    """
+    from io24_preset_record import complete_device_slot_record
+
+    record = complete_device_slot_record(base)
+    if not isinstance(preset_name, str) or not preset_name.strip():
+        raise ValueError("current slot preset name must be non-empty text")
+    record["preset_name"] = preset_name.strip()
+    record["opt"] = {"swapcompeq": int(bool(eq_first))}
+    record["filter"] = {"hpf": float(hpf_hz)}
+
+    if not isinstance(bands, (list, tuple)) or len(bands) != 4:
+        raise ValueError("current slot EQ must contain four bands")
+    eq = {
+        "__classid": next(key for key, value in EQ_CLASSES.items()
+                          if value == "standard"),
+        "eqallon": int(any(band.get("shape") != "off" for band in bands)),
+    }
+    allowed = (
+        {"off", "peaking", "lowshelf"},
+        {"off", "peaking"},
+        {"off", "peaking"},
+        {"off", "peaking", "highshelf"},
+    )
+    for index, band in enumerate(bands, 1):
+        if not isinstance(band, dict) or not {
+                "shape", "freq", "gain", "q"}.issubset(band):
+            raise ValueError("current slot EQ band %d is incomplete" % index)
+        shape = band["shape"]
+        if shape not in allowed[index - 1]:
+            raise UnsupportedPresetModel(
+                "EQ band %d shape %s has no complete Standard-slot mapping" %
+                (index, shape))
+        eq["eqbandon%d" % index] = int(shape != "off")
+        eq["eqfreq%d" % index] = float(band["freq"])
+        eq["eqgain%d" % index] = float(band["gain"])
+        eq["eqq%d" % index] = float(band["q"])
+        if index in (1, 4):
+            shelf = "lowshelf" if index == 1 else "highshelf"
+            eq["eqbandop%d" % index] = int(shape == shelf)
+    _standard_eq_bands(eq)
+    record["eq"] = eq
+
+    gate_fields = {
+        "on", "threshold_db", "range_db", "attack_s", "release_s",
+        "keyfilter_hz", "keylisten", "expander",
+    }
+    if not isinstance(gate, dict) or set(gate) != gate_fields:
+        raise ValueError("current slot gate state is incomplete")
+    record["gate"] = {
+        "on": int(bool(gate["on"])),
+        "keylisten": int(bool(gate["keylisten"])),
+        "expander": int(bool(gate["expander"])),
+        "keyfilter": float(gate["keyfilter_hz"]),
+        "threshold": float(gate["threshold_db"]),
+        "range": float(gate["range_db"]),
+        "attack": float(gate["attack_s"]),
+        "release": float(gate["release_s"]),
+    }
+
+    try:
+        comp_name = ("standard", "tube", "fet")[int(compressor_model)]
+    except (IndexError, TypeError, ValueError):
+        raise ValueError("current slot compressor model must be 0, 1, or 2")
+    if not isinstance(compressor, dict):
+        raise ValueError("current slot compressor state must be an object")
+    common = {
+        "on": int(bool(compressor["on"])),
+        "keyfilter": float(compressor["keyfilter_hz"]),
+        "keylisten": int(bool(compressor["keylisten"])),
+        "__classid": next(key for key, value in COMP_CLASSES.items()
+                          if value == comp_name),
+    }
+    if common["keyfilter"] <= 0.0 and comp_name in ("standard", "fet"):
+        common["keyfilter"] = 20.0
+    if comp_name == "standard":
+        common.update({
+            "threshold": float(compressor["threshold_db"]),
+            "ratio": float(compressor["ratio"]),
+            "attack": float(compressor["attack_s"]),
+            "release": float(compressor["release_s"]),
+            "gain": float(compressor["gain_db"]),
+            "softknee": int(bool(compressor["softknee"])),
+            "automode": int(bool(compressor["automode"])),
+        })
+    elif comp_name == "tube":
+        common.update({
+            "peak": float(compressor["peak"]),
+            "gain": float(compressor["gain"]),
+            "mode": int(bool(compressor["limit_mode"])),
+        })
+    else:
+        common.update({
+            "input": float(compressor["input_db"]),
+            "output": float(compressor["output_db"]),
+            "attack": float(compressor["attack_s"]),
+            "release": float(compressor["release_s"]),
+            "ratio": int(compressor["ratio_index"]),
+        })
+    _compressor_call(common)
+    record["comp"] = common
+
+    if not isinstance(limiter, dict) or set(limiter) != {"on", "threshold_db"}:
+        raise ValueError("current slot limiter state is incomplete")
+    record["limit"] = {
+        "limiteron": int(bool(limiter["on"])),
+        "threshold": float(limiter["threshold_db"]),
+    }
+    record["voicefx"] = io24_fx.voicefx_preset_state(
+        voicefx_model, **voicefx)
+    return complete_device_slot_record(record)
+
+
+def main():
+    ps = load()
+    argv = sys.argv[1:]
+    with_fx = "--voicefx" in argv
+    argv = [value for value in argv if value != "--voicefx"]
+    if not argv:
+        print("%d factory presets:\n" % len(ps))
+        for n in names():
+            print("  %-22s %s" % (n, describe(ps[n])))
+        print("\n  apply strip:  python3 io24_presets.py \"Vocal\" [channel]")
+        print("  apply strip plus explicit VoiceFX model/state:")
+        print("                python3 io24_presets.py --voicefx \"Reverb\" [channel]")
+        return
+    name = argv[0]
+    ch = int(argv[1]) if len(argv) > 1 else 1
+    if name not in ps:
+        raise SystemExit("no preset %r — try: %s" % (name, ", ".join(names()[:8])))
+    from io24 import Io24
+    d = Io24()
+    try:
+        applied = apply_preset(d, ps[name], ch, with_fx=with_fx)
+        print("applied %r to channel %d: %s" % (name, ch, ", ".join(applied)))
+    finally:
+        d.close()
+
+
+if __name__ == "__main__":
+    main()

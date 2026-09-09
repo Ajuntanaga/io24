@@ -1,0 +1,16 @@
+.io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/unixlib.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/Makefile.in
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/session.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+.io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/Makefile.in
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/main.c
+.io24-build/winusb-api-v1/dev-source/dlls/winusb/winusb_private.h
+tests/winusb_function_io_contract.c
+tests/winusb_function_io_contract.sh
+tests/winusb_function_binding_contract.c
+tests/winusb_function_binding_contract.sh
+tests/winusb_user_api_contract.c
+tests/winusb_user_api_contract.sh
+re/winusb-api-v1/logs/task-04-initialize.patch
+re/winusb-api-v1/logs/task-04-initialize.sha256

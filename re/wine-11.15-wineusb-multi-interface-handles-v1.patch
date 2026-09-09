@@ -1,0 +1,182 @@
+--- a/dlls/wineusb.sys/unixlib.c
++++ b/dlls/wineusb.sys/unixlib.c
+@@ -395,7 +395,7 @@
+     {
+         struct pipe pipe;
+         HANDLE handle;
+-    } u;
++    } u = {0};
+ 
+     u.pipe.endpoint = endpoint;
+     u.pipe.type = type;
+@@ -414,6 +414,89 @@
+     return u.pipe;
+ }
+ 
++static NTSTATUS validate_select_configuration(IRP *irp,
++        struct _URB_SELECT_CONFIGURATION *req, unsigned int *interface_count,
++        unsigned int *pipe_count)
++{
++    const size_t request_header_size = offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
++    const size_t interface_header_size = offsetof(USBD_INTERFACE_INFORMATION, Pipes);
++    const unsigned char *cursor, *end;
++    unsigned int interfaces = 0, pipes = 0;
++    const char *reason = "unknown";
++    size_t available = 0, required = 0;
++    ULONG declared_pipes = 0;
++
++    if (req->Hdr.Length < request_header_size)
++    {
++        reason = "short_request_header";
++        available = req->Hdr.Length;
++        required = request_header_size;
++        goto invalid;
++    }
++
++    cursor = (const unsigned char *)&req->Interface;
++    end = (const unsigned char *)req + req->Hdr.Length;
++    while (cursor < end)
++    {
++        const USBD_INTERFACE_INFORMATION *interface;
++        size_t remaining, available_pipes;
++
++        remaining = end - cursor;
++        if (remaining < interface_header_size)
++        {
++            reason = "short_interface_header";
++            available = remaining;
++            required = interface_header_size;
++            goto invalid;
++        }
++
++        interface = (const USBD_INTERFACE_INFORMATION *)cursor;
++        if (interface->Length < interface_header_size)
++        {
++            reason = "short_interface_length";
++            available = interface->Length;
++            required = interface_header_size;
++            goto invalid;
++        }
++        if (interface->Length > remaining)
++        {
++            reason = "interface_length_exceeds_request";
++            available = remaining;
++            required = interface->Length;
++            goto invalid;
++        }
++
++        available_pipes = (interface->Length - interface_header_size) /
++                sizeof(interface->Pipes[0]);
++        if (interface->NumberOfPipes > available_pipes)
++        {
++            reason = "truncated_pipe_array";
++            available = available_pipes;
++            required = interface->NumberOfPipes;
++            declared_pipes = interface->NumberOfPipes;
++            goto invalid;
++        }
++
++        pipes += interface->NumberOfPipes;
++        ++interfaces;
++        cursor += interface->Length;
++    }
++
++    *interface_count = interfaces;
++    *pipe_count = pipes;
++    FIXME("IO24_HANDLE_POPULATION event=validated irp=%p header_length=%u "
++            "interfaces=%u pipes=%u.\n", irp, req->Hdr.Length, interfaces, pipes);
++    return STATUS_SUCCESS;
++
++invalid:
++    FIXME("IO24_HANDLE_POPULATION event=reject irp=%p reason=%s interface_index=%u "
++            "available=%lu required=%lu declared_pipes=%u.\n", irp, reason,
++            interfaces, (unsigned long)available, (unsigned long)required,
++            (unsigned int)declared_pipes);
++    req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++    return STATUS_INVALID_PARAMETER;
++}
++
+ static const unsigned char io24_clock_source_range[] =
+ {
+     0x04, 0x00,
+@@ -460,6 +543,16 @@
+             const char *route = pipe.type == UsbdPipeTypeBulk ? "bulk" :
+                     pipe.type == UsbdPipeTypeInterrupt ? "interrupt" : "invalid";
+ 
++            if (req->TransferBufferLength && !params->transfer_buffer)
++            {
++                req->Hdr.Status = USBD_STATUS_INVALID_PARAMETER;
++                FIXME("IO24_PIPE_SAFETY event=transfer_reject reason=null_buffer irp=%p "
++                        "handle=%p endpoint=%#x type=%u route=%s length=%u.\n", irp,
++                        req->PipeHandle, pipe.endpoint, pipe.type, route,
++                        req->TransferBufferLength);
++                return STATUS_INVALID_PARAMETER;
++            }
++
+             FIXME("IO24_PIPE_OBSERVE event=transfer_route irp=%p handle=%p endpoint=%#x "
+                     "type=%u route=%s length=%u buffer=%p.\n", irp, req->PipeHandle,
+                     pipe.endpoint, pipe.type, route, req->TransferBufferLength,
+@@ -548,12 +641,9 @@
+         case URB_FUNCTION_SELECT_CONFIGURATION:
+         {
+             struct _URB_SELECT_CONFIGURATION *req = &urb->UrbSelectConfiguration;
+-            ULONG i;
+-
+-            FIXME("IO24_PIPE_OBSERVE event=select_configuration_backend irp=%p "
+-                    "scope=first_interface interface=%u alternate=%u pipes=%u.\n", irp,
+-                    req->Interface.InterfaceNumber, req->Interface.AlternateSetting,
+-                    (unsigned int)req->Interface.NumberOfPipes);
++            unsigned char *cursor, *end;
++            unsigned int interface_count, pipe_count, interface_index = 0;
++            NTSTATUS status;
+ 
+             /* FIXME: In theory, we'd call libusb_set_configuration() here, but
+              * the CASIO FX-9750GII (which has only one configuration) goes into
+@@ -561,17 +651,39 @@
+              * we should skip setting that if and only if the configuration is
+              * already active? */
+ 
+-            for (i = 0; i < req->Interface.NumberOfPipes; ++i)
++            status = validate_select_configuration(irp, req, &interface_count, &pipe_count);
++            if (status != STATUS_SUCCESS)
++                return status;
++
++            FIXME("IO24_PIPE_OBSERVE event=select_configuration_backend irp=%p "
++                    "scope=all_interfaces interfaces=%u pipes=%u.\n", irp,
++                    interface_count, pipe_count);
++
++            cursor = (unsigned char *)&req->Interface;
++            end = (unsigned char *)req + req->Hdr.Length;
++            while (cursor < end)
+             {
+-                USBD_PIPE_INFORMATION *pipe = &req->Interface.Pipes[i];
+-                pipe->PipeHandle = make_pipe_handle(pipe->EndpointAddress, pipe->PipeType);
+-                FIXME("IO24_PIPE_OBSERVE event=pipe_handle irp=%p interface=%u pipe_index=%u "
+-                        "endpoint=%#x type=%u handle=%p.\n", irp,
+-                        req->Interface.InterfaceNumber, (unsigned int)i,
+-                        pipe->EndpointAddress, (unsigned int)pipe->PipeType,
+-                        pipe->PipeHandle);
++                USBD_INTERFACE_INFORMATION *interface = (USBD_INTERFACE_INFORMATION *)cursor;
++                ULONG i;
++
++                for (i = 0; i < interface->NumberOfPipes; ++i)
++                {
++                    USBD_PIPE_INFORMATION *pipe = &interface->Pipes[i];
++                    pipe->PipeHandle = make_pipe_handle(pipe->EndpointAddress, pipe->PipeType);
++                    FIXME("IO24_PIPE_OBSERVE event=pipe_handle irp=%p interface_index=%u "
++                            "interface=%u pipe_index=%u endpoint=%#x type=%u handle=%p.\n",
++                            irp, interface_index, interface->InterfaceNumber, (unsigned int)i,
++                            pipe->EndpointAddress, (unsigned int)pipe->PipeType,
++                            pipe->PipeHandle);
++                }
++
++                cursor += interface->Length;
++                ++interface_index;
+             }
+ 
++            FIXME("IO24_HANDLE_POPULATION event=populated irp=%p interfaces=%u pipes=%u.\n",
++                    irp, interface_count, pipe_count);
++
+             return STATUS_SUCCESS;
+         }
+ 

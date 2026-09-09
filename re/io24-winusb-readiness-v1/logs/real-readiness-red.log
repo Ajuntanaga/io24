@@ -1,0 +1,16 @@
+expected_exit=1
+STRUCTURALLY NOT READY: os_1_compatible_id_translation_missing
+STRUCTURALLY NOT READY: generic_winusb_function_binding_missing
+STRUCTURALLY NOT READY: required_winusb_api_surface_unimplemented
+io24 MI05/MI06 WinUSB readiness
+  vendor imports: 14/14
+  io24 MI05/MI06 WINUSB model: present
+  compatible-ID translation: missing
+  generic WinUSB INF match: missing
+  required WinUSB APIs implemented: 0/14
+  known CP30 boundary: confirmed
+  structural readiness: NOT READY
+  stageable from this audit alone: NO
+    blocker: os_1_compatible_id_translation_missing
+    blocker: generic_winusb_function_binding_missing
+    blocker: required_winusb_api_surface_unimplemented

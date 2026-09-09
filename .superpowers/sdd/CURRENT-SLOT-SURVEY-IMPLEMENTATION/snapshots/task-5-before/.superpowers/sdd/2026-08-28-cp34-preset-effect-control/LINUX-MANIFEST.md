@@ -1,0 +1,127 @@
+# CP34 Linux-only continuation
+
+Status: active; offline host-operation closure and scoped slot classifier
+reproduced; L01 read-only discovery partial
+
+Linux is the project host. This procedure does not use Wine, the protected
+io24 prefix, USB, audio hardware, firmware, network access, installation, or a
+vendor process.
+
+## Pinned source
+
+- Module:
+  `/home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll`
+- Size: 4,984,704 bytes
+- SHA-256:
+  `567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b`
+- Queue function: `0x1800546b0`
+- `WinUsb_WritePipe` IAT slot: `0x1800e53f0`
+
+Refuse conclusions if the module hash differs.
+
+## L00: analyzer contract
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test_cp34_host_queue_inventory.py -v
+```
+
+Expected: three tests pass. They cover instruction-boundary scanning,
+resynchronization across mixed code/data, and RIP-relative IAT resolution.
+
+## L01: central queue callers
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 re/cp34_host_queue_inventory.py \
+  '/home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll' \
+  --target 0x1800546b0 --context-before 384
+```
+
+Expected direct call sites:
+
+| Call site | Local operation evidence |
+| --- | --- |
+| `0x180035abe` | `FRst`, `Appl` |
+| `0x180049f2f` | `VoFx` |
+| `0x18005238e` | `MemP` |
+| `0x1800542a9` | `Pari` |
+| `0x18005432a` | `Para` |
+| `0x1800555ae` | generic `SetP`/`GetP` builder context |
+
+The ASCII immediates are bounded context evidence, not automatic semantic
+labels. The disassembly around each call establishes the payload family.
+
+## L02: native writer consumers
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 re/cp34_host_queue_inventory.py \
+  '/home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll' \
+  --target 0x1800e53f0 --call-kind rip-indirect --context-before 384
+```
+
+Expected `WinUsb_WritePipe` calls:
+
+- `0x1800780db`
+- `0x18007867d`
+- `0x180084ac8`
+
+These are buffer consumers. They do not construct an additional preset or
+Voice FX command family.
+
+## L03: firmware reconciliation
+
+- `FRst` restores live defaults.
+- `VoFx` carries model parameters but does not open the processing gate.
+- `MemP | PrsM` reaches the root cache-republication handler and does not
+  consume or persist the nested preset record.
+- `Pari` and `Para` update live parameters; the closed resolver does not route
+  them to the internal preset component.
+- No queue caller constructs `Stat`, slot assignment, a save-point operation,
+  or an explicit Voice-FX-on command.
+
+Therefore this exact vendor module and firmware expose no source-bound sender
+for custom device-resident store/assignment and no explicit host-side Voice FX
+gate operation. Do not manufacture one from printable tags.
+
+## L04: scoped slot-capture classifier
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q \
+  tests/test_cp34_live_matrix.py
+```
+
+Expected: 37 tests pass. The `analyze-slot` contracts require two dry and two
+active captures with matching impulse count/cadence, an audible attestation,
+and a repeatable 150 ms delta. A positive classification is
+`REPEAT_150MS_SIGNATURE`, not a preset title or model identity. A repeatable
+late tail is source-neutral and inconclusive.
+
+The classifier reads existing local WAV files only and reports
+`live_ready=false` and `restoration_verified=false`. It is not a capture
+procedure, restoration ledger, live authorization, device-source proof, or
+negative-result gate.
+
+## Next safe action
+
+The separate design now exists at `LINUX-LIVE-MATRIX.md`. It distinguishes the
+historical unidentified-slot recall negative from a front-panel recall of a
+name-verified active `Slap Echo` factory record. The matrix aborts unless that
+exact title is already accessible and every changed write-only value has a
+current inverse.
+
+The hardware-free impulse generator, WAV analyzer, and restoration-ledger
+validator named by the matrix are implemented and contract-tested. The ordinary
+driver shadow was audited offline: it has the needed reverb/FX-mix rows, but its
+2026-08-23 state is not current-attested and its assign/master baseline is not
+explicit. It is therefore not yet restoration authority.
+
+The title-free `analyze-slot` classifier is also contract-tested, but it does
+not remove those live preconditions. A no-write slot survey would need its own
+offline procedure and executable restoration contract before separate exact
+authorization could be requested.
+
+L01 now names target `AB7C22200355` and records its readable slots and ALSA
+identity. It remains partial: the device-screen title, preset mode, physical
+capture map, and current complete restoration ledger are unresolved. Do not
+execute L02-L07 without those preconditions and separate exact live-device
+authorization. A factory recall can test audible Voice FX; it cannot prove
+custom device-resident storage.

@@ -1,0 +1,12 @@
+--- a/dlls/ntdll/reg.c
++++ b/dlls/ntdll/reg.c
+@@ -635,7 +635,8 @@ out:
+     RtlFreeHeap(GetProcessHeap(), 0, pInfo);
+     if (handle != topkey)
+         NtClose(handle);
+-    NtClose(topkey);
++    if (!(RelativeTo & RTL_REGISTRY_HANDLE))
++        NtClose(topkey);
+     return ret;
+ }
+ 

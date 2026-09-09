@@ -1,0 +1,46 @@
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256 .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-2-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256	2026-08-24 01:35:37.625087784 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-2-head/re/winusb-api-v1/logs/task-03-lifecycle.sha256	2026-08-24 01:45:35.626990223 -0700
+@@ -3,7 +3,7 @@
+ 7c4499d74cce20b3eef6f2567272adc7e9faf84c071a7ccd2723178463b9688f  .io24-build/winusb-api-v1/dev-source/dlls/wineusb.sys/wineusb.c
+ a4d745f63cda8ee4444a0a2231121a08dfa2bffbc0860bc9d52ab4b30c00497c  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/main.c
+ 910d10cc0dbf1c447cd93e71ba139851e13bf64ea4c6df73aabb27783b4902d4  .io24-build/winusb-api-v1/dev-source/dlls/winusb.sys/winusb_private.h
+-376d26ed11f3440bf6db973efeccf436b654e9c1e5f8938af8e5b1696c3b4bab  tests/wineusb_winusb_busif_contract.c
++d50242ea368ae94c0f2c93b068f714bd6236ecdefe65829e7fe54a20fb167807  tests/wineusb_winusb_busif_contract.c
+ ddc1f5f58c8f9e2d0526ba27f43b2a74216728bda133ca3da604b4cb683c06c4  tests/wineusb_winusb_busif_contract.sh
+ 13b968a92d4d555c2627760eaa8f03ae01cba9efa6ec69250df3eecbef048a2b  tests/winusb_function_io_contract.c
+ 34cd44382d9a09ad900765a1ada3d4c67ff8ed680a9920036c062a7c7c628c93  tests/winusb_function_binding_contract.c
+diff -urN .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.c .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-2-head/tests/wineusb_winusb_busif_contract.c
+--- .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-1-head/tests/wineusb_winusb_busif_contract.c	2026-08-24 01:31:44.954073360 -0700
++++ .superpowers/sdd/2026-08-23-cp33-winusb-operations/task-3-round-2-head/tests/wineusb_winusb_busif_contract.c	2026-08-24 01:45:20.867114209 -0700
+@@ -354,7 +354,7 @@
+         struct wineusb_ms_os_10_metadata_interface_v2 interface;
+         UCHAR guard[16];
+     } guarded;
+-    struct usb_device device;
++    struct usb_device device, before;
+     UCHAR speed;
+     NTSTATUS status;
+ 
+@@ -380,6 +380,20 @@
+     status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
+     CHECK(status == STATUS_SUCCESS && speed == HighSpeed,
+             "actual lower high speed returned %#lx/%#x", (long)status, speed);
++    before = device;
++    status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, NULL);
++    CHECK(status == STATUS_INVALID_PARAMETER,
++            "actual lower null output returned %#lx", (long)status);
++    CHECK(!memcmp(&device, &before, sizeof(device)),
++            "actual lower null output changed device state");
++    speed = 0x3c;
++    status = guarded.interface.GetDeviceSpeed(NULL, &speed);
++    CHECK(status == STATUS_INVALID_PARAMETER && speed == 0x3c,
++            "actual lower null context returned %#lx/%#x", (long)status, speed);
++    CHECK(!memcmp(&device, &before, sizeof(device)),
++            "actual lower null context changed device state");
++    CHECK(!memcmp(guarded.guard, (UCHAR[16]){[0 ... 15] = 0xa5}, sizeof(guarded.guard)),
++            "actual lower invalid input changed query guard");
+     device.removed = TRUE; speed = 0xa5;
+     status = guarded.interface.GetDeviceSpeed(guarded.interface.BusContext, &speed);
+     CHECK(status == STATUS_DEVICE_NOT_CONNECTED && speed == 0xa5,
+

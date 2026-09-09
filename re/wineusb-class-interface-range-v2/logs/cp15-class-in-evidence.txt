@@ -1,0 +1,16 @@
+command=python3 tests/io24_usbmon_class_in_evidence.py --require-evidence re/io24-passive-usbmon/passive-usbmon-range-v1-20260821T023641-0700/control-urbs.pcap
+exit_status=0
+pcap_sha256=194a4b2619e0bddcdeef2108b0969cf13c029b3d2516309123c6567437b2922d
+linktype=220
+snaplen=512
+packet_count=316
+complete_uac2_configuration_count=1
+clock_source_5_sampling_frequency_cur requests=14 successful=14 values_u32=48000,96000
+clock_source_5_sampling_frequency_cur value_count_48000=11 value_count_96000=3
+terminal_2_latency_cur requests=0 successful=0 values_u32=none
+terminal_3_latency_cur requests=0 successful=0 values_u32=none
+terminal entity=1 kind=input_terminal bm_controls=0x0000 latency_access=not_present
+terminal entity=2 kind=output_terminal bm_controls=0x0000 latency_access=not_present
+terminal entity=3 kind=input_terminal bm_controls=0x0000 latency_access=not_present
+terminal entity=4 kind=output_terminal bm_controls=0x0000 latency_access=not_present
+

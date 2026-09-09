@@ -1,0 +1,305 @@
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 06:19:30.713359028 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md	2026-08-29 06:34:02.797232974 -0700
+@@ -20,6 +20,10 @@
+ `AB-PROVENANCE.json` v1 binds attestation and AB hashes after those observations.
+ Root v1 evidence/restoration artifacts are forbidden; candidate seals are atomic.
+ 
++Fix2 rejects parser-limit raw/summary numbers as malformed evidence, guards
++missing P0 and physical/S4 timestamp types, and requires exact boolean operator
++attestation plus distinct, nonempty, non-io24 playback/monitor identities.
++
+ ## Objective
+ 
+ Determine whether either currently selected front-panel preset produces a
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md	2026-08-29 06:19:30.716090324 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md	2026-08-29 06:34:02.804232919 -0700
+@@ -609,3 +609,6 @@
+ audible-attestation-v2 observations, AB-PROVENANCE-v1 ordering, 0..6 processing
+ map values, root-v1 artifact rejection, and `set -e -o pipefail` plus initial
+ hash `&&` enumeration in each candidate seal.
++
++Fix2 adds narrow parser-limit numeric rejection and guards for missing P0,
++physical/S4 timestamp types, and strict non-io24 audible identities.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256 .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 06:19:30.728090230 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256	2026-08-29 06:34:02.827232739 -0700
+@@ -1,6 +1,6 @@
+-e48b34a31fc7c6d85756ff1fe0c2e006ed54085b2185caf54cc0df5c434b65b6  re/cp34_current_slot_survey.py
+-d84bd72abc8b0f2521cc1a2c541532a6a42aa57a92eabdeb1780636ae8dbd03f  tests/test_cp34_current_slot_survey.py
+-816e2a3a27ac1ecb15eea554d40fcca5d67354afd8b3fe7876708bb06bb9130f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-18a0c68f66e16a8d393aeeda8d035a2798f9e5621006924fead84db838c8f14b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++8cb7325cebdcc9e15d71ec91135a35e1e2a057d9a274c8e6dde79985c741e78d  re/cp34_current_slot_survey.py
++1e677e5b4bec7c0fbc5ac2692b272a3964c9a8b503bcc2f8284a259a38b41fdf  tests/test_cp34_current_slot_survey.py
++b388aa52f54cbeee53bc94379edc49dec77045f5ed760f2ac74e70c5972af5dc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++b0716ba1142576b950a082d2354c3ae0b814a088b90423d20d3ed3e2ea470304  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-d8c671881a8007e65af9f959de66aa9288b2a27b8c7d834ccba6fbb8e771bc0b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++d5413a48fbdf39ba4d429b8576bf8f0c7e96f96c191a5f33a751059c20918e26  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 06:19:30.720090293 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md	2026-08-29 06:34:02.812232857 -0700
+@@ -219,6 +219,10 @@
+ This final SHA-256 command is an offline seal of retained files, not authority
+ for further operation.
+ 
++Fix2 validation treats parser-limit raw/summary integers as invalid evidence;
++guards missing P0 and physical/S4 timestamp types; and requires boolean
++operator attestation plus distinct nonempty non-io24 playback/monitor identities.
++
+ ## Outcome and candidate rules
+ 
+ `SIGNATURE_PRESENT` is positive only after `RESTORED`; stop after that first
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 06:19:30.736090167 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md	2026-08-29 06:34:02.842232621 -0700
+@@ -577,6 +577,14 @@
+ Controller broad verification is authoritative: 102 passed, 36 subtests in
+ 157.09s, exit 0. Historical 94/31 claims are superseded; no live action occurred.
+ 
++Fix1 39/9 and 102/36 are historical/superseded by fix2 current-slot 40/11 in
++153.74s, exit 0. Fix2 broad verification returned 103 passed and 38 subtests in
++183.80s, exit 0. Stage 6/6 and offline manifest 23/23 verify; the stage hash is
++`466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++The offline-manifest file hash is recorded outside its pinned inputs in the
++task-local implementation report. BAT0 was 22 percent, discharging, via
++passive sysfs. Independent fix2 re-review remains pending.
++
+ Current revision-2 fix1 core hashes are:
+ 
+ ```text
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 06:19:30.748090073 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md	2026-08-29 06:34:02.865232440 -0700
+@@ -278,6 +278,13 @@
+ Revision 1 is rejected/superseded by the v2 current-slot evidence protocol.
+ Revision 2 is pending independent review and retains every no-live boundary.
+ 
++Fix2 current evidence is 40 passed, 11 subtests in 153.74s, exit 0. Fix1 39/9
++and 102/36 are historical. Fix2 broad verification returned 103 passed and 38
++subtests in 183.80s, exit 0. Stage 6/6 and offline manifest 23/23 verify at
++stage hash `466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++BAT0 was 22 percent, discharging, via passive sysfs. Independent fix2 re-review
++is next. No live authority is granted.
++
+ Fix1 current-slot gate is 39 passed, 9 subtests, 129.12s, exit 0; old 94/31
+ claims are historical. Broad suite/manifests were pending at that intermediate
+ checkpoint; the completed gate below supersedes it.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 06:19:30.744090104 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md	2026-08-29 06:34:02.857107137 -0700
+@@ -179,6 +179,13 @@
+ may a new separately exact authorization be requested for a named live run.
+ No live action occurred while producing or integrating this stage.
+ 
++Fix2 current evidence is 40 passed, 11 subtests in 153.74s, exit 0. Fix1 39/9
++and 102/36 are historical. Fix2 broad verification returned 103 passed and 38
++subtests in 183.80s, exit 0. Stage 6/6 and offline manifest 23/23 verify at
++stage hash `466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++BAT0 was 22 percent, discharging, via passive sysfs. Independent fix2 re-review
++is next. No live authority is granted.
++
+ Historical 94/31/hash statements are superseded by fix1 current-slot evidence:
+ 39 passed, 9 subtests in 129.12s, exit 0. Broad verification was pending at
+ that intermediate checkpoint and is superseded below.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 06:19:30.752090041 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-OFFLINE-SHA256SUMS	2026-08-29 06:34:02.872232385 -0700
+@@ -6,18 +6,18 @@
+ 89b0572dd760b77831d012e2db0568b4f4eeb158985a4ca86126be28e934c73d  re/uc_factory_presets.json
+ 6502fa83125fb519d61bd2bba40e9d10d81f0307bdbe104e2d0e38304b1d6fce  tests/fx_gate_probe.py
+ 2e71faaa046d1bd87a02c62fe36c8a5692e7e7f7007c2c6a11352c5db956bb6c  PROTOCOL.md
+-fa761489ad5ec7aec9aa9a0d2da2b1d745b2e2cd0f682b8d59761fbe72b94051  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
++e8acb94805d0ac58bc34d774d89fdaeec73c2d44ebf248a059ed84212d29d7c5  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+ c6238bac7efb7eda37f3289be948eb2fc34455f44a1b3fbfd6cb7c55389f86e8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CAPTURE-MANIFEST.md
+ 2267f83eb9eaec10ad493b2d0d520135d55ccba3e96e05ad70eb0a90d319f6b6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/PRESTATE.md
+-bfe3e625bc5266297d499aac8c39726484c2405d2c94d75c386b2e2299d53062  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+-712f6e2b84753d212fa4774227549cb3aa2f684a5091f15ede3851d5dd77f339  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+-2750a8e75674f6a5e52750d26e3325d0cdc1f37217aa58d9422d732cc75faa20  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
+-121d0ab70bc6fa40257f40e96c2833a054cf59529358b87ddd78e34e4e6e2706  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
+-e48b34a31fc7c6d85756ff1fe0c2e006ed54085b2185caf54cc0df5c434b65b6  re/cp34_current_slot_survey.py
+-d84bd72abc8b0f2521cc1a2c541532a6a42aa57a92eabdeb1780636ae8dbd03f  tests/test_cp34_current_slot_survey.py
+-816e2a3a27ac1ecb15eea554d40fcca5d67354afd8b3fe7876708bb06bb9130f  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
+-18a0c68f66e16a8d393aeeda8d035a2798f9e5621006924fead84db838c8f14b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
++d578da21dea716c485f58789225ae95ea27977bbfef883195ed179dfa095d8e1  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
++d285baa04f2c6bf6eb68afea891fcf1146504ca6d0bf4f27b5a1a989f71e9e5c  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
++8d76fff1acaa4f5f0bc8da14bd703d9658799ec34781ff0c555310d28f1a290e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-MANIFEST.md
++db1c4166efddcf836f3931b982e150cfca09c0e9f54143e9aae92b264308423a  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/LINUX-LIVE-MATRIX.md
++8cb7325cebdcc9e15d71ec91135a35e1e2a057d9a274c8e6dde79985c741e78d  re/cp34_current_slot_survey.py
++1e677e5b4bec7c0fbc5ac2692b272a3964c9a8b503bcc2f8284a259a38b41fdf  tests/test_cp34_current_slot_survey.py
++b388aa52f54cbeee53bc94379edc49dec77045f5ed760f2ac74e70c5972af5dc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-DESIGN.md
++b0716ba1142576b950a082d2354c3ae0b814a088b90423d20d3ed3e2ea470304  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY.md
+ 83db1ffc91f7fc3b5ec3cd6c689bd7ccdefa208e12c3722775b5d794f7338c14  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-PLAN.template.json
+-d8c671881a8007e65af9f959de66aa9288b2a27b8c7d834ccba6fbb8e771bc0b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
+-c4fc43129e998d2626670ef32ddd1a6f169c7a4613788899b1910b7db1109410  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
++d5413a48fbdf39ba4d429b8576bf8f0c7e96f96c191a5f33a751059c20918e26  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-IMPLEMENTATION.md
++466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/CURRENT-SLOT-SURVEY-STAGE.sha256
+ 567892d75c7243b3cc30487f7431933e593f3c288ea6add84c21d4e8678f877b  /home/ajuntanaga/Documents/Universal Control/hwaccess/dspusbdevice.dll
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 06:19:30.732090198 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/PLAN.md	2026-08-29 06:34:02.834232684 -0700
+@@ -112,6 +112,15 @@
+ Controller verification is now complete: 102 passed, 36 subtests in 157.09s,
+ exit 0. Historical 94/31 remains superseded; independent fix1 re-review is next.
+ 
++Fix2 supersedes fix1 evidence: current-slot 40 passed, 11 subtests in 153.74s,
++exit 0. Controller fix2 broad verification returned 103 passed and 38 subtests
++in 183.80s, exit 0. Stage 6/6 and offline manifest 23/23 verify; the
++stage-manifest hash is
++`466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++The offline-manifest file hash is kept outside its pinned inputs in the
++task-local implementation report. BAT0 was 22 percent, discharging, via
++passive sysfs. Independent fix2 re-review is next; no live authority exists.
++
+ Current revision-2 core hashes are `e48b34a3...65b6` (CLI),
+ `d84bd72a...d03f` (tests), `816e2a3a...130f` (design),
+ `18a0c68f...f14b` (procedure), `83db1ffc...e590` (invalid template), and
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 06:19:30.740090136 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md	2026-08-29 06:34:02.849232566 -0700
+@@ -233,6 +233,13 @@
+ 
+ Do not call either outcome resolved until the observable checks in step 8 pass.
+ 
++Fix2 current evidence is 40 passed, 11 subtests in 153.74s, exit 0. Fix1 39/9
++and 102/36 are historical. Fix2 broad verification returned 103 passed and 38
++subtests in 183.80s, exit 0. Stage 6/6 and offline manifest 23/23 verify; the
++stage hash is `466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++BAT0 was 22 percent, discharging. Independent fix2 re-review is next; no live
++authority is granted.
++
+ Fix1 current-slot gate supersedes historical 94/31 evidence: 39 passed, 9
+ subtests in 129.12s, exit 0. Broad suite and manifests were still pending at
+ that intermediate checkpoint; the completed gate below supersedes it.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md	2026-08-29 06:19:30.758102496 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/.superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/task-6-report.md	2026-08-29 06:34:02.881313889 -0700
+@@ -113,6 +113,8 @@
+ it required the superseded literal `set -o pipefail` prefix. Updated it to the
+ required revision-2 `set -e -o pipefail` command. A later full-file run still
+ reports two failures after 22 successful tests; diagnosis remains pending.
++That sentence records the intermediate checkpoint only; later focused and
++terminal controller gates below supersede it.
+ 
+ ### Checkpoint A5 current-slot terminal result
+ 
+@@ -133,6 +135,33 @@
+ 
+ `1 passed in 15.48s`.
+ 
++### Fix2 checkpoint C1
++
++Subprocess malformed-v2 contract:
++
++```text
++PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py::RestorationVerifierTests::test_malformed_v2_inputs_exit_two_without_traceback
++```
++
++Output: `1 passed, 2 subtests passed in 10.86s`. It covers 5,001-digit raw and
++summary JSON integers, missing P0, noninteger physical/S4 timestamps, and
++malicious io24/null/string audible identity/attestation values. Each CLI path
++returned structured restoration failure without a traceback.
++
++Controller fix2 current-slot gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py` returned `40 passed, 11 subtests passed in 153.74s (0:02:33)`, exit 0. At that intermediate checkpoint, fix2 broad suite and manifests remained pending; the terminal fix2 seal below supersedes it.
++
++Controller fix2 broad gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_host_queue_inventory.py tests/test_cp34_live_matrix.py tests/test_cp34_current_slot_survey.py tests/test_io24_preset_persistence.py tests/test_normalize_io24_capture.py tests/test_io24_capture_decode.py` returned `103 passed, 38 subtests passed in 183.80s (0:03:03)`, exit 0. No live action occurred.
++
++### Fix2 terminal offline seal
++
++- Six-row stage manifest: 6/6 OK; SHA-256
++  `466ed68735a91e022e9c423a416b93f71a6999b840aa65427e4945c9130bc5d7`.
++- Twenty-three-row offline manifest: 23/23 OK; final post-record SHA-256
++  `7b14d59a24559d7b9692e2265e3dfb86650e55b68fdc5763792a5c17f08cb48f`.
++- Passive sysfs battery: BAT0 22 percent, Discharging, above the 10 percent
++  hard-stop floor.
++- No live action occurred; independent fix2 re-review remains required.
++
+ Controller current-slot gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_current_slot_survey.py` returned `39 passed, 9 subtests passed in 129.12s (0:02:09)`, exit 0. Broad suite and manifest refresh remain pending.
+ 
+ Controller broad gate: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -q tests/test_cp34_host_queue_inventory.py tests/test_cp34_live_matrix.py tests/test_cp34_current_slot_survey.py tests/test_io24_preset_persistence.py tests/test_normalize_io24_capture.py tests/test_io24_capture_decode.py` returned `102 passed, 36 subtests passed in 157.09s (0:02:37)`, exit 0.
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/re/cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/re/cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/re/cp34_current_slot_survey.py	2026-08-29 06:19:30.697093337 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/re/cp34_current_slot_survey.py	2026-08-29 06:34:02.762233250 -0700
+@@ -289,7 +289,12 @@
+     def reject_constant(value):
+         raise json.JSONDecodeError("non-standard JSON constant", value, 0)
+ 
+-    return json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
++    try:
++        return json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
++    except ValueError as exc:
++        if "digit" in str(exc).lower() or "integer string conversion" in str(exc).lower():
++            raise json.JSONDecodeError("integer conversion exceeds parser limit", "", 0) from exc
++        raise
+ 
+ 
+ def _candidate_reasons(candidates):
+@@ -1173,8 +1178,12 @@
+         if not _same_json_scalar(audible.get("frozen_mix_channel"), frozen_channel):
+             reasons.append("audible_attestation_frozen_channel_mismatch")
+         observations = audible.get("observations")
++        identities = (audible.get("playback_identity"), audible.get("monitoring_identity"))
++        if (any(not isinstance(x, str) or not x.strip() or "io24" in x.lower() for x in identities) or identities[0] == identities[1]):
++            reasons.append("audible_attestation_identity_invalid")
++        enabled = p0.get("enabled") if isinstance(p0, dict) else None
+         expected_roles = dict(zip(("S1", "S2", "S3", "S4"),
+-            ("active", "dry", "dry", "active") if p0.get("enabled") is True else ("dry", "active", "active", "dry")))
++            ("active", "dry", "dry", "active") if enabled is True else ("dry", "active", "active", "dry")))
+         seen, observation_times, audible_positive = set(), [], True
+         if not isinstance(observations, list) or len(observations) != 4:
+             reasons.append("audible_observations_must_be_four")
+@@ -1196,6 +1205,8 @@
+                 or any(b <= a for a, b in zip(observation_times, observation_times[1:]))
+                 or physical_time is None or any(x <= physical_time for x in observation_times)):
+             reasons.append("audible_observation_timestamps_invalid"); audible_positive = False
++        if not isinstance(audible.get("operator_attested"), bool):
++            reasons.append("audible_attestation_operator_attested_invalid")
+         audible_positive = audible_positive and audible.get("operator_attested") is True
+ 
+     provenance = _json_input(inputs, prefix + "AB-PROVENANCE.json", reasons)
+@@ -1261,7 +1272,9 @@
+         physical_time = physical.get("monotonic_ns")
+         if not isinstance(physical_time, int) or isinstance(physical_time, bool) or physical_time < 0:
+             reasons.append("physical_restoration_timestamp_invalid")
+-        elif events and physical_time <= events[-1].get("monotonic_ns", -1):
++        elif (events and isinstance(events[-1].get("monotonic_ns"), int)
++              and not isinstance(events[-1].get("monotonic_ns"), bool)
++              and physical_time <= events[-1]["monotonic_ns"]):
+             reasons.append("physical_restoration_must_follow_s4")
+ 
+     if candidate == "ch2-slot1":
+diff -ruN .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/tests/test_cp34_current_slot_survey.py .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/tests/test_cp34_current_slot_survey.py
+--- .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-before/tests/test_cp34_current_slot_survey.py	2026-08-29 06:19:30.701081433 -0700
++++ .superpowers/sdd/CURRENT-SLOT-SURVEY-IMPLEMENTATION/snapshots/task-6-fix2-after/tests/test_cp34_current_slot_survey.py	2026-08-29 06:34:02.771326767 -0700
+@@ -819,6 +819,30 @@
+             self.assertIn("audible_attestation_fields_invalid", result["reasons"])
+             self.assertIn("audible_observations_must_be_four", result["reasons"])
+ 
++    def test_malformed_v2_inputs_exit_two_without_traceback(self):
++        for target in ("P0.raw.jast", "P0.json"):
++            with self.subTest(target=target), tempfile.TemporaryDirectory() as directory:
++                run_dir = _build_restoration_run(directory)
++                path = run_dir / "ch1-slot1" / target
++                path.write_text('{"n":' + '1' + '0' * 5000 + '}', encoding="utf-8")
++                result = self._cli_result(run_dir)
++                self.assertTrue(result["reasons"])
++        with tempfile.TemporaryDirectory() as directory:
++            run_dir = _build_restoration_run(directory)
++            (run_dir / "ch1-slot1" / "P0.json").unlink()
++            physical = run_dir / "ch1-slot1" / "PHYSICAL-RESTORATION.json"
++            self._mutate_json(physical, lambda value: value.update(monotonic_ns="late"))
++            events = run_dir / "ch1-slot1" / "ACTION-LOG.jsonl"
++            self._mutate_action_log(events, lambda value: value.__setitem__(-1, {**value[-1], "monotonic_ns": "bad"}))
++            audible = run_dir / "ch1-slot1" / "AUDIBLE-ATTESTATION.json"
++            self._mutate_json(audible, lambda value: value.update(
++                playback_identity="io24 output", monitoring_identity=None, operator_attested="yes"))
++            result = self._cli_result(run_dir)
++        self.assertIn("required_input_missing:ch1-slot1/P0.json", result["reasons"])
++        self.assertIn("physical_restoration_timestamp_invalid", result["reasons"])
++        self.assertIn("audible_attestation_identity_invalid", result["reasons"])
++        self.assertIn("audible_attestation_operator_attested_invalid", result["reasons"])
++
+     def _cli_result(self, run_dir, candidate="ch1-slot1"):
+         completed = subprocess.run(
+             [sys.executable, str(CLI), "verify-restoration", str(run_dir),

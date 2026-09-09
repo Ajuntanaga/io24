@@ -1,0 +1,14 @@
+a5afbbf21137c56069be5d0b497f585de6f587489113e7629f41626b673711b1  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/SCOPE.md
+13f5899e41652269a13716b465a584821d8a26bc5fddd4f1ab758df5e3046107  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/ACQUISITION.json
+2a01622794bd142a997253ba778014f5767c59292e906a10006c9564ace69ebd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/EXTRACTION.md
+9c3453c28de15623e970b7d7a0d6a968775fe35cb6697568dbad7e1889ab282e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/ANALYSIS.json
+1a2c6d3b50664ce600a2fd17e5cfc47da72ed92bb5c245fc1193d73a0710ff7b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/TESTS.md
+d79269685844a16a7a2f8b4bfad497a1e70db5f47909a4b7ac2ca4425c8b2b4b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/PROGRESS.md
+1b5ddd6fd3ad4b93529caf8e5933bcd52b13194bdfa62652292b46ddcd980b95  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/PreSonus_Universal_Control_v4_7_2-108537.exe
+de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260906T001130-0700-uc472-official-reacquisition/extracted/hwaccess/dspusbdevice.dll
+e63d728e943635dfa3aecfc66f9c45823ebb65be5b97dbd8eac4508669a2bf42  re/cp34_uc472_record_writer_sink.py
+85db9cc4fd2d422b6cb479c2b9486c7b8df4ed85b445559a4b47ab73419e57dc  tests/test_cp34_uc472_record_writer_sink.py
+2e4cf9f57612a3310fbbaa68fb11230bbbd2df4a08f24afbbf970fb1251da5e6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+f84ec849438195900b807d2cbee65fe4e59aebac454f3c1e290a21afd15c8834  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/EVIDENCE.md
+b65b1223001c91ca22614ef986c5c8ecb207eaf75b8a15665c2b9999fd5314f3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T231733-0700-appl-zero-selector-receiver/CHECKPOINT.sha256
+46b28fd10b02c350b5f06a1c9cf7d625c230e09d4e3a0166765ad9d199fbe429  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260905T210639-0700-firmware-ingress-storage-framing/CHECKPOINT.sha256

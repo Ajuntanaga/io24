@@ -1,0 +1,8 @@
+preserved_from=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/live-service-usb.txt
+preserved_as=/home/ajuntanaga/.cache/io24/sandboxes/io24-wine-sandbox.ntoskrnl-mdl-nonpaged-v1-20260822/out/inherited-live-service-usb-observe-v2-20260819T194220PDT.txt
+inode=4074896
+size=179452
+mode=600
+mtime=2026-08-19 19:42:50.749419575 -0700
+sha256=f7ae3a97696dfd1ceff7b511c307d054422250e481deceb7b180167538762a67
+source_capture_absent=yes

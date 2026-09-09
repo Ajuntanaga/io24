@@ -1,0 +1,6230 @@
+#!/usr/bin/env python3
+"""
+io24gtk — a native GTK4 / libadwaita mixer for the PreSonus Revelator io24.
+
+The Linux replacement for Universal Control's window. Needs only PyGObject,
+which is already present on any GNOME system.
+
+    io24gtk.py [--wait]
+
+USB is exclusive: run this OR io24d OR io24web OR ucnet_shim, not several.
+
+Two things this is built around, both learned the hard way:
+
+  * REAL TIME, BOTH WAYS. One 0x7EC state read costs 0.33 ms and carries every
+    meter *and* every knob position, so the worker polls it at 30 fps and the
+    controls follow the hardware. Turn the gain knob on the box and the fader
+    moves. A widget the user is currently touching is left alone for a moment
+    afterwards, so the device can never fight your hand.
+
+  * DRAWN METERS, NOT PROGRESS BARS. Gtk.LevelBar has no ballistics, no peak
+    hold and no scale. These are Cairo, with segment colouring, a 1.5 s peak
+    hold and a dB scale, plus gain-reduction bars that run backwards the way
+    every compressor display does.
+"""
+import math
+import json
+import os
+import queue
+import re
+import struct
+import sys
+import threading
+import time
+
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+gi.require_version("Gsk", "4.0")
+from gi.repository import (Adw, GLib, Gtk, Gio, Gdk, Gsk, Graphene,  # noqa: E402
+                           Pango)
+
+import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
+import io24_dsp                            # noqa: E402  (exact compressor models)
+import io24_mbc                            # noqa: E402  (host multiband)
+import io24_presets                        # noqa: E402  (shared preset model resolver)
+from io24_preset_record import (           # noqa: E402
+    DeviceSlotRegistry,
+    complete_device_slot_record,
+)
+from io24d import Device, wait_for_device  # noqa: E402
+
+# JaSt slots (PROTOCOL.md §6)
+M_IN1, M_IN2 = 4, 6
+M_MAIN = (12, 13)
+M_MIXA = (14, 15)
+M_MIXB = (16, 17)
+P_HP, P_MAIN, P_BLEND, P_G1, P_G2 = 43, 44, 45, 46, 47
+
+PROFILE = bool(os.environ.get('IO24_PROFILE'))
+BAND_NAMES = ["Low", "Low mid", "High mid", "High"]
+SHAPES = ["off", "peaking", "lowshelf", "highshelf", "hp", "lp"]
+FLOOR = -60.0
+HPF_BASIC_HZ = (24.0, 40.0, 80.0, 160.0)
+DEVICE_SLOT_REGISTRY_PATH = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "io24", "device-slots.json")
+
+
+def db(x):
+    return -99.0 if x is None or x <= 1e-12 else 20.0 * math.log10(x)
+
+
+def factory_preset_matches(query, name, description=""):
+    """Case-insensitive factory-sound filtering for the Presets page."""
+    terms = str(query or "").casefold().split()
+    haystack = "%s %s" % (name, description)
+    haystack = haystack.casefold()
+    return all(term in haystack for term in terms)
+
+
+def preset_indicator_opacity(active, slot_index, now, animations=True):
+    """Breathing intensity for the Mixer preset marker.
+
+    User-facing Slot 1 (index 0) breathes slowly; Slot 2 (index 1) breathes
+    twice as quickly. Reduced-motion mode keeps a steady lit marker, and bypass
+    is an unlit ring rather than motion/color.
+    """
+    if not active:
+        return 0.0
+    if not animations:
+        return 1.0
+    period = 3.2 if slot_index == 0 else 1.6
+    phase = (float(now) % period) / period * 2.0 * math.pi
+    return 0.72 + 0.28 * (0.5 + 0.5 * math.sin(phase - math.pi / 2.0))
+
+
+def preset_indicator_visual(active, slot_index, now, animations=True):
+    """Return the dot-only preset cue, including its reduced-motion fallback."""
+    if not active:
+        return {"glyph": "○", "opacity": 0.28, "radius": 5.0}
+    # With animation enabled, cadence alone distinguishes the slots as the user
+    # requested. Reduced motion deliberately removes cadence, so a small radius
+    # difference preserves slot identity without bringing S1/S2 text back.
+    radius = 5.0 if animations else (4.25 if slot_index == 0 else 5.75)
+    return {
+        "glyph": "●",
+        "opacity": preset_indicator_opacity(
+            True, slot_index, now, animations),
+        "radius": radius,
+    }
+
+
+def bus_meter_columns():
+    """Mixer bus identity, compact visible label, and retained detail."""
+    return (
+        ("main", "Main", "Main output"),
+        ("mixa", "Mix A", "USB capture channels 3–4"),
+        ("mixb", "Mix B", "USB capture channels 5–6"),
+    )
+
+
+def bus_balance_text(value):
+    """Compact left/center/right display for a normalized stereo balance."""
+    value = max(0.0, min(1.0, float(value)))
+    if abs(value - 0.5) < 0.005:
+        return "C"
+    return ("L%d" if value < 0.5 else "R%d") % round(
+        abs(value - 0.5) * 200)
+
+
+def append_host_migration_notices(completion_message, migrations):
+    """Disclose migration only as part of a completed Host-file load."""
+    if completion_message is None:
+        return None
+    if migrations:
+        completion_message += "; " + "; ".join(migrations)
+    return completion_message
+
+
+def shadow_ui_state(shadow):
+    """Translate the Host's write-only call mirror into display state.
+
+    This is deliberately not device readback.  It exists so loading a Host JSON
+    preset cannot leave the controls showing the pre-load values while the DSP
+    is running the loaded ones.
+    """
+    state = {
+        "hpf_toggle": {}, "hpf_freq": {}, "eq": {1: {}, 2: {}},
+        "gate": {}, "compressor": {}, "limiter": {}, "order": {},
+        "reverb": None, "processing_mix": {}, "reverb_return": {},
+        "voicefx": None,
+        "voicefx_target": None, "preset_mode": None,
+        "preset_slot": {}, "output_delay": None,
+        "output_delay_bus": None, "phones_source": None,
+        "link": None, "balance": None,
+    }
+    for call in (shadow or {}).values():
+        if not isinstance(call, dict):
+            continue
+        name = call.get("fn")
+        kw = call.get("kwargs") or {}
+        try:
+            ch = int(kw.get("channel", 0))
+        except (TypeError, ValueError):
+            ch = 0
+        if name == "set_highpass" and ch in (1, 2):
+            state["hpf_toggle"][ch] = bool(kw.get("on"))
+        elif name == "set_highpass_freq" and ch in (1, 2):
+            state["hpf_freq"][ch] = float(kw.get("freq_hz", 24.0))
+        elif name == "set_eq_band" and ch in (1, 2):
+            band = max(0, min(3, int(kw.get("band", 0))))
+            state["eq"][ch][band] = {
+                "shape": str(kw.get("shape", "off")),
+                "freq": float(kw.get("freq_hz", 1000.0)),
+                "gain": float(kw.get("gain_db", 0.0)),
+                "q": float(kw.get("q", 0.7)),
+            }
+        elif name in ("set_gate", "gate_off") and ch in (1, 2):
+            state["gate"][ch] = {"on": name == "set_gate" and
+                                  bool(kw.get("on", True)), **kw}
+        elif name in ("set_compressor", "compressor_off") and ch in (1, 2):
+            state["compressor"][ch] = {
+                "on": name == "set_compressor" and bool(kw.get("on", True)),
+                **kw,
+            }
+        elif name == "set_limiter" and ch in (1, 2):
+            state["limiter"][ch] = dict(kw)
+        elif name == "set_comp_eq_order" and ch in (1, 2):
+            state["order"][ch] = bool(kw.get("eq_first"))
+        elif name == "set_reverb":
+            state["reverb"] = dict(kw)
+        elif name == "set_fx_mix" and ch in (1, 2):
+            state["processing_mix"][ch] = float(kw.get("value", 0.0))
+        elif name in ("set_send_db", "set_mix_db") and \
+                kw.get("source") == "fxreturn/ch1":
+            bus = str(kw.get("bus", "main")).lower()
+            bus = io24.Io24.BUS_ALIASES.get(bus, bus)
+            if bus in io24.Io24.MIXER_BUSES:
+                state["reverb_return"][bus] = kw.get("gain_db")
+        elif name == "set_fx":
+            state["voicefx"] = dict(kw)
+        elif name == "set_processing_channel" and ch == 1:
+            source = int(kw.get("source_input", 1))
+            if source in (1, 2):
+                state["voicefx_target"] = source
+        elif name == "set_preset_mode":
+            state["preset_mode"] = int(kw.get("mode", 1))
+        elif name == "set_preset_slot" and ch in (1, 2):
+            state["preset_slot"][ch] = int(kw.get("slot", 0))
+        elif name == "set_output_delay":
+            state["output_delay"] = float(kw.get("seconds", 0.0))
+            if kw.get("bus") is not None:
+                state["output_delay_bus"] = str(kw["bus"])
+        elif name == "output_delay_off":
+            state["output_delay"] = 0.0
+            state["output_delay_bus"] = "off"
+        elif name == "set_output_delay_bus":
+            state["output_delay_bus"] = str(kw.get("bus", "off"))
+        elif name == "set_phones_source":
+            source = kw.get("source")
+            try:
+                if isinstance(source, str):
+                    key = source.strip().lower()
+                    canonical = io24.Io24.PHONE_SOURCE_ALIASES.get(key, key)
+                    state["phones_source"] = io24.Io24.PHONE_SOURCES[canonical]
+                else:
+                    value = int(source)
+                    if value in (0, 1, 2):
+                        state["phones_source"] = value
+            except (KeyError, TypeError, ValueError):
+                pass
+        elif name == "set_channel_link":
+            state["link"] = bool(kw.get("on"))
+        elif name == "set_pan" and kw.get("source") in \
+                ("line/ch1", "line/ch2") and kw.get("bus") == "main":
+            state["balance"] = kw.get("pan")
+    return state
+
+
+# --------------------------------------------------------------------------
+# device worker: one thread, one read per frame, everything else is a snapshot
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# Sample rate and buffer size.
+#
+# These are NOT device parameters. There is no clock, rate, buffer or latency
+# descriptor among the 117 the host exposes, and no rate vocabulary in the
+# device firmware — the io24 is class-compliant, so it advertises its rates
+# through standard USB Audio Class descriptors and the AUDIO SERVER picks one.
+# On Windows the ASIO driver owns this, which is why Universal Control can
+# present it as a device setting; on Linux PipeWire owns it. So this page reads
+# the truth from ALSA and drives PipeWire, rather than pretending to write to
+# the device.
+# --------------------------------------------------------------------------
+CARD = "R24"
+
+
+def alsa_rates(card=CARD):
+    """Rates the DEVICE advertises, straight from its USB descriptors."""
+    try:
+        for n in os.listdir("/proc/asound"):
+            if n == card or (n.startswith("card") and
+                             os.path.exists("/proc/asound/%s/id" % n) and
+                             open("/proc/asound/%s/id" % n).read().strip() == card):
+                for line in open("/proc/asound/%s/stream0" % n):
+                    if "Rates:" in line:
+                        return [int(x) for x in
+                                line.split("Rates:")[1].replace(" ", "").split(",")
+                                if x.strip().isdigit()]
+    except Exception:
+        pass
+    return [44100, 48000, 88200, 96000]
+
+
+def alsa_live(card=CARD):
+    """The rate/period actually in use, if a stream is open."""
+    out = {}
+    try:
+        base = None
+        for n in os.listdir("/proc/asound"):
+            if os.path.exists("/proc/asound/%s/id" % n) and \
+               open("/proc/asound/%s/id" % n).read().strip() == card:
+                base = "/proc/asound/%s" % n
+                break
+        if not base:
+            return out
+        for sub in ("pcm0c", "pcm0p"):
+            f = "%s/%s/sub0/hw_params" % (base, sub)
+            if not os.path.exists(f):
+                continue
+            txt = open(f).read()
+            if "closed" in txt:
+                continue
+            d = {}
+            for line in txt.splitlines():
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    d[k.strip()] = v.strip()
+            out["capture" if sub.endswith("c") else "playback"] = d
+    except Exception:
+        pass
+    return out
+
+
+def pw_settings():
+    """Current PipeWire clock settings."""
+    import subprocess
+    out = {}
+    try:
+        r = subprocess.run(["pw-metadata", "-n", "settings"], capture_output=True,
+                           text=True, timeout=4).stdout
+        for line in r.splitlines():
+            if "key:'" in line and "value:'" in line:
+                k = line.split("key:'")[1].split("'")[0]
+                v = line.split("value:'")[1].split("'")[0]
+                out[k] = v
+    except Exception:
+        pass
+    return out
+
+
+def pw_set(key, value):
+    """Ask PipeWire to force a rate or quantum. Returns (ok, message)."""
+    import subprocess
+    try:
+        r = subprocess.run(["pw-metadata", "-n", "settings", "0", key, str(value)],
+                           capture_output=True, text=True, timeout=4)
+        return (r.returncode == 0, (r.stderr or r.stdout).strip()[:120])
+    except FileNotFoundError:
+        return (False, "pw-metadata not installed")
+    except Exception as e:
+        return (False, str(e)[:120])
+
+
+class Ctl:
+    def __init__(self, dev):
+        self.dev = dev
+        cached = self._cached_shadow_count(dev)
+        self.snap = {
+            "in": [-99.0, -99.0], "main": [-99.0, -99.0],
+            "mixa": [-99.0, -99.0], "mixb": [-99.0, -99.0],
+            "gain": [0.0, 0.0], "hp": 0.0, "mainvol": 0.0, "blend": 0.0,
+            "phantom": [False, False], "gr": {1: {"gate": 0.0, "comp": 0.0, "lim": 0.0},
+                   2: {"gate": 0.0, "comp": 0.0, "lim": 0.0}},
+            "sel": [0, 2], "chsel": [True, False],
+            "preset_off": [False, False], "preset_slot": [0, 0],
+            "mute": [False, False], "hpmute": False, "link": False,
+            "mainmute": False,
+            # DSP/mixer blocks cannot be read back.  A newly opened handle may
+            # follow a cold boot, so a disk cache is explicitly *pending*, not
+            # silently assumed to match the interface or automatically sent.
+            "shadow_pending": bool(cached), "shadow_calls": cached,
+            "attach_generation": 1 if dev is not None else 0,
+            "alive": False, "error": None,
+        }
+        self.q = queue.Queue()
+        self.running = True
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def submit(self, fn):
+        self.q.put(fn)
+
+    @staticmethod
+    def _cached_shadow_count(dev):
+        backend = getattr(dev, "dev", None)
+        count = getattr(backend, "replayable_shadow_count", None)
+        if callable(count):
+            return count()
+        raw = getattr(backend, "_shadow", {})
+        return len(raw) if isinstance(raw, dict) else 0
+
+    def _mark_attached(self):
+        cached = self._cached_shadow_count(self.dev)
+        self.snap["shadow_calls"] = cached
+        self.snap["shadow_pending"] = bool(cached)
+        self.snap["attach_generation"] = \
+            int(self.snap.get("attach_generation", 0)) + 1
+
+    def _loop(self):
+        import struct
+        n = 0
+        self._errs = 0
+        self._next_probe = 0.0
+        while self.running:
+            if self.dev is None:
+                # OFFLINE: the app runs without the interface now — the
+                # multiband and the UI itself never needed it. Queued control
+                # writes are dropped (there is no hardware to take them), and
+                # every couple of seconds we try to attach, so plugging the
+                # device in brings everything live without a restart.
+                try:
+                    while True:
+                        self.q.get_nowait()
+                except queue.Empty:
+                    pass
+                self.snap["alive"] = False
+                now = time.monotonic()
+                if now >= self._next_probe:
+                    self._next_probe = now + 2.0
+                    try:
+                        self.dev = Device(poll_interval=0.5)
+                        self._mark_attached()
+                        self._errs = 0
+                        self.snap["error"] = None
+                    except SystemExit:
+                        self.dev = None          # genuinely absent
+                    except Exception as e:
+                        # present but unopenable is a DIFFERENT state than
+                        # absent — "Resource busy" here meant a forgotten
+                        # instance held the device for six hours while this
+                        # loop reported nothing at all. Keep probing (the
+                        # holder may exit), but say what is happening.
+                        self.dev = None
+                        if "busy" in str(e).lower():
+                            self.snap["error"] = ("device is held by another "
+                                                  "program (Resource busy)")
+                time.sleep(0.2)
+                continue
+            try:
+                while True:
+                    fn = self.q.get_nowait()
+                    try:
+                        with self.dev.lock:
+                            fn(self.dev.dev)
+                    except Exception as e:
+                        self.snap["error"] = "%s: %s" % (type(e).__name__, e)
+            except queue.Empty:
+                pass
+            try:
+                with self.dev.lock:
+                    rsp = self.dev.dev.read_state(0x7EC)
+                    f = self.dev.dev.floats(rsp) if rsp else None
+                    if n % 6 == 0 and f:
+                        gr = {}
+                        for ch in (1, 2):
+                            g = {}
+                            for blk in ("gate", "comp", "lim "):
+                                r = self.dev.dev.read_reduction(blk, ch)
+                                g[blk.strip()] = db(r[0]) if r else 0.0
+                            gr[ch] = g
+                        self.snap["gr"] = gr
+                if f:
+                    s = self.snap
+                    s["in"] = [db(f[M_IN1]), db(f[M_IN2])]
+                    s["main"] = [db(f[i]) for i in M_MAIN]
+                    s["mixa"] = [db(f[i]) for i in M_MIXA]
+                    s["mixb"] = [db(f[i]) for i in M_MIXB]
+                    s["gain"] = [f[P_G1], f[P_G2]]
+                    s["hp"], s["mainvol"], s["blend"] = f[P_HP], f[P_MAIN], f[P_BLEND]
+                    raw = struct.pack("<f", f[50])
+                    s["phantom"] = [bool(raw[0]), bool(raw[1])]
+                    # slot 42 is a bitfield. Every assignment below was found by
+                    # driving the control and diffing the whole state blob:
+                    #   bit 1  MAIN OUT mute — the physical front-panel button.
+                    #          READ ONLY: no 'Pari' id 5..19 moves it, so the app
+                    #          can mirror the button but cannot press it.
+                    #   bit 2  the software mute on 'Pari' id 6 (a DIFFERENT
+                    #          control from the front-panel button)
+                    #   bit 3  ch1 mute      bit 4  ch2 mute      ('Pari' id 7)
+                    #   bit 12 stereo link   ('Pari' id 9)
+                    #   bit 13 'Pari' id 15  (PROTOCOL.md calls id 15 a no-op;
+                    #          it is not — it sets this bit. Purpose unknown.)
+                    # The low cut is NOT here: nothing stable reflects it, so it
+                    # cannot be mirrored at all.
+                    fl = struct.unpack("<i", struct.pack("<f", f[42]))[0]
+                    s["mainmute"] = bool(fl >> 1 & 1)
+                    s["hpmute"] = bool(fl >> 2 & 1)
+                    s["mute"] = [bool(fl >> 3 & 1), bool(fl >> 4 & 1)]
+                    s["link"] = bool(fl >> 12 & 1)
+                    # slots 40/41 move when a front-panel button is pressed
+                    # (re/state_map.md). Surfaced so the UI can follow whichever
+                    # channel the hardware has selected.
+                    s["sel"] = [struct.unpack("<i", struct.pack("<f", f[40]))[0],
+                                struct.unpack("<i", struct.pack("<f", f[41]))[0]]
+                    # bits 5 and 6 are the front-panel CHANNEL SELECT buttons,
+                    # found by watching the blob while they were pressed. They
+                    # are independent — the device happily selects both at once,
+                    # which is why the UI highlights a set rather than one.
+                    # bits 5/6 latch when press-and-hold DISABLES that
+                    # channel's preset function. A short preset press only
+                    # blips them, so treat the steady state as the meaning.
+                    s["preset_off"] = [bool(fl >> 5 & 1), bool(fl >> 6 & 1)]
+                    s["preset_slot"] = [
+                        struct.unpack("<i", struct.pack("<f", f[40]))[0],
+                        struct.unpack("<i", struct.pack("<f", f[41]))[0]]
+                    s["alive"] = True
+                    s["error"] = None
+                    self._errs = 0        # a good poll ends any error streak
+                else:
+                    # A dead poll usually RETURNS None rather than raising —
+                    # the driver's read path swallows USB errors — so the
+                    # unplug detector must count this branch too. It counted
+                    # only exceptions at first, and a real cable-pull test
+                    # showed the app clutching its stale handle forever.
+                    s = self.snap
+                    s["alive"] = False
+                    self._errs += 1
+                    if self._errs >= 5:
+                        try:
+                            self.dev.close()
+                        except Exception:
+                            pass
+                        self.dev = None
+                        self._errs = 0
+                        continue
+            except Exception as e:
+                self.snap["alive"] = False
+                self._errs += 1
+                if self._errs >= 5:
+                    # five consecutive failures is an unplug, not a hiccup:
+                    # release the stale handle and let the offline machinery
+                    # re-attach when the device comes back
+                    try:
+                        self.dev.close()
+                    except Exception:
+                        pass
+                    self.dev = None
+                    self._errs = 0
+                    continue
+                self.snap["error"] = "%s: %s" % (type(e).__name__, e)
+            n += 1
+            time.sleep(0.020)
+
+    def close(self):
+        self.running = False
+        try:
+            self.dev.close()
+        except Exception:
+            pass
+
+
+# --------------------------------------------------------------------------
+# drawn widgets
+#
+# These use GTK4's own snapshot API (Gsk paths + Graphene rects + Pango
+# layouts) rather than Cairo. PyGObject can only pass a cairo.Context to Python
+# when the separate `python3-gi-cairo` bridge is installed, and it usually is
+# not — the failure is silent per-frame ("Couldn't find foreign struct
+# converter"), which shows up as a window with no graphics in it at all. The
+# snapshot API is built into GTK4, so this draws everywhere.
+# --------------------------------------------------------------------------
+# -- palette ---------------------------------------------------------------
+# The canvases used to derive every colour from the theme foreground via
+# tint(), which made them monochrome and flat. They now carry their own
+# palette so the instrument reads as an instrument: a near-black blue ground,
+# a cyan trace, and violet for the second channel so the two are separable at
+# a glance rather than by position alone.
+#
+# Meter colours stay conventional — green / amber / red is what every desk in
+# the world uses and is not the place to be inventive — but they are pushed
+# toward neon so they sit with the rest.
+GREEN = (0.16, 0.85, 0.62)
+AMBER = (0.98, 0.72, 0.20)
+RED = (0.98, 0.29, 0.36)
+
+ACCENT = (0.24, 0.84, 0.87)          # cyan — channel 1, curves, active state
+ACCENT2 = (0.66, 0.55, 0.98)         # violet — channel 2
+GRID = (0.35, 0.62, 0.78)            # graticule, used at low alpha
+
+# The instrument palette for the field displays: a phosphor-cyan → thermal-amber
+# duotone over a deep field, with gold reserved for nodal lines. The point of a
+# duotone is that VALUE maps to HUE — a surface reads its own sign without a
+# legend, and the one third colour is spent on the one thing worth singling out:
+# where the field cancels.
+PHOS = (0.349, 0.839, 0.788)         # #59D6C9  phosphor cyan — positive
+THERM = (0.961, 0.659, 0.235)        # #F5A83C  thermal amber — negative
+IVORY = (0.929, 0.910, 0.863)        # #EDE8DC
+GOLD = (1.0, 0.843, 0.0)             # #FFD700  nodal contours only
+FIELD = (0.027, 0.043, 0.078)        # #070B14  the deep field
+
+
+def duo(mix, a=1.0):
+    """Phosphor→thermal across 0..1. The workhorse: every field value is a hue."""
+    m = 0.0 if mix < 0.0 else 1.0 if mix > 1.0 else mix
+    return rgba(PHOS[0] + (THERM[0] - PHOS[0]) * m,
+                PHOS[1] + (THERM[1] - PHOS[1]) * m,
+                PHOS[2] + (THERM[2] - PHOS[2]) * m, a)
+INK = (0.79, 0.85, 0.93)             # primary text on canvas
+GROUND = (0.031, 0.043, 0.071)       # canvas ground, near-black with a blue cast
+
+
+def rgba(r, g, b, a=1.0):
+    c = Gdk.RGBA()
+    c.red, c.green, c.blue, c.alpha = r, g, b, a
+    return c
+
+
+def pal(col, a=1.0):
+    """A palette tuple as a Gdk.RGBA. Companion to tint() for theme colours.
+
+    Named `pal` rather than `c` on purpose: Meter.paint already binds `c` as a
+    loop variable for zone colours, and a one-letter global would shadow into
+    exactly the kind of bug this file has had enough of."""
+    return rgba(col[0], col[1], col[2], a)
+
+
+def chan_col(channel):
+    """Channel 1 reads cyan, channel 2 violet, everywhere in the app."""
+    return ACCENT if channel == 1 else ACCENT2
+
+
+def tint(col, a):
+    return rgba(col.red, col.green, col.blue, a)
+
+
+def glow(sn, draw, radius=7.0, passes=1):
+    """Run `draw` blurred underneath itself, then crisp on top.
+
+    GTK 4.10+ has a real blur node, so this is an actual optical glow rather
+    than the usual trick of stroking a fat translucent line under a thin one —
+    which reads as a fat line, not as light. `draw` is called once per pass, so
+    it must be cheap and side-effect free.
+    """
+    for _ in range(max(1, passes)):
+        sn.push_blur(radius)
+        draw()
+        sn.pop()
+    draw()
+
+
+def box(sn, x, y, w, h, color):
+    if w > 0 and h > 0:
+        sn.append_color(color, Graphene.Rect().init(x, y, w, h))
+
+
+def polyline(sn, pts, color, width=2.0):
+    if len(pts) < 2:
+        return
+    pb = Gsk.PathBuilder()
+    pb.move_to(pts[0][0], pts[0][1])
+    for x, y in pts[1:]:
+        pb.line_to(x, y)
+    sn.append_stroke(pb.to_path(), Gsk.Stroke.new(width), color)
+
+
+def label(widget, sn, text, x, y, color, size=9):
+    lay = widget.create_pango_layout(text)
+    fd = Pango.FontDescription()
+    fd.set_size(int(size * Pango.SCALE))
+    lay.set_font_description(fd)
+    sn.save()
+    sn.translate(Graphene.Point().init(x, y))
+    sn.append_layout(lay, color)
+    sn.restore()
+
+
+def vgrad(sn, x, y, w, h, stops):
+    """Vertical gradient. stops = [(offset 0..1, (r,g,b,a)), ...]"""
+    if w <= 0 or h <= 0:
+        return
+    cs = []
+    for off, c in stops:
+        st = Gsk.ColorStop()
+        st.offset = off
+        st.color = rgba(*c)
+        cs.append(st)
+    sn.append_linear_gradient(Graphene.Rect().init(x, y, w, h),
+                              Graphene.Point().init(x, y),
+                              Graphene.Point().init(x, y + h), cs)
+
+
+def fill_poly(sn, pts, color):
+    if len(pts) < 3:
+        return
+    pb = Gsk.PathBuilder()
+    pb.move_to(pts[0][0], pts[0][1])
+    for x, y in pts[1:]:
+        pb.line_to(x, y)
+    pb.close()
+    sn.append_fill(pb.to_path(), Gsk.FillRule.WINDING, color)
+
+
+def dot(sn, x, y, r, color):
+    pb = Gsk.PathBuilder()
+    pb.add_circle(Graphene.Point().init(x, y), r)
+    sn.append_fill(pb.to_path(), Gsk.FillRule.WINDING, color)
+
+
+class Spectrum:
+    """Real-time spectrum from the device's own capture stream.
+
+    The control interface tells us levels but not spectrum, so this taps the
+    class-compliant audio side instead: `arecord` on the same card, FFT in
+    numpy. The two interfaces are independent, so this runs happily while the
+    control interface is held. If arecord or numpy is missing it simply stays
+    silent and the EQ page loses its backdrop, nothing else.
+    """
+
+    BINS = 256
+    FFT = 8192
+    HOP = 1024
+    RELEASE_TAU_S = 0.16
+
+    # If a capture generation produces no data for this long while it is
+    # supposed to be running, treat it as wedged rather than waiting forever.
+    STALL_S = 6.0
+
+    # The io24 captures SIX channels (FL FR FC LFE RL RR in ALSA's naming): the
+    # two inputs first, then Mix A on 3-4 and Mix B on 5-6 (PROTOCOL.md §12F).
+    # Ask for the device's native width and slice the pair we want explicitly.
+    #
+    # Asking `plughw` for 2 channels instead, as this did, leaves it to ALSA's
+    # plug layer to reduce 6 to 2 — and that is a channel *conversion*, which may
+    # downmix rather than truncate. A downmix would fold Mix A and Mix B into the
+    # backdrop, so the EQ curve would be drawn over the whole monitor mix rather
+    # than over the channel being edited: entirely plausible on screen, and wrong.
+    # Slicing named columns is deterministic and costs nothing.
+    CAPTURE_CHANNELS = 6
+    ANALYSE = (0, 1)                     # capture channels 1 and 2 = the inputs
+
+    def __init__(self, card="R24", channels=None, rate=48000, autostart=True):
+        self.rate = rate
+        self.channels = self.CAPTURE_CHANNELS if channels is None else channels
+        self.card = card
+        self.mag = [None, None]          # dB per log-spaced bin, per channel
+        self.ok = False
+        self.error = None
+        self.running = False
+        self.proc = None
+        self.gen = 0                     # bumped on every start/stop
+        self.last_data = 0.0
+        self._lock = threading.Lock()
+        self.freqs = [20.0 * (24000 / 20.0) ** (i / (self.BINS - 1))
+                      for i in range(self.BINS)]
+        if autostart:
+            self.start()
+
+    def frequency_resolution_hz(self):
+        """Native FFT-bin width at the configured sample rate."""
+        return float(self.rate) / self.FFT
+
+    def update_interval_seconds(self):
+        """Analysis update cadence; independent of the longer FFT window."""
+        return float(self.HOP) / self.rate
+
+    # -- lifecycle ---------------------------------------------------------
+    # The capture thread spends nearly all its time blocked in
+    # proc.stdout.read(), so a flag alone cannot stop it -- it would not be
+    # noticed until the next buffer arrived, and if arecord wedges, never. So
+    # stopping means KILLING THE PIPE, which makes the blocked read return b""
+    # immediately and the thread fall out of its loop on its own.
+    #
+    # Nothing here joins the thread. This is called from the GTK main thread on
+    # page switches, and a join is exactly how a UI locks up when the thing it
+    # waits for is stuck. The generation counter makes an outgoing thread
+    # harmless instead: it can finish whenever it likes, and its results are
+    # discarded because its generation is stale.
+
+    def start(self):
+        with self._lock:
+            if self.running:
+                return
+            self.running = True
+            self.gen += 1
+            gen = self.gen
+            self.last_data = time.time()
+        threading.Thread(target=self._run, args=(gen,), daemon=True).start()
+
+    def pause(self):
+        """Stop capturing and release the card. Safe from the UI thread."""
+        with self._lock:
+            if not self.running:
+                return
+            self.running = False
+            self.gen += 1
+            proc, self.proc = self.proc, None
+            # Cleared INSIDE the lock, with the generation bump, so a worker
+            # cannot slip a frame in between the bump and the clear.
+            self.mag = [None, None]
+            self.ok = False
+        if proc is not None:
+            # terminate() is what unblocks the reader. kill() is the backstop if
+            # arecord ignores SIGTERM; both are non-blocking, and the reaping
+            # happens on a throwaway thread so the UI never waits on either.
+            def reap():
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2.0)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            threading.Thread(target=reap, daemon=True).start()
+
+    def stalled(self):
+        """True if a running capture has gone quiet for too long."""
+        return (self.running and self.last_data
+                and (time.time() - self.last_data) > self.STALL_S)
+
+    @staticmethod
+    def _take_window(buf, need, hop):
+        """Return one overlapping analysis window and its retained tail."""
+        if len(buf) < need:
+            return None, buf
+        return buf[:need], buf[hop:]
+
+    @classmethod
+    def _release_alpha(cls, elapsed):
+        return math.exp(-max(0.0, float(elapsed)) / cls.RELEASE_TAU_S)
+
+    def _run(self, gen):
+        try:
+            import numpy as np
+            import subprocess
+        except Exception as e:
+            self.error = str(e)
+            return
+        cmd = ["arecord", "-D", "plughw:CARD=%s" % self.card, "-f", "S32_LE",
+               "-c", str(self.channels), "-r", str(self.rate), "-t", "raw",
+               "--period-size=1024", "-q"]
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, bufsize=0)
+        except Exception as e:
+            self.error = "arecord: %s" % e
+            return
+        with self._lock:
+            if gen != self.gen:              # paused while we were starting up
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                return
+            self.proc = proc
+        win = np.hanning(self.FFT).astype(np.float32)
+        fft_f = np.fft.rfftfreq(self.FFT, 1.0 / self.rate)
+        # Each display bin must cover its whole frequency SPAN. A fixed +-k bin
+        # window is wrong at both ends: down low several display bins share one
+        # FFT bin, and up high the display bins are hundreds of Hz apart, so a
+        # narrow window steps straight over the peaks (a 10 kHz tone read 74 dB
+        # low before this was fixed).
+        ratio = (24000 / 20.0) ** (1.0 / (self.BINS - 1))
+        spans = []
+        for f in self.freqs:
+            lo = int(np.searchsorted(fft_f, f / math.sqrt(ratio)))
+            hi = int(np.searchsorted(fft_f, f * math.sqrt(ratio)))
+            lo = max(1, lo)
+            spans.append((lo, max(lo + 1, hi)))
+        frame_bytes = self.channels * 4
+        need = self.FFT * frame_bytes
+        hop_bytes = self.HOP * frame_bytes
+        buf = b""
+        smooth = [None, None]
+        last_frame_at = None
+        try:
+            while self.running and gen == self.gen:
+                chunk = proc.stdout.read(hop_bytes)
+                if not chunk:
+                    break
+                buf += chunk
+                self.last_data = time.time()
+                while len(buf) >= need:
+                    frame, buf = self._take_window(buf, need, hop_bytes)
+                    a = np.frombuffer(frame, dtype="<i4").astype(
+                        np.float32) / 2147483648.0
+                    a = a.reshape(-1, self.channels)
+                    frame_at = time.monotonic()
+                    elapsed = ((self.HOP / self.rate) if last_frame_at is None
+                               else frame_at - last_frame_at)
+                    last_frame_at = frame_at
+                    alpha = self._release_alpha(elapsed)
+                    for out, src_col in enumerate(self.ANALYSE):
+                        if src_col >= self.channels:
+                            continue
+                        sp = np.abs(np.fft.rfft(
+                            a[:, src_col] * win)) / (self.FFT / 4)
+                        d = 20.0 * np.log10(np.maximum(sp, 1e-9))
+                        binned = np.array(
+                            [d[lo:hi].max() for lo, hi in spans])
+                        if smooth[out] is None:
+                            smooth[out] = binned
+                        else:
+                            rise = binned > smooth[out]
+                            smooth[out] = np.where(
+                                rise, binned,
+                                smooth[out] * alpha + binned * (1.0 - alpha))
+                        with self._lock:
+                            if gen == self.gen:
+                                self.mag[out] = smooth[out].tolist()
+                    with self._lock:
+                        if gen == self.gen:
+                            self.ok = True
+        except Exception as e:
+            if gen == self.gen:
+                self.error = "%s: %s" % (type(e).__name__, e)
+        finally:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            with self._lock:
+                if self.proc is proc:
+                    self.proc = None
+
+    def stop(self):
+        self.pause()
+
+
+class Canvas(Gtk.Widget):
+    """A widget that paints itself with the snapshot API."""
+
+    def __init__(self, width=-1, height=-1):
+        super().__init__()
+        self.set_size_request(width, height)
+
+    def paint(self, sn, w, h):
+        raise NotImplementedError
+
+    def do_snapshot(self, sn):
+        w, h = self.get_width(), self.get_height()
+        if w > 0 and h > 0:
+            self.paint(sn, w, h)
+
+
+class Meter(Canvas):
+    """Flat console-style meter: discrete zone colours, fine LED ruling, a
+    held peak line and dB ticks. No gradient — real desk meters do not have
+    one, and a gradient reads as decoration rather than information."""
+
+    HOLD, DECAY = 1.6, 26.0
+    TICKS = (0, -6, -12, -20, -30, -45)
+
+    def __init__(self, width=22, scale=True):
+        super().__init__(width, 120)
+        self.value = -99.0
+        self.peak = -99.0
+        self.peak_at = 0.0
+        self.show_scale = scale
+        self.set_vexpand(True)
+
+    def set_db(self, v):
+        self.value = v
+        now = time.monotonic()
+        if v >= self.peak:
+            self.peak, self.peak_at = v, now
+        elif now - self.peak_at > self.HOLD:
+            self.peak = max(v, self.peak - self.DECAY * (now - self.peak_at - self.HOLD))
+            self.peak_at = now - self.HOLD
+        self.queue_draw()
+
+    def _y(self, d, h):
+        return h - (max(FLOOR, min(0.0, d)) - FLOOR) / (-FLOOR) * h
+
+    def _y_inv(self, y, h):
+        """Pixel row back to dB — which zone a segment belongs to."""
+        return FLOOR + (h - y) / max(h, 1.0) * (-FLOOR)
+
+    def paint(self, sn, w, h):
+        bw = max(7, w - (18 if self.show_scale else 0))
+        box(sn, 0, 0, bw, h, pal(GROUND))
+        box(sn, 0, 0, bw, h, pal(GRID, 0.06))
+        if self.value > FLOOR:
+            # three flat zones, each clipped to how far the level has risen.
+            # Still flat, still discrete: a gradient here would read as
+            # decoration and make the zone boundaries impossible to judge.
+            top = self._y(self.value, h)
+            hot = self.value > -9.0
+            # Discrete LED segments rather than a continuous bar. Real ladder
+            # meters are segmented, it reads as an instrument, and — the part
+            # that actually matters — a segment boundary is a fixed dB landmark,
+            # so you can judge level by counting rather than by estimating a
+            # length. Drawn as segments directly instead of painting a bar and
+            # punching gaps out of it, which left the gaps a different colour
+            # from the ground wherever the zones met.
+            # A smooth column with a real vertical gradient, clipped to the
+            # current level. The segmented version read as blocky and, worse,
+            # quantised the level to 7 px steps — the whole point of a meter is
+            # fine movement. Gradient stops sit exactly on the zone boundaries,
+            # so green/amber/red still land at the same dB as before.
+            def stop(db, col):
+                # Gsk.ColorStop is a plain struct with no .new() constructor —
+                # calling one raised inside the draw callback, which GTK
+                # swallows, so the meter silently drew nothing at all.
+                st = Gsk.ColorStop()
+                st.offset = (h - self._y(db, h)) / max(h, 1.0)
+                st.color = pal(col)
+                return st
+            bar = lambda: sn.append_linear_gradient(
+                Graphene.Rect().init(0, top, bw, h - top),
+                Graphene.Point().init(0, h), Graphene.Point().init(0, 0),
+                [stop(FLOOR, GREEN), stop(-12.0, GREEN),
+                 stop(-9.0, AMBER), stop(-3.0, AMBER),
+                 stop(-1.5, RED), stop(0.0, RED)])
+            # only the loud zones glow, so the glow carries information rather
+            # than being ambient decoration
+            glow(sn, bar, radius=5.0) if hot else bar()
+            # a bright cap at the top of the column gives the level an edge to
+            # track, which a plain gradient loses at low levels
+            box(sn, 0, max(0, top - 1), bw, 2,
+                pal(RED if self.value > -1.5 else
+                    AMBER if self.value > -9 else GREEN, 0.95))
+        if self.peak > FLOOR:
+            py = self._y(self.peak, h)
+            zone = RED if self.peak > -1.5 else AMBER if self.peak > -9 else GREEN
+            glow(sn, lambda: box(sn, 0, max(0, py - 1), bw, 2, pal(zone)), radius=4.0)
+        if self.show_scale:
+            for d in self.TICKS:
+                yy = self._y(d, h)
+                box(sn, bw, yy, 3, 1, pal(GRID, 0.35))
+                label(self, sn, str(d), bw + 5,
+                      min(h - 11, max(0, yy - 5)), pal(INK, 0.42), 7)
+
+
+class PresetIndicator(Canvas):
+    """Compact slot identity plus an active/bypassed processing marker."""
+
+    def __init__(self):
+        super().__init__(28, 20)
+        self.slot = None
+        self.active = False
+
+    def set_state(self, slot, active):
+        slot = slot if slot in (0, 1) else None
+        active = bool(active and slot is not None)
+        if (slot, active) != (self.slot, self.active):
+            self.slot, self.active = slot, active
+        self.queue_draw()
+
+    @staticmethod
+    def _animations_enabled():
+        settings = Gtk.Settings.get_default()
+        return bool(settings is None or
+                    settings.get_property("gtk-enable-animations"))
+
+    def paint(self, sn, w, h):
+        visual = preset_indicator_visual(
+            self.active, self.slot, time.monotonic(),
+            self._animations_enabled())
+        size = int(round(visual["radius"] * 2.6))
+        x = max(0, (w - size) / 2.0)
+        if visual["glyph"] == "○":
+            label(self, sn, visual["glyph"], x, 0,
+                  pal(INK, visual["opacity"]), size)
+            return
+        draw = lambda: label(
+            self, sn, visual["glyph"], x, 0,
+            pal(ACCENT, visual["opacity"]), size)
+        glow(sn, draw, radius=4.0)
+
+
+class GRBar(Canvas):
+    """Gain reduction, filling right-to-left as every compressor display does."""
+
+    def __init__(self, span=24.0):
+        super().__init__(-1, 11)
+        self.value = 0.0
+        self.span = span
+        self.set_hexpand(True)
+
+    def set_db(self, v):
+        self.value = v
+        self.queue_draw()
+
+    def paint(self, sn, w, h):
+        box(sn, 0, 0, w, h, pal(GROUND))
+        box(sn, 0, 0, w, h, pal(GRID, 0.07))
+        amt = min(1.0, max(0.0, -self.value / self.span))
+        if amt > 0.002:
+            x = w * (1 - amt)
+            glow(sn, lambda: box(sn, x, 0, w * amt, h, pal(AMBER, 0.95)), radius=4.0)
+            # a bright leading edge gives the bar a direction to read
+            box(sn, x, 0, 1.5, h, pal(AMBER))
+
+
+class _SwitchValue:
+    """Adapts a SwitchRow to the .get_value()/.set_value() a fader offers, so
+    the parameter plumbing does not have to care which widget it got."""
+
+    def __init__(self, row):
+        self.row = row
+
+    def get_value(self):
+        return 1.0 if self.row.get_active() else 0.0
+
+    def set_value(self, v):
+        self.row.set_active(bool(v))
+
+
+class _ComboValue:
+    """Same idea for a ComboRow over an evenly-spaced numeric range."""
+
+    def __init__(self, row, lo, step):
+        self.row, self.lo, self.step = row, lo, step
+
+    def get_value(self):
+        return self.lo + self.row.get_selected() * self.step
+
+    def set_value(self, v):
+        self.row.set_selected(int(round((v - self.lo) / self.step)))
+
+
+# --------------------------------------------------------------------------
+# A very small 3D wireframe renderer.
+#
+# GTK4's drawing API is 2D — there is no mesh node and no shader stage — so the
+# geometry is transformed here and emitted as line segments. That is a real
+# projection, not a fake isometric look: vertices are rotated, divided through
+# by depth, and drawn back-to-front with depth cueing, so parallax and
+# foreshortening behave correctly when a parameter changes the shape.
+#
+# Wireframe surfaces, not polyhedra. An earlier pass drew boxes and lattices —
+# a cube tells you nothing about what an effect does, and at this size a shaded
+# blob tells you less. What is drawn now is the response itself: a curved
+# surface over frequency and time, interpolated with Catmull-Rom in both axes,
+# so the shape IS the information and every parameter deforms it.
+# --------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# The displays are 2D.
+#
+# An earlier pass rendered these as projected 3D surfaces. It was dropped, and
+# the reason is worth keeping: the third axis was carrying PARAMETER HISTORY —
+# how the response had changed while you moved a slider. That is not an axis the
+# effect has. It looked like data without being data, and it made every model
+# read as the same generic landscape when the whole point is that a detuner and
+# a comb filter do visibly different things.
+#
+# What replaced it is what each effect actually IS, drawn flat and lit: the
+# detuner's two voices as two traces, the comb's notches as notches. If a real
+# 3D instrument is wanted later — a spectrogram of live audio, where time is a
+# genuine axis — that is a different program with a different job.
+# ---------------------------------------------------------------------------
+
+
+class FXVisual(Canvas):
+    """A drawn signature for each Voice FX model, in two dimensions.
+
+    Each one is a picture of the transformation that model performs, plotted
+    from its OWN decoded parameters — so the display says what the effect is
+    and moves when you change it. Universal Control shows these as rack units;
+    copying that would be dishonest here, because on this device the processor
+    is present but held off by firmware state, and a photoreal front panel would
+    be a picture of a machine that does nothing.
+    """
+
+    ANIMATED = ("detuner", "ringmod", "delay")
+
+    def __init__(self, model="transformer", params=None, height=190):
+        super().__init__(-1, height)
+        self.model = model
+        self.params = params or (lambda: {})
+        self._key = None
+        self.phase = 0.0
+        self.set_hexpand(True)
+
+    def set_model(self, name):
+        self.model = name
+        self._key = None
+        self.queue_draw()
+
+    def tick(self):
+        """Animated models advance every tick (the page gate in _fx_anim keeps
+        this from running unseen); static ones redraw only on a change."""
+        if self.model in self.ANIMATED:
+            self.phase = (self.phase + 0.09) % (math.pi * 2000)
+            if self.get_mapped():
+                self.queue_draw()
+            return
+        try:
+            P = self.params() or {}
+        except Exception:
+            return
+        key = (self.model,) + tuple(round(float(v), 4) for _, v in sorted(P.items()))
+        if key == self._key:
+            return
+        self._key = key
+        if self.get_mapped():
+            self.queue_draw()
+
+    # -- helpers ------------------------------------------------------------
+    def _frame(self, sn, w, h):
+        box(sn, 0, 0, w, h, pal(FIELD))
+        for i in range(1, 8):
+            polyline(sn, [(w * i / 8.0, 0), (w * i / 8.0, h)], pal(PHOS, 0.055), 1.0)
+        polyline(sn, [(0, h * 0.5), (w, h * 0.5)], pal(PHOS, 0.10), 1.0)
+
+    def _curve(self, sn, w, fn, colour, width=2.2, n=200, glow_r=7.0):
+        pts = [(w * i / n, fn(i / float(n))) for i in range(n + 1)]
+        glow(sn, lambda: polyline(sn, pts, pal(colour, 0.95), width), radius=glow_r)
+
+    def paint(self, sn, w, h):
+        self._frame(sn, w, h)
+        try:
+            P = self.params() or {}
+        except Exception:
+            P = {}
+
+        def q(name, default):
+            try:
+                return float(P.get(name, default))
+            except (TypeError, ValueError):
+                return default
+
+        m = self.model
+        pad = 16.0
+        base = h - pad
+
+        if m == "transformer":
+            lows, width_, mix = q("lows", 0.5), q("width", 0.5), q("mix", 0.5)
+            # the low shelf itself: 600/550 Hz, gain = Lows x 12 dB, on log f
+            def shelf(t):
+                f = 20.0 * (1000.0 ** t)
+                g = 1.0 / (1.0 + (f / 575.0) ** 2.0) * lows
+                return base - (0.10 + g * 0.82) * (h - 2 * pad)
+            self._curve(sn, w, shelf, PHOS)
+            # Width: the two sides separating around centre
+            spread = (h * 0.04) + width_ * (h * 0.20)
+            for sgn, tone in ((-1, PHOS), (1, THERM)):
+                y = h * 0.30 + sgn * spread
+                glow(sn, lambda y=y, tone=tone: polyline(
+                    sn, [(w * 0.63, y), (w - 14, y)], pal(tone, 0.85), 2.0), radius=5.0)
+            label(self, sn, "%+.1f dB shelf  ·  width %.0f%%  ·  wet %.0f%%"
+                  % (lows * 12.0, width_ * 100, mix * 100), 10, h - 15,
+                  pal(INK, 0.45), 8)
+
+        elif m == "detuner":
+            # two voices, a whole number of semitones apart. This is the one that
+            # reads immediately: you can see the second trace running slower.
+            semis = int(q("detune", 4)) - 8
+            ratio = 2.0 ** (semis / 12.0)
+            mix = q("mix", 0.5)
+            amp = (h * 0.5 - pad)
+            ph = self.phase
+            self._curve(sn, w, lambda t: h * 0.5 + math.sin(t * 22 + ph) * amp * 0.9,
+                        PHOS, 2.0, n=320)
+            self._curve(sn, w,
+                        lambda t: h * 0.5 + math.sin(t * 22 * ratio + ph * ratio)
+                        * amp * (0.35 + 0.55 * mix),
+                        THERM, 1.8, n=320)
+            label(self, sn, "%s  ·  wet %.0f%%"
+                  % ("no shift" if semis == 0 else "%d semitones" % semis, mix * 100),
+                  10, h - 15, pal(INK, 0.45), 8)
+
+        elif m == "vocoder":
+            kind = int(q("carrier_type", 1))
+            fr = q("carrier_freq", 80.0)
+            n = 22
+            for i in range(n):
+                if kind == 0:
+                    a = 0.45 + 0.22 * math.sin(i * 2.3)
+                elif kind == 1:
+                    a = 0.95 / (1 + i * 0.5)
+                else:
+                    a = 0.95 / (1 + i * 0.5) if i % 2 == 0 else 0.09
+                a *= 0.40 + fr / 640.0
+                bh = max(2.0, (h - 2 * pad) * min(1.0, a))
+                x = 12 + i * (w - 26) / n
+                bw = max(3.0, (w - 26) / n - 5)
+                glow(sn, lambda x=x, bh=bh, bw=bw, a=a:
+                     box(sn, x, base - bh, bw, bh, duo(min(1.0, a), 0.9)), radius=5.0)
+            label(self, sn, "%s carrier  ·  %.0f Hz"
+                  % (["Noise", "Sawtooth", "Rectangle"][kind], fr), 10, h - 15,
+                  pal(INK, 0.45), 8)
+
+        elif m == "ringmod":
+            fr, dist = q("carrier_hz", 30.0), q("dist", 0.5)
+            sub = q("carrier2", 0) >= 0.5
+            k = 4.0 + fr / 90.0
+            amp = h * 0.5 - pad
+            self._curve(sn, w, lambda t: h * 0.5 + math.sin(t * 6) * amp * 0.85,
+                        GRID, 1.2, n=200, glow_r=0.0)
+            ph = self.phase
+            def rm(t):
+                v = math.sin(t * k * 6 + ph * 2) * math.sin(t * 6 + ph * 0.3)
+                if sub:
+                    v = 0.72 * v + 0.28 * math.sin(t * (q("carrier2_hz", 50.0) / 22.0) + ph)
+                if dist > 0.01:
+                    v = math.tanh(v * (1 + dist * 6)) / math.tanh(1 + dist * 6)
+                return h * 0.5 + v * amp * 0.92
+            self._curve(sn, w, rm, PHOS, 2.0, n=380)
+            label(self, sn, "%.0f Hz%s  ·  dist %.0f%%"
+                  % (fr, "  + sub %.0f Hz" % q("carrier2_hz", 50.0) if sub else "",
+                     dist * 100), 10, h - 15, pal(INK, 0.45), 8)
+
+        elif m == "filters":
+            samples = int(q("pitch", 0.5) * 1300 + 250.5)
+            fb = q("regeneration", 0.5) * 0.35 + 0.5
+            damp = q("damping", 0.5) * 0.6 + 0.3
+            f_comb = 48000.0 / max(1, samples)
+            sharp = 2.0 + fb * 12.0
+            def comb(t):
+                f = 20.0 * (1000.0 ** t)
+                v = abs(math.cos(math.pi * f / f_comb)) ** sharp
+                v *= 1.0 / (1.0 + (f / (20000.0 * (1.06 - damp))) ** 2)
+                return base - v * (h - 2 * pad) * 0.92
+            self._curve(sn, w, comb, PHOS, 2.0, n=420)
+            label(self, sn, "%d samples  ·  fb %.2f  ·  damp %.2f"
+                  % (samples, fb, damp), 10, h - 15, pal(INK, 0.45), 8)
+
+        else:                                       # delay
+            t_s, fb = q("time_s", 0.125), q("feedback", 0.5)
+            mix = q("mix", 0.5)
+            n = max(2, min(10, int(2 + fb * 9)))
+            span_s = max(0.25, t_s * (n + 0.5))     # the visible time window
+            x_of = lambda sec: 14 + (w - 28) * (sec / span_s)
+            # time axis with real millisecond ticks
+            polyline(sn, [(12, base), (w - 12, base)], pal(GRID, 0.35), 1.0)
+            tick_ms = 100 if span_s < 1.2 else 250
+            sec = 0.0
+            while sec <= span_s:
+                x = x_of(sec)
+                polyline(sn, [(x, base), (x, base + 4)], pal(GRID, 0.45), 1.0)
+                if sec > 0:
+                    label(self, sn, "%d" % round(sec * 1000), x - 8, base + 4,
+                          pal(INK, 0.30), 6)
+                sec += tick_ms / 1000.0
+            # the dry hit, then each echo at its true time and level, with the
+            # feedback path drawn as an arc from each echo to the next
+            events = [(0.0, 1.0)] + [(t_s * (i + 1), (0.25 + fb * 0.72) ** (i + 1))
+                                     for i in range(n)]
+            for i, (sec, lvl) in enumerate(events):
+                x = x_of(sec)
+                bh = (h - 2 * pad - 10) * lvl * (0.35 + 0.65 * mix if i else 1.0)
+                colour = IVORY if i == 0 else None
+                glow(sn, lambda x=x, bh=bh, i=i:
+                     box(sn, x - 1.5, base - bh, 3.0, bh,
+                         rgba(*IVORY, 0.9) if i == 0 else duo(i / len(events), 0.85)),
+                     radius=5.0)
+                if i + 1 < len(events):
+                    nx = x_of(events[i + 1][0])
+                    mid_x, top = (x + nx) / 2.0, base - bh - 10
+                    arc = [(x + (nx - x) * t2 / 14.0,
+                            top + 8 - math.sin(math.pi * t2 / 14.0) * 7)
+                           for t2 in range(15)]
+                    polyline(sn, arc, pal(THERM, 0.30), 1.0)
+            # the playhead: one pulse travelling the tail, wrapping each pass
+            cyc = (self.phase * 0.05) % 1.0
+            px = x_of(cyc * span_s)
+            glow(sn, lambda: polyline(sn, [(px, pad), (px, base)],
+                                      rgba(*GOLD, 0.35), 1.2), radius=4.0)
+            label(self, sn, "%.0f ms  ·  feedback %.0f%%  ·  %d repeats"
+                  % (t_s * 1000, fb * 100, n), 10, h - 15, pal(INK, 0.45), 8)
+
+        label(self, sn, MODEL_LABELS.get(m, m), 10, 7, pal(INK, 0.55), 8)
+
+
+class ReverbVisual(Canvas):
+    """The reverb as its own decay: pre-delay gap, then the tail dying away.
+
+    Time runs left to right, energy is height — the two things every reverb
+    control actually changes. Size sets how long the tail survives, Wet mix its
+    height, Pre-delay the silent run-in before the first reflection, and the
+    input high-pass how much low end is under it (drawn as the shaded body).
+    """
+
+    def __init__(self, params, height=190):
+        super().__init__(-1, height)
+        self.params = params
+        self.t = 0.0
+        self._key = None
+        self._moving = False
+        self.set_hexpand(True)
+
+    def tick(self):
+        try:
+            P = self.params() or {}
+        except Exception:
+            return
+        key = tuple(round(float(P.get(k, 0) or 0), 4)
+                    for k in ("size", "mix", "predelay", "hp")) + (bool(P.get("on")),)
+        moving = bool(P.get("on")) and self._moving
+        if key == self._key and not moving:
+            return
+        self._key = key
+        self.t += 0.05
+        if self.get_mapped():
+            self.queue_draw()
+
+    def paint(self, sn, w, h):
+        box(sn, 0, 0, w, h, pal(FIELD))
+        try:
+            P = self.params() or {}
+        except Exception:
+            P = {}
+        size = max(0.02, min(1.0, float(P.get("size", 0.5))))
+        mix = max(0.0, min(1.0, float(P.get("mix", 0.35))))
+        pre = max(0.0, min(0.25, float(P.get("predelay", 0.02))))
+        hp = max(0.0, min(500.0, float(P.get("hp", 200.0))))
+        on = bool(P.get("on", False))
+        pad = 16.0
+        base = h - pad
+        for i in range(1, 8):
+            polyline(sn, [(w * i / 8.0, 0), (w * i / 8.0, h)], pal(PHOS, 0.055), 1.0)
+
+        gap = pre / 0.25 * 0.34
+        decay = 0.10 + size * 0.72
+        lit = 1.0 if on else 0.30
+
+        def env(t):
+            if t < gap:
+                return 0.0
+            return math.exp(-(t - gap) / max(0.03, decay)) * (0.12 + mix * 0.88)
+
+        # the dry hit, then the tail
+        polyline(sn, [(14, base), (14, base - (h - 2 * pad) * 0.92)],
+                 pal(IVORY, 0.55 * lit), 2.0)
+        pts = [(14 + (w - 28) * (i / 240.0), base - env(i / 240.0) * (h - 2 * pad) * 0.92)
+               for i in range(241)]
+        if on:
+            glow(sn, lambda: polyline(sn, pts, pal(PHOS, 0.95), 2.2), radius=7.0)
+        else:
+            polyline(sn, pts, pal(PHOS, 0.30), 1.6)
+
+        # the body under the tail: how much low end survives the input high-pass
+        low = 1.0 - min(1.0, hp / 500.0)
+        if low > 0.03:
+            step = 8
+            for i in range(0, 241, step):
+                t = i / 240.0
+                y = base - env(t) * (h - 2 * pad) * 0.92 * low
+                if base - y > 1.0:
+                    x = 14 + (w - 28) * t
+                    polyline(sn, [(x, base), (x, y)], duo(1.0 - t, 0.18 * lit), 1.0)
+
+        # the pre-delay gap, marked where it is
+        if gap > 0.004:
+            gx = 14 + (w - 28) * gap
+            polyline(sn, [(gx, 22), (gx, base)], pal(GOLD, 0.45 * lit), 1.2)
+            # beside its own line, below the readout — at the old spot it sat
+            # directly on top of the "pre N ms" text
+            label(self, sn, "pre-delay", gx + 5, 24, pal(GOLD, 0.5 * lit), 7)
+
+        polyline(sn, [(12, base), (w - 12, base)], pal(GRID, 0.30), 1.0)
+        label(self, sn, "pre %.0f ms   size %.0f%%   wet %.0f%%   hp %s"
+              % (pre * 1000, size * 100, mix * 100,
+                 "off" if hp < 1 else "%.0f Hz" % hp),
+              10, 7, pal(INK, 0.48), 8)
+        if not on:
+            label(self, sn, "reverb off", w - 74, h - 15, pal(INK, 0.35), 8)
+
+
+def fx_response(model, P, bins=34):
+    """The effect's spectral response across the audible band, 0..1 per bin.
+
+    Real characterisations rather than ornament — each is the shape that model
+    actually imposes, computed from its own decoded parameters:
+
+        Transformer  a low shelf at 600/550 Hz, gain = Lows * 12 dB, plus the
+                     stereo spread Width opens up
+        Detuner      the source partial and its shifted copy, Tune semitones apart
+        Vocoder      the carrier's harmonic series — 1/n for sawtooth, odd-only
+                     for rectangle, flat and noisy for noise
+        Ring Mod     sidebands at signal +/- carrier, and again for the sub carrier
+        Filters      the comb produced by a 250-1550 sample feedback delay
+        Delay        the comb produced by the delay time, depth set by Feedback
+
+    Log frequency, 20 Hz to 20 kHz, so the low end gets the room it deserves.
+    """
+    out = []
+    for i in range(bins):
+        f = 20.0 * (1000.0 ** (i / (bins - 1.0)))          # 20 Hz .. 20 kHz
+        v = 0.0
+        if model == "transformer":
+            lows = P.get("lows", 0.5)
+            width = P.get("width", 0.5)
+            shelf = 1.0 / (1.0 + (f / 575.0) ** 2.0)
+            v = 0.16 + shelf * (0.10 + lows * 0.78) + width * 0.10 * (f > 2000)
+        elif model == "detuner":
+            semis = int(P.get("detune", 4)) - 8
+            r = 2.0 ** (semis / 12.0)
+            for k in range(1, 7):
+                for f0, amp in ((220.0 * k, 0.85 / k), (220.0 * k * r, 0.85 / k)):
+                    v += amp * math.exp(-((math.log(f / f0)) ** 2) / 0.006)
+        elif model == "vocoder":
+            kind = int(P.get("carrier_type", 1))
+            f0 = max(20.0, P.get("carrier_freq", 80.0))
+            if kind == 0:
+                v = 0.42 + 0.18 * math.sin(f * 0.013)
+            else:
+                for k in range(1, 26):
+                    if kind == 2 and k % 2 == 0:
+                        continue
+                    v += (0.95 / k) * math.exp(-((math.log(f / (f0 * k))) ** 2) / 0.004)
+        elif model == "ringmod":
+            c = max(0.1, P.get("carrier_hz", 30.0))
+            sig = 300.0
+            peaks = [(sig - c, 0.8), (sig + c, 0.8)]
+            if P.get("carrier2", 0) >= 0.5:
+                c2 = max(0.1, P.get("carrier2_hz", 50.0))
+                peaks += [(sig - c2, 0.5), (sig + c2, 0.5)]
+            for f0, amp in peaks:
+                if f0 > 1:
+                    v += amp * math.exp(-((math.log(f / f0)) ** 2) / 0.004)
+            v += P.get("dist", 0.5) * 0.30 * (1.0 / (1.0 + (f / 4000.0)))
+        elif model == "filters":
+            samples = int(P.get("pitch", 0.5) * 1300 + 250.5)
+            fb = P.get("regeneration", 0.5) * 0.35 + 0.5
+            damp = P.get("damping", 0.5) * 0.6 + 0.3
+            f_comb = 48000.0 / max(1, samples)
+            v = abs(math.cos(math.pi * f / f_comb)) ** (2 + fb * 12)
+            v *= 1.0 / (1.0 + (f / (20000.0 * (1.05 - damp))) ** 2)
+        else:                                              # delay
+            t = max(0.001, P.get("time_s", 0.125))
+            fb = P.get("feedback", 0.5)
+            v = 0.5 + 0.5 * math.cos(2 * math.pi * f * t) * (0.25 + fb * 0.7)
+        out.append(max(0.0, min(1.0, v)))
+    return out
+
+
+# NAMING, and PreSonus itself is inconsistent about it. Checked against the
+# io24's OWN owner's manual (EN_08042022, fetched from PreSonus; cached in
+# ~/.cache/io24/re/), not just the io44's: BOTH manuals call model 0 "Doubler"
+# — the io24 spec sheet lists "Doubler, Vocoder, Ring Modulator, Comb Filter,
+# Detuner, Delay, Reverb". "Transformer" appears only in Universal Control,
+# which is nevertheless what this device's owner saw and used, so it stays.
+# That same spec sheet's "Comb Filter" independently confirms the decode of
+# model 4 as a tuned feedback comb — identified from the binary alone before
+# the manual was read.
+MODEL_LABELS = {
+    "transformer": "TRANSFORMER   richness, depth, a hint of reverb",
+    "detuner": "DETUNER   artificially lowers the voice",
+    "vocoder": "VOCODER   talking synthesizer",
+    "ringmod": "RING MODULATOR   voice x oscillator",
+    "filters": "FILTERS   custom filter bank",
+    "delay": "DELAY   echo",
+}
+
+_INTERVALS = ["unison", "m2", "M2", "m3", "M3", "P4", "TT", "P5", "m6"]
+
+
+def _interval_name(v):
+    """Shipped TuneList readout: indices 0..8 are -8..0 semitones."""
+    n = int(v) - 8
+    if n == 0:
+        return "unison"
+    name = _INTERVALS[min(8, abs(n))]
+    return ("\u2193 " if n < 0 else "\u2191 ") + name
+
+
+MODEL_TITLES = ["Doubler / Transformer", "Detuner", "Vocoder", "Ring Modulator",
+                "Filters", "Delay"]
+
+
+class SlotBlocks(Gtk.Box):
+    """The device's preset slots as blocks, not a dropdown.
+
+    The unit has two Preset buttons per channel on its face, and the wire
+    parameter ('Pari' 16) addresses four slots — the firmware clamps anything
+    higher. So four blocks, with the first two marked as the ones the hardware
+    buttons reach, which is the mapping a user actually has in their hands.
+
+    Exposes get_selected/set_selected so it drops straight into the code that
+    was driving an Adw.ComboRow.
+    """
+
+    def __init__(self, count=4, hardware=2, on_change=None):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.add_css_class("linked")
+        self.set_halign(Gtk.Align.CENTER)
+        self._on_change = on_change
+        self._mute = False
+        self.buttons = []
+        for i in range(count):
+            b = Gtk.ToggleButton(label=str(i + 1))
+            b.set_size_request(46, 34)
+            b.add_css_class("io24-slot")
+            if i < hardware:
+                b.add_css_class("io24-slot-hw")
+                b.set_tooltip_text("Slot %d — reachable from the unit's Preset "
+                                   "button" % (i + 1))
+            else:
+                b.set_tooltip_text("Slot %d — host-selectable only" % (i + 1))
+            b.connect("toggled", self._toggled, i)
+            self.buttons.append(b)
+            self.append(b)
+        # Seed the initial block with the handler muted. Letting it fire meant a
+        # slot write went to the device merely because the window was built, and
+        # say() ran before the toast overlay existed.
+        self._mute = True
+        try:
+            self.buttons[0].set_active(True)
+        finally:
+            self._mute = False
+
+    def _toggled(self, btn, idx):
+        if self._mute or not btn.get_active():
+            return
+        self._mute = True
+        try:
+            for j, b in enumerate(self.buttons):
+                if j != idx:
+                    b.set_active(False)
+        finally:
+            self._mute = False
+        if self._on_change:
+            self._on_change(idx)
+
+    def get_selected(self):
+        for i, b in enumerate(self.buttons):
+            if b.get_active():
+                return i
+        return 0
+
+    def set_selected(self, idx):
+        """idx -1 deselects everything — the device can be pointing at a slot
+        outside this widget's pair, and lighting a wrong block would lie."""
+        if idx == self.get_selected() and idx >= 0:
+            return
+        self._mute = True
+        try:
+            for i, b in enumerate(self.buttons):
+                b.set_active(i == idx)
+        finally:
+            self._mute = False
+
+
+class Knob(Canvas):
+    """A rotary control. Drag vertically to turn, double-click to centre.
+
+    Drawn rather than themed because a Gtk.Scale cannot be made to look like a
+    knob, and pan is the one control on this desk that is genuinely rotary — a
+    left/right position reads instantly on a dial and poorly on a slider.
+
+    Vertical drag, not circular: circular tracking feels clever for a second and
+    then fights you at the top of the sweep, where a small hand movement crosses
+    the discontinuity. Every DAW that tried it went back to vertical.
+    """
+
+    SWEEP = 270.0                        # degrees of travel, centred on 12 o'clock
+    TRAVEL = 140.0                       # pixels of drag for the full sweep
+
+    def __init__(self, value=0.5, size=46, on_change=None, centre=0.5, label=""):
+        super().__init__(size, size)
+        self.value = value
+        self.centre = centre
+        self.on_change = on_change
+        self.label = label
+        self._start = value
+        # While you are turning this, the device's own reported value lags —
+        # the write is throttled and the state poll is 30 fps behind. Without a
+        # hold, _sync yanks the knob back to that stale value on every frame,
+        # which is what made it feel like it was fighting the mouse. Any touch
+        # claims the control for a moment; the device drives it again after.
+        self._hold_until = 0.0
+        self.set_tooltip_text("Drag to turn, double-click to centre")
+
+        dr = Gtk.GestureDrag()
+        dr.connect("drag-begin", self._begin)
+        dr.connect("drag-update", self._update)
+        dr.connect("drag-end", self._end)
+        self.add_controller(dr)
+        cl = Gtk.GestureClick()
+        cl.connect("pressed", self._clicked)
+        self.add_controller(cl)
+
+    def set_value(self, v, notify=True):
+        v = max(0.0, min(1.0, float(v)))
+        if abs(v - self.value) < 1e-9:
+            return
+        self.value = v
+        self.queue_draw()
+        if notify and self.on_change:
+            self.on_change(v)
+
+    HOLD_S = 0.6
+
+    def _touch(self):
+        self._hold_until = time.monotonic() + self.HOLD_S
+
+    def _begin(self, *_a):
+        self._start = self.value
+        self._touch()
+
+    def _update(self, _g, _dx, dy):
+        self._touch()
+        self.set_value(self._start - dy / self.TRAVEL)
+
+    def _end(self, *_a):
+        self._touch()
+
+    def _clicked(self, g, n_press, _x, _y):
+        if n_press == 2:
+            self._touch()
+            self.set_value(self.centre)
+            g.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def adopt(self, v):
+        """Device-driven update. Ignored while the user is working the knob."""
+        if time.monotonic() < self._hold_until:
+            return
+        self.set_value(v, notify=False)
+
+    def _angle(self, v):
+        return math.radians(-90 - self.SWEEP / 2 + v * self.SWEEP)
+
+    def paint(self, sn, w, h):
+        cx, cy = w / 2.0, h / 2.0
+        r = min(cx, cy) - 6.0
+        # track
+        track = [(cx + r * math.cos(self._angle(t / 40.0)),
+                  cy + r * math.sin(self._angle(t / 40.0))) for t in range(41)]
+        polyline(sn, track, pal(GRID, 0.38), 3.0)
+        # travel from centre to the current position, so the eye reads offset
+        a, b = sorted((self.centre, self.value))
+        if b - a > 0.004:
+            n = max(2, int((b - a) * 40))
+            arc = [(cx + r * math.cos(self._angle(a + (b - a) * i / n)),
+                    cy + r * math.sin(self._angle(a + (b - a) * i / n)))
+                   for i in range(n + 1)]
+            glow(sn, lambda: polyline(sn, arc, pal(ACCENT), 3.0), radius=5.0)
+        # pointer
+        ang = self._angle(self.value)
+        p0 = (cx + r * 0.30 * math.cos(ang), cy + r * 0.30 * math.sin(ang))
+        p1 = (cx + r * 0.92 * math.cos(ang), cy + r * 0.92 * math.sin(ang))
+        glow(sn, lambda: polyline(sn, [p0, p1], pal(INK, 0.95), 2.4), radius=4.0)
+        dot(sn, cx, cy, 3.0, pal(GRID, 0.75))
+        if self.label:
+            label(self, sn, self.label, 2, h - 11, pal(INK, 0.5), 7)
+
+
+def _clamp(v, lo, hi):
+    return lo if v < lo else hi if v > hi else v
+
+
+def _fet_input_db(threshold_db):
+    """Map the Threshold slider (-56..0) onto the FET model's INPUT drive.
+
+    Inverted and anchored, in two segments, because the FET has no threshold —
+    input drive is what compresses, so the control runs the other way, and its
+    auto-makeup is a steep function of the operating point (+0.58 dB at -43,
+    +27.5 dB at -24). The anchor puts the slider's own default of -24 dB onto
+    Universal Control's default input of -43 dB, which is unity makeup.
+
+        cth -56 (max compression) -> input   0 dB
+        cth -24 (slider default)  -> input -43 dB   (UC default, ~unity)
+        cth   0 (min compression) -> input -56 dB
+    """
+    t = _clamp(float(threshold_db), -56.0, 0.0)
+    if t <= -24.0:                       # -56..-24  ->  0..-43
+        f = (t + 24.0) / -32.0           # 0 at -24, 1 at -56
+        return _clamp(-43.0 * (1.0 - f), -56.0, 0.0)
+    f = (t + 24.0) / 24.0                # 0 at -24, 1 at 0
+    return _clamp(-43.0 - 13.0 * f, -56.0, 0.0)
+
+
+def _fet_ratio_index(ratio):
+    """Ratio slider (1..20) -> the FET's five fixed positions.
+
+    FET_RATIO is [6.5, 9.9, 14.0, 22.0, 20.0]; index 4 is the 1176's "All
+    buttons in" mode. The old code did min(3, int(ratio/5)), which capped at 3 —
+    index 4 was unreachable — and put everything below 5:1 on index 0.
+    """
+    r = _clamp(float(ratio), 1.0, 20.0)
+    if r >= 19.5:
+        return 4                          # top of the slider = All
+    for i, edge in enumerate((8.0, 12.0, 18.0)):
+        if r < edge:
+            return i
+    return 3
+
+
+class ChannelBound:
+    """Mixin for canvases that draw exactly ONE channel's state.
+
+    The fat channel became per-channel — two independent columns, `Win.w[ch]` for
+    the widgets and `bands_by_ch` / `cur_band_by_ch` / `dyn_by_ch` for the state —
+    but these canvases went on reading the single-channel names the refactor
+    removed: `win.bands`, `win.cur_band`, `win.dyn`, `win.fat_ch` and the
+    `win.s_*` widget handles. None of them has existed since.
+
+    Nothing crashed visibly because GTK swallows exceptions raised inside a draw
+    callback: every `paint()` simply died partway through, so the EQ curve, the
+    compressor transfer curve and three of the five rack units silently never
+    drew, and all EQ mouse interaction — click-to-select, drag, scroll-for-Q,
+    hover — was dead. A silent half-drawn frame is why this survived so long.
+
+    Each canvas is already constructed with its channel, so the fix is to read
+    through to the per-channel state rather than to reintroduce global handles.
+    """
+
+    @property
+    def bands(self):
+        """This channel's band DATA. Note `w[ch]["bands"]` is the button row."""
+        return self.win.bands_by_ch[self.channel]
+
+    @property
+    def cur_band(self):
+        return self.win.cur_band_by_ch[self.channel]
+
+    @cur_band.setter
+    def cur_band(self, value):
+        self.win.cur_band_by_ch[self.channel] = value
+
+    @property
+    def dyn(self):
+        return self.win.dyn_by_ch[self.channel]
+
+    def wid(self, key):
+        """One of this channel's widgets, e.g. wid("cth") for the comp threshold."""
+        return self.win.w[self.channel][key]
+
+
+class EQCurve(ChannelBound, Canvas):
+    """Combined response with a marker per band; click a marker to select it."""
+
+    def __init__(self, win, channel=1):
+        super().__init__(-1, 230)
+        self.win = win
+        self.channel = channel
+        self.set_hexpand(True)
+        self.drag_band = None
+        self._drag_thr = Throttle(
+            lambda _value: self.win._push_band(self.channel), 0.012)
+        self._drag_push = lambda: self._drag_thr(0.0)
+        g = Gtk.GestureClick()
+        g.connect("pressed", self._clicked)
+        self.add_controller(g)
+        # grab a node and move it, the way any DAW equaliser works:
+        # horizontal = frequency, vertical = gain
+        dr = Gtk.GestureDrag()
+        dr.connect("drag-begin", self._drag_begin)
+        dr.connect("drag-update", self._drag_update)
+        dr.connect("drag-end", self._drag_end)
+        self.add_controller(dr)
+        # the scroll wheel over a node adjusts its Q, again as DAWs do
+        scr = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
+        scr.connect("scroll", self._scroll)
+        self.add_controller(scr)
+        mo = Gtk.EventControllerMotion()
+        mo.connect("motion", self._motion)
+        self.add_controller(mo)
+        self.hover = None
+
+    def _x(self, f, w):
+        return math.log10(max(f, 20) / 20.0) / math.log10(24000 / 20.0) * w
+
+    def _nearest(self, x, y):
+        w, h = self.get_width() or 1, self.get_height() or 1
+        best, bd = 0, 1e18
+        for i, b in enumerate(self.bands):
+            bx = self._x(b["freq"], w)
+            by = h / 2 - self.win.response_db(b["freq"]) / 18.0 * (h / 2)
+            d = (bx - x) ** 2 + ((by - y) * 0.65) ** 2
+            if d < bd:
+                best, bd = i, d
+        return best
+
+    def _clicked(self, _g, _n, x, y):
+        self.win.select_band(self._nearest(x, y))
+
+    def _motion(self, _c, x, y):
+        n = self._nearest(x, y)
+        if n != self.hover:
+            self.hover = n
+            self.queue_draw()
+
+    def _f_from_x(self, x, w):
+        t = max(0.0, min(1.0, x / max(w, 1)))
+        return max(20.0, min(18000.0, 20.0 * (24000 / 20.0) ** t))
+
+    def _drag_begin(self, g, x, y):
+        self.drag_band = self._nearest(x, y)
+        self.win.select_band(self.drag_band)
+        b = self.bands[self.drag_band]
+        if b["shape"] == "off":            # grabbing an unused band switches it on
+            b["shape"] = "peaking"
+            self.wid("shape").set_selected(SHAPES.index("peaking"))
+        self._start = (x, y, b["freq"], b["gain"])
+
+    def _drag_update(self, g, dx, dy):
+        if self.drag_band is None:
+            return
+        self.win.invalidate_curve()
+        w, h = self.get_width() or 1, self.get_height() or 1
+        x0, y0, f0, g0 = self._start
+        b = self.bands[self.drag_band]
+        b["freq"] = self._f_from_x(x0 + dx, w)
+        b["gain"] = max(-15.0, min(15.0, g0 - dy / (h / 2) * 18.0))
+        prior = self.win._adopt_mute
+        self.win._adopt_mute = True
+        try:
+            self.wid("freq").set_value(b["freq"])
+            self.wid("gain").set_value(b["gain"])
+        finally:
+            self.win._adopt_mute = prior
+        self._drag_push()
+        self.queue_draw()
+        for rack in self.win.racks.values():
+            rack.queue_draw()
+
+    def _drag_end(self, g, dx, dy):
+        self.drag_band = None
+
+    def _scroll(self, _c, _dx, dy):
+        i = self.hover if self.hover is not None else self.cur_band
+        b = self.bands[i]
+        b["q"] = max(0.1, min(10.0, b["q"] * (1.12 if dy > 0 else 1 / 1.12)))
+        self.win.invalidate_curve()
+        if i == self.cur_band:
+            self.wid("q").set_value(b["q"])
+        else:
+            self.win._push_band()
+        self.queue_draw()
+        return True
+
+    def paint(self, sn, w, h):
+        col = self.get_color()
+        acc = chan_col(self.channel)
+        box(sn, 0, 0, w, h, pal(GROUND))
+        # zero line reads brighter than the rest of the graticule, so the eye
+        # finds unity without hunting for a label
+        for d in (-12, -6, 0, 6, 12):
+            y = h / 2 - d / 18.0 * (h / 2)
+            polyline(sn, [(0, y), (w, y)],
+                     pal(GRID, 0.30 if d == 0 else 0.11), 1.0)
+        for f in (50, 100, 200, 500, 1000, 2000, 5000, 10000):
+            x = self._x(f, w)
+            polyline(sn, [(x, 0), (x, h)], pal(GRID, 0.11), 1.0)
+        for f, t in ((100, "100"), (1000, "1k"), (10000, "10k")):
+            label(self, sn, t, self._x(f, w) + 3, h - 13, pal(INK, 0.45), 8)
+        for d in (12, 0, -12):
+            label(self, sn, "%+d" % d, 3, h / 2 - d / 18.0 * (h / 2) - 6,
+                  pal(INK, 0.45), 8)
+        # spectrum backdrop, straight off the device's capture stream.
+        # Always say what it is doing: a silent input used to draw nothing at
+        # all, which is indistinguishable from the feature being missing.
+        sp = self.win.spectrum
+        mag = sp.mag[self.channel - 1] if sp else None
+        if sp is None:
+            label(self, sn, "spectrum: analyser not started", 8, 6, pal(INK, 0.45), 8)
+        elif sp.error:
+            label(self, sn, "spectrum: %s" % sp.error[:44], 8, 6, pal(RED, 0.75), 8)
+        elif not mag:
+            label(self, sn, "spectrum: starting capture…", 8, 6, pal(INK, 0.45), 8)
+        else:
+            peak = max(mag)
+            label(self, sn, "spectrum: input %d   peak %.0f dB%s"
+                  % (self.channel, peak,
+                     "   (no signal on this input)" if peak < -90 else ""),
+                  8, 6, pal(INK, 0.45), 8)
+        if mag:
+            top, bot = -6.0, -108.0
+            poly = [(0, h)]
+            for f, d in zip(sp.freqs, mag):
+                x = self._x(f, w)
+                y = h - (max(bot, min(top, d)) - bot) / (top - bot) * h
+                poly.append((x, y))
+            poly.append((w, h))
+            # the analyser sits UNDER the EQ curve, so it is deliberately dim
+            # and desaturated — it is context, not the thing being edited
+            fill_poly(sn, poly, pal(acc, 0.13))
+            polyline(sn, poly[1:-1], pal(acc, 0.42), 1.0)
+
+        pts = self.win.curve_points(w, h, self.channel)
+        if any(b["shape"] != "off" for b in self.bands):
+            fill_poly(sn, pts + [(w, h / 2), (0, h / 2)], pal(acc, 0.14))
+        glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
+        for i, b in enumerate(self.bands):
+            if b["shape"] == "off":
+                continue
+            x = self._x(b["freq"], w)
+            y = max(8, min(h - 8, h / 2 - self.win.response_for(
+                self.channel, b["freq"]) / 18.0 * (h / 2)))
+            sel = (i == self.cur_band)
+            hov = (i == self.hover)
+            r = 8 if sel else (7 if hov else 5)
+            polyline(sn, [(x, 0), (x, h)], pal(acc, 0.32 if sel else 0.12), 1.0)
+            dot(sn, x, y, r + 3, rgba(0, 0, 0, 0.35))
+            if sel:
+                glow(sn, lambda x=x, y=y, r=r: dot(sn, x, y, r, pal(AMBER)), radius=6.0)
+            else:
+                dot(sn, x, y, r, pal(acc, 0.95 if hov else 0.8))
+            dot(sn, x, y, max(1.5, r - 3), rgba(1, 1, 1, 0.9))
+            if sel or hov:
+                label(self, sn, "%s  %.0f Hz  %+.1f dB  Q %.2f"
+                      % (BAND_NAMES[i], b["freq"], b["gain"], b["q"]),
+                      min(w - 168, x + 11), max(2, y - 20), pal(INK, 0.92), 8)
+            else:
+                label(self, sn, BAND_NAMES[i], x + 10, y - 7, pal(INK, 0.7), 8)
+
+
+class CompCurve(ChannelBound, Canvas):
+    """Compressor transfer curve with a live dot at the current input level."""
+
+    def __init__(self, win, channel=1):
+        super().__init__(-1, 180)
+        self.win = win
+        self.channel = channel
+        self.set_hexpand(True)
+
+    def paint(self, sn, w, h):
+        col = self.get_color()
+        acc = chan_col(self.channel)
+        lo = -60.0
+        box(sn, 0, 0, w, h, pal(GROUND))
+        X = lambda d: (d - lo) / (-lo) * w
+        Y = lambda d: h - (d - lo) / (-lo) * h
+        for d in range(-60, 1, 12):
+            polyline(sn, [(X(d), 0), (X(d), h)], pal(GRID, 0.11), 1.0)
+            polyline(sn, [(0, Y(d)), (w, Y(d))], pal(GRID, 0.11), 1.0)
+        # unity: dashed-looking guide so the compression is visible as departure
+        polyline(sn, [(X(lo), Y(lo)), (X(0), Y(0))], pal(GRID, 0.34), 1.0)
+        # Use the exact builder inputs for whichever hardware compressor is
+        # selected.  Tube and FET do not have Standard's threshold/ratio/makeup
+        # controls, so drawing them from those hidden sliders was as misleading
+        # as sending those sliders to the DSP.
+        thr, ratio, mk, model_name = self.win.compressor_transfer(self.channel)
+        on = self.dyn["comp"]
+        pts = []
+        for i in range(0, int(w) + 1, 3):
+            din = lo + i / max(w, 1) * (-lo)
+            dout = din if din <= thr else thr + (din - thr) / ratio
+            if on:
+                dout = min(0.0, dout + mk)
+            pts.append((X(din), Y(dout)))
+        # The area between unity and the transfer curve IS the gain change —
+        # shading it makes the compressor's effect the biggest thing on the
+        # graph instead of something you infer from two nearly-parallel lines.
+        # Above unity is makeup (added), below is reduction (taken away), so the
+        # two are coloured differently rather than both reading as "activity".
+        if on:
+            above = [(X(lo), Y(lo))]
+            below = [(X(lo), Y(lo))]
+            for (px, py), i in zip(pts, range(0, int(w) + 1, 3)):
+                din = lo + i / max(w, 1) * (-lo)
+                (above if py < Y(din) else below).append((px, py))
+            for poly, tone in ((below, RED), (above, GREEN)):
+                if len(poly) > 2:
+                    closed = poly + [(poly[-1][0], Y(lo)), (X(lo), Y(lo))]
+                    fill_poly(sn, closed, pal(tone, 0.13))
+
+        # threshold: a vertical marker, so the knee is locatable at a glance
+        polyline(sn, [(X(thr), 0), (X(thr), h)],
+                 pal(AMBER, 0.45 if on else 0.18), 1.0)
+
+        if on:
+            glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=7.0)
+        else:
+            polyline(sn, pts, pal(INK, 0.30), 2.0)
+        label(self, sn, "%s  threshold %.0f dB" % (model_name, thr),
+              X(thr) + 4, 4, pal(INK, 0.5), 8)
+        label(self, sn, "in", w - 18, h - 14, pal(INK, 0.45), 8)
+        label(self, sn, "%.1f:1" % ratio, 6, h - 14, pal(INK, 0.45), 8)
+
+        lvl = self.win.ctl.snap["in"][self.channel - 1]
+        if lvl > lo:
+            dout = lvl if lvl <= thr else thr + (lvl - thr) / ratio
+            if on:
+                dout = min(0.0, dout + mk)
+            # drop lines to both axes: the working point is only useful if you
+            # can read what it maps FROM and TO without measuring by eye
+            polyline(sn, [(X(lvl), Y(dout)), (X(lvl), h)], pal(acc, 0.30), 1.0)
+            polyline(sn, [(0, Y(dout)), (X(lvl), Y(dout))], pal(acc, 0.30), 1.0)
+            glow(sn, lambda: dot(sn, X(lvl), Y(dout), 4.5, pal(acc)), radius=6.0)
+            dot(sn, X(lvl), Y(dout), 2.0, rgba(1, 1, 1, 0.92))
+            gr = dout - lvl
+            if on and abs(gr) > 0.05:
+                label(self, sn, "%+.1f dB" % gr,
+                      min(w - 52, X(lvl) + 8), max(2, Y(dout) - 16),
+                      pal(RED if gr < 0 else GREEN, 0.95), 8)
+
+
+class Rack(ChannelBound, Canvas):
+    """The fat channel drawn as rack units, one per module, live.
+
+    Each unit shows what it is actually doing right now — the gate its
+    threshold against the input, the compressor its transfer curve and the
+    working point, the EQ a miniature of its own response, the limiter its
+    ceiling. Drag a unit to reorder.
+
+    An honest note about reordering: the hardware exposes exactly ONE ordering
+    choice, `'opt '` `'Pari'` id 0 = swapcompeq, which swaps the compressor and
+    the EQ. Filter, gate and limiter sit at fixed points in the DSP chain and no
+    wire parameter moves them. So those units are drawn with a lock and refuse
+    the drop rather than pretending.
+    """
+
+    FIXED = {"HPF", "GATE", "LIM"}
+    TITLES = {"HPF": "Fat Channel HPF", "GATE": "Gate", "COMP": "Compressor",
+              "EQ": "Equaliser", "LIM": "Limiter"}
+
+    def __init__(self, win, channel):
+        super().__init__(-1, 132)
+        self.win = win
+        self.channel = channel
+        self.set_hexpand(True)
+        self.order = ["HPF", "GATE", "COMP", "EQ", "LIM"]
+        self.drag = None
+        self.drag_x = 0.0
+        self.hover = None
+        self.preview = None
+        self._dx = 0.0
+        d = Gtk.GestureDrag()
+        d.connect("drag-begin", self._begin)
+        d.connect("drag-update", self._update)
+        d.connect("drag-end", self._end)
+        self.add_controller(d)
+        c = Gtk.GestureClick()
+        c.connect("released", self._clicked)
+        self.add_controller(c)
+        # scrolling over the low-cut unit sets its corner frequency, the way
+        # the original software let you dial it straight on the module
+        sc = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
+        sc.connect("scroll", self._scroll)
+        self.add_controller(sc)
+        self.moved = False
+        m = Gtk.EventControllerMotion()
+        m.connect("motion", self._motion)
+        m.connect("leave", lambda *_a: (setattr(self, "hover", None),
+                                        self.queue_draw()))
+        self.add_controller(m)
+
+    # ---- geometry -----------------------------------------------------
+    def _slot(self, x):
+        w = self.get_width() or 1
+        return max(0, min(len(self.order) - 1, int(x / (w / len(self.order)))))
+
+    def _motion(self, _c, x, _y):
+        i = self._slot(x)
+        if i != self.hover:
+            self.hover = i
+            self.queue_draw()
+
+    def _begin(self, _g, x, _y):
+        self.moved = False
+        i = self._slot(x)
+        self.drag = i if self.order[i] not in self.FIXED else None
+        self.drag_x = x
+        if self.drag is None and self.order[i] in self.FIXED:
+            self.win.say("%s sits at a fixed point in the hardware chain"
+                         % self.TITLES[self.order[i]])
+        self.queue_draw()
+
+    def _update(self, _g, dx, _dy):
+        if self.drag is None:
+            return
+        if abs(dx) > 4:
+            self.moved = True
+        self._dx = dx
+        # live preview: work out where it would land and let the other units
+        # slide aside, so the drag reads as continuous rather than snapping
+        # only at the moment of release
+        tgt = self._slot(max(0.0, self.drag_x + dx))
+        self.preview = tgt if self.order[tgt] not in self.FIXED else None
+        self.queue_draw()
+
+    def _end(self, _g, dx, _dy):
+        if self.drag is None:
+            return
+        src = self.drag
+        dst = self._slot(max(0, self.drag_x + dx))
+        self.drag, self._dx, self.preview = None, 0, None
+        if dst != src and self.order[dst] not in self.FIXED:
+            a, b = sorted((src, dst))
+            if set(self.order[a:b + 1]) <= {"COMP", "EQ"} or \
+               {self.order[src], self.order[dst]} == {"COMP", "EQ"}:
+                self.order[src], self.order[dst] = self.order[dst], self.order[src]
+                eq_first = self.order.index("EQ") < self.order.index("COMP")
+                self.win.set_order(self.channel, eq_first)
+            else:
+                self.win.say("Only the compressor and EQ can trade places — "
+                             "that is the one ordering the hardware exposes")
+        self.queue_draw()
+
+    def _clicked(self, _g, n, x, y):
+        """Single click REVEALS the unit's controls; double click switches it.
+
+        Reveal is the primary action because the rack is a navigator: with every
+        section stacked on screen at once there was nothing for a click to show,
+        which is what made the rack decorative. Toggling moved to double-click
+        rather than disappearing — it is still the fastest way to A/B a module.
+        """
+        if self.moved:
+            return
+        i = self._slot(x)
+        mod = self.order[i]
+        w = self.get_width() or 1
+        uw = w / len(self.order)
+        if mod == "HPF":
+            # clicking inside the response area dials the corner frequency,
+            # left edge = bypassed, right edge = 1 kHz
+            rel = (x - i * uw - 12) / max(1.0, uw - 24)
+            if 0.0 <= rel <= 1.0 and y > 30:
+                hz = 24.0 * (1000.0 / 24.0) ** max(0.0, min(1.0, rel))
+                self.win.set_hpf(self.channel, hz)
+                return
+        if n >= 2:
+            self.win.toggle_module(self.channel, mod)
+        else:
+            self.win.show_module(self.channel, mod)
+
+    def _scroll(self, _c, _dx, dy):
+        i = self.hover
+        if i is None or self.order[i] != "HPF":
+            return False
+        hz = self.win.hpf_hz(self.channel)
+        hz = max(24.0, min(1000.0, hz * (1.15 if dy < 0 else 1 / 1.15)))
+        self.win.set_hpf(self.channel, hz)
+        return True
+
+    # ---- per-module miniature ------------------------------------------
+    def _mini(self, sn, mod, x, y, w, h, col, on):
+        gr = self.win.ctl.snap["gr"].get(self.channel, {})
+        lvl = self.win.ctl.snap["in"][self.channel - 1]
+        acc = pal(chan_col(self.channel)) if on else pal(INK, 0.30)
+        if mod == "EQ":
+            bands = tuple(dict(b) for b in self.win.bands_by_ch[self.channel])
+            pts = []
+            for i in range(0, int(w) + 1, 3):
+                f = 20.0 * (24000 / 20.0) ** (i / max(w, 1))
+                mag = self.win.response_for(self.channel, f, bands=bands)
+                pts.append((x + i, y + h / 2 - mag / 18.0 * (h / 2)))
+            polyline(sn, [(x, y + h / 2), (x + w, y + h / 2)], pal(GRID, 0.18), 1.0)
+            polyline(sn, pts, acc, 1.6)
+        elif mod == "COMP":
+            thr = self.wid("cth").get_value()
+            ratio = max(1.0, self.wid("rat").get_value())
+            X = lambda d: x + (d + 60) / 60.0 * w
+            Y = lambda d: y + h - (d + 60) / 60.0 * h
+            polyline(sn, [(X(-60), Y(-60)), (X(0), Y(0))], pal(GRID, 0.18), 1.0)
+            pts = []
+            for i in range(0, int(w) + 1, 3):
+                din = -60 + i / max(w, 1) * 60
+                dout = din if din <= thr else thr + (din - thr) / ratio
+                pts.append((X(din), Y(min(0.0, dout))))
+            polyline(sn, pts, acc, 1.6)
+            if lvl > -60:
+                dout = lvl if lvl <= thr else thr + (lvl - thr) / ratio
+                dot(sn, X(lvl), Y(min(0.0, dout)), 3, pal(RED))
+        elif mod == "GATE":
+            thr = self.wid("gth").get_value()
+            box(sn, x, y + h - 6, w, 6, pal(GRID, 0.12))
+            f = max(0.0, min(1.0, (lvl + 84) / 84.0))
+            box(sn, x, y + h - 6, w * f, 6, acc)
+            tx = x + max(0.0, min(1.0, (thr + 84) / 84.0)) * w
+            box(sn, tx - 1, y + h - 11, 2, 11, pal(AMBER))
+            a = min(1.0, -gr.get("gate", 0.0) / 24.0)
+            if on and a > 0.01:
+                box(sn, x + w * (1 - a), y, w * a, h - 9, pal(AMBER, 0.55))
+        elif mod == "LIM":
+            thr = self.wid("lth").get_value()
+            box(sn, x, y + h - 6, w, 6, pal(GRID, 0.12))
+            tx = x + max(0.0, min(1.0, (thr + 40) / 40.0)) * w
+            box(sn, tx - 1, y + h - 11, 2, 11, pal(RED))
+            a = min(1.0, -gr.get("lim", 0.0) / 12.0)
+            if on and a > 0.01:
+                box(sn, x + w * (1 - a), y, w * a, h - 9, pal(RED, 0.5))
+        else:                                     # HPF
+            hz = self.win.hpf_hz(self.channel)
+            pts = []
+            for i in range(0, int(w) + 1, 3):
+                f = 20.0 * (24000 / 20.0) ** (i / max(w, 1))
+                # 2nd-order response, so the drawn slope matches the real filter
+                r = (f / hz) ** 2
+                mag = 20 * math.log10(max(r / math.sqrt(1 + r * r), 1e-3))
+                pts.append((x + i, y + h - max(0.0, min(1.0, (mag + 24) / 24.0)) * h))
+            polyline(sn, pts, acc, 1.8)
+            t = "bypassed" if hz <= 25 else "%.0f Hz" % hz
+            label(self, sn, t, x + w - len(t) * 5.2, y - 1,
+                  pal(INK, 0.75 if on else 0.4), 8)
+
+    def paint(self, sn, w, h):
+        col = self.get_color()
+        n = len(self.order)
+        uw = w / n
+        gr = self.win.ctl.snap["gr"].get(self.channel, {})
+        state = {"HPF": self.win.hpf_hz(self.channel) > 25,
+                 "GATE": self.win.dyn_for(self.channel)["gate"],
+                 "COMP": self.win.dyn_for(self.channel)["comp"],
+                 "EQ": any(b["shape"] != "off"
+                           for b in self.win.bands_by_ch[self.channel]),
+                 "LIM": self.win.dyn_for(self.channel)["lim"]}
+        for i, mod in enumerate(self.order):
+            x = i * uw
+            drag = (i == self.drag)
+            dx = getattr(self, "_dx", 0) if drag else 0
+            px = x + dx
+            on = state.get(mod, False)
+            # An active unit glows and an inactive one does not — the glow is
+            # the state readout, so it must never appear on something that is
+            # switched off. Real blur rather than stacked translucent boxes:
+            # the halos were hard-coded GREEN and no longer matched the
+            # channel's own colour once the palette arrived.
+            # Only ONE module is on screen now, so the outline must match the
+            # channel too — otherwise both racks would claim to be the one you
+            # are looking at.
+            sel = getattr(self.win, "current_module", None) == (self.channel, mod)
+            if on:
+                glow(sn, lambda px=px: box(sn, px + 5, 4, uw - 10, h - 8,
+                                           pal(chan_col(self.channel), 0.22)),
+                     radius=9.0)
+            # the section currently on screen gets an outline, so the rack also
+            # says where you are, not just what is on
+            if sel:
+                for ex, ey, ew, eh in ((px + 4, 3, uw - 8, 1),
+                                       (px + 4, h - 4, uw - 8, 1),
+                                       (px + 4, 3, 1, h - 6),
+                                       (px + uw - 5, 3, 1, h - 6)):
+                    box(sn, ex, ey, ew, eh, pal(ACCENT, 0.55))
+            # Faceplates must read as hardware at a glance: at 6% alpha the
+            # rack was a ghost of itself and the page's main navigator looked
+            # disabled. Off units are clearly present, on units clearly lit.
+            box(sn, px + 5, 4, uw - 10, h - 8,
+                pal(chan_col(self.channel), 0.24) if on else pal(GRID, 0.13))
+            box(sn, px + 5, 4, uw - 10, 22,
+                pal(chan_col(self.channel), 0.34) if on else pal(GRID, 0.20))
+            # a hairline frame so each unit holds its own edge
+            for ex, ey, ew, eh in ((px + 5, 4, uw - 10, 1),
+                                   (px + 5, h - 5, uw - 10, 1),
+                                   (px + 5, 4, 1, h - 8),
+                                   (px + uw - 6, 4, 1, h - 8)):
+                box(sn, ex, ey, ew, eh,
+                    pal(chan_col(self.channel), 0.38) if on else pal(GRID, 0.24))
+            if i == self.hover and not drag:
+                box(sn, px + 5, 4, uw - 10, 2, pal(chan_col(self.channel), 0.9))
+                box(sn, px + 5, h - 6, uw - 10, 2, pal(chan_col(self.channel), 0.9))
+            # power LED, with its own halo when lit
+            if on:
+                dot(sn, px + 15, 15, 7, pal(chan_col(self.channel), 0.25))
+            dot(sn, px + 15, 15, 4, pal(chan_col(self.channel)) if on else pal(INK, 0.28))
+            label(self, sn, self.TITLES[mod], px + 25, 8,
+                  pal(INK, 0.95 if on else 0.65), 9)
+            if mod in self.FIXED:
+                label(self, sn, "\u25ac", px + uw - 20, 8, pal(INK, 0.25), 8)
+            self._mini(sn, mod, px + 12, 32, uw - 24, h - 60, col, on)
+            # gain reduction read-out
+            key = {"GATE": "gate", "COMP": "comp", "LIM": "lim"}.get(mod)
+            if key and on and gr.get(key, 0.0) < -0.1:
+                t = "%.1f dB" % gr[key]
+                label(self, sn, t, px + uw / 2 - len(t) * 2.6, h - 20,
+                      pal(AMBER), 8)
+            if i < n - 1:
+                polyline(sn, [(x + uw - 5, h / 2), (x + uw + 5, h / 2)],
+                         pal(INK, 0.28), 1.5)
+
+
+# --------------------------------------------------------------------------
+# a control that follows the hardware without fighting the user's hand
+# --------------------------------------------------------------------------
+class Throttle:
+    """Leading-edge throttle with a guaranteed trailing send.
+
+    A debounce was used here first and it was the whole reason the hardware felt
+    slow and choppy: while a fader is moving, every new value cancels the
+    pending write, so exactly ONE write goes out — after the gesture ends. A
+    1 s drag produced one device write at t=1.04 s. This sends immediately and
+    then at most every `interval`, so the hardware tracks the fader live, and
+    the trailing timer makes sure the final resting value is never lost.
+    """
+
+    def __init__(self, fn, interval=0.002):
+        self.fn = fn
+        self.interval = interval
+        self.last = 0.0
+        self.pending = 0
+        self.latest = None
+
+    def __call__(self, v):
+        self.latest = v
+        now = time.monotonic()
+        if now - self.last >= self.interval:
+            self.last = now
+            self.fn(v)
+            return
+        if not self.pending:
+            wait = int(max(1, (self.interval - (now - self.last)) * 1000))
+            self.pending = GLib.timeout_add(wait, self._fire)
+
+    def _fire(self):
+        self.pending = 0
+        self.last = time.monotonic()
+        self.fn(self.latest)
+        return False
+
+
+class Live:
+    GRACE = 0.35                                 # seconds after a touch
+
+    def __init__(self, widget, push, prop="value"):
+        self.w = widget
+        self.push = push
+        self.prop = prop
+        self.touched = 0.0
+        self.mute = False
+        self.pending = 0
+        self._thr = Throttle(self.push, 0.002)
+        if prop == "value":
+            widget.connect("value-changed", self._changed)
+        else:
+            widget.connect("notify::active", self._changed)
+
+    def _changed(self, *_a):
+        if self.mute:
+            return
+        self.touched = time.monotonic()
+        v = self.w.get_value() if self.prop == "value" else self.w.get_active()
+        self._thr(v)
+
+    def pull(self, v):
+        """Adopt a value the device reports, unless the user is mid-gesture."""
+        if time.monotonic() - self.touched < self.GRACE:
+            return
+        cur = self.w.get_value() if self.prop == "value" else self.w.get_active()
+        if self.prop == "value":
+            if abs(cur - v) < 1e-4:
+                return
+        elif cur == v:
+            return
+        self.mute = True
+        (self.w.set_value if self.prop == "value" else self.w.set_active)(v)
+        self.mute = False
+
+
+def editable_db(scale, width_chars=5):
+    """A value label you can click and type into.
+
+    Gtk.EditableLabel: shows the number, click to edit, Enter commits. The
+    scale stays the fast path; typing is for exact values. Guarded both ways
+    so slider->label updates don't re-enter as label->slider writes.
+    """
+    lbl = Gtk.EditableLabel(text="%.1f" % scale.get_value())
+    lbl.set_width_chars(width_chars)
+    lbl.add_css_class("numeric")
+    lbl.add_css_class("caption")
+    state = {"mute": False}
+
+    def scale_moved(w):
+        if not lbl.get_editing():
+            state["mute"] = True
+            lbl.set_text("%.1f" % w.get_value())
+            state["mute"] = False
+    scale.connect("value-changed", scale_moved)
+
+    def committed(l, _p):
+        if state["mute"] or l.get_editing():
+            return
+        try:
+            v = float(l.get_text().replace(",", "."))
+        except ValueError:
+            state["mute"] = True
+            l.set_text("%.1f" % scale.get_value())
+            state["mute"] = False
+            return
+        adj = scale.get_adjustment()
+        scale.set_value(max(adj.get_lower(), min(adj.get_upper(), v)))
+    lbl.connect("notify::editing", committed)
+    return lbl
+
+
+def reset_on_double_click(scale, default, label_fn=None):
+    """Double-click a fader to return it to its designed default.
+
+    Lives here rather than inside _srow because five faders are built directly
+    — preamp gain, bus master, the routing sends, the output delay — and those
+    are the ones people ride hardest. Having the gesture on some sliders and not
+    others is worse than not having it at all, because the ones that ignore you
+    read as broken.
+    """
+    g = Gtk.GestureClick()
+    g.set_button(1)
+    # CAPTURE phase: in BUBBLE (the default) the Scale's own click-to-jump
+    # handling claims the sequence first and the second click never arrives —
+    # which is why double-click reset silently did nothing on the matrix.
+    g.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+    def hit(gesture, n_press, x, y):
+        if n_press == 2:
+            scale.set_value(default)
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+    g.connect("pressed", hit)
+    scale.add_controller(g)
+    try:
+        scale.set_tooltip_text("Double-click to reset to %s"
+                               % (label_fn(default) if label_fn else default))
+    except Exception:
+        pass
+    return scale
+
+
+def fader(lo, hi, step, vertical=True):
+    sc = Gtk.Scale.new_with_range(
+        Gtk.Orientation.VERTICAL if vertical else Gtk.Orientation.HORIZONTAL,
+        lo, hi, step)
+    sc.set_draw_value(False)
+    if vertical:
+        sc.set_inverted(True)
+        sc.set_vexpand(True)
+    else:
+        sc.set_hexpand(True)
+    return sc
+
+
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app, ctl):
+        super().__init__(application=app, title="Revelator io24",
+                         default_width=1040, default_height=800)
+        # Ties the window to org.io24.Mixer.desktop, so the shell shows the
+        # installed icon and groups the window under that entry rather than
+        # inventing a second generic one.
+        self.set_icon_name("org.io24.Mixer")
+        self.ctl = ctl
+        # The fat channel is per channel on the hardware, so keep a full set of
+        # state for each and let the page switch between them — or drive both at
+        # once, which the original software never offered.
+        self.bands_by_ch = {c: [{"shape": "off", "freq": f, "gain": 0.0, "q": 0.7}
+                                for f in (120.0, 600.0, 2500.0, 8000.0)]
+                            for c in (1, 2)}
+        self.dyn_by_ch = {c: {"gate": False, "comp": False, "lim": False}
+                          for c in (1, 2)}
+        self.cur_band_by_ch = {1: 0, 2: 0}
+        self.link_both = False
+        # Widget adoption is not a user edit.  Factory loads, band selection,
+        # and per-channel page changes all populate controls programmatically;
+        # without one shared guard those GTK signals enqueue fresh DSP writes
+        # and can overwrite the state that was just loaded.
+        self._adopt_mute = False
+        self._order_mute = False
+        self._fx_mute = False
+        self._phones_source_mute = False
+        self._hotkey_sync = False
+        self.hotkeys = io24.HostHotKeySession()
+        self.device_slot_registry = DeviceSlotRegistry(
+            DEVICE_SLOT_REGISTRY_PATH)
+        self._fx_push_id = None
+        # The assignment write is permutation-sensitive: changing the Voice FX
+        # owner exchanges the device's two exposed active-slot values. Remember
+        # what this Host successfully assigned so model/slider edits do not
+        # resend that unrelated route. A different device object always forces
+        # one fresh explicit assignment.
+        self._fx_last_sent_device = None
+        self._fx_last_sent_target = None
+        self.order_by_ch = {1: False, 2: False}
+        self.spectrum = None
+        self._frames = []
+        self._curve = None
+        self._curve_key = None
+        self.hpf_by_ch = {1: 24.0, 2: 24.0}
+        self.pan_state = io24_mbc.default_pan_snapshot()
+        self.bus_sources = io24_mbc.BusSourceManager()
+        self._pan_mute = False
+        self._bus_source_status = {
+            bus: "unavailable" for bus in io24_mbc.BUS_SOURCE_KEYS
+        }
+        self.live = []
+        self.meters = {}
+
+        stack = Adw.ViewStack()
+        self.stack = stack
+        stack.add_titled_with_icon(self._mixer_page(), "mix", "Mixer",
+                                   "audio-volume-high-symbolic")
+        stack.add_titled_with_icon(self._channel_page(), "ch", "Fat channel",
+                                   "applications-utilities-symbolic")
+        stack.add_titled_with_icon(self._fx_page(), "fx", "Effects",
+                                   "media-optical-symbolic")
+        stack.add_titled_with_icon(self._routing_page(), "route", "Routing",
+                                   "network-workgroup-symbolic")
+        stack.add_titled_with_icon(self._device_page(), "dev", "Device",
+                                   "preferences-system-symbolic")
+        stack.add_titled_with_icon(self._presets_page(), "pre", "Presets",
+                                   "view-list-symbolic")
+
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.ViewSwitcher(
+            stack=stack, policy=Adw.ViewSwitcherPolicy.WIDE))
+        self.status = Gtk.Label(label="")
+        self.status.add_css_class("dim-label")
+        header.pack_start(self.status)
+        menu = Gio.Menu()
+        menu.append("Save Host snapshot…", "win.save")
+        menu.append("Load Host snapshot…", "win.load")
+        header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",
+                                       menu_model=menu))
+        for nm, fn in (("save", self.on_save), ("load", self.on_load)):
+            a = Gio.SimpleAction.new(nm, None)
+            a.connect("activate", fn)
+            self.add_action(a)
+
+        self.toasts = Adw.ToastOverlay()
+        self.toasts.set_child(stack)
+        tv = Adw.ToolbarView()
+        tv.add_top_bar(header)
+        # Offline is a state, not an error: the app opens without the
+        # interface (the multiband never needed it) and attaches live when it
+        # is plugged in. The banner is the one place that says which mode
+        # you are in.
+        self.offline_banner = Adw.Banner(
+            title="io24 not connected — device controls are parked; "
+                  "the multiband compressor still works")
+        self.offline_banner.set_revealed(self.ctl.dev is None)
+        tv.add_top_bar(self.offline_banner)
+        self._was_offline = self.ctl.dev is None
+        # Reconnect recovery is intentionally not presented as a standing
+        # question. Host snapshots are the explicit save/load path; the
+        # write-only cache is never replayed automatically by the GTK Host.
+        tv.set_content(self.toasts)
+        self.set_content(tv)
+        # The spectrum is the only part of this app that opens an audio stream,
+        # and sustained capture alongside control traffic is what has twice put
+        # the device into its bootloader (PROTOCOL.md 12G/12I). So it runs only
+        # while a page that draws it is actually on screen.
+        self.stack = stack
+        try:
+            self.spectrum = Spectrum(autostart=False)
+        except Exception:
+            self.spectrum = None
+        stack.connect("notify::visible-child-name", self._page_changed)
+        GLib.timeout_add(33, self._tick)                 # 30 fps
+        GLib.timeout_add(2000, self._spectrum_watchdog)
+        GLib.timeout_add(50, self._fx_anim)             # 20 fps, page-gated
+        GLib.timeout_add(700, self._watch_attach)
+        GLib.timeout_add(2000, self._bus_source_watchdog)
+        GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
+        self._page_changed(stack, None)                  # set the initial state
+
+    # Pages whose drawing actually uses the spectrum backdrop.
+    SPECTRUM_PAGES = ("ch",)
+
+    def _watch_attach(self):
+        """Track hotplug and report only connection-state transitions."""
+        off = self.ctl.dev is None
+        if off:
+            err = self.ctl.snap.get("error")
+            self.offline_banner.set_title(
+                "io24 is connected but held by another program"
+                if err and "busy" in err else
+                "io24 not connected — device controls are parked; "
+                "the multiband compressor still works")
+        if off != self._was_offline:
+            self._was_offline = off
+            self.offline_banner.set_revealed(off)
+            if off:
+                self.say("io24 disconnected — controls parked until it returns")
+            else:
+                self.say("io24 connected — device controls are available")
+                GLib.idle_add(self._sync_mix_widgets)
+        return True
+
+    def _fx_anim(self):
+        """Advance the FX signature. Only while its page is visible — an
+        animation running behind a hidden page is pure battery drain."""
+        if self.stack.get_visible_child_name() != "fx":
+            return True
+        for name in ("fx_visual", "rev_visual"):
+            v = getattr(self, name, None)
+            if v is not None:
+                v.tick()
+        return True
+
+    def _page_changed(self, stack, _p):
+        """Run the capture only on pages that draw it."""
+        if not self.spectrum:
+            return
+        name = stack.get_visible_child_name()
+        if name in self.SPECTRUM_PAGES:
+            if not getattr(self, "_spectrum_blocked", False):
+                self.spectrum.start()
+        else:
+            self.spectrum.pause()
+
+    def _spectrum_watchdog(self):
+        """Kill a capture that has gone quiet, and do not silently retry forever.
+
+        A wedged arecord would otherwise hold the card open with nothing to show
+        for it. One restart is worth trying; a second stall means something is
+        actually wrong, so it stays off and says so rather than fighting the
+        device in a loop.
+        """
+        s = self.spectrum
+        if not s or not s.stalled():
+            return True
+        s.pause()
+        n = getattr(self, "_spectrum_stalls", 0) + 1
+        self._spectrum_stalls = n
+        if n >= 2:
+            self._spectrum_blocked = True
+            self.say("Spectrum stopped — the capture stream stalled twice")
+        else:
+            self.say("Spectrum stalled, restarting")
+            self._page_changed(self.stack, None)
+        return True
+
+    def say(self, msg):
+        """One message at a time.
+
+        Tolerates being called before the toast overlay exists: a status message
+        is never worth aborting a page build for, and construction-time callers
+        (a widget seeding its initial state) legitimately arrive early.
+
+        Adw.ToastOverlay queues by default, so rapid feedback (dragging a rack,
+        clicking modules) piled up into a backlog that kept popping long after
+        the action. Dismiss the outgoing one and keep the timeout short.
+        """
+        if getattr(self, "toasts", None) is None:
+            return
+        prev = getattr(self, "_toast", None)
+        if prev is not None:
+            try:
+                prev.dismiss()
+            except Exception:
+                pass
+        t = Adw.Toast(title=msg)
+        t.set_timeout(2)
+        self._toast = t
+        self.toasts.add_toast(t)
+
+    def set_hpf(self, ch, hz):
+        """Set the digital Fat Channel HPF and keep its one UI in sync."""
+        hz = max(24.0, min(1000.0, hz))
+        targets = (1, 2) if self.link_both else (ch,)
+        send = not self._adopt_mute
+        for c in targets:
+            self.hpf_by_ch[c] = hz
+            if send:
+                self.ctl.submit(lambda dev, x=c: dev.set_highpass_freq(x, hz))
+        prior = self._adopt_mute
+        self._adopt_mute = True
+        try:
+            for c in targets:
+                self._adopt_hpf_controls(c, hz)
+        finally:
+            self._adopt_mute = prior
+        for r in self.racks.values():
+            r.queue_draw()
+
+    @staticmethod
+    def _hpf_basic_index(hz):
+        for index, basic_hz in enumerate(HPF_BASIC_HZ):
+            if abs(float(hz) - basic_hz) < 0.02:
+                return index
+        return len(HPF_BASIC_HZ)
+
+    def _adopt_hpf_controls(self, ch, hz):
+        """Adopt one intended digital cutoff without crossing channels."""
+        hz = max(24.0, min(1000.0, float(hz)))
+        self.hpf_by_ch[ch] = hz
+        controls = self.w.get(ch, {})
+        if "hpf" not in controls:
+            return
+        controls["hpf"].set_value(hz)
+        index = self._hpf_basic_index(hz)
+        mode = controls.get("hpf_mode")
+        if mode is not None:
+            mode.set_selected(index)
+        controls["hpf"].set_sensitive(index == len(HPF_BASIC_HZ))
+
+    def _hpf_mode_changed(self, row, _param, ch):
+        """Choose Off/40/80/160 or unlock the one advanced cutoff control."""
+        if self._adopt_mute:
+            return
+        index = row.get_selected()
+        if index < len(HPF_BASIC_HZ):
+            self.set_hpf(ch, HPF_BASIC_HZ[index])
+        elif "hpf" in self.w.get(ch, {}):
+            self.w[ch]["hpf"].set_sensitive(True)
+
+    def show_module(self, ch, mod):
+        """Show one module, for one channel — switching both stacks together."""
+        st = getattr(self, "mod_stacks", {}).get(ch)
+        if st is None:
+            return
+        if getattr(self, "chan_stack", None) is not None:
+            self.chan_stack.set_visible_child_name(str(ch))
+            self._sync_order_row(ch)
+        if st.get_child_by_name(mod) is not None:
+            st.set_visible_child_name(mod)
+        if getattr(self, "mod_title", None) is not None:
+            self.mod_title.set_text("Channel %d — %s"
+                                    % (ch, Rack.TITLES.get(mod, mod)))
+        # the shared multiband group follows the visible compressor page
+        mbcw = getattr(self, "mbc_widget", None)
+        if mod == "COMP" and mbcw is not None:
+            holder = self._comp_holders.get(ch)
+            if holder is not None and mbcw.get_parent() is not holder:
+                if mbcw.get_parent() is not None:
+                    mbcw.get_parent().remove(mbcw)
+                holder.append(mbcw)
+        self.current_module = (ch, mod)
+        for r in self.racks.values():
+            r.queue_draw()
+
+    def toggle_module(self, ch, mod):
+        """Click a rack unit to switch that module in or out."""
+        if mod == "HPF":
+            cur = self.hpf_by_ch.get(ch, 24.0)
+            self.set_hpf(ch, 24.0 if cur > 25 else 120.0)
+            return
+        if mod == "EQ":
+            bands = self.bands_by_ch[ch]
+            if any(b["shape"] != "off" for b in bands):
+                self._saved_eq = [dict(b) for b in bands]
+                self._eq_flat(ch)
+            else:
+                saved = getattr(self, "_saved_eq", None)
+                if saved:
+                    self.bands_by_ch[ch] = [dict(b) for b in saved]
+                    self.invalidate_curve()
+                    for i, b in enumerate(self.bands_by_ch[ch]):
+                        self.ctl.submit(lambda dev, x=ch, j=i, bb=dict(b):
+                                        dev.set_eq_band(x, j, bb["shape"], bb["freq"],
+                                                        bb["gain"], bb["q"]))
+                    self._adopt_band(ch)
+                else:
+                    self.say("Nothing to restore — set some EQ bands first")
+            for r in self.racks.values():
+                r.queue_draw()
+            return
+        key = {"GATE": "gate", "COMP": "comp", "LIM": "lim"}[mod]
+        new = not self.dyn_by_ch[ch][key]
+        self.dyn_by_ch[ch][key] = new
+        self.w[ch][key + "_on"].set_active(new)
+        for r in self.racks.values():
+            r.queue_draw()
+
+    def dyn_for(self, ch):
+        return self.dyn_by_ch[ch]
+
+    def hpf_hz(self, ch):
+        return self.hpf_by_ch.get(ch, 24.0)
+
+    def set_order(self, ch, eq_first):
+        for c in ((1, 2) if self.link_both else (ch,)):
+            self.ctl.submit(lambda dev, x=c: dev.set_comp_eq_order(x, eq_first))
+
+    def response_for(self, ch, f, fs=48000.0, bands=None):
+        re, im = 1.0, 0.0
+        if bands is None:
+            bands = tuple(dict(b) for b in self.bands_by_ch[ch])
+        for b in bands:
+            c = self._biquad(b, fs)
+            if not c:
+                continue
+            b0, b1, b2, a1, a2 = c
+            om = 2 * math.pi * f / fs
+            c1, s1 = math.cos(-om), math.sin(-om)
+            c2, s2 = math.cos(-2 * om), math.sin(-2 * om)
+            nr, ni = b0 + b1 * c1 + b2 * c2, b1 * s1 + b2 * s2
+            dr, di = 1 + a1 * c1 + a2 * c2, a1 * s1 + a2 * s2
+            dd = dr * dr + di * di or 1e-12
+            hr, hi = (nr * dr + ni * di) / dd, (ni * dr - nr * di) / dd
+            re, im = re * hr - im * hi, re * hi + im * hr
+        return 20 * math.log10(max(math.hypot(re, im), 1e-6))
+
+
+    # ---------------------------------------------------------- mixer page
+    def _strip(self, title=None, subtitle=None, title_suffix=None):
+        b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        b.add_css_class("card")
+        b.set_margin_top(10); b.set_margin_bottom(10)
+        b.set_margin_start(3); b.set_margin_end(3)
+        if title:
+            head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
+                           halign=Gtk.Align.CENTER)
+            head.set_margin_top(10)
+            lab = Gtk.Label(label=title)
+            lab.add_css_class("heading")
+            head.append(lab)
+            if title_suffix is not None:
+                head.append(title_suffix)
+            b.append(head)
+            self._strip_titles = getattr(self, "_strip_titles", {})
+            self._strip_titles[title] = lab
+        if subtitle:
+            s = Gtk.Label(label=subtitle)
+            s.add_css_class("dim-label"); s.add_css_class("caption")
+            b.append(s)
+        return b
+
+    def _input_strip(self, ch):
+        indicator = PresetIndicator()
+        self.preset_indicators = getattr(self, "preset_indicators", {})
+        self.preset_indicators[ch] = indicator
+        box = self._strip("Channel %d" % ch, title_suffix=indicator)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                      halign=Gtk.Align.CENTER)
+        row.set_size_request(-1, 260)
+        m = Meter()
+        self.meters["in%d" % ch] = m
+        row.append(m)
+        f = fader(0, 60, 0.05)
+        reset_on_double_click(f, 0.0, lambda v: "%.1f dB" % v)
+        row.append(f)
+        box.append(row)
+
+        val = Gtk.Label(label="0.0 dB")
+        val.add_css_class("numeric")
+        box.append(val)
+        f.connect("value-changed", lambda w: val.set_text("%.1f dB" % w.get_value()))
+        self.live.append(Live(f, lambda v, c=ch: self._set("gain", c, v)))
+        self.gain_faders = getattr(self, "gain_faders", {})
+        self.gain_faders[ch] = self.live[-1]
+
+        for label, param in (("48V", "phantom"), ("Mute", "mute"),
+                             ("HPF", "hpf")):
+            t = Gtk.ToggleButton(label=label)
+            t.set_margin_start(6); t.set_margin_end(6)
+            self.live.append(Live(t, lambda v, p=param, c=ch: self._set(p, c, v),
+                                  prop="active"))
+            if param == "phantom":
+                self.phantom_live = getattr(self, "phantom_live", {})
+                self.phantom_live[ch] = self.live[-1]
+            elif param == "mute":
+                self.mute_live = getattr(self, "mute_live", {})
+                self.mute_live[ch] = self.live[-1]
+            elif param == "hpf":
+                t.set_tooltip_text(
+                    "Fixed 80 Hz preamp filter; separate from the adjustable "
+                    "Fat Channel HPF. The device does not report this switch "
+                    "back to Host.")
+                self.hpf_live = getattr(self, "hpf_live", {})
+                self.hpf_live[ch] = self.live[-1]
+            box.append(t)
+
+        g = Gtk.Label(label="Gain reduction")
+        g.add_css_class("caption"); g.add_css_class("dim-label")
+        g.set_margin_top(6)
+        box.append(g)
+        if not hasattr(self, "gr_bars"):
+            self.gr_bars = {1: {}, 2: {}}
+        if True:
+            for key, nm in (("gate", "Gate"), ("comp", "Comp"), ("lim", "Lim")):
+                r = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                r.set_margin_start(10); r.set_margin_end(10)
+                l = Gtk.Label(label=nm, xalign=0)
+                l.add_css_class("caption"); l.set_size_request(38, -1)
+                bar = GRBar()
+                self.gr_bars[ch][key] = bar
+                r.append(l); r.append(bar)
+                box.append(r)
+        box.append(Gtk.Box(vexpand=True))
+        return box
+
+    def _bus_strip(self):
+        box = self._strip("Buses")
+        grid = Gtk.Grid(column_spacing=10, row_spacing=6,
+                        column_homogeneous=True,
+                        halign=Gtk.Align.CENTER)
+        grid.set_size_request(228, 260)
+        self.bus_balance_knobs = {}
+        self.bus_balance_labels = {}
+        for column, (key, visible_name, detail) in enumerate(
+                bus_meter_columns()):
+            header = Gtk.Label(label=visible_name, halign=Gtk.Align.CENTER)
+            header.add_css_class("caption")
+            header.add_css_class("dim-label")
+            header.set_tooltip_text(detail)
+            grid.attach(header, column, 0, 1, 1)
+            pair = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+            pair.set_halign(Gtk.Align.CENTER)
+            pair.set_vexpand(True)
+            for side in (0, 1):
+                m = Meter(width=14, scale=(side == 1 and key == "mixb"))
+                self.meters["%s%d" % (key, side)] = m
+                pair.append(m)
+            grid.attach(pair, column, 1, 1, 1)
+            value = (0.5 if key == "main" else
+                     self.pan_state["balances"][key])
+            moved = (None if key == "main" else
+                     lambda position, bus=key:
+                     self._bus_balance_moved(bus, position))
+            knob = Knob(value, 52, moved, label="balance")
+            knob.set_sensitive(False)
+            label_text = ("Main is not exposed by USB capture"
+                          if key == "main" else bus_balance_text(value))
+            label = Gtk.Label(label=label_text, halign=Gtk.Align.CENTER)
+            label.add_css_class("numeric")
+            label.add_css_class("dim-label")
+            if key == "main":
+                knob.set_tooltip_text(label_text)
+                label.set_wrap(True)
+            else:
+                knob.set_tooltip_text(
+                    "%s stereo balance for the passive Host source" %
+                    visible_name)
+            self.bus_balance_knobs[key] = knob
+            self.bus_balance_labels[key] = label
+            grid.attach(knob, column, 2, 1, 1)
+            grid.attach(label, column, 3, 1, 1)
+        box.append(grid)
+        box.append(Gtk.Box(vexpand=True))
+        return box
+
+    def _bus_balance_moved(self, bus, value):
+        """Update one saved bus balance and its ready source, if available."""
+        if getattr(self, "_pan_mute", False):
+            return
+        if bus not in io24_mbc.BUS_SOURCE_KEYS:
+            raise ValueError("bus balance must be mixa or mixb")
+        value = max(0.0, min(1.0, float(value)))
+        self.pan_state["balances"][bus] = value
+        self.bus_balance_labels[bus].set_text(bus_balance_text(value))
+        if not self.bus_sources.set_balance(bus, value):
+            self._set_bus_source_status(bus, "failed", notify=True)
+
+    def _set_bus_source_status(self, bus, status, notify=False):
+        previous = self._bus_source_status.get(bus, "unavailable")
+        self._bus_source_status[bus] = status
+        self.bus_balance_knobs[bus].set_sensitive(status == "ready")
+        if notify and status == "failed" and previous != "failed":
+            self.say("%s source failed to start" %
+                     io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
+
+    def _bus_source_watchdog(self):
+        """Slowly reconcile source visibility; ordinary transitions are quiet."""
+        capture = io24_mbc.find_io24_capture_source()
+        statuses = self.bus_sources.reconcile(
+            capture, self.pan_state["balances"])
+        for bus in io24_mbc.BUS_SOURCE_KEYS:
+            self._set_bus_source_status(
+                bus, statuses[bus], notify=statuses[bus] == "failed")
+        return True
+
+    def _pan_snapshot_state(self):
+        return io24_mbc.validate_pan_snapshot({
+            "version": io24_mbc.PAN_SNAPSHOT_VERSION,
+            "balances": {
+                bus: self.bus_balance_knobs[bus].value
+                for bus in io24_mbc.BUS_SOURCE_KEYS
+            },
+        })
+
+    def _adopt_pan_state(self, state):
+        if state is None:
+            return None
+        state = io24_mbc.validate_pan_snapshot(state)
+        self._pan_mute = True
+        try:
+            self.pan_state = state
+            for bus, value in state["balances"].items():
+                self.bus_balance_knobs[bus].set_value(value, notify=False)
+                self.bus_balance_labels[bus].set_text(
+                    bus_balance_text(value))
+        finally:
+            self._pan_mute = False
+        return "Mix A/B balances restored (Host only)"
+
+    def _master_strip(self):
+        box = self._strip("Monitoring")
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14,
+                      halign=Gtk.Align.CENTER)
+        row.set_size_request(-1, 260)
+        self.mon = {}
+        for key, nm in (("mainvol", "Main"), ("hp", "Phones")):
+            c = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            f = fader(0, 1, 0.002)
+            reset_on_double_click(f, 0.75, lambda v: "%.0f %%" % (v * 100))
+            v = Gtk.Label(label="0.00"); v.add_css_class("numeric")
+            f.connect("value-changed", lambda w, l=v: l.set_text("%.2f" % w.get_value()))
+            param = "mainvol" if key == "mainvol" else "hpvol"
+            self.live.append(Live(f, lambda x, p=param: self._set(p, None, x)))
+            self.mon[key] = self.live[-1]
+            c.append(f); c.append(v)
+            lab = Gtk.Label(label=nm)
+            lab.add_css_class("caption"); lab.add_css_class("dim-label")
+            c.append(lab)
+            row.append(c)
+        box.append(row)
+
+        source_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        source_row.set_margin_start(10); source_row.set_margin_end(10)
+        source_label = Gtk.Label(label="Phones source", xalign=0, hexpand=True)
+        source_label.add_css_class("caption")
+        self.phones_source_row = Gtk.DropDown.new_from_strings(
+            ["Main", "Mix A", "Mix B"])
+        self.phones_source_row.set_selected(0)
+        self.phones_source_row.set_tooltip_text(
+            "Firmware write-only selector; the Host remembers the requested "
+            "source because the device does not return it in JaSt")
+        self.phones_source_row.connect(
+            "notify::selected", self._phones_source_changed)
+        source_row.append(source_label); source_row.append(self.phones_source_row)
+        box.append(source_row)
+
+        # Blend is a balance between two sources, not a level — the same shape of
+        # control as pan, so it gets the same knob. Centre is an equal mix, which
+        # a dial shows at a glance and a horizontal slider does not.
+        br = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        br.set_margin_start(10); br.set_margin_end(10)
+        bl = Gtk.Label(label="Blend  playback ←→ direct")
+        bl.add_css_class("caption"); bl.add_css_class("dim-label")
+        br.append(bl)
+        krow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                       halign=Gtk.Align.CENTER)
+        blbl = Gtk.Label(label="even")
+        blbl.add_css_class("numeric"); blbl.add_css_class("dim-label")
+        blbl.set_size_request(58, -1)
+
+        def blend_text(v):                       # v is 0..1 on the knob
+            d = v * 2.0 - 1.0                    # device takes -1..+1
+            if abs(d) < 0.01:
+                return "even"
+            return ("play %d%%" if d < 0 else "direct %d%%") % round(abs(d) * 100)
+
+        bthr = Throttle(lambda v: self._set("blend", None, v * 2.0 - 1.0), 0.010)
+
+        def blend_moved(v, l=blbl):
+            l.set_text(blend_text(v))
+            if not getattr(self, "_dev_mute", False):
+                bthr(v)
+
+        self.blend_knob = Knob(0.5, 60, blend_moved, label="blend")
+        krow.append(self.blend_knob); krow.append(blbl)
+        br.append(krow)
+        box.append(br)
+        self.mainmute_row = Gtk.Label(label="Main out: on", xalign=0.5)
+        self.mainmute_row.add_css_class("caption")
+        self.mainmute_row.set_margin_top(4)
+        self.mainmute_row.set_tooltip_text(
+            "Mirrors the physical MUTE button. The device reports this state but "
+            "exposes no parameter to set it, so it is read-only here.")
+        box.append(self.mainmute_row)
+        for nm, p in (("Output mute (software)", "hpmute"), ("Stereo link", "link")):
+            t = Gtk.ToggleButton(label=nm)
+            t.set_margin_start(10); t.set_margin_end(10)
+            self.live.append(Live(t, lambda v, pp=p: self._set(pp, None, v),
+                                  prop="active"))
+            self.mon[p] = self.live[-1]
+            box.append(t)
+        box.append(Gtk.Box(vexpand=True))
+        return box
+
+    def _mixer_page(self):
+        b = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2,
+                    homogeneous=False)
+        b.set_margin_start(6); b.set_margin_end(6)
+        strips = (self._input_strip(1), self._input_strip(2),
+                  self._bus_strip(), self._master_strip())
+        for index, w in enumerate(strips):
+            w.set_hexpand(index < 2)
+            b.append(w)
+        sc = Gtk.ScrolledWindow(); sc.set_child(b)
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        return sc
+
+    # -------------------------------------------------------- channel page
+    def _channel_page(self):
+        """Both channels' fat channels, side by side and independent.
+
+        The hardware has a complete strip per input, so showing one at a time
+        was an artificial limit of the original software rather than of the
+        device. Linking makes channel 2 mirror channel 1 and collapses the two
+        racks into one.
+        """
+        self.w = {1: {}, 2: {}}
+        self.columns = {}
+        self.col_titles = {}
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        # ONE continuous page. The old build nested Adw.PreferencesPages —
+        # each carrying its own ScrolledWindow — inside the outer scroll, so
+        # the module area scrolled separately and the page read as two pages
+        # stitched together. That was an artifact of the original two-column
+        # bichannel layout. Now: one clamp, one column, one scroll.
+        self.chain_group = Adw.PreferencesGroup(title="Signal chain")
+
+        # Stereo link and chain order live in the Signal chain header instead
+        # of their own full-height group — two rows of chrome became one line.
+        suffix = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        lk_lab = Gtk.Label(label="Stereo link")
+        lk_lab.add_css_class("caption"); lk_lab.add_css_class("dim-label")
+        self.link_row = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.link_row.set_tooltip_text(
+            "Links the inputs in the hardware (mono → stereo pair) and shows "
+            "one chain")
+        self.link_row.connect("notify::active", self._link_changed)
+        order = Gtk.DropDown.new_from_strings(["Compressor → EQ",
+                                               "EQ → Compressor"])
+        order.set_tooltip_text("Chain order — the one reorder the hardware "
+                               "can do")
+        order.connect("notify::selected", self._order_changed)
+        self.order_row = order
+        suffix.append(lk_lab); suffix.append(self.link_row); suffix.append(order)
+        self.chain_group.set_header_suffix(suffix)
+
+        self.chain_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.racks = {}
+        self.chain_group.add(self.chain_box)
+        outer.append(self.chain_group)
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.set_margin_top(10)
+        self.mod_title = Gtk.Label(label="Channel 1 — Equaliser", xalign=0)
+        self.mod_title.add_css_class("title-4")
+        head.append(self.mod_title)
+        outer.append(head)
+
+        self.chan_stack = Gtk.Stack()
+        # not vhomogeneous: a Stack reserves its tallest child's height, which
+        # left a page-sized void under short modules
+        self.chan_stack.set_vhomogeneous(False)
+        self.chan_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.chan_stack.set_transition_duration(110)
+        for ch in (1, 2):
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            title = Gtk.Label(label="Channel %d" % ch)      # kept: _sync marks
+            title.add_css_class("caption")                  # the preset state on it
+            title.add_css_class("dim-label")
+            title.set_margin_top(2)
+            self.col_titles[ch] = title
+            col.append(title)
+            col.append(self._channel_column(ch))
+            self.columns[ch] = col
+            self.chan_stack.add_named(col, str(ch))
+        self.chan_stack.set_visible_child_name("1")
+        outer.append(self.chan_stack)
+        self.mbc_widget = self._mbc_group()
+        if self.mbc_widget is not None:
+            self._comp_holders[1].append(self.mbc_widget)
+
+        self._rebuild_chains()
+        outer.set_margin_top(10); outer.set_margin_bottom(24)
+        clamp = Adw.Clamp(maximum_size=580, tightening_threshold=400)
+        clamp.set_child(outer)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_child(clamp)
+        sc.set_vexpand(True)
+        return sc
+
+    def _mbc_group(self):
+        """The 4-band compressor, living inside the Compressor section.
+
+        The device's own compressor is single-band by hardware; this one runs
+        as a PipeWire chain and appears as the "io24 Multiband" output device;
+        the details live in GUIDE.md — the UI just offers the controls.
+        Each band carries the same vocabulary as the device compressors: a
+        character (Standard / Tube / FET, mapped onto sc3's time constants and
+        knee), threshold/ratio/knee, auto makeup like the FET model's, a Tube
+        limit mode, and a key filter with key listen via sc3's sidechain.
+        """
+        if not io24_mbc.pipewire_available():
+            return None
+        self.mbc = io24_mbc.Chain()
+        self.mbc_ctl = {}
+        self._mbc_mute = False
+        g = Adw.PreferencesGroup(title="Multiband")
+
+        row = Adw.SwitchRow(
+            title="Multiband",
+            subtitle="Off · adds the \u201cio24 Multiband\u201d output device")
+        row.connect("notify::active", self._mbc_toggled)
+        self.mbc_row = row
+        g.add(row)
+        if io24_mbc.sc4_available() is None:
+            note = Adw.ActionRow(title="Needs swh-plugins",
+                                 subtitle="sudo apt install swh-plugins")
+            note.add_prefix(Gtk.Image.new_from_icon_name(
+                "dialog-warning-symbolic"))
+            g.add(note)
+
+        def slider(parent, title, lo, hi, step, dv, fmt, keys):
+            r, sc = self._srow(title, lo, hi, step, dv, fmt,
+                               lambda v, k=keys: self._mbc_set(k, v))
+            parent.add_row(r) if isinstance(parent, Adw.ExpanderRow) else parent.add(r)
+            return sc
+
+        # crossovers: each split drives the four biquads that realise it
+        XNODES = (("b0_0", "b0_1", "b1_0", "b1_1"),
+                  ("b1_2", "b1_3", "b2_0", "b2_1"),
+                  ("b2_2", "b2_3", "b3_0", "b3_1"))
+        for i, ttl in enumerate(("Split low / low-mid", "Split low-mid / high-mid",
+                                 "Split high-mid / high")):
+            lo, hi = ((40, 400), (300, 2500), (2000, 12000))[i]
+            self.mbc_ctl["x%d" % i] = slider(
+                g, ttl, lo, hi, 1, io24_mbc.DEFAULTS["xovers"][i],
+                lambda v: "%.0f Hz" % v,
+                tuple(n + ":Freq" for n in XNODES[i]))
+
+        for bi, (band, bname) in enumerate(zip(
+                io24_mbc.BANDS, ("Low", "Low mid", "High mid", "High"))):
+            d = io24_mbc.DEFAULTS[band]
+            ex = Adw.ExpanderRow(title=bname)
+            comp = "c%d" % bi
+
+            trow = Adw.ComboRow(title="Character",
+                                model=Gtk.StringList.new(
+                                    ["Standard", "Tube", "FET"]))
+            trow.connect("notify::selected", self._mbc_type, bi)
+            ex.add_row(trow)
+            self.mbc_ctl[(bi, "type")] = trow
+
+            self.mbc_ctl[(bi, "thr")] = slider(
+                ex, "Threshold", -40, 0, 0.5, d["threshold"],
+                lambda v: "%.1f dB" % v, (comp + ":Threshold level (dB)",))
+            self.mbc_ctl[(bi, "ratio")] = slider(
+                ex, "Ratio", 1, 20, 0.1, d["ratio"],
+                lambda v: "%.1f:1" % v, (comp + ":Ratio (1:n)",))
+            self.mbc_ctl[(bi, "knee")] = slider(
+                ex, "Knee", 0, 12, 0.5, d["knee"],
+                lambda v: "%.1f dB" % v, (comp + ":Knee radius (dB)",))
+            self.mbc_ctl[(bi, "attack")] = slider(
+                ex, "Attack", 1, 100, 0.5, d["attack"],
+                lambda v: "%.1f ms" % v, (comp + ":Attack time (ms)",))
+            self.mbc_ctl[(bi, "release")] = slider(
+                ex, "Release", 10, 800, 5, d["release"],
+                lambda v: "%.0f ms" % v, (comp + ":Release time (ms)",))
+            self.mbc_ctl[(bi, "makeup")] = slider(
+                ex, "Makeup", 0, 24, 0.5, d["makeup"],
+                lambda v: "+%.1f dB" % v, (comp + ":Makeup gain (dB)",))
+
+            arow = Adw.SwitchRow(title="Auto makeup")
+            arow.connect("notify::active", self._mbc_auto, bi)
+            ex.add_row(arow)
+            self.mbc_ctl[(bi, "auto")] = arow
+
+            lrow = Adw.SwitchRow(title="Limit mode")
+            lrow.connect("notify::active", self._mbc_limit, bi)
+            ex.add_row(lrow)
+            self.mbc_ctl[(bi, "limit")] = lrow
+
+            krow = Adw.SwitchRow(title="Key filter")
+            krow.connect("notify::active",
+                         lambda r_, _p, b=bi: self._mbc_set(
+                             ("c%d:Chain balance" % b,),
+                             1.0 if r_.get_active() else 0.0))
+            ex.add_row(krow)
+            self.mbc_ctl[(bi, "keyon")] = krow
+            self.mbc_ctl[(bi, "keyf")] = slider(
+                ex, "Key frequency", 30, 16000, 5, d["key"],
+                lambda v: "%.0f Hz" % v, ("k%d:Freq" % bi,))
+
+            srow = Adw.SwitchRow(title="Key listen")
+            srow.connect("notify::active", self._mbc_listen, bi)
+            ex.add_row(srow)
+            self.mbc_ctl[(bi, "listen")] = srow
+            g.add(ex)
+        return g
+
+    def _mbc_type(self, row, _p, bi):
+        """Apply a character's time constants and knee to the band's sliders —
+        visible state, not hidden state, so what you hear is what you see."""
+        if self._mbc_mute:
+            return
+        t = ("standard", "tube", "fet")[row.get_selected()]
+        vals = io24_mbc.TYPES[t]
+        for key, v in (("attack", vals["attack"]), ("release", vals["release"]),
+                       ("knee", vals["knee"])):
+            self.mbc_ctl[(bi, key)].set_value(v)   # fires the live push
+
+    def _mbc_limit(self, row, _p, bi):
+        if self._mbc_mute:
+            return
+        if row.get_active():
+            self._mbc_prev = getattr(self, "_mbc_prev", {})
+            self._mbc_prev[bi] = (self.mbc_ctl[(bi, "ratio")].get_value(),
+                                  self.mbc_ctl[(bi, "attack")].get_value())
+            self.mbc_ctl[(bi, "ratio")].set_value(io24_mbc.TUBE_LIMIT["ratio"])
+            self.mbc_ctl[(bi, "attack")].set_value(io24_mbc.TUBE_LIMIT["attack"])
+        else:
+            prev = getattr(self, "_mbc_prev", {}).get(bi)
+            if prev:
+                self.mbc_ctl[(bi, "ratio")].set_value(prev[0])
+                self.mbc_ctl[(bi, "attack")].set_value(prev[1])
+
+    def _mbc_auto(self, row, _p, bi):
+        if self._mbc_mute:
+            return
+        self.mbc_ctl[(bi, "makeup")].set_sensitive(not row.get_active())
+        self._mbc_recompute_makeup(bi)
+
+    def _mbc_recompute_makeup(self, bi):
+        if not self.mbc_ctl[(bi, "auto")].get_active():
+            return
+        mk = io24_mbc.auto_makeup(self.mbc_ctl[(bi, "thr")].get_value(),
+                                  self.mbc_ctl[(bi, "ratio")].get_value())
+        self.mbc_ctl[(bi, "makeup")].set_value(mk)   # fires the live push
+
+    def _mbc_listen(self, row, _p, bi):
+        if self._mbc_mute:
+            return
+        on = row.get_active()
+        self._mbc_set(("lc%d:Mult" % bi,), 0.0 if on else 1.0)
+        self._mbc_set(("lk%d:Mult" % bi,), 1.0 if on else 0.0)
+
+    def _mbc_toggled(self, row, _p):
+        if self._mbc_mute:
+            return
+        if row.get_active():
+            if io24_mbc.sc4_available() is None:
+                self._mbc_mute = True
+                try:
+                    row.set_active(False)
+                finally:
+                    self._mbc_mute = False
+                self.say("Multiband unavailable — install swh-plugins first")
+                return
+            target = io24_mbc.find_io24_sink()
+            ok = self.mbc.start(
+                target=target, state=self._mbc_snapshot_state())
+            if ok:
+                row.set_subtitle(
+                    "On · route playback to the \u201cio24 Multiband\u201d output")
+            else:
+                self.say("Multiband failed to start — is PipeWire running?")
+                row.set_active(False)
+        else:
+            self.mbc.stop()
+            row.set_subtitle(
+                "Off · adds the \u201cio24 Multiband\u201d output device")
+
+    def _mbc_set(self, keys, value):
+        """Push one control move to every node that carries it. A move while
+        the chain is down is a no-op; auto-makeup rides along with threshold
+        and ratio changes, exactly as the device compressors compensate."""
+        if self._mbc_mute:
+            return
+        for k in keys:
+            if "Threshold" in k or "Ratio" in k:
+                bi = int(k[1])
+                GLib.idle_add(self._mbc_recompute_makeup, bi)
+                break
+        if not getattr(self, "mbc", None) or not self.mbc.running:
+            return
+        self.mbc.set_controls({k: value for k in keys})
+
+    def _mbc_snapshot_state(self):
+        """Capture every visible computer-side multiband control."""
+        if getattr(self, "mbc_widget", None) is None:
+            return None
+        state = io24_mbc.default_snapshot(
+            enabled=self.mbc_row.get_active())
+        state["xovers"] = [
+            self.mbc_ctl["x%d" % index].get_value() for index in range(3)]
+        for index, band in enumerate(io24_mbc.BANDS):
+            controls = self.mbc_ctl
+            state["bands"][band] = {
+                "type": ("standard", "tube", "fet")[
+                    controls[(index, "type")].get_selected()],
+                "threshold": controls[(index, "thr")].get_value(),
+                "ratio": controls[(index, "ratio")].get_value(),
+                "attack": controls[(index, "attack")].get_value(),
+                "release": controls[(index, "release")].get_value(),
+                "knee": controls[(index, "knee")].get_value(),
+                "makeup": controls[(index, "makeup")].get_value(),
+                "auto": controls[(index, "auto")].get_active(),
+                "limit": controls[(index, "limit")].get_active(),
+                "key_filter": controls[(index, "keyon")].get_active(),
+                "key": controls[(index, "keyf")].get_value(),
+                "listen": controls[(index, "listen")].get_active(),
+            }
+        return io24_mbc.validate_snapshot(state)
+
+    def _adopt_mbc_state(self, state):
+        """Restore Host-only multiband controls and one exact chain instance."""
+        if state is None:
+            return None
+        state = io24_mbc.validate_snapshot(state)
+        if getattr(self, "mbc_widget", None) is None:
+            return "multiband state retained in file; controls unavailable here"
+        self._mbc_mute = True
+        try:
+            for index, value in enumerate(state["xovers"]):
+                self.mbc_ctl["x%d" % index].set_value(value)
+            for index, band in enumerate(io24_mbc.BANDS):
+                values = state["bands"][band]
+                self.mbc_ctl[(index, "type")].set_selected(
+                    ("standard", "tube", "fet").index(values["type"]))
+                for key, field in (("thr", "threshold"), ("ratio", "ratio"),
+                                   ("attack", "attack"),
+                                   ("release", "release"), ("knee", "knee"),
+                                   ("makeup", "makeup"), ("keyf", "key")):
+                    self.mbc_ctl[(index, key)].set_value(values[field])
+                for key, field in (("auto", "auto"), ("limit", "limit"),
+                                   ("keyon", "key_filter"),
+                                   ("listen", "listen")):
+                    self.mbc_ctl[(index, key)].set_active(values[field])
+                self.mbc_ctl[(index, "makeup")].set_sensitive(
+                    not values["auto"])
+            self.mbc_row.set_active(state["enabled"])
+        finally:
+            self._mbc_mute = False
+
+        self.mbc.stop()
+        if not state["enabled"]:
+            return "multiband restored off (Host only)"
+        if io24_mbc.sc4_available() is None:
+            self._mbc_mute = True
+            try:
+                self.mbc_row.set_active(False)
+            finally:
+                self._mbc_mute = False
+            return "multiband settings restored, but swh-plugins is unavailable"
+        ok = self.mbc.start(
+            target=io24_mbc.find_io24_sink(), state=state)
+        if ok:
+            return "multiband restored on (Host only)"
+        self._mbc_mute = True
+        try:
+            self.mbc_row.set_active(False)
+        finally:
+            self._mbc_mute = False
+        return "multiband settings restored, but the PipeWire chain did not start"
+
+    def _channel_column(self, ch):
+        """One channel's fat channel. The rack above selects which module's
+        controls are shown; only one section is on screen at a time."""
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        if not hasattr(self, "mod_stacks"):
+            self.mod_stacks = {}
+        W = self.w[ch]
+
+        e = Adw.PreferencesGroup(title="Equaliser")
+        W["curve"] = EQCurve(self, ch)
+        e.add(W["curve"])
+        bb = Gtk.Box(halign=Gtk.Align.CENTER, margin_top=8, margin_bottom=4)
+        bb.add_css_class("linked")
+        W["bands"] = []
+        for i, nm in enumerate(BAND_NAMES):
+            t = Gtk.ToggleButton(label=nm)
+            t.connect("toggled", self._band_toggled, i, ch)
+            bb.append(t)
+            W["bands"].append(t)
+        e.add(bb)
+        W["shape"] = Adw.ComboRow(title="Shape", model=Gtk.StringList.new(SHAPES))
+        W["shape"].connect("notify::selected", self._shape_changed, ch)
+        e.add(W["shape"])
+        for key, title, lo, hi, st, dv, fmt, sub in (
+                ("freq", "Frequency", 20, 18000, 1, 120,
+                 lambda v: "%.0f Hz" % v, None),
+                ("gain", "Gain", -15, 15, 0.1, 0,
+                 lambda v: "%+.1f dB" % v, None),
+                ("q", "Q", 0.1, 10, 0.05, 0.7, lambda v: "%.2f" % v,
+                 "Above 1 a shelf resonates and overshoots")):
+            r, W[key] = self._srow(title, lo, hi, st, dv, fmt,
+                                   lambda v, k=key, c=ch: self._band_set(k, v, c),
+                                   sub)
+            e.add(r)
+        flat = Gtk.Button(label="Flatten", margin_top=6)
+        flat.connect("clicked", lambda _b, c=ch: self._eq_flat(c))
+        e.add(flat)
+
+        gt = Adw.PreferencesGroup(
+            title="Gate / expander",)
+        W["gate_on"] = Adw.SwitchRow(title="Gate")
+        W["gate_on"].connect("notify::active", self._dyn_toggle, "gate", ch)
+        gt.add(W["gate_on"])
+        for key, title, lo, hi, st, dv, fmt, sub in (
+                ("gth", "Threshold", -84, 0, 0.01, -40.0,
+                 lambda v: "%.2f dB" % v, None),
+                ("grange", "Range", -84, 0, 0.01, -60.0,
+                 lambda v: "%.2f dB" % v, "How far down it closes"),
+                ("gatk", "Attack", 0.00002, 0.5, 0.0001, 0.005,
+                 lambda v: "%.1f ms" % (v * 1000), None),
+                ("grel", "Release", 0.05, 2.0, 0.001, 0.3,
+                 lambda v: "%.0f ms" % (v * 1000), None),
+                ("gkey", "Key filter", 40, 16000, 1, 40,
+                 lambda v: ("off" if v <= 41 else "%.0f Hz" % v),
+                 "40 Hz = off")):
+            r, W[key] = self._srow(title, lo, hi, st, dv, fmt,
+                                   lambda v, c=ch: self._dyn_push("gate", c), sub)
+            gt.add(r)
+        W["gklisten"] = Adw.SwitchRow(title="Key listen")
+        W["gklisten"].connect("notify::active",
+                              lambda *_a, c=ch: self._dyn_push("gate", c))
+        gt.add(W["gklisten"])
+        W["gexp"] = Adw.SwitchRow(title="Expander mode",
+                                  subtitle="Soft, not a hard gate")
+        W["gexp"].set_active(True)
+        W["gexp"].connect("notify::active",
+                          lambda *_a, c=ch: self._dyn_push("gate", c))
+        gt.add(W["gexp"])
+
+        d = Adw.PreferencesGroup(title="Compressor")
+        W["comp_curve"] = CompCurve(self, ch)
+        d.add(W["comp_curve"])
+        W["comp_on"] = Adw.SwitchRow(title="Compressor")
+        W["comp_on"].connect("notify::active", self._dyn_toggle, "comp", ch)
+        d.add(W["comp_on"])
+        W["model"] = Adw.ComboRow(
+            title="Model", model=Gtk.StringList.new(["Standard", "Tube", "FET"]))
+        W["model"].connect("notify::selected",
+                           lambda *_a, c=ch: self._comp_model_changed(c))
+        d.add(W["model"])
+
+        # The three device models share one cpxt blob format, not one parameter
+        # vocabulary.  Presenting a single set of Standard sliders and mapping
+        # it heuristically made Tube controls misleading and made FET output
+        # literally unreachable (0..28 was clamped into its -56..0 range).
+        # Each stack child below is therefore the actual descriptor set.
+        W["comp_param_stack"] = Gtk.Stack()
+        W["comp_param_stack"].set_vhomogeneous(False)
+
+        standard = Adw.PreferencesGroup()
+        for key, title, lo, hi, st, dv, fmt, sub in (
+                ("cth", "Threshold", -56, 0, 0.01, 0.0,
+                 lambda v: "%.2f dB" % v, None),
+                ("rat", "Ratio", 1, 20, 0.01, 2.0,
+                 lambda v: "%.2f:1" % v, None),
+                ("catk", "Attack", 0.0002, 0.15, 0.0001, 0.02,
+                 lambda v: "%.2f ms" % (v * 1000), None),
+                ("crel", "Release", 0.0025, 0.9, 0.001, 0.15,
+                 lambda v: "%.1f ms" % (v * 1000), None),
+                ("mk", "Gain", 0, 28, 0.01, 0.0,
+                 lambda v: "%+.2f dB" % v, None)):
+            r, W[key] = self._srow(
+                title, lo, hi, st, dv, fmt,
+                lambda v, c=ch: self._dyn_push("comp", c), sub)
+            standard.add(r)
+        for key, title, sub, default in (
+                ("knee", "Soft knee", "", False),
+                ("auto", "Auto mode", "Programme-dependent timing", False)):
+            W[key] = Adw.SwitchRow(title=title, subtitle=sub)
+            W[key].set_active(default)
+            W[key].connect("notify::active",
+                           lambda *_a, c=ch: self._dyn_push("comp", c))
+            standard.add(W[key])
+        W["comp_param_stack"].add_named(standard, "standard")
+
+        tube = Adw.PreferencesGroup()
+        for key, title, lo, hi, st, dv, fmt in (
+                ("tpeak", "Peak reduction", 0, 100, 0.1, 0.0,
+                 lambda v: "%.1f" % v),
+                ("tgain", "Gain", 0, 100, 0.1, 40.0,
+                 lambda v: "%.1f" % v)):
+            r, W[key] = self._srow(
+                title, lo, hi, st, dv, fmt,
+                lambda v, c=ch: self._dyn_push("comp", c))
+            tube.add(r)
+        W["climit"] = Adw.SwitchRow(
+            title="Limit mode", subtitle="Steeper than Compress")
+        W["climit"].connect("notify::active",
+                            lambda *_a, c=ch: self._dyn_push("comp", c))
+        tube.add(W["climit"])
+        W["comp_param_stack"].add_named(tube, "tube")
+
+        fet = Adw.PreferencesGroup()
+        for key, title, lo, hi, st, dv, fmt in (
+                ("finput", "Input", -56, 0, 0.01, -43.0,
+                 lambda v: "%.2f dB" % v),
+                ("foutput", "Output", -56, 0, 0.01, 0.0,
+                 lambda v: "%.2f dB" % v),
+                ("fatk", "Attack", 0.000021, 0.0008, 0.000001, 0.0001,
+                 lambda v: "%.3f ms" % (v * 1000)),
+                ("frel", "Release", 0.05, 1.1, 0.001, 0.25,
+                 lambda v: "%.0f ms" % (v * 1000))):
+            r, W[key] = self._srow(
+                title, lo, hi, st, dv, fmt,
+                lambda v, c=ch: self._dyn_push("comp", c))
+            fet.add(r)
+        W["fratio"] = Adw.ComboRow(
+            title="Ratio", model=Gtk.StringList.new(io24_dsp.FET_RATIO_NAMES))
+        W["fratio"].connect("notify::selected",
+                            lambda *_a, c=ch: self._dyn_push("comp", c))
+        fet.add(W["fratio"])
+        W["comp_param_stack"].add_named(fet, "fet")
+        W["comp_param_stack"].set_visible_child_name("standard")
+        d.add(W["comp_param_stack"])
+
+        # These are genuine common inputs on all three builders.
+        r, W["ckey"] = self._srow(
+            "Key filter", 40, 16000, 1, 40,
+            lambda v: ("off" if v <= 41 else "%.0f Hz" % v),
+            lambda v, c=ch: self._dyn_push("comp", c),
+            "Side-chain band; 40 Hz = off")
+        d.add(r)
+        W["cklisten"] = Adw.SwitchRow(
+            title="Key listen", subtitle="Hear the side-chain")
+        W["cklisten"].connect("notify::active",
+                              lambda *_a, c=ch: self._dyn_push("comp", c))
+        d.add(W["cklisten"])
+
+        lm = Adw.PreferencesGroup(title="Limiter")
+        W["lim_on"] = Adw.SwitchRow(title="Limiter")
+        W["lim_on"].connect("notify::active", self._dyn_toggle, "lim", ch)
+        lm.add(W["lim_on"])
+        r, W["lth"] = self._srow("Limiter threshold", -40, 0, 0.01, -28.0,
+                                 lambda v: "%.2f dB" % v,
+                                 lambda v, c=ch: self._dyn_push("lim", c))
+        lm.add(r)
+
+        # The digital HPF gets its own section: it is its own rack unit and is
+        # separate from the fixed 80 Hz preamp switch on the mixer strip.
+        # Sharing a group with the limiter meant clicking either one landed you
+        # in a page about the other.
+        hp = Adw.PreferencesGroup(title="Fat Channel HPF")
+        W["hpf_mode"] = Adw.ComboRow(
+            title="Fat Channel HPF",
+            subtitle="Digital filter; independent of the 80 Hz preamp switch",
+            model=Gtk.StringList.new(
+                ["Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
+        W["hpf_mode"].set_selected(0)
+        W["hpf_mode"].connect(
+            "notify::selected", self._hpf_mode_changed, ch)
+        hp.add(W["hpf_mode"])
+        r, W["hpf"] = self._srow(
+            "Exact cutoff", 24, 1000, 0.5, 24,
+            lambda v: ("bypassed" if v <= 25 else "%.0f Hz" % v),
+            lambda v, c=ch: self.set_hpf(c, v),
+            "Advanced 24 Hz–1 kHz; Host-written value, device readback unavailable")
+        W["hpf"].set_sensitive(False)
+        hp.add(r)
+
+        # One section visible at a time, selected by the rack above. Stacking
+        # every group defeated the rack: if all four are on screen already,
+        # clicking a unit has nothing to reveal.
+        stack = Gtk.Stack()
+        stack.set_vhomogeneous(False)     # same: size to the visible module
+        stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        stack.set_transition_duration(120)
+        for key, group in (("EQ", e), ("GATE", gt), ("COMP", d),
+                           ("LIM", lm), ("HPF", hp)):
+            group.set_title("")           # the header line names the module
+            holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            holder.set_margin_top(6)
+            holder.append(group)          # no nested PreferencesPage: it owns
+            stack.add_named(holder, key)  # a ScrolledWindow, which is exactly
+                                          # the split-page artifact
+            if key == "COMP":
+                # the multiband lives INSIDE the compressor section; one shared
+                # widget, reparented to whichever channel's page is showing
+                if not hasattr(self, "_comp_holders"):
+                    self._comp_holders = {}
+                self._comp_holders[ch] = holder
+        self.mod_stacks[ch] = stack
+        stack.set_visible_child_name("EQ")
+        page.append(stack)
+        W["bands"][0].set_active(True)
+        return page
+
+
+    def _rebuild_chains(self):
+        """One rack when the channels are linked, one per channel when not."""
+        child = self.chain_box.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self.chain_box.remove(child)
+            child = nxt
+        self.racks = {}
+        chans = (1,) if self.link_both else (1, 2)
+        for ch in chans:
+            if not self.link_both:
+                lab = Gtk.Label(label="Channel %d" % ch, xalign=0)
+                lab.add_css_class("caption")
+                lab.add_css_class("dim-label")
+                self.chain_box.append(lab)
+            r = Rack(self, ch)
+            self.racks[ch] = r
+            self.chain_box.append(r)
+        if self.link_both:
+            lab = Gtk.Label(label="Channels 1 and 2 linked — one chain", xalign=0)
+            lab.add_css_class("caption")
+            lab.add_css_class("dim-label")
+            self.chain_box.append(lab)
+        self.chain = next(iter(self.racks.values()))
+
+    def _fx_page(self):
+        """Reverb, plus the send/return it needs, plus an honest note on the
+        insert-FX models."""
+        page = Adw.PreferencesPage()
+
+        pg = Adw.PreferencesGroup(
+            title="Channel processing / effects mix",
+            description="0% bypasses EQ, compression, limiting and effects; "
+                        "100% is fully processed. Exact nonzero values are "
+                        "Host-written and cannot be read back from the device.")
+        self.processing_mix_controls = {}
+        self.processing_mix_rows = {}
+        for ch in (1, 2):
+            r, sc = self._srow(
+                "Channel %d mix" % ch, 0, 1, 0.005, 1.0,
+                lambda v: "bypass" if v == 0 else "%.0f %%" % (v * 100),
+                lambda v, c=ch: self._set_processing_mix(c, v),
+                "Exact value unknown. Move the slider to establish an exact "
+                "Host value")
+            self.processing_mix_controls[ch] = sc
+            self.processing_mix_rows[ch] = r
+            pg.add(r)
+        page.add(pg)
+
+        g = Adw.PreferencesGroup(
+            title="Shared reverb",)
+        self.rev_visual = ReverbVisual(self._reverb_live_params)
+        g.add(self.rev_visual)
+
+        self.rev_on = Adw.SwitchRow(
+            title="Shared reverb engine",
+            subtitle="Needs a nonzero channel processing/effects mix and an "
+                     "FX return; device readback unavailable")
+        self.rev_on.connect("notify::active",
+                            lambda *_a: (self._push_reverb(), self._repaint_reverb()))
+        g.add(self.rev_on)
+
+        # Character presets. The device exposes one algorithm with size, input
+        # high-pass and pre-delay, so a "type" is a position in that space rather
+        # than a different reverb — which is worth saying plainly instead of
+        # implying the unit has a spring tank in it. Wet mix stays independent so
+        # switching character does not change how much you hear.
+        self.rev_type = Adw.ComboRow(
+            title="Character",
+            model=Gtk.StringList.new([n for n, _ in self.REVERB_TYPES]))
+        self.rev_type.set_subtitle_lines(2)     # wrap, do not crowd out the value
+        self.rev_type.connect("notify::selected", self._reverb_type_changed)
+        g.add(self.rev_type)
+
+        # Host-side augmentation. The device has one fixed algorithm, but the
+        # host owns the parameters and can move them over time — which is a real
+        # extra process, not a relabelling. Slowly modulating room size is how a
+        # static digital tail is made to breathe; on a spring it is most of the
+        # character. Costs one small control write per step, well under the rate
+        # the mixer sustains.
+        self.rev_mod = Adw.SwitchRow(
+            title="Movement",
+            subtitle="Slow drift in room size")
+        self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
+        g.add(self.rev_mod)
+        r, self.s_rmoddep = self._srow(
+            "Movement depth", 0.0, 0.30, 0.005, 0.08,
+            lambda v: ("off" if v < 0.005 else "±%.0f %%" % (v * 100)),
+            lambda v: None)
+        g.add(r)
+        r, self.s_rsize = self._srow("Room size", 0, 1, 0.005, 0.5,
+                                     lambda v: "%.0f %%" % (v * 100),
+                                     lambda v: (self._reverb_touched(), self._push_reverb(),
+                                              self._repaint_reverb()))
+        g.add(r)
+        r, self.s_rmix = self._srow("Wet mix", 0, 1, 0.005, 0.35,
+                                    lambda v: "%.0f %%" % (v * 100),
+                                    lambda v: (self._reverb_touched(), self._push_reverb(),
+                                              self._repaint_reverb()))
+        g.add(r)
+        r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
+                                   lambda v: ("off" if v < 1 else "%.0f Hz" % v),
+                                   lambda v: (self._reverb_touched(), self._push_reverb(),
+                                              self._repaint_reverb()),
+                                   "Keeps low end out of the tail")
+        g.add(r)
+        r, self.s_rpre = self._srow("Pre-delay", 0.0001, 0.25, 0.0005, 0.02,
+                                    lambda v: "%.0f ms" % (v * 1000),
+                                    lambda v: (self._reverb_touched(), self._push_reverb(),
+                                              self._repaint_reverb()))
+        g.add(r)
+
+        page.add(g)          # added ONCE — adding it twice raised a GTK critical
+
+        sg = Adw.PreferencesGroup(
+            title="Shared reverb returns",)
+        self.rev_return_controls = {}
+        for bus, bname in (("main", "Main out"), ("mixa", "Mix A"), ("mixb", "Mix B")):
+            r, sc = self._srow("FX return → %s" % bname, -60, 10, 0.1, 0.0,
+                               lambda v: "%.1f dB" % v,
+                               lambda v, b=bus: self.ctl.submit(
+                                   lambda dev: dev.set_mix_db("fxreturn/ch1", v, bus=b)))
+            self.rev_return_controls[bus] = sc
+            sg.add(r)
+        page.add(sg)
+
+        # Insert-FX model parameters. Model 0 owns the private reverb used by
+        # UC's factory preset named Reverb. The device has one stock Voice FX
+        # engine, so target ownership and the model's own on field remain
+        # explicit rather than implying independent per-channel engines.
+        ig = Adw.PreferencesGroup(
+            title="Voice FX insert",)
+
+        self.fx_visual = FXVisual("transformer", self._fx_live_params)
+        ig.add(self.fx_visual)
+
+        self.fx_target = Adw.ComboRow(
+            title="Target input",
+            subtitle="Changing the owner can exchange the device's two "
+                     "exposed active-slot indicators",
+            model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
+        self.fx_target.set_selected(0)
+        self.fx_target.connect("notify::selected", lambda *_a: self._push_fx())
+        ig.add(self.fx_target)
+
+        self.fx_model = Adw.ComboRow(title="Model",
+                                     model=Gtk.StringList.new(MODEL_TITLES))
+        self.fx_model.connect("notify::selected", lambda *_a: self._fx_model_changed())
+        ig.add(self.fx_model)
+
+        # Each model's OWN parameters. These were decoded from the host binary
+        # and are what the effect actually takes — the page used to send only
+        # builder defaults, so five of the six models were unadjustable and the
+        # controls that do exist were invisible.
+        self.fx_params = {}
+        self.fx_param_stack = Gtk.Stack()
+        self.fx_param_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        for key, specs in self.FX_PARAMS.items():
+            grp = Adw.PreferencesGroup()
+            self.fx_params[key] = {}
+            for name, title, lo, hi, step, dv, fmt in specs:
+                # An on/off parameter drawn as a slider is a slider you have to
+                # aim: it looks continuous, and half its travel is a lie. Same
+                # for a three-way choice. Only genuinely continuous values get
+                # a fader.
+                if lo == 0 and hi == 1 and step == 1:
+                    w_ = Adw.SwitchRow(title=title)
+                    w_.set_active(bool(dv))
+                    w_.connect("notify::active", lambda *_a: self._push_fx())
+                    self.fx_params[key][name] = _SwitchValue(w_)
+                    grp.add(w_)
+                elif step >= 1 and (hi - lo) / step <= 4:
+                    labels = [fmt(lo + i * step)
+                              for i in range(int((hi - lo) / step) + 1)]
+                    w_ = Adw.ComboRow(title=title,
+                                      model=Gtk.StringList.new(labels))
+                    w_.set_selected(int((dv - lo) / step))
+                    w_.connect("notify::selected", lambda *_a: self._push_fx())
+                    self.fx_params[key][name] = _ComboValue(w_, lo, step)
+                    grp.add(w_)
+                else:
+                    r, sc = self._srow(title, lo, hi, step, dv, fmt,
+                                       lambda v: self._queue_fx_push())
+                    self.fx_params[key][name] = sc
+                    grp.add(r)
+            self.fx_param_stack.add_named(grp, key)
+        self.fx_param_stack.set_visible_child_name("transformer")
+        ig.add(self.fx_param_stack)
+
+        self.fx_arm = Adw.SwitchRow(
+            title="Model parameters enabled",
+            subtitle="Sends model state; standalone activation requires a "
+                     "device-slot save and recall")
+        self.fx_arm.set_active(True)
+        self.fx_arm.connect("notify::active", lambda *_a: self._push_fx())
+        ig.add(self.fx_arm)
+
+        page.add(ig)
+        return page
+
+    FX_ORDER = ("transformer", "detuner", "vocoder", "ringmod", "filters", "delay")
+
+    # (kwarg, label, min, max, step, default, formatter) per model, taken from
+    # the io24_fx builder signatures rather than invented. Vocoder has no
+    # per-instance parameters beyond on/mix — its character is the fixed
+    # 22-biquad bank — so it gets mix alone.
+    # (kwarg, label, min, max, step, default, formatter). Labels are the
+    # manual's. Several parameters were simply absent before: the vocoder's
+    # carrier Type and Freq, and the ring modulator's Sub Carrier and SC Freq —
+    # so half of two effects was unreachable.
+    _wet = staticmethod(lambda v: "%.0f %% wet" % (v * 100))
+    FX_PARAMS = {
+        "transformer": [("lows", "Lows", 0.0, 1.0, 0.005, 0.06,
+                         lambda v: "%+.1f dB" % (v * 12.0)),
+                        ("width", "Width", 0.0, 1.0, 0.005, 0.405,
+                         lambda v: "%.0f %%" % (v * 100)),
+                        ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.295,
+                         lambda v: "%.0f %% wet" % (v * 100))],
+        # UC's TuneList is exactly indices 0..8 = -8..0 semitones.  The
+        # backend can encode positive values as an experimental extension, but
+        # the public Host does not expose a range that has not passed audio.
+        "detuner": [("detune", "Tune", 0, 8, 1, 8, _interval_name),
+                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %% wet" % (v * 100))],
+        "vocoder": [("carrier_type", "Type", 0, 2, 1, 1,
+                     lambda v: ["Noise", "Sawtooth", "Rectangle"][int(v)]),
+                    ("carrier_freq", "Freq", 50.0, 500.0, 1.0, 80.0,
+                     lambda v: "%.0f Hz" % v),
+                    ("vol", "Output", 0.0, 1.0, 0.005, 1.0,
+                     lambda v: "%.0f %%" % (v * 100)),
+                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %% wet" % (v * 100))],
+        "ringmod": [("dist", "Dist", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %%" % (v * 100)),
+                    ("carrier_hz", "Freq", 0.1, 2000.0, 0.1, 30.0,
+                     lambda v: "%.1f Hz" % v),
+                    ("carrier2", "Sub Carrier", 0, 1, 1, 0,
+                     lambda v: "on" if v >= 0.5 else "off"),
+                    ("carrier2_hz", "SC Freq", 0.1, 2000.0, 0.1, 50.0,
+                     lambda v: "%.1f Hz" % v),
+                    ("vol", "Output", 0.0, 1.0, 0.005, 1.0,
+                     lambda v: "%.0f %%" % (v * 100)),
+                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %% wet" % (v * 100))],
+        "filters": [("pitch", "Tune", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%d samples" % int(v * 1300 + 250.5)),
+                    ("damping", "Damping", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.2f" % (v * 0.6 + 0.3)),
+                    ("regeneration", "Feedback", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.2f" % (v * 0.35 + 0.5)),
+                    ("distortion", "Distortion", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %%" % (v * 100)),
+                    ("volume", "Output", 0.0, 1.0, 0.005, 1.0,
+                     lambda v: "%.0f %%" % (v * 100)),
+                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
+                     lambda v: "%.0f %% wet" % (v * 100))],
+        "delay": [("time_s", "Time", 0.0001, 0.25, 0.0001, 0.125,
+                   lambda v: "%.0f ms" % (v * 1000)),
+                  ("feedback", "Feedback", 0.0, 1.0, 0.005, 0.5,
+                   lambda v: "%.0f %%" % (v * 100)),
+                  ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
+                   lambda v: "%.0f %% wet" % (v * 100))],
+    }
+
+    def _fx_live_params(self):
+        """Current slider values for the selected model, for the diagram."""
+        idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
+        model = self.FX_ORDER[idx]
+        return {n: sc.get_value()
+                for n, sc in getattr(self, "fx_params", {}).get(model, {}).items()}
+
+    def _fx_model_changed(self):
+        idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
+        name = self.FX_ORDER[idx]
+        v = getattr(self, "fx_visual", None)
+        if v is not None:
+            v.set_model(name)
+        if getattr(self, "fx_param_stack", None) is not None:
+            self.fx_param_stack.set_visible_child_name(name)
+        self._push_fx()
+
+    def _queue_fx_push(self):
+        """Coalesce an expensive multi-packet VoiceFX slider gesture."""
+        if self._fx_mute:
+            return
+        if self._fx_push_id is not None:
+            GLib.source_remove(self._fx_push_id)
+        self._fx_push_id = GLib.timeout_add(80, self._fire_fx_push)
+
+    def _fire_fx_push(self):
+        self._fx_push_id = None
+        self._push_fx()
+        return False
+
+    def _push_fx(self):
+        """Assign the stock singleton, then send its selected model and state.
+
+        Block 201 has no readable state, so success here means only that the
+        known UC-ordered writes completed.  Audibility is decided separately by
+        the loopback campaign and never inferred from transport replies.
+        """
+        if self._fx_mute:
+            return
+        if self.ctl.dev is None:
+            return
+        on = self.fx_arm.get_active()
+        model = self.FX_ORDER[max(0, min(len(self.FX_ORDER) - 1,
+                                         self.fx_model.get_selected()))]
+        target = 2 if self.fx_target.get_selected() == 1 else 1
+        params = {name: control.get_value()
+                  for name, control in self.fx_params[model].items()}
+        for name in ("detune", "carrier_type"):
+            if name in params:
+                params[name] = int(params[name])
+        if "carrier2" in params:
+            params["carrier2"] = bool(params["carrier2"])
+        def work(dev, ch=target, name=model, enabled=on, kw=dict(params)):
+            try:
+                if self._fx_last_sent_device is not dev or \
+                        self._fx_last_sent_target != ch:
+                    dev.set_voicefx_channel(ch)
+                    # Assignment already reached the transport. Keep this fact
+                    # even if the following model write fails, so a retry does
+                    # not touch the slot-swapping route again.
+                    self._fx_last_sent_device = dev
+                    self._fx_last_sent_target = ch
+                dev.set_fx(name, on=enabled, **kw)
+            except Exception as error:
+                GLib.idle_add(self.say, "Voice FX send failed: %s" % error)
+
+        self.ctl.submit(work)
+
+    # name -> (size, input high-pass Hz, pre-delay s)
+    # Chosen for what each name means acoustically: a small bright box, a large
+    # slow space, a plate's dense low-mid-shy tail, a spring's tight bandpassed
+    # boing, and a cathedral's long pre-delay and huge size.
+    # (size, input high-pass, pre-delay, movement depth or None). Movement is
+    # part of a character, not an extra: a static tail is what makes Spring or
+    # Cathedral sound like a preset instead of a space, so the characters that
+    # live on modulation bring it with them.
+    REVERB_TYPES = [
+        ("Custom",     None),
+        ("Room",       (0.28, 220.0, 0.008, None)),
+        ("Plate",      (0.52, 320.0, 0.014, None)),
+        ("Spring",     (0.34, 480.0, 0.004, 0.12)),
+        ("Hall",       (0.72, 160.0, 0.032, 0.05)),
+        ("Cathedral",  (0.94, 110.0, 0.070, 0.08)),
+    ]
+
+    def _reverb_type_changed(self, row, _p):
+        spec = self.REVERB_TYPES[row.get_selected()][1]
+        if spec is None:
+            return                       # "Custom" leaves the sliders alone
+        size, hp, pre, move = spec
+        self._rev_mute = True            # moving these must not re-select Custom
+        prior_adopt = self._adopt_mute    # and must not send three partial states
+        self._adopt_mute = True
+        try:
+            self.s_rsize.set_value(size)
+            self.s_rhp.set_value(hp)
+            self.s_rpre.set_value(pre)
+            if move is not None:
+                self.s_rmoddep.set_value(move)
+                self.rev_mod.set_active(True)
+            else:
+                self.rev_mod.set_active(False)
+        finally:
+            self._rev_mute = False
+            self._adopt_mute = prior_adopt
+        self._push_reverb()
+
+    def _reverb_live_params(self):
+        """Current reverb state for the room display."""
+        return {"on": self.rev_on.get_active(),
+                "size": self.s_rsize.get_value(),
+                "mix": self.s_rmix.get_value(),
+                "predelay": self.s_rpre.get_value(),
+                "hp": self.s_rhp.get_value()}
+
+    REV_MOD_HZ = 0.07                 # a slow drift, not a wobble
+
+    def _reverb_mod_toggled(self, *_a):
+        on = self.rev_mod.get_active()
+        if on and getattr(self, "_rev_mod_id", None) is None:
+            self._rev_mod_base = self.s_rsize.get_value()
+            self._rev_mod_t = 0.0
+            self._rev_mod_id = GLib.timeout_add(120, self._reverb_mod_step)
+            if getattr(self, "rev_visual", None) is not None:
+                self.rev_visual._moving = True
+        elif not on and getattr(self, "_rev_mod_id", None) is not None:
+            GLib.source_remove(self._rev_mod_id)
+            self._rev_mod_id = None
+            if getattr(self, "rev_visual", None) is not None:
+                self.rev_visual._moving = False
+            # put the size back where the user left it, or the control lies
+            self._rev_mute = True
+            prior_adopt = self._adopt_mute
+            self._adopt_mute = True
+            try:
+                self.s_rsize.set_value(getattr(self, "_rev_mod_base",
+                                               self.s_rsize.get_value()))
+            finally:
+                self._rev_mute = False
+                self._adopt_mute = prior_adopt
+            self._push_reverb()
+
+    def _reverb_mod_step(self):
+        if not self.rev_mod.get_active():
+            self._rev_mod_id = None
+            return False
+        self._rev_mod_t += 0.12
+        dep = self.s_rmoddep.get_value()
+        base = getattr(self, "_rev_mod_base", 0.5)
+        v = max(0.02, min(1.0, base + math.sin(
+            2 * math.pi * self.REV_MOD_HZ * self._rev_mod_t) * dep))
+        self._rev_mute = True             # a drift is not the user choosing Custom
+        try:
+            self.s_rsize.set_value(v)
+        finally:
+            self._rev_mute = False
+        return True
+
+    def _repaint_reverb(self):
+        v = getattr(self, "rev_visual", None)
+        if v is not None:
+            v.queue_draw()
+
+    def _reverb_touched(self):
+        """Any manual move drops the character back to Custom, so the label
+        never claims a preset that is no longer what is loaded."""
+        if getattr(self, "_rev_mute", False):
+            return
+        if getattr(self, "rev_type", None) is not None and self.rev_type.get_selected() != 0:
+            self.rev_type.set_selected(0)
+
+    def _push_reverb(self):
+        if self._adopt_mute:
+            return
+        on = self.rev_on.get_active()
+        size, mix = self.s_rsize.get_value(), self.s_rmix.get_value()
+        hp, pre = self.s_rhp.get_value(), self.s_rpre.get_value()
+        self.ctl.submit(lambda dev: dev.set_reverb(
+            on=on, size=size, mix=mix, hp_freq=hp, predelay=max(0.0001, pre))
+            if on else dev.reverb_off())
+
+    def _mark_processing_mix_known(self, channel):
+        self.processing_mix_rows[channel].set_subtitle(
+            "Host-known exact value; device readback reports only bypass/nonzero")
+
+    def _set_processing_mix(self, channel, value):
+        """Set the unified channel processing scalar, never an isolated send.
+
+        The old page showed a 0 dB Main return without ever writing that value.
+        When shared reverb is on, raising the unified processing mix can feed
+        that engine, so only an *unknown* return is initialized. An explicitly
+        muted/off return remains respected.
+        """
+        value = max(0.0, min(1.0, float(value)))
+        shared_reverb_on = self.rev_on.get_active()
+
+        def work(dev, ch=channel, amount=value, reverb_on=shared_reverb_on):
+            dev.set_fx_mix(ch, amount)
+            GLib.idle_add(self._mark_processing_mix_known, ch)
+            if reverb_on and amount > 0.0 and not dev.has_send_level(
+                    "fxreturn/ch1", "main"):
+                dev.set_send_db("fxreturn/ch1", "main", dev.DEFAULT_SEND_DB)
+
+        self.ctl.submit(work)
+
+    SOURCES = [("line/ch1", "Input 1"), ("line/ch2", "Input 2"),
+               ("return/ch1", "USB playback 1-2"), ("return/ch2", "USB playback 3-4"),
+               ("return/ch3", "USB playback 5-6"), ("fxreturn/ch1", "FX return")]
+    BUSES = [("main", "Main out"), ("mixa", "Mix A"), ("mixb", "Mix B")]
+
+    def _routing_page(self):
+        """The mixer matrix — every source into every bus, including the two
+        loopback mixes.
+
+        Mix A and Mix B are not just extra headphone mixes: they are the
+        loopback buses that feed the computer's own record channels. Measured on
+        this device by routing a tone and watching the capture stream:
+            Mix A  -> USB capture channels 3-4
+            Mix B  -> USB capture channels 5-6
+        Capture 1-2 are the analog inputs. (Corrected 2026-08-02: this said
+        A->5-6 and B->1-2, which was wrong in both entries. Re-measured by
+        routing a tone into one bus at a time and reading the level on all six
+        capture channels.)
+        So this page is what decides what a streaming or recording application
+        actually hears.
+        """
+        self.mix_widgets = {}
+        self.bus_master_widgets = {}
+        self._mix_mute = False
+
+        # A matrix, not three stacked lists. Sources are rows, buses are
+        # columns — 7 rows instead of 24, every source's whole routing on one
+        # line, and the page stops repeating itself. The widget contract
+        # (mix_widgets[(src, bus)] = (scale, mute)) is unchanged, so
+        # _sync_mix_widgets and preset loads keep working untouched.
+        g = Adw.PreferencesGroup(
+            title="Routing matrix",
+            description="Mix A feeds USB capture 3-4, Mix B feeds 5-6 — they "
+                        "are what recording apps hear")
+        grid = Gtk.Grid(column_spacing=16, row_spacing=8)
+        grid.set_margin_top(6); grid.set_margin_bottom(4)
+
+        def cell_label(text, cls=("caption", "dim-label"), xal=0.0):
+            l = Gtk.Label(label=text, xalign=xal)
+            for c in cls:
+                l.add_css_class(c)
+            return l
+
+        # column headers
+        for col, (bus, bname) in enumerate(self.BUSES):
+            head = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            t = Gtk.Label(label=bname)
+            t.add_css_class("heading")
+            head.append(t)
+            sub = {"mixa": "→ USB 3-4", "mixb": "→ USB 5-6"}.get(bus)
+            if sub:
+                head.append(cell_label(sub, xal=0.5))
+            head.set_halign(Gtk.Align.CENTER)
+            grid.attach(head, 1 + col, 0, 1, 1)
+
+        # bus master row: one offset fader per column, mirror on the mixes
+        grid.attach(cell_label("Bus master", ("caption",)), 0, 1, 1, 1)
+        for col, (bus, bname) in enumerate(self.BUSES):
+            cellbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            msc = fader(-40, 10, 0.1, vertical=False)
+            reset_on_double_click(msc, 0.0, lambda v: "%.1f dB" % v)
+            msc.set_value(0.0)
+            msc.set_size_request(150, -1)
+            msc.set_hexpand(True)
+            if bus != "main":
+                msc.add_css_class("bus-" + bus)
+            mlbl = editable_db(msc)
+            mthr = Throttle(
+                lambda v, b=bus: self.ctl.submit(
+                    lambda dev: dev.set_bus_master(b, v)), 0.010)
+            msc.connect("value-changed", lambda w, t=mthr: t(w.get_value()))
+            cellbox.append(msc); cellbox.append(mlbl)
+            if bus != "main":
+                mir = Gtk.Button(icon_name="edit-copy-symbolic",
+                                 valign=Gtk.Align.CENTER)
+                mir.add_css_class("flat")
+                mir.set_tooltip_text(
+                    "Mirror main: copy the main mix's send levels into this "
+                    "bus once — it does not keep following")
+
+                def do_mirror(_b, b=bus):
+                    self.ctl.submit(lambda dev: dev.mirror_main(b))
+                    GLib.timeout_add(140, self._sync_mix_widgets)
+                    self.say("%s mirrored from the main mix"
+                             % b.replace("mix", "Mix ").title())
+                mir.connect("clicked", do_mirror)
+                cellbox.append(mir)
+            grid.attach(cellbox, 1 + col, 1, 1, 1)
+            self.bus_master_widgets[bus] = msc
+
+        # a hairline under the master row, so sends read as their own block
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep.set_margin_top(2); sep.set_margin_bottom(2)
+        grid.attach(sep, 0, 2, 4, 1)
+
+        for rown, (src, sname) in enumerate(self.SOURCES):
+            grid.attach(cell_label(sname, ()), 0, 3 + rown, 1, 1)
+            for col, (bus, bname) in enumerate(self.BUSES):
+                cellbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
+                                  spacing=4)
+                sc = fader(-60, 10, 0.1, vertical=False)
+                reset_on_double_click(sc, 0.0, lambda v: "%.1f dB" % v)
+                sc.set_value(0.0)
+                sc.set_size_request(150, -1)
+                sc.set_hexpand(True)
+                if bus != "main":
+                    sc.add_css_class("bus-" + bus)
+                lbl = editable_db(sc)
+                thr = Throttle(
+                    lambda v, s2=src, b=bus: self.ctl.submit(
+                        lambda dev: dev.set_send_db(s2, b, v)), 0.002)
+
+                def moved(w, t=thr):
+                    if not self._mix_mute:
+                        t(w.get_value())
+                sc.connect("value-changed", moved)
+                off = Gtk.ToggleButton(icon_name="audio-volume-muted-symbolic",
+                                       valign=Gtk.Align.CENTER)
+                off.add_css_class("flat")
+                off.set_tooltip_text(
+                    "Take this source out of the bus (UC calls it assign — the "
+                    "fader keeps its position while unassigned)")
+
+                def cut(b_, s2=src, b=bus, sl=sc):
+                    on = not b_.get_active()
+                    sl.set_sensitive(on)
+                    if not self._mix_mute:
+                        self.ctl.submit(
+                            lambda dev: dev.set_send_assigned(s2, b, on))
+                off.connect("toggled", cut)
+                cellbox.append(sc); cellbox.append(lbl); cellbox.append(off)
+                grid.attach(cellbox, 1 + col, 3 + rown, 1, 1)
+                self.mix_widgets[(src, bus)] = (sc, off)
+
+        g.add(grid)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        outer.set_margin_top(10); outer.set_margin_bottom(24)
+        outer.append(g)
+        clamp = Adw.Clamp(maximum_size=760, tightening_threshold=560)
+        clamp.set_child(outer)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_child(clamp)
+        sc.set_vexpand(True)
+        return sc
+
+    def _sync_mix_widgets(self):
+        """Pull the sliders back into line with the driver's send model.
+
+        Needed after anything that changes several sends at once — Mirror main,
+        or loading a preset — because those move the model without going through
+        the widgets. Reads no USB: the send model is host-side bookkeeping, and
+        block 100 could not be queried even if we wanted to.
+        """
+        if self.ctl.dev is None:
+            return False                  # offline: nothing to mirror from
+        dev = self.ctl.dev.dev
+        self._mix_mute = True
+        try:
+            for (src, bus), (sc, off) in self.mix_widgets.items():
+                lvl = dev.send_db(src, bus)
+                known = dev.has_send_level(src, bus)
+                if lvl is not None:
+                    sc.set_value(max(-60.0, min(10.0, lvl)))
+                assigned = dev.send_assigned(src, bus) if known else False
+                off.set_active(not assigned)
+                sc.set_sensitive(assigned)
+                if known:
+                    off.set_tooltip_text(
+                        "Take this source out of the bus; its fader position "
+                        "is retained")
+                else:
+                    off.set_tooltip_text(
+                        "No Host level has been sent on this connection; "
+                        "unmute to create a 0 dB send")
+            for bus, msc in self.bus_master_widgets.items():
+                msc.set_value(max(-40.0, min(10.0, dev.bus_master(bus))))
+        finally:
+            self._mix_mute = False
+        return False
+
+    def _device_preset_group(self):
+        """The device's four global slots — one pair per channel, selectable.
+
+        What the protocol actually allows, established by measurement:
+          * 'Pari' id 4 is a Boolean alias for the same processing/effects mix
+            exposed on the Effects page: 0 bypasses, 1 selects full processing.
+            JaSt slot 42 bits 5/6 report only zero versus nonzero.
+          * 'Pari' id 16 selects one of four global slots; each channel's hardware
+            button owns a pair. The device accepts 0..3 and hard-clamps higher.
+          * A sweep changed only the readable index among all 503 state floats.
+            The DSP is write-only, so that does not exclude internal recall. The
+            device has factory content, but its preset component cannot be read
+            or written through the decoded direct-control resolver. This app's
+            custom settings therefore live in host-side preset files.
+        """
+        g = Adw.PreferencesGroup(
+            title="Device slots",
+            description="Two device-resident slots per channel; selection is "
+                        "separate from Host files and temporary previews")
+        self.preset_rows = {}
+        # These rows are also driven FROM the device by _sync (slot 42 bits 5/6
+        # and slots 40/41), and set_active/set_selected fire the same signals a
+        # user click does. Without this guard the app would echo the device's own
+        # reported state straight back as a write — so pressing and holding on the
+        # front panel would provoke a host write describing what the panel just
+        # did, and the two could fight. The flag makes programmatic updates silent.
+        self._preset_sync = False
+
+        # The device-wide preset mode: how many blocks the unit shows and its
+        # button cycles. 'Pari' wire 17 (internal id 2). Write-only — nothing
+        # in the state blob reports it — so this row commands, it cannot
+        # follow the hardware.
+        self.preset_mode_row = Adw.ComboRow(
+            title="Preset blocks on the unit",
+            subtitle="Write-only \u2014 but in Two mode the slots below do "
+                     "follow the unit's button",
+            model=Gtk.StringList.new(["One", "Two", "None"]))
+        self.preset_mode_row.set_selected(1)
+        self.preset_mode_row.connect("notify::selected", self._preset_mode_changed)
+        g.add(self.preset_mode_row)
+
+        for ch in (1, 2):
+            srow = Adw.ActionRow(
+                title="Channel %d slot" % ch,
+                subtitle="Processing status follows the unit; exact mix is "
+                         "on the Effects page")
+            # Two blocks, not four: the device's four slot indexes are GLOBAL,
+            # two owned per channel (resting state reads ch1=0, ch2=2, and the
+            # hardware button lands on the pair's first slot). Offering all
+            # four let a channel point into the other's pair, which the
+            # 2026-08-10 button test showed produces exactly the half-broken
+            # states it looked like it would.
+            sl = SlotBlocks(2, 2,
+                            lambda idx, c=ch: self._preset_block_changed(c, idx))
+            srow.add_suffix(sl)
+            g.add(srow)
+            self.preset_rows[ch] = (srow, sl)
+        return g
+
+    def _host_hotkey_group(self):
+        """Momentary per-channel Host snapshots; never device preset slots."""
+        g = Adw.PreferencesGroup(
+            title="Temporary A/B previews (Host only)",
+            description="Capture a known channel sound, then hold to audition "
+                        "it. Release returns to the sound active when the hold began.")
+        self.hotkey_rows = {}
+        for ch in (1, 2):
+            row = Adw.ActionRow(
+                title="Channel %d preview" % ch,
+                subtitle="Temporary and computer-controlled; not a device slot")
+            capture = Gtk.Button(label="Capture current sound",
+                                 valign=Gtk.Align.CENTER)
+            capture.connect("clicked", self._hotkey_capture, ch)
+            row.add_suffix(capture)
+            hold = Gtk.Button(label="Hold to preview", valign=Gtk.Align.CENTER)
+            hold.add_css_class("suggested-action")
+            gesture = Gtk.GestureClick()
+            gesture.connect("pressed", self._hotkey_pressed, ch)
+            gesture.connect("released", self._hotkey_released, ch)
+            hold.add_controller(gesture)
+            row.add_suffix(hold)
+            g.add(row)
+            self.hotkey_rows[ch] = (row, capture, hold)
+        return g
+
+    def _hotkey_capture(self, _button, ch):
+        if getattr(self, "_hotkey_sync", False):
+            return
+
+        def work(dev, channel=ch):
+            try:
+                snap = self.hotkeys.capture(dev, channel)
+                msg = ("Captured Channel %d temporary preview (%d known calls; "
+                       "device readback/standalone persistence unavailable)" %
+                       (channel, len(snap["calls"])))
+            except Exception as error:
+                msg = "Channel %d preview capture failed: %s" % (
+                    channel, error)
+            GLib.idle_add(self.say, msg)
+
+        self.ctl.submit(work)
+
+    def _hotkey_pressed(self, _gesture, _n_press, _x, _y, ch):
+        if getattr(self, "_hotkey_sync", False):
+            return
+
+        def work(dev, channel=ch):
+            try:
+                report = self.hotkeys.press(dev, channel)
+                status = report["status"]
+            except Exception as error:
+                GLib.idle_add(
+                    self.say,
+                    "Channel %d preview press failed: %s" % (channel, error))
+                return
+
+            def finished():
+                row = self.hotkey_rows[channel][0]
+                row.set_subtitle(
+                    "Preview active; release to restore"
+                    if status == "PREVIEW_ACTIVE" else
+                    status.lower().replace("_", " ").capitalize())
+                return False
+
+            GLib.idle_add(finished)
+
+        self.ctl.submit(work)
+
+    def _hotkey_released(self, _gesture, _n_press, _x, _y, ch):
+        if getattr(self, "_hotkey_sync", False):
+            return
+
+        def work(dev, channel=ch):
+            try:
+                report = self.hotkeys.release(dev, channel)
+                status = report["status"]
+            except Exception as error:
+                GLib.idle_add(
+                    self.say,
+                    "Channel %d preview release failed: %s" % (channel, error))
+                return
+
+            def finished():
+                row = self.hotkey_rows[channel][0]
+                row.set_subtitle(
+                    "Normal sound restored"
+                    if status == "NORMAL_RESTORED" else
+                    status.lower().replace("_", " ").capitalize())
+                return False
+
+            GLib.idle_add(finished)
+
+        self.ctl.submit(work)
+
+    def _preset_mode_changed(self, row, _p):
+        if getattr(self, "_preset_sync", False):
+            return
+        mode = row.get_selected()
+        self.ctl.submit(lambda dev: dev.set_preset_mode(mode))
+
+    PRESET_BASE = {1: 0, 2: 2}           # each channel's first global slot
+
+    def _preset_block_changed(self, ch, idx):
+        if getattr(self, "_preset_sync", False):
+            return
+        self._slot_changed(ch, self.PRESET_BASE[ch] + idx)
+
+    def _slot_changed(self, ch, slot):
+        self.ctl.submit(lambda dev: dev.set_preset_slot(ch, slot))
+
+    def _device_page(self):
+        """Sample rate, buffer size and device identity.
+
+        Rate and buffer are host-side on Linux: the io24 is class-compliant, so
+        it advertises rates over USB Audio Class and PipeWire chooses. There is
+        no device parameter for either — no clock/rate/buffer/latency descriptor
+        exists among the 117 the host exposes, and the firmware has no rate
+        vocabulary at all. So this page reads the real state from ALSA and
+        drives PipeWire, instead of pretending to write to the device.
+        """
+        page = Adw.PreferencesPage()
+
+        g = Adw.PreferencesGroup(
+            title="Sample rate",)
+        rates = alsa_rates()
+        self.rate_row = Adw.ComboRow(
+            title="Rate", model=Gtk.StringList.new(["%d Hz" % r for r in rates]))
+        self._rates = rates
+        self.rate_row.connect("notify::selected", self._rate_changed)
+        g.add(self.rate_row)
+        self.rate_note = Adw.ActionRow(title="Allowed by PipeWire")
+        self.rate_note_lbl = Gtk.Label(label="…")
+        self.rate_note_lbl.add_css_class("dim-label")
+        self.rate_note.add_suffix(self.rate_note_lbl)
+        g.add(self.rate_note)
+        page.add(g)
+
+        b = Adw.PreferencesGroup(
+            title="Buffer size",)
+        self._quanta = [32, 64, 128, 256, 512, 1024, 2048]
+        self.quantum_row = Adw.ComboRow(
+            title="Quantum",
+            model=Gtk.StringList.new(["%d frames" % q for q in self._quanta]))
+        self.quantum_row.connect("notify::selected", self._quantum_changed)
+        b.add(self.quantum_row)
+        self.latency_row = Adw.ActionRow(title="Resulting latency")
+        self.latency_lbl = Gtk.Label(label="…")
+        self.latency_lbl.add_css_class("numeric")
+        self.latency_lbl.add_css_class("dim-label")
+        self.latency_row.add_suffix(self.latency_lbl)
+        b.add(self.latency_row)
+        page.add(b)
+
+        # Output delay. Universal Control puts this on the same page as the
+        # sample rate, and this is the one control here that lives in the
+        # DEVICE rather than in PipeWire — the two rows above only ask the
+        # sound server for something, this one writes hardware.
+        od = Adw.PreferencesGroup(
+            title="Output delay",)
+        self._delay_buses = [("off", "Off"), ("mixa", "Mix A"), ("mixb", "Mix B")]
+        self.delay_bus_row = Adw.ComboRow(
+            title="Apply to",
+            subtitle="Mix A and Mix B are measured; the analog outputs cannot "
+                     "be checked without a loopback cable",
+            model=Gtk.StringList.new([t for _, t in self._delay_buses]))
+        self.delay_bus_row.set_subtitle_lines(2)   # wrap, don't crowd the value
+        self.delay_bus_row.connect("notify::selected", self._delay_bus_changed)
+        od.add(self.delay_bus_row)
+
+        drow = Adw.ActionRow(title="Delay")
+        self.delay_scale = fader(0, 500, 2, vertical=False)
+        reset_on_double_click(self.delay_scale, 0.0, lambda v: "%.0f ms" % v)
+        self.delay_scale.set_value(0)
+        self.delay_scale.set_size_request(260, -1)
+        self.delay_lbl = Gtk.Label(label="0 ms")
+        self.delay_lbl.add_css_class("numeric")
+        self.delay_lbl.add_css_class("dim-label")
+        self.delay_lbl.set_size_request(72, -1)
+        # 10 ms throttle, not 2: this is a hardware write behind a coarse
+        # control, and there is no reason to flood the bus from a drag.
+        self._delay_thr = Throttle(
+            lambda ms: self.ctl.submit(
+                lambda dev: dev.set_output_delay(ms / 1000.0)), 0.010)
+
+        def delay_moved(w):
+            ms = int(round(w.get_value() / 2.0) * 2)
+            self.delay_lbl.set_text("%d ms" % ms)
+            if not getattr(self, "_delay_mute", False):
+                self._delay_thr(ms)
+        self.delay_scale.connect("value-changed", delay_moved)
+        drow.add_suffix(self.delay_scale)
+        drow.add_suffix(self.delay_lbl)
+        od.add(drow)
+        # Starts off, so the slider starts inert. There is no read-back for this
+        # parameter — like the mixer, these widgets show what the app last sent,
+        # not what the hardware holds.
+        self.delay_scale.set_sensitive(False)
+        page.add(od)
+
+        lv = Adw.PreferencesGroup(title="Live stream",
+                                  description="What the hardware is actually doing")
+        self.live_rows = {}
+        for k, t in (("rate", "Rate"), ("period", "Period size"),
+                     ("buffer", "Buffer size"), ("format", "Format"),
+                     ("channels", "Channels")):
+            row = Adw.ActionRow(title=t)
+            l = Gtk.Label(label="—")
+            l.add_css_class("numeric")
+            l.add_css_class("dim-label")
+            row.add_suffix(l)
+            lv.add(row)
+            self.live_rows[k] = l
+        page.add(lv)
+
+        idg = Adw.PreferencesGroup(title="Device")
+        for t, v in (("Model", "Revelator io24"),
+                     ("USB ID", "194f:0422"),
+                     ("Firmware", self._bcd_device()),
+                     ("Serial", self._usb_serial()),
+                     ("Control protocol", "paesdk over vendor interface 5")):
+            row = Adw.ActionRow(title=t)
+            l = Gtk.Label(label=v)
+            l.add_css_class("dim-label")
+            row.add_suffix(l)
+            idg.add(row)
+        page.add(idg)
+
+        # Channel names, read from the device's 'CHNP' table (PROTOCOL.md §13j).
+        # Read ONCE, not polled: the table is static, and this device dislikes
+        # control traffic during streaming (§12G).
+        #
+        # It has to go through ctl.submit like every other device access — Win
+        # holds no device handle of its own, only `ctl`. Reading it directly here
+        # was wrong twice over: Win has no `.dev`, and even if it did, a
+        # synchronous USB read on the GTK main thread would block the UI. The
+        # group is created hidden and revealed only if the device answers, so a
+        # device that returns nothing simply shows no section.
+        self._names_group = Adw.PreferencesGroup(
+            title="Channel names",
+            description="Reported by the device ('CHNP' on block 0)")
+        self._names_group.set_visible(False)
+        page.add(self._names_group)
+        self.ctl.submit(
+            lambda dev: self.ctl.snap.__setitem__("names", dev.channel_names()))
+        self._names_tries = 0
+        GLib.timeout_add(700, self._fill_channel_names)
+
+        GLib.timeout_add(1500, self._refresh_device_page)
+        return page
+
+    def _fill_channel_names(self):
+        """Populate the channel-name group once the worker thread has read it.
+
+        Returns True to be called again while the answer is still outstanding.
+        Gives up after ~7 s rather than retrying forever: no names is a normal
+        outcome (only two entries exist on this device, and a future firmware
+        may expose none), not a condition worth spinning on.
+        """
+        names = self.ctl.snap.get("names")
+        if not names:
+            self._names_tries += 1
+            return self._names_tries < 10
+        for i, n in sorted(names.items()):
+            self._names_group.add(Adw.ActionRow(title=n, subtitle="index %d" % i))
+        self._names_group.set_visible(True)
+        return False
+
+    def _usb_serial(self):
+        try:
+            for d in os.listdir("/sys/bus/usb/devices"):
+                b = "/sys/bus/usb/devices/" + d
+                if os.path.exists(b + "/idProduct") and \
+                   open(b + "/idProduct").read().strip() == "0422":
+                    return open(b + "/serial").read().strip()
+        except Exception:
+            pass
+        return "unknown"
+
+    def _bcd_device(self):
+        try:
+            for d in os.listdir("/sys/bus/usb/devices"):
+                b = "/sys/bus/usb/devices/" + d
+                if os.path.exists(b + "/idProduct") and \
+                   open(b + "/idProduct").read().strip() == "0422":
+                    return open(b + "/bcdDevice").read().strip()
+        except Exception:
+            pass
+        return "unknown"
+
+    def _rate_changed(self, row, _p):
+        if getattr(self, "_dev_mute", False):
+            return
+        want = self._rates[row.get_selected()]
+        allowed = pw_settings().get("clock.allowed-rates", "")
+        if str(want) not in allowed:
+            self.say("PipeWire only allows %s — see the note below the selector"
+                     % allowed.strip("[] "))
+            return
+        ok, msg = pw_set("clock.force-rate", want)
+        if not ok:
+            self.say("Rate change failed: %s" % msg)
+            return
+
+    def _delay_bus_changed(self, row, _p):
+        """Pick the bus, then re-apply the delay to it.
+
+        Order matters, and getting it wrong is visible: if the delay is left set
+        while the selector moves, the old bus keeps its delay until the next
+        write lands. So select first, then push the current slider value.
+        """
+        if getattr(self, "_delay_mute", False):
+            return
+        key = self._delay_buses[row.get_selected()][0]
+        ms = int(round(self.delay_scale.get_value() / 2.0) * 2)
+        self.delay_scale.set_sensitive(key != "off")
+        if key == "off":
+            self.ctl.submit(lambda dev: dev.output_delay_off())
+            return
+        self.ctl.submit(lambda dev: dev.set_output_delay(ms / 1000.0, key))
+
+    def _quantum_changed(self, row, _p):
+        if getattr(self, "_dev_mute", False):
+            return
+        q = self._quanta[row.get_selected()]
+        ok, msg = pw_set("clock.force-quantum", q)
+        if not ok:
+            self.say("Buffer change failed: %s" % msg)
+
+    def _refresh_device_page(self):
+        st = pw_settings()
+        allowed = st.get("clock.allowed-rates", "").strip("[] ").strip()
+        live = alsa_live()
+        d = live.get("capture") or live.get("playback") or {}
+        # Which number is the truth? Not `clock.rate` — that is the *default*
+        # the server falls back to, and it stays at 48000 no matter what the
+        # graph is actually doing. In order of authority:
+        #   1. the rate the device is genuinely clocking at, from hw_params
+        #   2. clock.force-rate, if a rate has been pinned but nothing runs yet
+        #   3. clock.rate, the idle default
+        live_rate = 0
+        try:
+            live_rate = int((d.get("rate") or "0").split(" ")[0])
+        except ValueError:
+            pass
+        forced = int(st.get("clock.force-rate", "0") or 0)
+        cur_rate = live_rate or forced or int(st.get("clock.rate", "48000") or 48000)
+        cur_q = int(st.get("clock.force-quantum", "0") or 0) or \
+            int(st.get("clock.quantum", "1024") or 1024)
+        self._dev_mute = True
+        if cur_rate in self._rates:
+            self.rate_row.set_selected(self._rates.index(cur_rate))
+        if cur_q in self._quanta:
+            self.quantum_row.set_selected(self._quanta.index(cur_q))
+        self._dev_mute = False
+        # Compare SETS of numbers, not strings. PipeWire prints this list
+        # comma-separated — "[ 44100, 48000, 88200, 96000 ]" — while this
+        # compared it against a space-joined string, so the test could never
+        # succeed and every machine was told its rates were restricted, including
+        # while it was demonstrably clocking at 96 kHz. The question is only ever
+        # "is anything we offer missing", so ask exactly that.
+        offered = set(self._rates)
+        available = set(int(x) for x in re.findall(r"\d+", allowed))
+        missing = sorted(offered - available) if available else []
+        if missing:
+            self.rate_note_lbl.set_text(
+                "%s  (missing %s)" % (", ".join(str(r) for r in sorted(available)),
+                                      ", ".join(str(r) for r in missing)))
+            self.rate_note.set_subtitle(
+                "PipeWire is limiting the choice. Widen it in "
+                "~/.config/pipewire/pipewire.conf.d/ with clock.allowed-rates.")
+        else:
+            self.rate_note_lbl.set_text(
+                ", ".join(str(r) for r in sorted(available)) if available else "any")
+            self.rate_note.set_subtitle("")
+        self.latency_lbl.set_text("%.2f ms" % (cur_q / max(cur_rate, 1) * 1000.0))
+        self.live_rows["rate"].set_text(
+            (d.get("rate") or "—").split(" ")[0] if d else
+            ("%d (pinned, idle)" % forced if forced else "— (idle)"))
+        self.live_rows["period"].set_text(d.get("period_size") or "—")
+        self.live_rows["buffer"].set_text(d.get("buffer_size") or "—")
+        self.live_rows["format"].set_text(d.get("format") or "—")
+        self.live_rows["channels"].set_text(d.get("channels") or "—")
+        return True
+
+    def _presets_page(self):
+        """Universal Control's own factory presets, recovered from the installer."""
+        page = Adw.PreferencesPage()
+        # The device's own slots go first, and OUTSIDE the try below: they are a
+        # property of the hardware and have nothing to do with whether the
+        # recovered factory-preset data happens to be present. Adding them after
+        # the try is what left this group orphaned — every early return skipped
+        # it, and the group was built but never attached to any page at all.
+        page.add(self._device_preset_group())
+        page.add(self._host_hotkey_group())
+        # One pointer to the written guide, in place of the paragraphs that used
+        # to sit above every group on every page.
+        hint = Adw.PreferencesGroup()
+        row = Adw.ActionRow(title="What these controls do",
+                            subtitle="GUIDE.md, next to the app")
+        row.add_prefix(Gtk.Image.new_from_icon_name("help-about-symbolic"))
+        hint.add(row)
+        page.add(hint)
+        try:
+            import io24_presets as PR
+            self.PR = PR
+            names = PR.names()
+        except SystemExit as e:
+            self.PR = None
+            g = Adw.PreferencesGroup(title="Factory sounds")
+            g.add(Adw.ActionRow(title="Preset data not present",
+                                subtitle=str(e).split("\n")[0]))
+            page.add(g)
+            return page
+        except Exception as e:
+            self.PR = None
+            g = Adw.PreferencesGroup(title="Factory sounds")
+            g.add(Adw.ActionRow(title="Could not load presets", subtitle=str(e)))
+            page.add(g)
+            return page
+
+        g = Adw.PreferencesGroup(
+            title="Factory sounds",
+            description="Search, audition on the selected channel, or explicitly "
+                        "store a complete sound in an inactive device slot")
+        search_row = Adw.ActionRow(
+            title="Find a factory sound",
+            subtitle="Filters names and sound descriptions")
+        self.factory_search = Gtk.SearchEntry(
+            placeholder_text="Search factory sounds…",
+            valign=Gtk.Align.CENTER)
+        self.factory_search.set_size_request(240, -1)
+        search_row.add_suffix(self.factory_search)
+        g.add(search_row)
+        self.factory_target = Adw.ComboRow(
+            title="Target channel",
+            subtitle="Unlinked: loads this strip. Linked: loads both strips and "
+                     "assigns Voice FX to this input.",
+            model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
+        self.factory_target.set_selected(0)
+        g.add(self.factory_target)
+        self.factory_device_slot = Adw.ComboRow(
+            title="Device-store destination",
+            subtitle="Writes a complete body only; selection and recall stay "
+                     "separate",
+            model=Gtk.StringList.new(["Slot 1", "Slot 2"]))
+        self.factory_device_slot.set_selected(1)
+        g.add(self.factory_device_slot)
+        self.factory_names = list(names)
+        self.factory_device_base = Adw.ComboRow(
+            title="Complete-body base",
+            subtitle="Supplies archive fields the live Host does not expose; "
+                     "all visible channel and Voice FX controls are replaced",
+            model=Gtk.StringList.new(self.factory_names))
+        if "Broadcast" in self.factory_names:
+            self.factory_device_base.set_selected(
+                self.factory_names.index("Broadcast"))
+        g.add(self.factory_device_base)
+        current_row = Adw.ActionRow(
+            title="Current sound",
+            subtitle="Stores the selected channel and current Voice FX as one "
+                     "complete body; selection and recall remain separate")
+        current_store = Gtk.Button(
+            label="Store current sound…", valign=Gtk.Align.CENTER)
+        current_store.add_css_class("suggested-action")
+        current_store.connect("clicked", self._store_current_slot_clicked)
+        current_row.add_suffix(current_store)
+        current_row.set_activatable_widget(current_store)
+        g.add(current_row)
+        self.factory_preset_rows = []
+        for n in names:
+            pr = PR.load()[n]
+            supported, reason = PR.direct_apply_support(pr)
+            summary = PR.describe(pr)
+            if not supported:
+                summary = "%s — %s" % (summary, reason)
+            row = Adw.ActionRow(title=n, subtitle=summary)
+            if supported:
+                b = Gtk.Button(label="Load strip", valign=Gtk.Align.CENTER)
+                b.connect("clicked", self._load_factory, n, False)
+                row.add_suffix(b)
+                row.set_activatable_widget(b)
+                if pr.get("voicefx", {}).get("on"):
+                    fx = Gtk.Button(label="Load + Voice FX",
+                                    valign=Gtk.Align.CENTER)
+                    fx.add_css_class("suggested-action")
+                    fx.connect("clicked", self._load_factory, n, True)
+                    row.add_suffix(fx)
+            g.add(row)
+            self.factory_preset_rows.append((row, n, summary))
+
+        def filter_factory(entry):
+            query = entry.get_text()
+            for preset_row, preset_name, preset_summary in self.factory_preset_rows:
+                preset_row.set_visible(factory_preset_matches(
+                    query, preset_name, preset_summary))
+
+        self.factory_search.connect("search-changed", filter_factory)
+        page.add(g)
+        return page
+
+    def _factory_target_channel(self):
+        row = getattr(self, "factory_target", None)
+        return 2 if row is not None and row.get_selected() == 1 else 1
+
+    def _prepare_factory_slot_store(self, name):
+        """Validate one complete, currently inactive factory-slot write."""
+        target_plan = self._prepare_slot_store_target()
+        target = target_plan["target"]
+        relative_slot = target_plan["relative_slot"]
+        slot = target_plan["slot"]
+        try:
+            record = complete_device_slot_record(self.PR.load()[name])
+        except KeyError as error:
+            raise io24.HostActionError(
+                "factory preset %r is unavailable" % name) from error
+        return {
+            "name": name,
+            "target": target,
+            "relative_slot": relative_slot,
+            "slot": slot,
+            "record": record,
+            "source": "factory:%s" % name,
+        }
+
+    def _prepare_slot_store_target(self):
+        """Return one connected, live, inactive device-slot destination."""
+        if self.ctl.dev is None:
+            raise io24.HostActionError("io24 is not connected")
+        if not self.ctl.snap.get("alive"):
+            raise io24.HostActionError(
+                "live device slot state is not available yet")
+        target = self._factory_target_channel()
+        relative_slot = int(self.factory_device_slot.get_selected())
+        if relative_slot not in (0, 1):
+            raise io24.HostActionError("device slot must be Slot 1 or Slot 2")
+        slot = self.PRESET_BASE[target] + relative_slot
+        selected = self.ctl.snap.get("preset_slot")
+        if not isinstance(selected, (list, tuple)) or len(selected) != 2:
+            raise io24.HostActionError("live device slot selection is unavailable")
+        if selected[target - 1] == slot:
+            raise io24.HostActionError(
+                "Channel %d device Slot %d is currently selected; choose the "
+                "other slot before overwriting a body" %
+                (target, relative_slot + 1))
+        return {
+            "target": target,
+            "relative_slot": relative_slot,
+            "slot": slot,
+        }
+
+    def _current_slot_record(self, base_name, target):
+        """Build a complete slot body from the current visible controls."""
+        fx_target = 2 if self.fx_target.get_selected() == 1 else 1
+        if fx_target != target:
+            raise io24.HostActionError(
+                "Voice FX targets Channel %d; choose Channel %d as the preset "
+                "target before storing this sound" % (fx_target, fx_target))
+        W = self.w[target]
+        gate = {
+            "on": self.dyn_by_ch[target]["gate"],
+            "threshold_db": W["gth"].get_value(),
+            "range_db": W["grange"].get_value(),
+            "attack_s": W["gatk"].get_value(),
+            "release_s": W["grel"].get_value(),
+            "keyfilter_hz": (0.0 if W["gkey"].get_value() <= 41
+                              else W["gkey"].get_value()),
+            "keylisten": W["gklisten"].get_active(),
+            "expander": W["gexp"].get_active(),
+        }
+        comp_model, compressor = self._compressor_kwargs(target)
+        compressor["on"] = self.dyn_by_ch[target]["comp"]
+        limiter = {
+            "on": self.dyn_by_ch[target]["lim"],
+            "threshold_db": W["lth"].get_value(),
+        }
+        fx_model = self.FX_ORDER[max(
+            0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))]
+        voicefx = self._fx_live_params()
+        voicefx["on"] = self.fx_arm.get_active()
+        try:
+            base = self.PR.load()[base_name]
+        except KeyError as error:
+            raise io24.HostActionError(
+                "complete-body base %r is unavailable" % base_name) from error
+        return self.PR.current_slot_record(
+            base, "Current Channel %d" % target,
+            bands=[dict(band) for band in self.bands_by_ch[target]],
+            hpf_hz=self.hpf_by_ch[target],
+            eq_first=self.order_by_ch[target],
+            gate=gate, compressor_model=comp_model,
+            compressor=compressor, limiter=limiter,
+            voicefx_model=fx_model, voicefx=voicefx)
+
+    def _prepare_current_slot_store(self):
+        plan = self._prepare_slot_store_target()
+        base_index = self.factory_device_base.get_selected()
+        if not 0 <= base_index < len(self.factory_names):
+            raise io24.HostActionError("choose a complete-body base")
+        base_name = self.factory_names[base_index]
+        plan.update({
+            "name": "current Channel %d sound" % plan["target"],
+            "record": self._current_slot_record(base_name, plan["target"]),
+            "source": "current:channel%d;base:%s" %
+                      (plan["target"], base_name),
+            "base_name": base_name,
+        })
+        return plan
+
+    def _queue_factory_slot_store(self, plan):
+        """Queue only the confirmed body write and Host registry commit."""
+        def work(dev, prepared=plan):
+            try:
+                result = dev.save_known_device_slot(
+                    prepared["slot"], prepared["record"],
+                    self.device_slot_registry, prepared["source"])
+                transport = result["transport"]
+                msg = ("Sent complete %s body to Channel %d device Slot %d "
+                       "(%d frame%s, %d repl%s); registry status %s. "
+                       "Selection and recall unchanged." %
+                       (prepared["name"], prepared["target"],
+                        prepared["relative_slot"] + 1,
+                        transport["fragments_sent"],
+                        "" if transport["fragments_sent"] == 1 else "s",
+                        transport["replies_received"],
+                        "y" if transport["replies_received"] == 1 else "ies",
+                        result["registry"]["status"]))
+            except Exception as error:
+                report = getattr(error, "device_slot_transport", None)
+                if report is None:
+                    msg = "Device-slot body was not sent: %s" % error
+                else:
+                    msg = ("Device-slot body transport returned, but the local "
+                           "registry failed: %s" % error)
+            GLib.idle_add(self.say, msg)
+
+        self.ctl.submit(work)
+
+    def _factory_slot_store_response(self, _dialog, response, plan):
+        if response == "store":
+            self._queue_factory_slot_store(plan)
+
+    def _store_factory_slot_clicked(self, _button, name):
+        try:
+            plan = self._prepare_factory_slot_store(name)
+        except Exception as error:
+            self.say("Device-slot store unavailable: %s" % error)
+            return
+        dialog = Adw.MessageDialog.new(
+            self,
+            "Overwrite Channel %d device Slot %d?" %
+            (plan["target"], plan["relative_slot"] + 1),
+            "%s will replace that unreadable device-resident body. The Host "
+            "will record only that the write was sent; this will not select, "
+            "enable, recall, or directly apply the slot." % plan["name"])
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("store", "Overwrite body")
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("cancel")
+        dialog.set_response_appearance(
+            "store", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._factory_slot_store_response, plan)
+        dialog.present()
+
+    def _store_current_slot_clicked(self, _button):
+        try:
+            plan = self._prepare_current_slot_store()
+        except Exception as error:
+            self.say("Device-slot store unavailable: %s" % error)
+            return
+        dialog = Adw.MessageDialog.new(
+            self,
+            "Overwrite Channel %d device Slot %d?" %
+            (plan["target"], plan["relative_slot"] + 1),
+            "The current Fat Channel and Voice FX controls will replace that "
+            "unreadable device-resident body, using %s only for hidden archive "
+            "fields. Processing/effects mix is not part of the slot body. The "
+            "Host records a sent write only; selection, recall, and audibility "
+            "remain unchanged." % plan["base_name"])
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("store", "Overwrite body")
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("cancel")
+        dialog.set_response_appearance(
+            "store", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._factory_slot_store_response, plan)
+        dialog.present()
+
+    def _load_factory(self, _b, name, with_fx=False):
+        pr = self.PR.load()[name]
+        supported, reason = self.PR.direct_apply_support(pr)
+        if not supported:
+            self.say("%s was not loaded: %s" % (name, reason))
+            return
+        target = self._factory_target_channel()
+        chans = (1, 2) if self.link_both else (target,)
+
+        def adopt():
+            for ch in chans:
+                self.bands_by_ch[ch] = self.PR.to_bands(pr)
+                self.dyn_by_ch[ch] = {
+                    "gate": bool(pr.get("gate", {}).get("on")),
+                    "comp": bool(pr.get("comp", {}).get("on")),
+                    "lim": bool(pr.get("limit", {}).get("limiteron"))}
+                self.hpf_by_ch[ch] = float(
+                    pr.get("filter", {}).get("hpf", 24.0))
+                self.order_by_ch[ch] = bool(
+                    pr.get("opt", {}).get("swapcompeq", False))
+            self.invalidate_curve()
+            self._adopt_mute = True
+            try:
+                for ch in chans:
+                    self._adopt_band(ch)
+                    self._adopt_hpf_controls(ch, self.hpf_by_ch[ch])
+                    self._adopt_dynamics(ch, pr)
+                    for key in ("gate", "comp", "lim"):
+                        self.w[ch][key + "_on"].set_active(
+                            self.dyn_by_ch[ch][key])
+                    self.w[ch]["curve"].queue_draw()
+                self._sync_order_row(self._current_channel())
+            finally:
+                self._adopt_mute = False
+            for rack in self.racks.values():
+                rack.queue_draw()
+
+        def work(dev):
+            try:
+                # Block 201 is a singleton. When linked, assign/select/apply it
+                # once to the selected owner while applying Fat Channel to both.
+                for ch in chans:
+                    self.PR.apply_preset(
+                        dev, pr, ch, with_fx=bool(with_fx and ch == target))
+            except Exception as error:
+                GLib.idle_add(
+                    self.say, "%s load failed: %s" % (name, error))
+                return
+
+            def finished():
+                adopt()
+                channel_text = " and ".join(str(ch) for ch in chans)
+                self.say("Loaded %s on Channel%s %s" % (
+                    name, "s" if len(chans) > 1 else "", channel_text))
+                return False
+
+            GLib.idle_add(finished)
+
+        self.ctl.submit(work)
+
+    def _srow(self, title, lo, hi, step, val, fmt, cb, subtitle=None):
+        row = Adw.ActionRow(title=title)
+        if subtitle:
+            row.set_subtitle(subtitle)
+        sc = fader(lo, hi, step, vertical=False)
+        sc.set_value(val); sc.set_size_request(260, -1)
+        lbl = Gtk.Label(label=fmt(val), xalign=1.0)
+        lbl.add_css_class("numeric"); lbl.add_css_class("dim-label")
+        lbl.set_size_request(80, -1)
+        thr = Throttle(cb, 0.002)
+
+        def ch(w):
+            lbl.set_text(fmt(w.get_value()))
+            for c in getattr(self, "w", {}):
+                self.w[c]["curve"].queue_draw()
+                self.w[c]["comp_curve"].queue_draw()
+            # Adoption is a display update, not a delayed user write.  Guard
+            # before entering Throttle so no callback can escape after the
+            # adoption flag is lowered.
+            if not getattr(self, "_adopt_mute", False):
+                thr(w.get_value())
+        sc.connect("value-changed", ch)
+
+        # Double-click resets to this control's own default. Every fader is
+        # built here with its nominal value already in hand, so the behaviour
+        # comes for free and is consistent across the whole app rather than
+        # being remembered per-control. `val` is captured, so a slider always
+        # returns to what it was designed to sit at, not to wherever it started
+        # this session.
+        reset_on_double_click(sc, val, fmt)
+        row.set_tooltip_text("Double-click to reset to %s" % fmt(val))
+
+        row.add_suffix(sc); row.add_suffix(lbl)
+        return row, sc
+
+    # ------------------------------------------------------------- actions
+    def _set(self, param, channel, value):
+        ch = channel or 1
+        self.ctl.submit(lambda dev: self.ctl.dev.apply(param, ch, value, {}))
+
+    def _phones_source_changed(self, row, _pspec):
+        if getattr(self, "_phones_source_mute", False):
+            return
+        sources = ("main", "mixa", "mixb")
+        selected = max(0, min(2, int(row.get_selected())))
+        source = sources[selected]
+        self._set("phonesrc", None, source)
+
+    def select_band(self, i, ch=1):
+        self.w[ch]["bands"][i].set_active(True)
+
+    def _band_toggled(self, btn, idx, ch):
+        if not btn.get_active():
+            return
+        for i, b in enumerate(self.w[ch]["bands"]):
+            if i != idx:
+                b.set_active(False)
+        self.cur_band_by_ch[ch] = idx
+        self._adopt_band(ch)
+        self.w[ch]["curve"].queue_draw()
+
+    def _adopt_band(self, ch):
+        b = self.bands_by_ch[ch][self.cur_band_by_ch[ch]]
+        W = self.w[ch]
+        prior = self._adopt_mute
+        self._adopt_mute = True
+        try:
+            W["shape"].set_selected(SHAPES.index(b["shape"]))
+            W["freq"].set_value(b["freq"])
+            W["gain"].set_value(b["gain"])
+            W["q"].set_value(b["q"])
+        finally:
+            self._adopt_mute = prior
+
+    def _shape_changed(self, row, _p, ch):
+        self.bands_by_ch[ch][self.cur_band_by_ch[ch]]["shape"] = \
+            SHAPES[row.get_selected()]
+        if self._adopt_mute:
+            return
+        self._push_band(ch)
+
+    def _band_set(self, key, v, ch):
+        self.bands_by_ch[ch][self.cur_band_by_ch[ch]][key] = v
+        if self._adopt_mute:
+            return
+        self._push_band(ch)
+
+    def _link_changed(self, row, _p):
+        on = row.get_active()
+        self.link_both = on
+        # Drive the hardware too. Without this the app claimed the channels were
+        # linked while the device still had two independent mono inputs.
+        if not getattr(self, "_link_mute", False):
+            self.ctl.submit(lambda dev: dev.set_channel_link(on))
+        self._rebuild_chains()
+        # when linked, channel 2 mirrors channel 1, so its column is redundant
+        self.columns[2].set_sensitive(not self.link_both)
+        self.col_titles[2].set_label(
+            "Channel 2  (mirroring channel 1)" if self.link_both else "Channel 2")
+
+    def _sync_link_row(self):
+        """Follow the device's own stereo-link state (JaSt slot 42 bit 12).
+
+        The link can be changed on the hardware, so the switch has to track it
+        rather than only command it. `_link_mute` stops the resulting UI update
+        from being echoed straight back to the device.
+        """
+        row = getattr(self, "link_row", None)
+        if row is None:
+            return
+        dev_on = bool(self.ctl.snap.get("link"))
+        if dev_on != row.get_active():
+            self._link_mute = True
+            try:
+                row.set_active(dev_on)
+            finally:
+                self._link_mute = False
+
+    def _current_channel(self):
+        stack = getattr(self, "chan_stack", None)
+        if stack is None:
+            return 1
+        try:
+            return int(stack.get_visible_child_name())
+        except (TypeError, ValueError):
+            return 1
+
+    def _sync_order_row(self, ch):
+        row = getattr(self, "order_row", None)
+        if row is None:
+            return
+        self._order_mute = True
+        try:
+            row.set_selected(1 if self.order_by_ch.get(ch, False) else 0)
+        finally:
+            self._order_mute = False
+
+    def _order_changed(self, row, _p):
+        if self._order_mute or self._adopt_mute:
+            return
+        ch = self._current_channel()
+        eq_first = row.get_selected() == 1
+        for c in ((1, 2) if self.link_both else (ch,)):
+            self.order_by_ch[c] = eq_first
+        self.set_order(ch, eq_first)
+
+    def _push_band(self, ch):
+        self.invalidate_curve()
+        i = self.cur_band_by_ch[ch]
+        b = dict(self.bands_by_ch[ch][i])
+        for c in ((1, 2) if self.link_both else (ch,)):
+            if c != ch:
+                self.bands_by_ch[c][i] = dict(b)
+                self._adopt_band(c)
+            self.ctl.submit(lambda dev, x=c: dev.set_eq_band(
+                x, i, b["shape"], b["freq"], b["gain"], b["q"]))
+        for c in self.w:
+            self.w[c]["curve"].queue_draw()
+
+    def _eq_flat(self, ch):
+        self.invalidate_curve()
+        for c in ((1, 2) if self.link_both else (ch,)):
+            for b in self.bands_by_ch[c]:
+                b["shape"] = "off"
+            self.ctl.submit(lambda dev, x=c: dev.eq_off(x))
+            prior = self._adopt_mute
+            self._adopt_mute = True
+            try:
+                self.w[c]["shape"].set_selected(0)
+            finally:
+                self._adopt_mute = prior
+            self.w[c]["curve"].queue_draw()
+
+    # Exact public field contract used by the exhaustive parameter inventory.
+    # Do not merge these sets merely because all three builders emit cpxt.
+    COMPRESSOR_COMMON_FIELDS = ("on", "model", "keyfilter_hz", "keylisten")
+    COMPRESSOR_MODEL_FIELDS = {
+        0: ("threshold_db", "ratio", "attack_s", "release_s", "gain_db",
+            "softknee", "automode"),
+        1: ("peak", "gain", "limit_mode"),
+        2: ("input_db", "output_db", "attack_s", "release_s", "ratio_index"),
+    }
+
+    def _comp_model_changed(self, ch):
+        W = self.w[ch]
+        model = max(0, min(2, W["model"].get_selected()))
+        W["comp_param_stack"].set_visible_child_name(
+            ("standard", "tube", "fet")[model])
+        W["comp_curve"].queue_draw()
+        if not self._adopt_mute:
+            self._dyn_push("comp", ch)
+
+    def _compressor_kwargs(self, ch):
+        """Return the exact selected compressor builder call."""
+        W = self.w[ch]
+        model = max(0, min(2, W["model"].get_selected()))
+        common = {
+            "on": True,
+            "keyfilter_hz": (0.0 if W["ckey"].get_value() <= 41
+                             else W["ckey"].get_value()),
+            "keylisten": W["cklisten"].get_active(),
+        }
+        if model == 0:
+            specific = {
+                "threshold_db": W["cth"].get_value(),
+                "ratio": W["rat"].get_value(),
+                "attack_s": W["catk"].get_value(),
+                "release_s": W["crel"].get_value(),
+                "gain_db": W["mk"].get_value(),
+                "softknee": W["knee"].get_active(),
+                "automode": W["auto"].get_active(),
+            }
+        elif model == 1:
+            specific = {
+                "peak": W["tpeak"].get_value(),
+                "gain": W["tgain"].get_value(),
+                "limit_mode": W["climit"].get_active(),
+            }
+        else:
+            specific = {
+                "input_db": W["finput"].get_value(),
+                "output_db": W["foutput"].get_value(),
+                "attack_s": W["fatk"].get_value(),
+                "release_s": W["frel"].get_value(),
+                "ratio_index": W["fratio"].get_selected(),
+            }
+        specific.update(common)
+        return model, specific
+
+    def compressor_transfer(self, ch):
+        """Transfer parameters decoded from the same cpxt blob we transmit."""
+        model, kw = self._compressor_kwargs(ch)
+        builder = (io24_dsp.cpxt_comp, io24_dsp.cpxt_tube,
+                   io24_dsp.cpxt_fet)[model]
+        blob = builder(index=0, fs=48000.0, **kw)
+        _attack, _release, slope, _knee, threshold, makeup = \
+            struct.unpack_from("<6f", blob, 0x20)
+        ratio = 1.0 / max(1e-6, 1.0 - slope)
+        gain_db = 20.0 * math.log10(max(makeup, 1e-12))
+        return (max(-60.0, min(0.0, threshold)), max(1.0, ratio),
+                gain_db, ("Standard", "Tube", "FET")[model])
+
+    def _adopt_dynamics(self, ch, preset):
+        """Populate every Fat Channel widget without emitting a USB write."""
+        W = self.w[ch]
+        prior = self._adopt_mute
+        self._adopt_mute = True
+        try:
+            gate = preset.get("gate") or {}
+            if gate:
+                W["gth"].set_value(float(gate.get("threshold", -40.0)))
+                W["grange"].set_value(float(gate.get("range", -60.0)))
+                W["gatk"].set_value(float(gate.get("attack", 0.005)))
+                W["grel"].set_value(float(gate.get("release", 0.3)))
+                W["gkey"].set_value(max(40.0, float(gate.get("keyfilter", 0.0))))
+                W["gklisten"].set_active(bool(gate.get("keylisten", 0)))
+                W["gexp"].set_active(bool(gate.get("expander", 1)))
+
+            comp = preset.get("comp") or {}
+            model_name = io24_presets.compressor_model(comp)
+            model = {None: 0, "standard": 0, "tube": 1, "fet": 2}[model_name]
+            W["model"].set_selected(model)
+            W["comp_param_stack"].set_visible_child_name(
+                ("standard", "tube", "fet")[model])
+            W["ckey"].set_value(max(40.0, float(comp.get("keyfilter", 0.0))))
+            W["cklisten"].set_active(bool(comp.get("keylisten", 0)))
+            if model == 0:
+                W["cth"].set_value(float(comp.get("threshold", 0.0)))
+                W["rat"].set_value(float(comp.get("ratio", 2.0)))
+                W["catk"].set_value(float(comp.get("attack", 0.02)))
+                W["crel"].set_value(float(comp.get("release", 0.15)))
+                W["mk"].set_value(float(comp.get("gain", 0.0)))
+                W["knee"].set_active(bool(comp.get("softknee", 0)))
+                W["auto"].set_active(bool(comp.get("automode", 0)))
+            elif model == 1:
+                W["tpeak"].set_value(float(comp.get("peak", 0.0)))
+                W["tgain"].set_value(float(comp.get("gain", 40.0)))
+                W["climit"].set_active(bool(comp.get("mode", 0)))
+            else:
+                W["finput"].set_value(float(comp.get("input", -43.0)))
+                W["foutput"].set_value(float(comp.get("output", 0.0)))
+                W["fatk"].set_value(float(comp.get("attack", 0.0001)))
+                W["frel"].set_value(float(comp.get("release", 0.25)))
+                W["fratio"].set_selected(max(0, min(4, int(comp.get("ratio", 0)))))
+
+            limit = preset.get("limit") or {}
+            if limit:
+                W["lth"].set_value(float(limit.get("threshold", -28.0)))
+        finally:
+            self._adopt_mute = prior
+
+    def _adopt_compressor_kwargs(self, ch, call):
+        """Adopt one shadowed set_compressor/compressor_off call silently."""
+        W = self.w[ch]
+        model = max(0, min(2, int(call.get("model", 0))))
+        W["model"].set_selected(model)
+        W["comp_param_stack"].set_visible_child_name(
+            ("standard", "tube", "fet")[model])
+        W["ckey"].set_value(max(40.0, float(call.get("keyfilter_hz", 0.0))))
+        W["cklisten"].set_active(bool(call.get("keylisten", False)))
+        if model == 0:
+            W["cth"].set_value(float(call.get("threshold_db", 0.0)))
+            W["rat"].set_value(float(call.get("ratio", 2.0)))
+            W["catk"].set_value(float(call.get("attack_s", 0.02)))
+            W["crel"].set_value(float(call.get("release_s", 0.15)))
+            W["mk"].set_value(float(call.get("gain_db", 0.0)))
+            W["knee"].set_active(bool(call.get("softknee", False)))
+            W["auto"].set_active(bool(call.get("automode", False)))
+        elif model == 1:
+            W["tpeak"].set_value(float(call.get("peak", 0.0)))
+            W["tgain"].set_value(float(call.get("gain", 40.0)))
+            W["climit"].set_active(bool(call.get("limit_mode", False)))
+        else:
+            W["finput"].set_value(float(call.get("input_db", -43.0)))
+            W["foutput"].set_value(float(call.get("output_db", 0.0)))
+            W["fatk"].set_value(float(call.get("attack_s", 0.0001)))
+            W["frel"].set_value(float(call.get("release_s", 0.25)))
+            W["fratio"].set_selected(max(
+                0, min(4, int(call.get("ratio_index", 0)))))
+
+    def _mirror_dynamics_widgets(self, key, source, target):
+        """Keep the hidden linked strip identical without echoing writes."""
+        src, dst = self.w[source], self.w[target]
+        prior = self._adopt_mute
+        self._adopt_mute = True
+        try:
+            if key == "gate":
+                for name in ("gth", "grange", "gatk", "grel", "gkey"):
+                    dst[name].set_value(src[name].get_value())
+                for name in ("gklisten", "gexp"):
+                    dst[name].set_active(src[name].get_active())
+            elif key == "comp":
+                model = src["model"].get_selected()
+                dst["model"].set_selected(model)
+                dst["comp_param_stack"].set_visible_child_name(
+                    ("standard", "tube", "fet")[model])
+                slider_names = {
+                    0: ("cth", "rat", "catk", "crel", "mk"),
+                    1: ("tpeak", "tgain"),
+                    2: ("finput", "foutput", "fatk", "frel"),
+                }[model]
+                for name in slider_names + ("ckey",):
+                    dst[name].set_value(src[name].get_value())
+                dst["cklisten"].set_active(src["cklisten"].get_active())
+                if model == 0:
+                    for name in ("knee", "auto"):
+                        dst[name].set_active(src[name].get_active())
+                elif model == 1:
+                    dst["climit"].set_active(src["climit"].get_active())
+                else:
+                    dst["fratio"].set_selected(src["fratio"].get_selected())
+            else:
+                dst["lth"].set_value(src["lth"].get_value())
+        finally:
+            self._adopt_mute = prior
+
+    def _dyn_toggle(self, row, _p, key, ch):
+        self.dyn_by_ch[ch][key] = row.get_active()
+        if self._adopt_mute:
+            return
+        self._dyn_push(key, ch)
+
+    def _dyn_push(self, key, ch):
+        if self._adopt_mute:
+            return
+        on = self.dyn_by_ch[ch][key]
+        W = self.w[ch]
+        for c in ((1, 2) if self.link_both else (ch,)):
+            if c != ch:
+                self.dyn_by_ch[c][key] = on
+                prior = self._adopt_mute
+                self._adopt_mute = True
+                try:
+                    self.w[c][key + "_on"].set_active(on)
+                finally:
+                    self._adopt_mute = prior
+                self._mirror_dynamics_widgets(key, ch, c)
+            if key == "gate":
+                kw = dict(threshold_db=W["gth"].get_value(),
+                          range_db=W["grange"].get_value(),
+                          attack_s=W["gatk"].get_value(),
+                          release_s=W["grel"].get_value(),
+                          keyfilter_hz=(0.0 if W["gkey"].get_value() <= 41
+                                        else W["gkey"].get_value()),
+                          keylisten=W["gklisten"].get_active(),
+                          expander=W["gexp"].get_active())
+                self.ctl.submit(lambda dev, x=c, k=kw: dev.set_gate(x, on=True, **k)
+                                if on else dev.gate_off(x))
+            elif key == "comp":
+                model, kw = self._compressor_kwargs(ch)
+                self.ctl.submit(
+                    lambda dev, x=c, m=model, k=kw: dev.set_compressor(x, model=m, **k)
+                    if on else dev.compressor_off(x))
+            else:
+                th = W["lth"].get_value()
+                self.ctl.submit(lambda dev, x=c: dev.set_limiter(x, on, th))
+        W["comp_curve"].queue_draw()
+        for r in self.racks.values():
+            r.queue_draw()
+
+    def invalidate_curve(self):
+        self._curves = {}
+
+    def curve_points(self, w, h, ch=1):
+        """The response polyline, cached.
+
+        This used to be recomputed per pixel per frame — about 800 evaluations,
+        each looping four biquads with trig, 30 times a second. It only changes
+        when a band changes, so cache it against the band state and the width.
+        """
+        key = (int(w), int(h), ch,
+               tuple((b["shape"], round(b["freq"], 2), round(b["gain"], 3),
+                      round(b["q"], 3)) for b in self.bands_by_ch[ch]))
+        cache = getattr(self, "_curves", None)
+        if cache is None:
+            cache = self._curves = {}
+        if cache.get(ch, (None, None))[0] == key:
+            return cache[ch][1]
+        step = max(1, int(w // 320))
+        pts = []
+        for px in range(0, int(w) + 1, step):
+            f = 20.0 * (24000 / 20.0) ** (px / max(w, 1))
+            y = h / 2 - self.response_for(ch, f) / 18.0 * (h / 2)
+            pts.append((px, max(1, min(h - 1, y))))
+        cache[ch] = (key, pts)
+        return pts
+
+    def response_db(self, f, fs=48000.0):
+        """Legacy single-channel helper, kept for the web UI's shared maths."""
+        return self.response_for(1, f, fs)
+
+    def _unused_response(self, f, fs=48000.0):
+        re, im = 1.0, 0.0
+        for b in self.bands_by_ch[1]:
+            c = self._biquad(b, fs)
+            if not c:
+                continue
+            b0, b1, b2, a1, a2 = c
+            om = 2 * math.pi * f / fs
+            c1, s1 = math.cos(-om), math.sin(-om)
+            c2, s2 = math.cos(-2 * om), math.sin(-2 * om)
+            nr, ni = b0 + b1 * c1 + b2 * c2, b1 * s1 + b2 * s2
+            dr, di = 1 + a1 * c1 + a2 * c2, a1 * s1 + a2 * s2
+            dd = dr * dr + di * di or 1e-12
+            hr, hi = (nr * dr + ni * di) / dd, (ni * dr - nr * di) / dd
+            re, im = re * hr - im * hi, re * hi + im * hr
+        return 20 * math.log10(max(math.hypot(re, im), 1e-6))
+
+    def _biquad(self, b, fs=48000.0):
+        if b["shape"] == "off":
+            return None
+        A = 10.0 ** (b["gain"] / 40.0)
+        w = 2 * math.pi * b["freq"] / fs
+        cw, sw = math.cos(w), math.sin(w)
+        al = sw / (2 * b["q"])
+        s = b["shape"]
+        if s == "peaking":
+            a0 = 1 + al / A
+            return ((1 + al * A) / a0, -2 * cw / a0, (1 - al * A) / a0,
+                    -2 * cw / a0, (1 - al / A) / a0)
+        if s == "highshelf":
+            # Reorder the exact wire fields [b0,-a1,b1,-a2,b2] into the
+            # conventional transfer-function tuple used by this graph.
+            wire = io24.biquad_highshelf(
+                b["freq"], b["gain"], fs, b["q"])
+            return (wire[0], wire[2], wire[4], -wire[1], -wire[3])
+        if s == "lowshelf":
+            be = math.sqrt(A) / b["q"] * sw
+            a0 = (A + 1) + (A - 1) * cw + be
+            return (A * ((A + 1) - (A - 1) * cw + be) / a0,
+                    2 * A * ((A - 1) - (A + 1) * cw) / a0,
+                    A * ((A + 1) - (A - 1) * cw - be) / a0,
+                    -2 * ((A - 1) + (A + 1) * cw) / a0,
+                    ((A + 1) + (A - 1) * cw - be) / a0)
+        a0 = 1 + al
+        if s == "hp":
+            return ((1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0,
+                    -2 * cw / a0, (1 - al) / a0)
+        return ((1 - cw) / 2 / a0, (1 - cw) / a0, (1 - cw) / 2 / a0,
+                -2 * cw / a0, (1 - al) / a0)
+
+    def on_save(self, *_a):
+        self._pick(True)
+
+    def on_load(self, *_a):
+        self._pick(False)
+
+    def _pick(self, saving):
+        dlg = Gtk.FileDialog(
+            title="Save Host snapshot" if saving else "Load Host snapshot",
+            initial_name="io24-host-snapshot.json")
+
+        def done(d, res):
+            try:
+                f = d.save_finish(res) if saving else d.open_finish(res)
+            except GLib.Error:
+                return
+            p = f.get_path()
+            host_features = None
+            if saving:
+                try:
+                    host_features = {"pan": self._pan_snapshot_state()}
+                    multiband = self._mbc_snapshot_state()
+                    if multiband is not None:
+                        host_features["multiband"] = multiband
+                except Exception as error:
+                    self.say("Save failed before writing: %s" % error)
+                    return
+
+            # The work happens on the USB thread, so the result is not known
+            # here. Announcing "Saved" at this point was a lie the user could
+            # not detect: a preset that failed to write still said it worked.
+            # Report from the worker, once there is something to report.
+            def work(dev, path=p, sv=saving, features=host_features):
+                try:
+                    if sv:
+                        snap = dev.save_preset(
+                            path, host_features=features)
+                        msg = "Saved %d host-file settings to %s" % (
+                            len(snap["calls"]) + len(snap["live"]),
+                            os.path.basename(path))
+                        quarantined = snap.get(
+                            "quarantined_device_preset_calls", 0)
+                    else:
+                        n_live, n_calls = dev.load_preset(path)
+                        msg = "Loaded %d host-file settings from %s" % (
+                            n_live + n_calls, os.path.basename(path))
+                        load_report = getattr(
+                            dev, "_last_preset_load_report", {})
+                        quarantined = load_report.get(
+                            "quarantined_device_preset_calls", 0)
+                        # Capture the exact post-load mirror while still on the
+                        # serialized worker.  The GTK thread then adopts it as
+                        # display state without touching USB.
+                        mirror = json.loads(json.dumps(dev._shadow))
+                        host_state = load_report.get("host_features", {})
+                        host_migrations = load_report.get(
+                            "host_feature_migrations", [])
+                    if quarantined:
+                        msg += ("; left %d device-slot selector entr%s "
+                                "untouched" %
+                                (quarantined,
+                                 "y" if quarantined == 1 else "ies"))
+                except Exception as e:
+                    msg = "%s failed: %s" % ("Save" if sv else "Load", e)
+                if not sv and "mirror" in locals():
+                    GLib.idle_add(
+                        self._after_load, mirror, host_state,
+                        host_migrations, msg)
+                else:
+                    GLib.idle_add(self.say, msg)
+            self.ctl.submit(work)
+        (dlg.save if saving else dlg.open)(self, None, done)
+
+    def _after_load(self, mirror=None, host_features=None,
+                    host_feature_migrations=None, completion_message=None):
+        """Pull the widgets back into line with what the preset just applied.
+
+        Loading replays a pile of setters straight into the driver, so every
+        control that mirrors driver state -- the mixer sliders, the bus masters
+        -- is now stale. Nothing reads back from the device here; this is the
+        shadow, which is all a write-only DSP can offer.
+        """
+        try:
+            self._sync_mix_widgets()
+        except Exception:
+            pass
+        if mirror is None:
+            try:
+                mirror = json.loads(json.dumps(self.ctl.dev.dev._shadow))
+            except Exception:
+                mirror = {}
+        state = shadow_ui_state(mirror)
+
+        prior_adopt = self._adopt_mute
+        prior_fx = self._fx_mute
+        prior_delay = getattr(self, "_delay_mute", False)
+        prior_preset = getattr(self, "_preset_sync", False)
+        prior_phones = getattr(self, "_phones_source_mute", False)
+        self._adopt_mute = True
+        self._fx_mute = True
+        self._delay_mute = True
+        self._preset_sync = True
+        self._phones_source_mute = True
+        try:
+            # The input-strip high-pass toggle is an Appl control, distinct
+            # from the Fat Channel's continuously variable low cut.
+            for ch, on in state["hpf_toggle"].items():
+                live = getattr(self, "hpf_live", {}).get(ch)
+                if live is not None:
+                    live.mute = True
+                    try:
+                        live.w.set_active(on)
+                        live.touched = 0.0
+                    finally:
+                        live.mute = False
+
+            for ch in (1, 2):
+                if ch in state["hpf_freq"]:
+                    hz = state["hpf_freq"][ch]
+                    self._adopt_hpf_controls(ch, hz)
+                for band, values in state["eq"][ch].items():
+                    self.bands_by_ch[ch][band] = dict(values)
+                if state["eq"][ch]:
+                    self._adopt_band(ch)
+
+                gate = state["gate"].get(ch)
+                if gate is not None:
+                    on = bool(gate.get("on"))
+                    self.dyn_by_ch[ch]["gate"] = on
+                    self.w[ch]["gate_on"].set_active(on)
+                    if on:
+                        self.w[ch]["gth"].set_value(float(
+                            gate.get("threshold_db", -40.0)))
+                        self.w[ch]["grange"].set_value(float(
+                            gate.get("range_db", -60.0)))
+                        self.w[ch]["gatk"].set_value(float(
+                            gate.get("attack_s", 0.005)))
+                        self.w[ch]["grel"].set_value(float(
+                            gate.get("release_s", 0.3)))
+                        self.w[ch]["gkey"].set_value(max(
+                            40.0, float(gate.get("keyfilter_hz", 0.0))))
+                        self.w[ch]["gklisten"].set_active(bool(
+                            gate.get("keylisten", False)))
+                        self.w[ch]["gexp"].set_active(bool(
+                            gate.get("expander", True)))
+
+                comp = state["compressor"].get(ch)
+                if comp is not None:
+                    on = bool(comp.get("on"))
+                    self.dyn_by_ch[ch]["comp"] = on
+                    self.w[ch]["comp_on"].set_active(on)
+                    if on:
+                        self._adopt_compressor_kwargs(ch, comp)
+
+                limiter = state["limiter"].get(ch)
+                if limiter is not None:
+                    on = bool(limiter.get("on"))
+                    self.dyn_by_ch[ch]["lim"] = on
+                    self.w[ch]["lim_on"].set_active(on)
+                    self.w[ch]["lth"].set_value(float(
+                        limiter.get("threshold_db", -28.0)))
+
+                if ch in state["order"]:
+                    self.order_by_ch[ch] = state["order"][ch]
+
+            self._sync_order_row(self._current_channel())
+
+            reverb = state["reverb"]
+            if reverb is not None:
+                self.rev_type.set_selected(0)
+                self.rev_on.set_active(bool(reverb.get("on", True)))
+                self.s_rsize.set_value(float(reverb.get("size", 0.5)))
+                self.s_rmix.set_value(float(reverb.get("mix", 0.3)))
+                self.s_rhp.set_value(float(reverb.get("hp_freq", 200.0)))
+                self.s_rpre.set_value(float(reverb.get("predelay", 0.02)))
+            for ch, value in state["processing_mix"].items():
+                control = getattr(self, "processing_mix_controls", {}).get(ch)
+                if control is not None:
+                    control.set_value(value)
+                    self._mark_processing_mix_known(ch)
+            for bus, value in state["reverb_return"].items():
+                control = getattr(self, "rev_return_controls", {}).get(bus)
+                if control is not None and value is not None:
+                    control.set_value(max(-60.0, min(10.0, float(value))))
+
+            voicefx = state["voicefx"]
+            if voicefx is not None:
+                model = str(voicefx.get("model", "transformer")).lower()
+                if model in self.FX_ORDER:
+                    index = self.FX_ORDER.index(model)
+                    self.fx_model.set_selected(index)
+                    self.fx_param_stack.set_visible_child_name(model)
+                    for name, control in self.fx_params[model].items():
+                        if name in voicefx:
+                            control.set_value(voicefx[name])
+                    self.fx_arm.set_active(bool(voicefx.get("on", True)))
+                    self.fx_visual.set_model(model)
+            target = state["voicefx_target"]
+            if target in (1, 2):
+                self.fx_target.set_selected(target - 1)
+
+            mode = state["preset_mode"]
+            if mode in (0, 1, 2):
+                self.preset_mode_row.set_selected(mode)
+            for ch, slot in state["preset_slot"].items():
+                row = self.preset_rows.get(ch)
+                if row is not None:
+                    local = slot - self.PRESET_BASE[ch]
+                    row[1].set_selected(local if 0 <= local <= 1 else -1)
+
+            bus = state["output_delay_bus"]
+            if bus is not None:
+                names = [name for name, _title in self._delay_buses]
+                canonical = io24.Io24.BUS_ALIASES.get(bus.lower(), bus.lower())
+                if canonical in names:
+                    self.delay_bus_row.set_selected(names.index(canonical))
+                    self.delay_scale.set_sensitive(canonical != "off")
+            if state["output_delay"] is not None:
+                self.delay_scale.set_value(state["output_delay"] * 1000.0)
+
+            if state["phones_source"] in (0, 1, 2):
+                self.phones_source_row.set_selected(state["phones_source"])
+
+            if state["link"] is not None and \
+                    self.link_row.get_active() != state["link"]:
+                prior_link = getattr(self, "_link_mute", False)
+                self._link_mute = True
+                try:
+                    self.link_row.set_active(state["link"])
+                finally:
+                    self._link_mute = prior_link
+        finally:
+            self._phones_source_mute = prior_phones
+            self._preset_sync = prior_preset
+            self._delay_mute = prior_delay
+            self._fx_mute = prior_fx
+            self._adopt_mute = prior_adopt
+
+        self.invalidate_curve()
+        for ch in (1, 2):
+            self.w[ch]["curve"].queue_draw()
+            self.w[ch]["comp_curve"].queue_draw()
+        for rack in self.racks.values():
+            rack.queue_draw()
+        host_messages = []
+        if host_features:
+            pan_message = self._adopt_pan_state(host_features.get("pan"))
+            multiband_message = self._adopt_mbc_state(
+                host_features.get("multiband"))
+            host_messages = [message for message in
+                             (pan_message, multiband_message) if message]
+        if completion_message is not None:
+            completion_message = append_host_migration_notices(
+                completion_message, host_feature_migrations)
+            if host_messages:
+                completion_message += "; " + "; ".join(host_messages)
+            self.say(completion_message)
+        return False
+
+    # -------------------------------------------------------------- 30 fps
+    def _tick(self):
+        """30 fps, but only for what is actually on screen.
+
+        Redrawing every meter, the chain and both curves each frame — including
+        the page the user cannot see — was what made the display feel sluggish.
+        The USB read behind it costs 0.34 ms; the drawing was the expensive part.
+        """
+        if self.ctl.snap["alive"]:
+            self._sync_link_row()
+        if PROFILE:
+            now = time.monotonic()
+            self._frames.append(now)
+            if now - self._frames[0] > 3.0:
+                n = len(self._frames)
+                gaps = [(self._frames[i + 1] - self._frames[i]) * 1000
+                        for i in range(n - 1)]
+                gaps.sort()
+                print("  UI %5.1f fps   gap med %5.1f ms  p95 %5.1f ms  max %6.1f ms"
+                      % (n / (now - self._frames[0]), gaps[len(gaps) // 2],
+                         gaps[int(len(gaps) * .95)], gaps[-1]), flush=True)
+                self._frames = [now]
+        s = self.ctl.snap
+        page = self.stack.get_visible_child_name() if self.stack else "mix"
+
+        if page == "mix":
+            self.meters["in1"].set_db(s["in"][0])
+            self.meters["in2"].set_db(s["in"][1])
+            for bus in ("main", "mixa", "mixb"):
+                for side in (0, 1):
+                    self.meters["%s%d" % (bus, side)].set_db(s[bus][side])
+            for ch, bars in getattr(self, "gr_bars", {}).items():
+                for k, bar in bars.items():
+                    bar.set_db(s["gr"].get(ch, {}).get(k, 0.0))
+        else:
+            self._half = not getattr(self, "_half", False)
+            if self._half:                    # 15 fps is plenty for these
+                for r in self.racks.values():
+                    r.queue_draw()
+                for c in self.w:
+                    self.w[c]["comp_curve"].queue_draw()
+                    self.w[c]["curve"].queue_draw()
+
+        # Following the hardware is cheap and must happen on both pages — but
+        # ONLY while there is hardware to follow. Without this gate the app
+        # pulled snap DEFAULTS into every widget while offline: blend snapped
+        # back to centre after each drag, 48V/Mute unlit themselves (Low cut
+        # alone stayed lit, having no read-back), and Stereo link sprang back —
+        # three "broken controls" with this single cause.
+        if not s["alive"]:
+            return True
+        for ch in (1, 2):
+            self.gain_faders[ch].pull(s["gain"][ch - 1])
+            self.phantom_live[ch].pull(s["phantom"][ch - 1])
+        self.mon["mainvol"].pull(s["mainvol"])
+        self.mon["hp"].pull(s["hp"])
+        if getattr(self, "blend_knob", None) is not None:
+            # device reports -1..+1; the knob is 0..1
+            self.blend_knob.adopt((s["blend"] + 1.0) / 2.0)
+        # hardware buttons the device does report back
+        for ch in (1, 2):
+            self.mute_live[ch].pull(s["mute"][ch - 1])
+        self.mon["hpmute"].pull(s["hpmute"])
+        self.mon["link"].pull(s["link"])
+        poff = s.get("preset_off", [False, False])
+        pslot = s.get("preset_slot", [0, 0])
+        rows = getattr(self, "preset_rows", {})
+        if rows:
+            self._preset_sync = True          # suppress the write-back handlers
+            try:
+                for ch, (status_row, sl) in rows.items():
+                    if poff[ch - 1]:
+                        status_row.set_subtitle(
+                            "Device reports bypass (exact 0%); set mix on "
+                            "the Effects page")
+                    else:
+                        status_row.set_subtitle(
+                            "Device reports processing active (>0); exact "
+                            "mix is Host-write-only")
+                    local = pslot[ch - 1] - self.PRESET_BASE[ch]
+                    if 0 <= local <= 1:
+                        if sl.get_selected() != local:
+                            sl.set_selected(local)
+                    else:
+                        sl.set_selected(-1)   # out of this channel's pair
+            finally:
+                self._preset_sync = False
+        for ch, indicator in getattr(self, "preset_indicators", {}).items():
+            local = pslot[ch - 1] - self.PRESET_BASE[ch]
+            indicator.set_state(
+                local if 0 <= local <= 1 else None,
+                not poff[ch - 1])
+        for r in self.racks.values():
+            if r.get_mapped():
+                r.queue_draw()
+        muted = s.get("mainmute")
+        self.mainmute_row.set_text("Main out: MUTED" if muted else "Main out: on")
+        if muted:
+            self.mainmute_row.add_css_class("error")
+        else:
+            self.mainmute_row.remove_css_class("error")
+        self.status.set_text("" if s["alive"] else (s["error"] or "no device"))
+        return True
+
+
+# Styling for the chrome around the canvases. libadwaita gives a good neutral
+# desktop app; this makes it read as a piece of audio equipment instead —
+# darker ground, a cyan accent that matches the traces, and tabular figures for
+# every number so readouts stop jittering as digits change width.
+#
+# Deliberately restrained: it recolours and tightens what libadwaita already
+# lays out rather than re-skinning widgets wholesale, because a hand-rolled
+# theme breaks on the next Adwaita release and this has to keep working.
+CSS = """
+:root, window.background {
+  --io24-accent: #3dd6de;
+  --io24-ground: #080b12;
+}
+window.background { background-color: #080b12; }
+
+headerbar {
+  background: linear-gradient(180deg, #131a26 0%, #0c111a 100%);
+  box-shadow: inset 0 -1px 0 alpha(#3dd6de, 0.22);
+}
+headerbar windowtitle { letter-spacing: 0.4px; }
+
+/* readouts: tabular figures so numbers stop dancing as digits change width */
+.numeric, .io24-readout {
+  font-family: "JetBrains Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0.2px;
+}
+.io24-readout { color: #3dd6de; }
+
+/* panels: a faint lit edge rather than a hard border */
+.card, preferencesgroup > box > box {
+  background-color: alpha(#16202e, 0.55);
+  border: 1px solid alpha(#3dd6de, 0.10);
+  border-radius: 10px;
+}
+
+/* Group headers. They were plain, tall, and the descriptions under them ran to
+   several lines of body text that pushed the actual controls off screen. Now:
+   a compact uppercase title with a lit rule beside it, and descriptions
+   demoted to small dim text with the leading pulled in. Same information,
+   roughly half the vertical space. */
+preferencesgroup > box > label:first-child {
+  color: #EDE8DC;
+  font-weight: 600;
+  font-size: 0.98em;
+  letter-spacing: 0.4px;
+  margin-top: 12px;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid alpha(#59D6C9, 0.35);
+}
+preferencesgroup > box > label:nth-child(2) {
+  font-size: 0.78em;
+  opacity: 0.5;
+  margin-top: 0;
+  margin-bottom: 3px;
+}
+preferencesgroup { margin-top: 1px; margin-bottom: 1px; }
+preferencesgroup > box { margin-top: 0; }
+preferencespage > scrolledwindow > viewport > clamp > box { margin-top: 4px; }
+
+/* Rows were 38px of mostly padding. The controls are what people came for, so
+   the chrome around them gets pulled in hard: shorter rows, tighter headers,
+   and subtitles small enough to be reference rather than prose. */
+row { min-height: 30px; }
+row > box.header { margin-top: 0; margin-bottom: 0; }
+row > box.header > label.title { font-size: 0.90em; }
+row > box.header > label.subtitle {
+  font-size: 0.76em; opacity: 0.48; margin-top: -1px;
+}
+row.property > box.header > label.title { font-size: 0.90em; }
+switchrow, actionrow, comborow { padding-top: 1px; padding-bottom: 1px; }
+
+switch:checked { background-color: alpha(#3dd6de, 0.85); }
+
+/* Toggles are instrument switches, not dialog buttons: a dark chip at rest,
+   lit phosphor when engaged. The stock pill was brighter than anything else
+   on the page and read as a leftover from the light theme. */
+button.toggle {
+  background-image: none;
+  background-color: #141b26;
+  border: 1px solid alpha(#3dd6de, 0.16);
+  color: #c8d4e0;
+}
+button.toggle:hover { border-color: alpha(#3dd6de, 0.45); }
+button.toggle:checked {
+  background-color: alpha(#3dd6de, 0.18);
+  border-color: alpha(#3dd6de, 0.75);
+  color: #eafcff;
+  box-shadow: 0 0 10px alpha(#3dd6de, 0.35);
+}
+
+/* Faders as console hardware: a narrow recessed track, a lit travelled
+   section, and a rectangular cap with a centre line — the shape your eye
+   uses to read position on a real desk. Round handles read as scrollbars. */
+scale trough {
+  min-height: 5px; min-width: 5px;
+  background-color: #05070c;
+  border: 1px solid alpha(#3dd6de, 0.13);
+  border-radius: 3px;
+}
+scale highlight {
+  background-image: linear-gradient(90deg, alpha(#3dd6de,0.55), #3dd6de);
+  box-shadow: 0 0 7px alpha(#3dd6de, 0.55);
+  border-radius: 3px;
+}
+scale.vertical highlight {
+  background-image: linear-gradient(0deg, alpha(#3dd6de,0.55), #3dd6de);
+}
+scale slider {
+  min-width: 15px; min-height: 26px;
+  border-radius: 3px;
+  background-image: linear-gradient(180deg, #e8eff7 0%, #aebccd 48%, #7d8b9c 52%, #cfd9e6 100%);
+  border: 1px solid alpha(#0a0f16, 0.9);
+  box-shadow: 0 1px 3px alpha(#000,0.6), 0 0 6px alpha(#3dd6de,0.30);
+}
+scale.vertical slider { min-width: 26px; min-height: 15px; }
+scale slider:hover  { box-shadow: 0 1px 3px alpha(#000,0.6), 0 0 10px alpha(#3dd6de,0.6); }
+scale:disabled trough, scale:disabled highlight { opacity: 0.35; }
+
+/* Routing matrix: each bus keeps its own colour, so a row of three faders
+   reads as three destinations rather than one control repeated. */
+scale.bus-mixa highlight {
+  background-image: linear-gradient(90deg, alpha(#a78bfa,0.55), #a78bfa);
+  box-shadow: 0 0 7px alpha(#a78bfa, 0.5);
+}
+scale.bus-mixb highlight {
+  background-image: linear-gradient(90deg, alpha(#2ad99e,0.55), #2ad99e);
+  box-shadow: 0 0 7px alpha(#2ad99e, 0.5);
+}
+button.suggested-action { background-color: #2aa9b4; color: #04252a; }
+.numeric { font-feature-settings: "tnum"; letter-spacing: 0.02em; }
+.io24-danger { color: #fa4a5c; }
+.io24-slot { font-weight: 700; font-size: 0.95em; }
+.io24-slot:checked {
+  background-image: linear-gradient(180deg, alpha(#3dd6de,0.30), alpha(#3dd6de,0.16));
+  box-shadow: inset 0 0 0 1px alpha(#3dd6de,0.75), 0 0 8px alpha(#3dd6de,0.45);
+  color: #eafcff;
+}
+.io24-slot-hw { border-bottom: 2px solid alpha(#3dd6de, 0.45); }
+stackswitcher button:checked { box-shadow: inset 0 -2px 0 #3dd6de; }
+
+/* The page tabs inherit the chip look only when active: six bordered boxes in
+   the header was noise, but the current page deserves to be lit. */
+viewswitcher button.toggle {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+viewswitcher button.toggle:hover { border-color: alpha(#3dd6de, 0.30); }
+viewswitcher button.toggle:checked {
+  background-color: alpha(#3dd6de, 0.12);
+  border-color: alpha(#3dd6de, 0.55);
+  box-shadow: 0 0 10px alpha(#3dd6de, 0.25);
+}
+"""
+
+
+def install_style():
+    """Force dark and load the sheet. Safe to call more than once."""
+    Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+    prov = Gtk.CssProvider()
+    try:
+        prov.load_from_data(CSS, -1)
+    except TypeError:                     # older introspection wants bytes
+        prov.load_from_data(CSS.encode())
+    disp = Gdk.Display.get_default()
+    if disp is not None:
+        Gtk.StyleContext.add_provider_for_display(
+            disp, prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+
+class App(Adw.Application):
+    def __init__(self, ctl):
+        super().__init__(application_id="org.io24.Mixer")
+        self.ctl = ctl
+        self.win = None
+
+    def do_shutdown(self):
+        w = self.win
+        if w is not None and getattr(w, "mbc", None) is not None:
+            w.mbc.stop()                  # never leave an orphan sink behind
+        if w is not None and getattr(w, "bus_sources", None) is not None:
+            w.bus_sources.stop()
+        Adw.Application.do_shutdown(self)
+
+    def do_activate(self):
+        if not self.win:
+            install_style()               # needs a display, so not at import time
+            self.win = Win(self, self.ctl)
+        self.win.present()
+
+
+def main():
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+    try:
+        dev = wait_for_device(0.5, timeout=0.0)
+    except SystemExit:
+        # No device is no longer a refusal: the window opens offline (host-side
+        # features work without the interface) and attaches when it appears.
+        # --wait is accepted for compatibility but means nothing anymore.
+        dev = None
+        print("io24 not found — opening offline; it will attach when plugged in")
+    ctl = Ctl(dev)
+    app = App(ctl)
+    try:
+        return app.run([])
+    finally:
+        ctl.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

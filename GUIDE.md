@@ -321,10 +321,10 @@ It is one global delay plus a bus selector, not an independent delay per bus.
 Two blocks per channel — the channel's own pair of the device's four global
 slots, the ones its hardware Preset button reaches.
 
-The active block is a solid blue dot with a pronounced size-and-brightness
-breath; Block 1 completes a cycle in 1.8 seconds and Block 2 in 0.9 seconds.
-Bypass is an outlined dot. With reduced motion enabled, both dots stay steady
-and use slightly different sizes to preserve block identity.
+The active block is a solid blue dot with a pronounced brightness breath;
+its size stays fixed. Block 1 completes a cycle in 1.8 seconds and Block 2 in
+0.9 seconds. Bypass is an outlined dot. With reduced motion enabled, both dots
+stay steady and use slightly different static sizes to preserve block identity.
 
 **Preset blocks on the unit** sets how many preset blocks the hardware screen
 shows and its Preset button cycles: **One**, **Two**, or **None**. Two is what

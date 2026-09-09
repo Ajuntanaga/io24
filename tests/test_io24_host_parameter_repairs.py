@@ -768,7 +768,9 @@ class HostRefinementTests(unittest.TestCase):
         self.assertEqual(slow_a["opacity"], 0.25)
         self.assertEqual(slow_b["opacity"], 1.0)
         self.assertEqual(fast_b["opacity"], 1.0)
-        self.assertGreater(slow_b["radius"] - slow_a["radius"], 1.5)
+        self.assertEqual(slow_a["radius"], 5.0)
+        self.assertEqual(slow_b["radius"], 5.0)
+        self.assertEqual(fast_b["radius"], 5.0)
         # Internal slot index 0 is user-facing Slot 1 (slow); index 1 is
         # user-facing Slot 2 (twice the breathing rate).
         reduced_slow = visual(True, 0, 0.8, False)

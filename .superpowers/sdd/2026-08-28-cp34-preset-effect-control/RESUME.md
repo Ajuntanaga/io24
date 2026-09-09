@@ -31,8 +31,9 @@ longer persist or restore bus pan. Old `host_features.pan` data is accepted only
 to discard it with a completed-load notice, so it cannot recreate a control or
 alter a source.
 
-The Channel preset-block dots now breathe through both opacity and size, from
-0.25 to 1.0 opacity, on faster 1.8-second and 0.9-second cycles. All embedded
+The Channel preset-block dots now breathe through opacity only, from 0.25 to
+1.0, on faster 1.8-second and 0.9-second cycles; their animated radius is fixed
+so the dots never grow spatially. All embedded
 `Adw.PreferencesGroup` descriptions were removed from the Host; explanatory
 material remains in README.md and GUIDE.md while operational row state remains
 beside its control.
@@ -45,14 +46,15 @@ inventory, and hot-key suite passes 140/140 with `ResourceWarning` elevated to
 error; release-package verification passes 1/1 without installation. Two
 independent 748-row matrix generations were byte-identical; the checked-in
 matrix SHA-256 is
-`e6ae8dee16fdfae9d88da060087dcd0353fd2133c020bf9372bd16bf6f0d1b56`.
+`94c1d5af78ee652b22c98893d7dd619edc84af84b379f079e3e1c0832978b23e`.
 
 Claude received only a tool-less textual plan, not the old 53-file snapshot or
 the user's personal scene. Its one useful finding—require the write window to
 be free of Host/audio activity—was applied. Its suggestion to back up stored
 slot bodies was inapplicable because the firmware exposes no body readback. A
-final behavior-only sanity request produced no response and was stopped rather
-than delaying the agreed implementation; no repeat snapshot review was made.
+final behavior-only sanity request was refused by Claude at its session limit
+and was not retried, rather than delaying the agreed implementation; no repeat
+snapshot review was made.
 
 ## 2026-09-09 superseded checkpoint: passive Mix A/B Host sources
 

@@ -103,8 +103,7 @@ def preset_indicator_visual(active, slot_index, now, animations=True):
     # difference preserves slot identity without bringing S1/S2 text back.
     opacity = preset_indicator_opacity(
         True, slot_index, now, animations)
-    radius = (4.4 + 1.8 * ((opacity - 0.25) / 0.75)
-              if animations else (4.25 if slot_index == 0 else 5.75))
+    radius = 5.0 if animations else (4.25 if slot_index == 0 else 5.75)
     return {
         "glyph": "●",
         "opacity": opacity,

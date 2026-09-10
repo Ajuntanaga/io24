@@ -50,3 +50,41 @@ the live Fat Channel values the stage applied directly were wiped by the power
 loss, so whatever the channel produces now came from the device's own storage.
 MAIN is Standard compressor 2:1 soft knee, the four-band Strandberg Boden 8
 curve, limiter at -0.6 dBFS, HPF bypassed, gate off, no Voice FX.
+
+## Correction (same day): the restored record is not the user's MAIN
+
+The user reported the MAIN description as inaccurate. It is, and the cause is
+the source record, not the wording.
+
+`build_main_record()` in `re/cp34_channel1_main_slot_stage.py` is not derived
+from any retained user data. Compare it with the user's own scene exports in
+`~/.cache/io24/re/scenes/`:
+
+| | `build_main_record()` | `Main.scene` ch1 | `B A S E.scene` ch1 |
+|---|---|---|---|
+| embedded `preset_name` | `MAIN` | `Broadcast` | `Main` |
+| EQ model | Standard | Vintage | Vintage |
+| gate | **off** | on, -48.72, 325 Hz key | on, -48.72, 325 Hz key |
+| comp | 2:1 soft knee, manual, +2 dB | 4.01:1 hard knee, auto, +9.8 dB | 4.01:1 hard knee, auto, +9.8 dB |
+| limiter | -0.600 dBFS | -0.800 dBFS | -0.800 dBFS |
+| voicefx delay time | 0.19 | 0.0351 | 0.0226 |
+| `icon_id` | `electricguitar` | — | — |
+
+`B A S E.scene` ch1 matches registry slot 1 exactly, field for field, so that
+restoration genuinely used the user's export. Nothing in either scene matches
+`build_main_record()`. Both real records are broadcast-style vocal chains; the
+fabricated one is a guitar preset.
+
+The slot-0 write therefore restored a fabrication. It did not destroy pristine
+data: slot 0's body had already been overwritten by the `voicefx-arm:MAIN`
+Detuner write before this session touched it, and both scene files are intact
+on disk.
+
+The power-cycle result stands as a *mechanism* result — device-slot selection
+and preset enable survive power loss. The claim "MAIN survived" does not: what
+survived is a selection pointing at a fabricated body.
+
+The scene filenames and their embedded channel preset names are crossed
+(`B A S E.scene` holds a channel preset named `Main`; `Main.scene` holds one
+named `Broadcast`), so which record is the user's MAIN is a question only the
+user can answer. Awaiting that before rewriting slot 0.

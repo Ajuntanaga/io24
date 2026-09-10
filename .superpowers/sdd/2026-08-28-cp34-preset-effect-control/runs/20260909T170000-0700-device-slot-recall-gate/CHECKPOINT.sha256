@@ -1,0 +1,9 @@
+52e034edbc2fb8f5ceafe86f2ad1c2324644e1dd008823c304adae612bcbfda7  io24.py
+feb819e74a3ef24a0ed29d95b0d16cb2747665d739456e05f6e33224cf9424bc  io24gtk.py
+a82b120fc92bf2ffeb20fd6f650aa7f9273b0491bb3370d0de8bacd977154ed8  README.md
+34747eacb6758e0e99e2bc737be7a861c96a328ef9952a87271f01fe6a6df409  GUIDE.md
+b4786108a0ab5d78891d74f873660a3338d1f88d5c9c2142ef48e361dce3eb72  tests/test_io24_device_slot_recall.py
+a61a7be3c7336e38ade80dca7d2f35e0a42bd98269799b6c202f85e22539790a  runs/20260906T165749-0700-host-live-routing-repair/PARAMETER-VERIFICATION-MATRIX.json
+0732c0c423bb6b1491578a06f78e5871770a0d503eabfb2406646e139a44918d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+7bb5490ed1f1abb931bde8a753fb84cd5cfc4285e5fc7a72831f42de2de7641b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260909T170000-0700-device-slot-recall-gate/SCOPE.md
+7d7576e8d740d29f4c4372002a8044349d02da751800110f697def4b07f75768  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260909T170000-0700-device-slot-recall-gate/PROGRESS.md

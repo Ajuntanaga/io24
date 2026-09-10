@@ -2200,6 +2200,72 @@ class Io24:
         self.set_param(16, max(0, min(self.PRESET_SLOTS - 1, int(slot))),
                        index=channel - 1, as_int=True)
 
+    def device_slot_pair(self, channel):
+        """The two global slot indexes a physical channel's button owns."""
+        from io24_preset_record import DEVICE_SLOT_PAIRS
+        if channel not in DEVICE_SLOT_PAIRS:
+            raise ValueError("channel must be 1 or 2")
+        return DEVICE_SLOT_PAIRS[channel]
+
+    def recall_device_slot(self, channel, slot):
+        """Select one stored slot and leave that channel processing it.
+
+        Saving a body with :meth:`save_device_slot` only stores it; nothing is
+        heard until the firmware loads it back.  Selecting the slot is what
+        runs the native ``Stat`` structured-state load, and that load is the
+        only decoded route that satisfies block 201's three gate conditions --
+        ``+0x44`` non-zero, ``+0x39`` non-zero and ``+0x40`` zero -- which the
+        handler at fw ``0x50af8`` checks before it dispatches anything at all.
+        See PROTOCOL.md 13c and the 2026-08-31 controlling correction.  A
+        direct ``SetP | 201 | 'VoFx'`` write is accepted, stored and silently
+        discarded while that gate is shut, which is why arming a model without
+        a recall has never been audible.
+
+        A bypassed channel never reaches the load, so the enable is asserted
+        only when the device reports this channel bypassed.  A channel that is
+        already processing keeps its exact mix, because wire id 4 is a float
+        whose nonzero value is write-only: re-asserting it would silently
+        force an arbitrary partial mix to full.
+
+        The slot must be one of this channel's own two.  Pointing a channel at
+        the other pair is what the 2026-08-10 button test showed produces
+        half-broken states.
+
+        Returns what was actually sent.  It does not claim audibility,
+        nonvolatile commit, front-panel agreement, or that the stored body is
+        what this Host believes it to be -- slot bodies have no readback.
+        """
+        pair = self.device_slot_pair(channel)
+        if isinstance(slot, bool) or not isinstance(slot, int):
+            raise ValueError("device slot index must be an integer")
+        if slot not in pair:
+            raise HostActionError(
+                "global slot %d is not one of Channel %d's slots %s; a "
+                "cross-channel selection was refused before any write"
+                % (slot, channel, " or ".join(str(index) for index in pair)))
+        before = self.preset_enabled(channel)
+        if before is None:
+            raise HostActionError(
+                "channel processing state is unreadable; refusing to recall "
+                "a device slot without knowing whether the channel is bypassed")
+        # Select first, then enable.  The other order would briefly run the
+        # previously selected slot through a channel the caller asked to be
+        # processing.
+        self.set_preset_slot(channel, slot)
+        if not before:
+            self.set_preset_enabled(channel, True)
+        return {
+            "channel": channel,
+            "slot": slot,
+            "relative_slot": pair.index(slot),
+            "slot_selected": True,
+            "was_processing": bool(before),
+            "enable_asserted": not before,
+            "selection": "SENT_UNVERIFIED",
+            "voicefx_gate": "STAT_LOAD_REQUESTED",
+            "audibility": "UNPROVED",
+        }
+
     # --------------------------------------------------------------- reverb
     # Block 202. Unlike the insert-FX slot (201) this one demonstrably works:
     # measured +2.26 dB on the FX return with the same rig that showed block 201

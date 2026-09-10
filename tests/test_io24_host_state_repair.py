@@ -393,15 +393,12 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertIn('title="Shared reverb engine"', rendered)
         self.assertIn('title="Shared reverb returns"', rendered)
         self.assertIn('title="Channel processing / effects mix"', rendered)
-        self.assertIn('"0% bypasses EQ, compression, limiting and effects; "',
-                      rendered)
+        self.assertNotIn('"0% bypasses EQ, compression, limiting and effects; "',
+                         rendered)
         self.assertNotIn('"Channel %d send"', rendered)
         self.assertIn('title="Voice FX insert"', rendered)
-        self.assertIn('title="Model parameters enabled"', rendered)
-        self.assertIn(
-            'subtitle="Sends model state; standalone activation requires a "',
-            rendered)
-        self.assertIn('"device-slot save and recall"', rendered)
+        self.assertIn('title="Voice FX"', rendered)
+        self.assertNotIn('standalone activation requires', rendered)
         self.assertNotIn(
             "Doubler private reverb has two structural input lanes", rendered)
         self.assertNotIn("fx_save_both", source)
@@ -424,7 +421,7 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertIn("Move the slider to establish an exact ", rendered)
         self.assertIn('"Host value"', rendered)
 
-    def test_presets_page_has_one_current_sound_store_workflow(self):
+    def test_presets_page_has_current_sound_save_workflows(self):
         source = (ROOT / "io24gtk.py").read_text()
         tree = ast.parse(source)
         preset_page = next(
@@ -433,7 +430,9 @@ class HostStateRepairTests(unittest.TestCase):
         )
         rendered = ast.get_source_segment(source, preset_page)
 
-        self.assertIn("Store current sound…", rendered)
+        self.assertIn("Save only…", rendered)
+        self.assertIn("Save and activate…", rendered)
+        self.assertIn("Preset name", rendered)
         self.assertIn("Complete-body base", rendered)
         self.assertNotIn("Store in device slot…", rendered)
         self.assertIn("_store_current_slot_clicked", rendered)

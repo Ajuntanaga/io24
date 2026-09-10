@@ -1,5 +1,84 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-09 controlling checkpoint: MAIN recalled; Voice FX gate opened
+
+The missing action identified by the prior checkpoint has now run on the live
+Host. The process that had been open since before the patch still rendered the
+old inert `MAIN` / `B A S E` rows and owned USB interface 5, so it was closed
+normally and the installed `io24-mixer` launcher reopened the current worktree.
+The patched Host's `MAIN` row then invoked `recall_device_slot(1, 0)`. The
+Effects page reports `Opened` and: `MAIN was recalled on Channel 1, so model
+and parameter edits reach the engine`.
+
+This was one Channel-1 slot-0 recall. It did not rewrite either slot body,
+change `B A S E`, start Wine, touch firmware/DFU, reset the unit, or use the
+network. Battery was 37 percent and `lsusb` showed `194f:0422` before the
+action. The Host remains open on Effects with MAIN's stored Detuner body
+adopted. Human listening is the remaining audibility observation; the Host's
+transport/gate path is no longer pending.
+
+Claude's interrupted save-path refactor left two stale test fixtures and the
+generated matrix behind current source hashes. The fixtures now describe the
+new `Save only` / `Save and activate` UI and exercise the extracted adoption
+helper. Two independent matrix generations were byte-identical at SHA-256
+`e2294b839c7be884e10f8991d8a723954d86c49e2affd2a34fc1711f4f79c540`.
+Focused result: 112 passed plus 36 subtests. Definitive result: 495 passed,
+1 skipped, 0 failed, plus 124 subtests, with `ResourceWarning` elevated to
+error. See
+`runs/20260909T184211-0700-main-recall-live/PROGRESS.md`.
+
+## 2026-09-09 controlling checkpoint: the Host had no recall, and that is the gate
+
+The Voice FX defect and the presets defect are one defect. Block 201's handler
+at fw `0x50af8` returns having done nothing unless `+0x44 != 0`, `+0x39 != 0`
+and `+0x40 == 0`, and only the native `Stat` structured-state loader `0x5545c`
+sets all three. Recalling a device slot is the decoded way to run that load,
+and the Host had no recall anywhere: `_slot_changed` sent `set_preset_slot`
+alone and the `Host presets` list was inert text. Every direct block-201 write
+was therefore accepted, stored and silently discarded.
+
+This supersedes the reading that the isolated Delay negative pointed at
+routing, wet/dry, or a model-specific default. The Detuner neutral-default
+correction was a genuine defect and is kept, but it was not why the insert was
+silent. Slot 0 `MAIN` already holds a Detuner body with `on=1`, `detune=1`,
+`mix=0.8` — the very values that were being pushed directly — and the Host
+offered no way to recall it.
+
+`recall_device_slot()` is the new primitive: cross-channel and non-integer
+slots are refused before any write, an unreadable processing state fails
+closed, selection precedes enable, and the enable is asserted only for a
+channel the device reports bypassed so an existing partial mix is never forced
+to full. Slot blocks now recall, `Host presets` rows carry `Recall on device`
+and show each body's Voice FX state, the Voice FX section carries a
+`Device activation` row (Not opened / Opened / Closed / Unknown), and the Host
+notices recalls made from the unit's own Preset button.
+
+This is offline implementation evidence. No device write, recall, audio, Host
+launch, USB, Wine, install, network, or firmware action occurred, and
+`recall_device_slot` has never run against hardware. The separately authorized
+live acceptance is: recall slot 0 `MAIN` on Channel 1 and listen.
+
+Resume from
+`runs/20260909T170000-0700-device-slot-recall-gate/PROGRESS.md`.
+
+
+## 2026-09-09 controlling checkpoint: Detuner neutral-default correction
+
+The user reported that the isolated 240 ms, 75-percent-feedback,
+100-percent-wet Delay remained inaudible while shared reverb worked. This
+rejects the candidate that the visible reverb processing-mix control should be
+resent before block 201; that write was removed from the Host path.
+
+The concrete Detuner defect was simpler: the Host initialized Tune to index 8,
+which the builder defines as zero semitones, so selecting Detuner started
+audibly dry. UC's factory Detuned Vocal record instead uses index 1, 80-percent
+wet, and `on=1`. Those values are now the Host defaults and were sent directly
+to Channel 1 at 95 percent battery on serial `AB7C22200355`. The Host is open;
+human confirmation of the pitch drop remains pending.
+
+Resume from
+`runs/20260909T150313-0700-voicefx-activation/PROGRESS.md`.
+
 ## 2026-09-09 controlling checkpoint: live Host effects repair
 
 The shared-reverb switch now establishes the Channel-1 processing mix and Main

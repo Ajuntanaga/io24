@@ -2514,6 +2514,17 @@ class Win(Adw.ApplicationWindow):
         # one fresh explicit assignment.
         self._fx_last_sent_device = None
         self._fx_last_sent_target = None
+        # Block 201 drops every model and parameter write unless a native Stat
+        # load has opened its gate, and recalling a device slot is the only
+        # decoded way to run that load. Remember per channel what this Host
+        # last recalled so the Effects page can say whether its controls
+        # currently reach the engine instead of reporting six silent successes.
+        self._fx_gate_recalled = {1: None, 2: None}
+        # The unit's own Preset button runs the same Stat load, so a slot the
+        # device reports moving is a recall this Host did not perform. Seed it
+        # empty: the resting index at attach says which slot is selected, not
+        # that a load has been run this session.
+        self._observed_preset_slot = {}
         self.order_by_ch = {1: False, 2: False}
         self.spectrum = None
         self._frames = []
@@ -3777,7 +3788,8 @@ class Win(Adw.ApplicationWindow):
                      "exposed active-slot indicators",
             model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
         self.fx_target.set_selected(0)
-        self.fx_target.connect("notify::selected", lambda *_a: self._push_fx())
+        self.fx_target.connect("notify::selected",
+                               lambda *_a: self._fx_target_changed())
         ig.add(self.fx_target)
 
         self.fx_model = Adw.ComboRow(title="Model",
@@ -3825,15 +3837,70 @@ class Win(Adw.ApplicationWindow):
         ig.add(self.fx_param_stack)
 
         self.fx_arm = Adw.SwitchRow(
-            title="Model parameters enabled",
-            subtitle="Sends model state; standalone activation requires a "
-                     "device-slot save and recall")
+            title="Voice FX")
         self.fx_arm.set_active(True)
         self.fx_arm.connect("notify::active", lambda *_a: self._push_fx())
         ig.add(self.fx_arm)
 
+        # Every control above is accepted, stored and silently discarded by the
+        # device while block 201's gate is shut, so the page has to say which
+        # of the two it is doing. Reporting in place beats a toast per edit.
+        self.fx_gate_row = Adw.ActionRow(title="Device activation")
+        self.fx_gate_state = Gtk.Label(xalign=1.0)
+        self.fx_gate_state.add_css_class("dim-label")
+        self.fx_gate_row.add_suffix(self.fx_gate_state)
+        gate_go = Gtk.Button(label="Presets…", valign=Gtk.Align.CENTER)
+        gate_go.set_tooltip_text(
+            "Save and activate, or recall a stored Voice FX preset")
+        gate_go.connect(
+            "clicked", lambda *_a: self.stack.set_visible_child_name("pre"))
+        self.fx_gate_row.add_suffix(gate_go)
+        ig.add(self.fx_gate_row)
+        self._update_fx_gate_row()
+
         page.add(ig)
         return page
+
+    def _fx_target_changed(self):
+        """The gate is per owning channel, so the row follows the target."""
+        self._update_fx_gate_row()
+        self._push_fx()
+
+    def _update_fx_gate_row(self):
+        """Say whether this session has opened the device's Voice FX gate.
+
+        Handler fw 0x50af8 returns having done nothing unless +0x44 and +0x39
+        are non-zero and +0x40 is zero, and only the native Stat structured-
+        state load sets all three (PROTOCOL.md 13c and the 2026-08-31
+        controlling correction). Recalling a device slot whose stored record
+        carries voicefx.on is the decoded way to run that load.
+        """
+        row = getattr(self, "fx_gate_row", None)
+        if row is None:
+            return
+        channel = 2 if self.fx_target.get_selected() == 1 else 1
+        state = getattr(self, "_fx_gate_recalled", {}).get(channel)
+        if state is None:
+            self.fx_gate_state.set_text("Not this session")
+            row.set_subtitle(
+                "The device cannot report its own gate. If Voice FX is "
+                "silent, recall a Channel %d preset whose Voice FX is on"
+                % channel)
+        elif state["on"] is None:
+            self.fx_gate_state.set_text("Unknown")
+            row.set_subtitle(
+                "%s was recalled on Channel %d, but the Host never wrote that "
+                "body and slots cannot be read back" % (state["name"], channel))
+        elif state["on"]:
+            self.fx_gate_state.set_text("Opened")
+            row.set_subtitle(
+                "%s was recalled on Channel %d, so model and parameter edits "
+                "reach the engine" % (state["name"], channel))
+        else:
+            self.fx_gate_state.set_text("Closed")
+            row.set_subtitle(
+                "%s was recalled on Channel %d, but its stored Voice FX is "
+                "off; recall one whose Voice FX is on" % (state["name"], channel))
 
     FX_ORDER = ("transformer", "detuner", "vocoder", "ringmod", "filters", "delay")
 
@@ -4314,16 +4381,7 @@ class Win(Adw.ApplicationWindow):
         """
         g = Adw.PreferencesGroup(title="Device slots")
         self.preset_rows = {}
-        try:
-            entries = self.device_slot_registry.entries()
-        except Exception:
-            entries = []
-        self._host_slot_entries = entries
-        self._slot_names_by_channel = {
-            channel: [entry["record"]["preset_name"] for entry in entries
-                      if entry["physical_channel"] == channel]
-            for channel in (1, 2)
-        }
+        self._load_host_slot_entries()
         # These rows are also driven FROM the device by _sync (slot 42 bits 5/6
         # and slots 40/41), and set_active/set_selected fire the same signals a
         # user click does. Without this guard the app would echo the device's own
@@ -4363,25 +4421,79 @@ class Win(Adw.ApplicationWindow):
             self.preset_rows[ch] = (srow, sl)
         return g
 
+    def _load_host_slot_entries(self):
+        """Read the identity-bound registry into the Host's own slot view."""
+        try:
+            entries = self.device_slot_registry.entries()
+        except Exception:
+            entries = []
+        self._host_slot_entries = entries
+        self._slot_names_by_channel = {
+            channel: [entry["record"]["preset_name"] for entry in entries
+                      if entry["physical_channel"] == channel]
+            for channel in (1, 2)
+        }
+        return entries
+
+    def _refresh_host_slot_entries(self):
+        """Re-read the registry after a write so the new body is listed.
+
+        The list used to be built once when the window opened, so a preset the
+        user had just saved did not appear until the Host was restarted — and
+        the gate row could not name it either.
+        """
+        self._load_host_slot_entries()
+        self._populate_host_preset_group()
+
     def _host_preset_group(self):
         """List complete slot bodies the Host has actually sent."""
         group = Adw.PreferencesGroup(title="Host presets")
+        self.host_preset_group = group
+        self._host_preset_rows = []
+        self._populate_host_preset_group()
+        return group
+
+    def _populate_host_preset_group(self):
+        """Fill or refill the Host preset list from the current registry view."""
+        group = getattr(self, "host_preset_group", None)
+        if group is None:
+            return
+        for row in getattr(self, "_host_preset_rows", []):
+            group.remove(row)
+        self._host_preset_rows = []
         entries = getattr(self, "_host_slot_entries", [])
         if not entries:
-            group.add(Adw.ActionRow(
+            row = Adw.ActionRow(
                 title="No Host-known user presets",
-                subtitle="A device slot may still contain unreadable content"))
-            return group
+                subtitle="A device slot may still contain unreadable content")
+            group.add(row)
+            self._host_preset_rows.append(row)
+            return
         for entry in entries:
             slot = entry["slot"]
             channel = entry["physical_channel"]
             relative = slot - self.PRESET_BASE[channel] + 1
-            group.add(Adw.ActionRow(
+            fx = entry["record"].get("voicefx") or {}
+            row = Adw.ActionRow(
                 title=entry["record"]["preset_name"],
-                subtitle="Channel %d block %d · sent-write receipt · %s" %
+                subtitle="Channel %d block %d · Voice FX %s · "
+                         "sent-write receipt · %s" %
                          (channel, relative,
-                          entry["device_identity"]["serial"])))
-        return group
+                          "on" if fx.get("on") else "off",
+                          entry["device_identity"]["serial"]))
+            # Storing a body is not recalling it. Without this the list was a
+            # receipt the user could read and never act on, and the device's
+            # own Stat load — the only decoded thing that opens block 201's
+            # gate — had no trigger anywhere in the Host.
+            recall = Gtk.Button(label="Recall on device",
+                                valign=Gtk.Align.CENTER)
+            if fx.get("on"):
+                recall.add_css_class("suggested-action")
+            recall.connect("clicked", self._recall_host_preset, entry)
+            row.add_suffix(recall)
+            row.set_activatable_widget(recall)
+            group.add(row)
+            self._host_preset_rows.append(row)
 
     def _host_hotkey_group(self):
         """Momentary per-channel Host snapshots; never device preset slots."""
@@ -4490,7 +4602,121 @@ class Win(Adw.ApplicationWindow):
         self._slot_changed(ch, self.PRESET_BASE[ch] + idx)
 
     def _slot_changed(self, ch, slot):
-        self.ctl.submit(lambda dev: dev.set_preset_slot(ch, slot))
+        """Selecting a block recalls it — the device runs its own Stat load.
+
+        Sending only the slot index left a bypassed channel silently pointing
+        at a preset it was not processing, and never opened block 201's gate.
+        """
+        def work(dev):
+            try:
+                report = dev.recall_device_slot(ch, slot)
+            except Exception as error:
+                GLib.idle_add(self.say,
+                              "Channel %d slot recall failed: %s" % (ch, error))
+                return
+            GLib.idle_add(self._slot_recalled, ch, slot, report, None)
+
+        self.ctl.submit(work)
+
+    def _observe_device_slot_recalls(self, pslot):
+        """Notice a recall this Host did not perform.
+
+        The unit's own Preset button runs the same native Stat load, so a slot
+        the device reports moving changes the Voice FX gate exactly as a Host
+        recall does. A first sighting is only the resting index -- it says
+        which slot is selected, not that a load has been run this session --
+        so only a change counts as evidence.
+        """
+        observed = getattr(self, "_observed_preset_slot", {})
+        changed = []
+        for ch in (1, 2):
+            slot = pslot[ch - 1]
+            previous = observed.get(ch)
+            observed[ch] = slot
+            if previous is not None and previous != slot:
+                self._fx_gate_recalled[ch] = self._slot_voicefx_intent(slot)
+                changed.append(ch)
+        self._observed_preset_slot = observed
+        if changed:
+            self._update_fx_gate_row()
+        return changed
+
+    def _host_slot_entry(self, slot):
+        """The Host's own receipt for one global slot, when it wrote it."""
+        for entry in getattr(self, "_host_slot_entries", []):
+            if entry["slot"] == slot:
+                return entry
+        return None
+
+    def _slot_voicefx_intent(self, slot):
+        """What this Host knows about the Voice FX stored in one device slot.
+
+        Slot bodies have no readback, so an entry the Host never wrote is
+        reported as unknown rather than assumed to be off.
+        """
+        entry = self._host_slot_entry(slot)
+        if entry is not None:
+            fx = entry["record"].get("voicefx") or {}
+            return {"name": entry["record"].get("preset_name", "that slot"),
+                    "on": bool(fx.get("on"))}
+        # Name it the way the user sees it. The wire index is global, but a
+        # channel's blocks are numbered within its own pair, so reporting
+        # "Slot 3" for Channel 2's first block would be a plain lie.
+        base = self.PRESET_BASE[1 if slot < 2 else 2]
+        return {"name": "Block %d" % (slot - base + 1), "on": None}
+
+    def _slot_recalled(self, ch, slot, report, name=None):
+        """Follow a completed selection in the UI and record the gate change."""
+        intent = self._slot_voicefx_intent(slot)
+        self._fx_gate_recalled[ch] = intent
+        pair = getattr(self, "preset_rows", {}).get(ch)
+        if pair is not None:
+            local = slot - self.PRESET_BASE[ch]
+            pair[1].set_selected(local if 0 <= local < 2 else -1)
+        self._update_fx_gate_row()
+        self._adopt_recalled_slot(ch, slot)
+        label = name or intent["name"]
+        if report.get("enable_asserted"):
+            self.say("Recalled %s on Channel %d; the channel was bypassed, so "
+                     "processing was enabled" % (label, ch))
+        else:
+            self.say("Recalled %s on Channel %d" % (label, ch))
+        return False
+
+    def _adopt_recalled_slot(self, ch, slot):
+        """Show a recalled body on the controls, when the Host knows it.
+
+        The device has just replaced that channel's whole chain. Leaving the
+        previous values on screen would have every page describing a sound the
+        io24 is no longer making. A body the Host never wrote cannot be shown,
+        because slots have no readback.
+        """
+        entry = self._host_slot_entry(slot)
+        if entry is None or getattr(self, "PR", None) is None:
+            return False
+        try:
+            self._adopt_preset_record(entry["record"], (ch,), fx_channel=ch)
+        except Exception as error:
+            self.say("Recalled body could not be shown on the controls: %s"
+                     % error)
+            return False
+        return True
+
+    def _recall_host_preset(self, _button, entry):
+        """Select one Host-known slot on the device and follow it in the UI."""
+        slot = entry["slot"]
+        channel = entry["physical_channel"]
+        name = entry["record"].get("preset_name", "that slot")
+
+        def work(dev):
+            try:
+                report = dev.recall_device_slot(channel, slot)
+            except Exception as error:
+                GLib.idle_add(self.say, "%s recall failed: %s" % (name, error))
+                return
+            GLib.idle_add(self._slot_recalled, channel, slot, report, name)
+
+        self.ctl.submit(work)
 
     def _device_page(self):
         """Sample rate, buffer size and device identity.
@@ -4834,16 +5060,31 @@ class Win(Adw.ApplicationWindow):
             self.factory_device_base.set_selected(
                 self.factory_names.index("Broadcast"))
         g.add(self.factory_device_base)
+        # A preset you cannot name is a preset you cannot find again. The
+        # record builder has always taken a name; the Host never asked for one
+        # and hardcoded "Current Channel N" into every body it wrote.
+        self.slot_name_row = Adw.EntryRow(title="Preset name")
+        g.add(self.slot_name_row)
+
         current_row = Adw.ActionRow(
             title="Current sound",
             subtitle="Stores the selected channel and current Voice FX as one "
-                     "complete body; selection and recall remain separate")
+                     "complete body")
+        # Saving a body the device never loads is half an action. Activating
+        # writes the chosen block and then recalls it, which is also the only
+        # decoded way to open the Voice FX gate.
+        current_activate = Gtk.Button(
+            label="Save and activate…", valign=Gtk.Align.CENTER)
+        current_activate.add_css_class("suggested-action")
+        current_activate.connect(
+            "clicked", self._store_current_slot_clicked, True)
         current_store = Gtk.Button(
-            label="Store current sound…", valign=Gtk.Align.CENTER)
-        current_store.add_css_class("suggested-action")
-        current_store.connect("clicked", self._store_current_slot_clicked)
+            label="Save only…", valign=Gtk.Align.CENTER)
+        current_store.connect(
+            "clicked", self._store_current_slot_clicked, False)
         current_row.add_suffix(current_store)
-        current_row.set_activatable_widget(current_store)
+        current_row.add_suffix(current_activate)
+        current_row.set_activatable_widget(current_activate)
         g.add(current_row)
         self.factory_preset_rows = []
         for n in names:
@@ -4899,7 +5140,22 @@ class Win(Adw.ApplicationWindow):
             "slot": slot,
             "record": record,
             "source": "factory:%s" % name,
+            "activate": False,
         }
+
+    def _current_slot_name(self):
+        """The user's own name for the body about to be written."""
+        row = getattr(self, "slot_name_row", None)
+        text = row.get_text().strip() if row is not None else ""
+        if not text:
+            raise io24.HostActionError(
+                "name this preset before saving; the Host preset list finds "
+                "a stored body by name and the device cannot return one")
+        if len(text.encode("utf-8")) > 0x7F:
+            raise io24.HostActionError(
+                "preset name is too long for the record's short text form "
+                "(127 bytes)")
+        return text
 
     def _prepare_slot_store_target(self):
         """Return one connected, live, inactive device-slot destination."""
@@ -4927,7 +5183,7 @@ class Win(Adw.ApplicationWindow):
             "slot": slot,
         }
 
-    def _current_slot_record(self, base_name, target):
+    def _current_slot_record(self, base_name, target, preset_name):
         """Build a complete slot body from the current visible controls."""
         fx_target = 2 if self.fx_target.get_selected() == 1 else 1
         if fx_target != target:
@@ -4962,7 +5218,7 @@ class Win(Adw.ApplicationWindow):
             raise io24.HostActionError(
                 "complete-body base %r is unavailable" % base_name) from error
         return self.PR.current_slot_record(
-            base, "Current Channel %d" % target,
+            base, preset_name,
             bands=[dict(band) for band in self.bands_by_ch[target]],
             hpf_hz=self.hpf_by_ch[target],
             eq_first=self.order_by_ch[target],
@@ -4970,32 +5226,40 @@ class Win(Adw.ApplicationWindow):
             compressor=compressor, limiter=limiter,
             voicefx_model=fx_model, voicefx=voicefx)
 
-    def _prepare_current_slot_store(self):
+    def _prepare_current_slot_store(self, activate=False):
         plan = self._prepare_slot_store_target()
         base_index = self.factory_device_base.get_selected()
         if not 0 <= base_index < len(self.factory_names):
             raise io24.HostActionError("choose a complete-body base")
         base_name = self.factory_names[base_index]
+        preset_name = self._current_slot_name()
         plan.update({
-            "name": "current Channel %d sound" % plan["target"],
-            "record": self._current_slot_record(base_name, plan["target"]),
+            "name": preset_name,
+            "record": self._current_slot_record(
+                base_name, plan["target"], preset_name),
             "source": "current:channel%d;base:%s" %
                       (plan["target"], base_name),
             "base_name": base_name,
+            "activate": bool(activate),
         })
         return plan
 
     def _queue_factory_slot_store(self, plan):
-        """Queue only the confirmed body write and Host registry commit."""
+        """Queue the confirmed body write, its registry commit, and — only when
+        the user asked to activate — the recall that actually loads it.
+
+        The write and the recall stay separate device operations. A failed
+        recall never retracts a body that did reach the device, and it is
+        reported as exactly that rather than as a failed save.
+        """
         def work(dev, prepared=plan):
             try:
                 result = dev.save_known_device_slot(
                     prepared["slot"], prepared["record"],
                     self.device_slot_registry, prepared["source"])
                 transport = result["transport"]
-                msg = ("Sent complete %s body to Channel %d device Slot %d "
-                       "(%d frame%s, %d repl%s); registry status %s. "
-                       "Selection and recall unchanged." %
+                msg = ("Saved %s to Channel %d block %d "
+                       "(%d frame%s, %d repl%s); registry status %s." %
                        (prepared["name"], prepared["target"],
                         prepared["relative_slot"] + 1,
                         transport["fragments_sent"],
@@ -5010,9 +5274,33 @@ class Win(Adw.ApplicationWindow):
                 else:
                     msg = ("Device-slot body transport returned, but the local "
                            "registry failed: %s" % error)
-            GLib.idle_add(self.say, msg)
+                GLib.idle_add(self.say, msg)
+                return
+
+            if not prepared.get("activate"):
+                GLib.idle_add(self._slot_saved, prepared,
+                              msg + " Not loaded — use Recall on device.")
+                return
+            try:
+                recall = dev.recall_device_slot(
+                    prepared["target"], prepared["slot"])
+            except Exception as error:
+                GLib.idle_add(self._slot_saved, prepared,
+                              msg + " The body was saved, but the recall "
+                                    "failed: %s" % error)
+                return
+            GLib.idle_add(self._slot_saved, prepared, msg, recall)
 
         self.ctl.submit(work)
+
+    def _slot_saved(self, prepared, message, recall=None):
+        """List the new body, then follow the recall when one was made."""
+        self._refresh_host_slot_entries()
+        self.say(message)
+        if recall is not None:
+            self._slot_recalled(prepared["target"], prepared["slot"], recall,
+                                prepared["name"])
+        return False
 
     def _factory_slot_store_response(self, _dialog, response, plan):
         if response == "store":
@@ -5040,29 +5328,109 @@ class Win(Adw.ApplicationWindow):
         dialog.connect("response", self._factory_slot_store_response, plan)
         dialog.present()
 
-    def _store_current_slot_clicked(self, _button):
+    def _store_current_slot_clicked(self, _button, activate=False):
         try:
-            plan = self._prepare_current_slot_store()
+            plan = self._prepare_current_slot_store(activate)
         except Exception as error:
             self.say("Device-slot store unavailable: %s" % error)
             return
+        tail = ("It will then be recalled, which loads it on Channel %d and "
+                "is what opens the device's Voice FX gate." % plan["target"]
+                if plan["activate"] else
+                "The Host records a sent write only; selection, recall, and "
+                "audibility remain unchanged.")
         dialog = Adw.MessageDialog.new(
             self,
-            "Overwrite Channel %d device Slot %d?" %
-            (plan["target"], plan["relative_slot"] + 1),
+            "Save %s over Channel %d block %d?" %
+            (plan["name"], plan["target"], plan["relative_slot"] + 1),
             "The current Fat Channel and Voice FX controls will replace that "
             "unreadable device-resident body, using %s only for hidden archive "
-            "fields. Processing/effects mix is not part of the slot body. The "
-            "Host records a sent write only; selection, recall, and audibility "
-            "remain unchanged." % plan["base_name"])
+            "fields. Processing/effects mix is not part of the slot body. %s"
+            % (plan["base_name"], tail))
         dialog.add_response("cancel", "Cancel")
-        dialog.add_response("store", "Overwrite body")
+        dialog.add_response(
+            "store", "Save and activate" if plan["activate"]
+            else "Overwrite body")
         dialog.set_close_response("cancel")
         dialog.set_default_response("cancel")
         dialog.set_response_appearance(
             "store", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.connect("response", self._factory_slot_store_response, plan)
         dialog.present()
+
+    def _adopt_preset_record(self, pr, chans, fx_channel=None):
+        """Show one complete preset record on the visible controls.
+
+        Shared by the factory strip load and by a recall of a Host-known slot.
+        After the device loads a record, leaving the previous values on screen
+        would have the Host describing a sound the device is no longer making.
+        ``fx_channel`` additionally adopts the record's stored Voice FX, which
+        only the recall path wants: an ordinary strip load must leave the
+        singleton engine alone.
+        """
+        if getattr(self, "PR", None) is None:
+            return False
+        for ch in chans:
+            self.bands_by_ch[ch] = self.PR.to_bands(pr)
+            self.dyn_by_ch[ch] = {
+                "gate": bool(pr.get("gate", {}).get("on")),
+                "comp": bool(pr.get("comp", {}).get("on")),
+                "lim": bool(pr.get("limit", {}).get("limiteron"))}
+            self.hpf_by_ch[ch] = float(
+                pr.get("filter", {}).get("hpf", 24.0))
+            self.order_by_ch[ch] = bool(
+                pr.get("opt", {}).get("swapcompeq", False))
+        self.invalidate_curve()
+        self._adopt_mute = True
+        try:
+            for ch in chans:
+                self._adopt_band(ch)
+                self._adopt_hpf_controls(ch, self.hpf_by_ch[ch])
+                self._adopt_dynamics(ch, pr)
+                for key in ("gate", "comp", "lim"):
+                    self.w[ch][key + "_on"].set_active(
+                        self.dyn_by_ch[ch][key])
+                self.w[ch]["curve"].queue_draw()
+            self._sync_order_row(self._current_channel())
+        finally:
+            self._adopt_mute = False
+        for rack in self.racks.values():
+            rack.queue_draw()
+        if fx_channel is not None:
+            self._adopt_record_voicefx(pr, fx_channel)
+        return True
+
+    def _adopt_record_voicefx(self, pr, channel):
+        """Show a record's stored Voice FX. Sends nothing to the device.
+
+        A body the Host cannot model — an archive Voice FX class it has no
+        builder for — leaves the controls untouched rather than inventing a
+        state the record never specified.
+        """
+        import io24_fx
+        fx = pr.get("voicefx") or {}
+        try:
+            model, kwargs = io24_fx.voicefx_preset_call(fx)
+        except Exception:
+            return False
+        if model not in self.FX_ORDER:
+            return False
+        prior = self._fx_mute
+        self._fx_mute = True         # adoption must not echo back as a write
+        try:
+            self.fx_target.set_selected(channel - 1)
+            self.fx_model.set_selected(self.FX_ORDER.index(model))
+            if getattr(self, "fx_param_stack", None) is not None:
+                self.fx_param_stack.set_visible_child_name(model)
+            for name, control in self.fx_params.get(model, {}).items():
+                if name in kwargs:
+                    control.set_value(kwargs[name])
+            self.fx_arm.set_active(bool(kwargs.get("on")))
+            if getattr(self, "fx_visual", None) is not None:
+                self.fx_visual.set_model(model)
+        finally:
+            self._fx_mute = prior
+        return True
 
     def _load_factory(self, _b, name, with_fx=False):
         pr = self.PR.load()[name]
@@ -5074,32 +5442,7 @@ class Win(Adw.ApplicationWindow):
         chans = (1, 2) if self.link_both else (target,)
 
         def adopt():
-            for ch in chans:
-                self.bands_by_ch[ch] = self.PR.to_bands(pr)
-                self.dyn_by_ch[ch] = {
-                    "gate": bool(pr.get("gate", {}).get("on")),
-                    "comp": bool(pr.get("comp", {}).get("on")),
-                    "lim": bool(pr.get("limit", {}).get("limiteron"))}
-                self.hpf_by_ch[ch] = float(
-                    pr.get("filter", {}).get("hpf", 24.0))
-                self.order_by_ch[ch] = bool(
-                    pr.get("opt", {}).get("swapcompeq", False))
-            self.invalidate_curve()
-            self._adopt_mute = True
-            try:
-                for ch in chans:
-                    self._adopt_band(ch)
-                    self._adopt_hpf_controls(ch, self.hpf_by_ch[ch])
-                    self._adopt_dynamics(ch, pr)
-                    for key in ("gate", "comp", "lim"):
-                        self.w[ch][key + "_on"].set_active(
-                            self.dyn_by_ch[ch][key])
-                    self.w[ch]["curve"].queue_draw()
-                self._sync_order_row(self._current_channel())
-            finally:
-                self._adopt_mute = False
-            for rack in self.racks.values():
-                rack.queue_draw()
+            self._adopt_preset_record(pr, chans)
 
         def work(dev):
             try:
@@ -5929,6 +6272,7 @@ class Win(Adw.ApplicationWindow):
         self.mon["link"].pull(s["link"])
         poff = s.get("preset_off", [False, False])
         pslot = s.get("preset_slot", [0, 0])
+        self._observe_device_slot_recalls(pslot)
         rows = getattr(self, "preset_rows", {})
         if rows:
             self._preset_sync = True          # suppress the write-back handlers

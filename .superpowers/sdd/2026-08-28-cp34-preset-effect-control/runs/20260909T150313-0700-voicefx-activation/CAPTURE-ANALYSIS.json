@@ -1,0 +1,16 @@
+{
+  "schema": "io24-voicefx-delay-capture-analysis-v1",
+  "raw_capture": {
+    "path": "/tmp/io24-voicefx-delay-20260909-alsa.wav",
+    "bytes": 16128044,
+    "sha256": "c03e8c72427589a79d18d38fead2f9e6cd1c80b8ae103aeaed143ae3fce6adba",
+    "rate_hz": 48000,
+    "channels": 6,
+    "frames": 672000,
+    "sample_format": "S32_LE"
+  },
+  "channel_rms_dbfs": [-10.09, -48.84, -300.0, -300.0, -300.0, -300.0],
+  "channel_1_autocorrelation_at_240_ms": -0.37758,
+  "conclusion": "INPUT_1_SIGNAL_PRESENT_PROCESSED_OUTPUT_NOT_CAPTURED",
+  "audibility": "USER_REPORTED_DELAY_INAUDIBLE_CAPTURE_NOT_DECISIVE"
+}

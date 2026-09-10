@@ -151,9 +151,36 @@ snapshot, not another hardware preset slot. The Linux host exposes the exact
 route through `with_fx=True`, CLI `--voicefx`, and the GTK **Load + Voice FX**
 button. The opted-in load first assigns the singleton VoiceFX layer to the
 requested physical channel, then selects the model, then applies `voicefx.on`
-and its model fields. This sends known state but cannot by itself promise that
-standalone recall opens the stock processing gate or that the result is
-audible.
+and its model fields. A direct model edit sends the owner once, then the selected
+model and state; the visible processing/effects-mix control is the shared reverb
+path and is not part of Voice FX activation. Detuner starts at the factory
+Detuned Vocal values (minus 7 semitones, 80 percent wet) instead of the neutral
+zero-semitone position.
+
+#### The device's Voice FX gate
+
+Configuring a model is not switching it on. Block 201's own USB handler checks
+three flags on the FX object before it dispatches anything, and returns having
+done nothing when any of them fails — no error, no reply difference, no audio.
+Only the native `Stat` structured-state load sets all three, and **recalling a
+device slot is the decoded way to run that load**. So a model armed by direct
+writes alone is accepted, stored and silently discarded; that is why a fully wet
+Delay could be sent successfully and still be inaudible, while the shared reverb
+on block 202 — which has no such gate — worked in the same session.
+
+The **Device activation** row at the bottom of the Voice FX section says which
+of the two is happening:
+
+| Row says | Meaning |
+|---|---|
+| **Not this session** | No recall this session. The device cannot report its own gate, so this is the Host's knowledge, not a reading |
+| **Opened** | A record whose `voicefx.on` is set was recalled on this channel |
+| **Closed** | A record was recalled, but its stored Voice FX is off |
+| **Unknown** | A slot the Host never wrote was recalled; slot bodies have no readback |
+
+To open it, recall a preset whose Voice FX is on — from the **Host presets**
+list on the Presets page, from that channel's slot blocks, or from the unit's
+own Preset button. After that, model and parameter edits reach the engine.
 
 Changing the Voice FX target can exchange the two slot indicators exposed by
 the device. The Host therefore sends the owner assignment only for the first
@@ -337,6 +364,14 @@ write-only — the app commands it but cannot read it back.
 > One-block mode a press has nowhere to go, so nothing moves.) The mode setting
 > itself is the one exception — the device never reports it back.
 
+Selecting a block is a **recall**, not just an index change: the device runs
+its own `Stat` load for that slot. Because a bypassed channel never reaches
+that load, the Host asserts the channel enable when — and only when — the
+device reports the channel bypassed. A channel that is already processing keeps
+its exact mix, since the nonzero value of that control is write-only and
+re-asserting it would silently force a partial mix to full. A slot outside the
+channel's own pair is refused before any write.
+
 There is no separate per-channel preset-enable switch. Press-and-hold writes
 the Boolean 0/1 form of the same processing/effects mix shown on the Effects
 page. The slot row reports bypass or active from the device, but an active flag
@@ -351,7 +386,13 @@ The hardware button lands on the pair's first slot.
 The **Host presets** list shows the complete device-slot bodies this Host has
 actually sent, in global slot order. Their names also appear in the matching
 device-slot row. These are identity-bound sent-write receipts, not a readback:
-the io24 reports the selected block but cannot return its stored body.
+the io24 reports the selected block but cannot return its stored body. Each row
+also says whether that stored body's Voice FX is on or off.
+
+**Recall on device** selects that entry's own slot on its own channel. This is
+the action that opens the Voice FX gate described above, so an entry whose
+Voice FX is on is drawn as the suggested action. Recalling is not overwriting:
+it never writes a slot body.
 
 The device-slot write is a complete-record operation, not a normal readable
 parameter. `MemP/Stat` saves one scene-shaped channel record to a global slot;

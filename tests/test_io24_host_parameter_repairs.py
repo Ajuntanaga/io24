@@ -1167,6 +1167,8 @@ class HostRefinementTests(unittest.TestCase):
                    "lim_on": toggle, "curve": toggle}},
             racks={}, say=messages.append,
         )
+        host._adopt_preset_record = lambda preset, channels: \
+            io24gtk.Win._adopt_preset_record(host, preset, channels)
 
         io24gtk.Win._load_factory(host, None, "Clean", False)
         self.assertEqual(messages, [])

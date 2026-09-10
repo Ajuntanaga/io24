@@ -1,5 +1,41 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-10 controlling checkpoint: MAIN restored, and it survives a power cycle
+
+The authorized `MAIN` profile was written back to Channel-1 slot 0 through
+`re/cp34_channel1_main_slot_stage.py` at 99 percent battery on serial
+`AB7C22200355`, firmware `0128`. Result `MAIN_ACTIVE_WRITE_SENT`, record
+SHA-256 `fdd1c3def78bd774f49eccb34ae85c1f1e60906337723b06e847aee6e63b2404`,
+one `MemP/Stat(0)` fragment and zero replies. The stage verified Channel 2,
+both gains, stereo link and the Voice FX assignment unchanged before and after.
+Channel 1 had been sitting on slot 1 and bypassed (flags 417); it is now on
+slot 0 and processing. The identity-bound registry entry, which still held the
+`voicefx-arm:MAIN` Detuner body, was corrected to the authorized record under
+source `restored-authorized:MAIN`.
+
+A real power cycle then followed — physically unplugged by the user, because
+the unit is on a root-hub port with no per-port power switching and every
+software reset would have left VBUS applied and returned a false positive. The
+Host was closed across the whole window so no cached shadow could be re-pushed
+on reattachment. `devnum` moved 5 -> 6, confirming the device left the bus.
+
+Every readable preset-relevant field survived identically: slot 0 selected,
+Channel 1 preset enabled, gains 30.0 and 24.287769317626953, stereo link off,
+processing channels (0, 1), Channel 2 on slot 2 and enabled. The only change is
+`flags` 897 -> 385, bit 9, which is absent from the recovered slot-42 table and
+matches the value recorded immediately after the stage write, so it tracks
+session/stream state rather than preset state.
+
+This establishes device-slot **selection and enable** survival across power
+loss. It does **not** establish the stored body. Slot bodies have no readback
+on firmware 0128, so listening is the only remaining test of whether slot 0
+really contains MAIN — and it is now a valid test, because the power loss wiped
+the Fat Channel values the stage had applied directly.
+
+Resume from
+`runs/20260910T013611-0700-main-power-cycle-survival/PROGRESS.md`.
+
+
 ## 2026-09-10 controlling checkpoint: MAIN correction, preset saving, effect clock
 
 **Correction, controlling.** The previous checkpoint's claim that slot 0 `MAIN`

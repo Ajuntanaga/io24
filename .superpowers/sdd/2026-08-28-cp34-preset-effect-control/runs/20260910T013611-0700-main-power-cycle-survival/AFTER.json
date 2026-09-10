@@ -1,0 +1,14 @@
+{
+  "bcd_device": "0128",
+  "channel_linked": false,
+  "flags_word": 385,
+  "input1_gain_db": 30.0,
+  "input1_preset_enabled": true,
+  "input1_processing_channel": 0,
+  "input1_slot_index": 0,
+  "input2_gain_db": 24.287769317626953,
+  "input2_preset_enabled": true,
+  "input2_processing_channel": 1,
+  "input2_slot_index": 2,
+  "serial": "AB7C22200355"
+}

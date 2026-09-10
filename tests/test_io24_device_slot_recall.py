@@ -435,3 +435,47 @@ class PresetSavingTests(unittest.TestCase):
         self.assertEqual([e["record"]["preset_name"]
                           for e in window._host_slot_entries], ["MAIN"])
         self.assertEqual(window._slot_names_by_channel[1], ["MAIN"])
+
+
+class RecalledBodyDisplayTests(unittest.TestCase):
+    """A recall replaces the whole chain, so the controls must follow it —
+    or say plainly that they cannot."""
+
+    class _PR:
+        def __init__(self, supported, reason):
+            self._supported, self._reason = supported, reason
+            self.adopted = []
+
+        def direct_apply_support(self, record):
+            return self._supported, self._reason
+
+        def to_bands(self, record):
+            raise AssertionError("must not be reached for an unsupported body")
+
+    def test_an_unsupported_body_is_not_shown_and_says_why(self):
+        # B A S E is a real Vintage-EQ record: it has no Standard-band form,
+        # so showing four derived bands would describe a sound that is not
+        # on the device.
+        window = _window(entries=[_entry(1, 1, "B A S E", False)])
+        window.PR = self._PR(
+            False, "Vintage EQ is device-slot only; exact live builder pending")
+        self.assertFalse(window._adopt_recalled_slot(1, 1))
+        joined = " ".join(window.messages)
+        self.assertIn("Vintage EQ is device-slot only", joined)
+        self.assertIn("still show the previous sound", joined)
+
+    def test_a_body_the_host_never_wrote_is_not_shown(self):
+        window = _window()
+        window.PR = self._PR(True, "exact direct-live mapping")
+        self.assertFalse(window._adopt_recalled_slot(1, 0))
+        self.assertEqual(window.messages, [])
+
+    def test_a_supported_body_is_adopted_onto_the_controls(self):
+        window = _window(entries=[_entry(0, 1, "MAIN", True)])
+        window.PR = self._PR(True, "exact direct-live mapping")
+        seen = []
+        window._adopt_preset_record = \
+            lambda record, chans, fx_channel=None: seen.append(
+                (record["preset_name"], chans, fx_channel))
+        self.assertTrue(window._adopt_recalled_slot(1, 0))
+        self.assertEqual(seen, [("MAIN", (1,), 1)])

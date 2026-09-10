@@ -44,6 +44,12 @@ lock and refuse the drop rather than pretending.
 One module is shown at a time, for one channel. Both racks stay visible so you
 can reach either.
 
+**Limiter**: threshold plus **release**, 50 ms to 1.5 s. The device has always
+taken a release coefficient and the driver has always computed it exactly; the
+page simply never offered the control, so every limiter write before this used
+the 0.4 s default. UC keeps no release field in its preset record, so release
+is live Host state — it rides a Host snapshot, not a device slot body.
+
 **High-pass filters**: the Mixer strip's **HPF** is the unit's
 fixed preamp switch. The Fat Channel's digital HPF is separate: choose Off,
 40 Hz, 80 Hz, or 160 Hz, or select Advanced and set an exact 24 Hz–1 kHz
@@ -330,6 +336,14 @@ the real rate is in `/proc/asound/card*/pcm0p/sub0/hw_params` — and a forced r
 only takes effect once something is playing, because a suspended device has no
 graph to re-rate.
 
+Every coefficient this Host computes is a function of that rate: EQ and HPF
+biquads, gate/compressor/limiter time constants, the reverb, and the
+rate-dependent Voice FX filters. The device stores the coefficients, not the
+Hz and seconds they came from, so when the clock moves the Host recomputes and
+re-sends them and says so. Before this, nothing passed a rate at all and every
+write was built for 48 kHz — at 96 kHz a 1 kHz EQ band was landing at 2 kHz and
+a 240 ms delay was running at 120 ms.
+
 **Buffer** is PipeWire's quantum. Latency is quantum ÷ rate, so smaller is
 tighter but works the CPU harder and risks dropouts.
 
@@ -389,6 +403,21 @@ device-slot row. These are identity-bound sent-write receipts, not a readback:
 the io24 reports the selected block but cannot return its stored body. Each row
 also says whether that stored body's Voice FX is on or off.
 
+**Preset name** names the body you are about to write. A preset you cannot
+name is one you cannot find again, and every body written before this was
+called `Current Channel N`. Saving without a name is refused.
+
+**Save and activate** writes the current sound to the chosen block and then
+recalls it, which is the decoded way to open the Voice FX gate. **Save only**
+writes the body and leaves the device pointing where it was. Either way the
+destination must not be the block that is currently selected, and a newly
+saved preset appears in this list straight away rather than after a restart.
+
+A recalled body is also shown on the controls, so the pages stop describing the
+previous sound. A Passive/Vintage body has no Standard-band form, so it is not
+shown at all and the Host says why — showing four derived bands would describe
+a sound the device is not making.
+
 **Recall on device** selects that entry's own slot on its own channel. This is
 the action that opens the Voice FX gate described above, so an entry whose
 Voice FX is on is drawn as the suggested action. Recalling is not overwriting:
@@ -402,6 +431,13 @@ experiment actions. Slot selection never implies permission to overwrite the
 selected slot body.
 
 ### Host snapshots
+
+A snapshot also carries the Host-only half of the reverb — the named
+**character**, **movement**, and **movement depth**. The device has no
+parameter for any of them, so a save that kept only the device values came back
+with the character reset to Custom. Saved values that are unreadable, unknown,
+or out of range are refused with a completed-load notice rather than quietly
+moving a control.
 
 `savepreset` / `loadpreset` keep arbitrarily many settings as JSON. A preset
 holds the live values the device *can* report, plus this driver's mirror of the

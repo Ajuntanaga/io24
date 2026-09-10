@@ -2520,6 +2520,12 @@ class Win(Adw.ApplicationWindow):
         # last recalled so the Effects page can say whether its controls
         # currently reach the engine instead of reporting six silent successes.
         self._fx_gate_recalled = {1: None, 2: None}
+        # Every coefficient this Host computes — biquads, gate/comp/limiter
+        # time constants, reverb, the rate-dependent Voice FX filters — is a
+        # function of the device clock. Nothing used to pass one, so all of it
+        # was built for 48 kHz whatever the interface was actually running at.
+        self._fs = 48000.0
+        self._fs_seen = False
         # The unit's own Preset button runs the same Stat load, so a slot the
         # device reports moving is a recall this Host did not perform. Seed it
         # empty: the resting index at attach says which slot is selected, not
@@ -2705,7 +2711,8 @@ class Win(Adw.ApplicationWindow):
         for c in targets:
             self.hpf_by_ch[c] = hz
             if send:
-                self.ctl.submit(lambda dev, x=c: dev.set_highpass_freq(x, hz))
+                self.ctl.submit(lambda dev, x=c, fs=self._fs:
+                                dev.set_highpass_freq(x, hz, fs=fs))
         prior = self._adopt_mute
         self._adopt_mute = True
         try:
@@ -2789,9 +2796,10 @@ class Win(Adw.ApplicationWindow):
                     self.bands_by_ch[ch] = [dict(b) for b in saved]
                     self.invalidate_curve()
                     for i, b in enumerate(self.bands_by_ch[ch]):
-                        self.ctl.submit(lambda dev, x=ch, j=i, bb=dict(b):
-                                        dev.set_eq_band(x, j, bb["shape"], bb["freq"],
-                                                        bb["gain"], bb["q"]))
+                        self.ctl.submit(
+                            lambda dev, x=ch, j=i, bb=dict(b), fs=self._fs:
+                            dev.set_eq_band(x, j, bb["shape"], bb["freq"],
+                                            bb["gain"], bb["q"], fs=fs))
                     self._adopt_band(ch)
                 else:
                     self.say("Nothing to restore — set some EQ bands first")
@@ -3596,6 +3604,15 @@ class Win(Adw.ApplicationWindow):
                                  lambda v: "%.2f dB" % v,
                                  lambda v, c=ch: self._dyn_push("lim", c))
         lm.add(r)
+        # The device has always taken a release coefficient and the driver has
+        # always computed it exactly; the page simply never offered the
+        # control, so every limiter write in this Host's history used the 0.4 s
+        # default. UC keeps no release field in its preset record, so this is
+        # live Host state and rides the snapshot shadow, not the slot body.
+        r, W["lrel"] = self._srow("Limiter release", 0.05, 1.5, 0.01, 0.4,
+                                  lambda v: "%.0f ms" % (v * 1000.0),
+                                  lambda v, c=ch: self._dyn_push("lim", c))
+        lm.add(r)
 
         # The digital HPF gets its own section: it is its own rack unit and is
         # separate from the fixed 80 Hz preamp switch on the mixer strip.
@@ -4147,7 +4164,8 @@ class Win(Adw.ApplicationWindow):
         main_return = self.rev_return_controls["main"].get_value()
 
         def work(dev, enable=on, establish=establish_path,
-                 channel_mix=processing_mix, return_db=main_return):
+                 channel_mix=processing_mix, return_db=main_return,
+                 fs=self._fs):
             if not enable:
                 return dev.reverb_off()
             if establish:
@@ -4158,9 +4176,66 @@ class Win(Adw.ApplicationWindow):
                 dev.set_send_assigned("fxreturn/ch1", "main", True)
             return dev.set_reverb(
                 on=True, size=size, mix=mix, hp_freq=hp,
-                predelay=max(0.0001, pre))
+                predelay=max(0.0001, pre), fs=fs)
 
         self.ctl.submit(work)
+
+    def _reverb_character_state(self):
+        """The Host-only half of the reverb, which the device has no parameter
+        for: the named character, and the slow size drift the Host applies.
+
+        Saving only the device parameters lost these on every load, and the
+        character combo was reset to Custom because exact numbers cannot imply
+        a name. Saving them explicitly is what makes a restored reverb the one
+        the user built.
+        """
+        if getattr(self, "rev_type", None) is None:
+            return None
+        return {
+            "version": 1,
+            "type": int(self.rev_type.get_selected()),
+            "movement": bool(self.rev_mod.get_active()),
+            "movement_depth": float(self.s_rmoddep.get_value()),
+        }
+
+    def _adopt_reverb_character(self, state):
+        """Restore the Host-only reverb character. Sends nothing to the device.
+
+        Returns a completed-load notice when saved values are rejected, so a
+        bad file cannot quietly leave a control describing something else.
+        """
+        if state is None or getattr(self, "rev_type", None) is None:
+            return None
+        if not isinstance(state, dict):
+            return "reverb character was not restored; it was not a mapping"
+        try:
+            index = int(state["type"])
+            depth = float(state["movement_depth"])
+            movement = bool(state["movement"])
+        except (KeyError, TypeError, ValueError):
+            return "reverb character was not restored; the saved values were " \
+                   "incomplete or unreadable"
+        if not 0 <= index < len(self.REVERB_TYPES):
+            return "reverb character was not restored; unknown character"
+        lower, upper = self.s_rmoddep.get_adjustment().get_lower(), \
+            self.s_rmoddep.get_adjustment().get_upper()
+        if not lower <= depth <= upper:
+            return "reverb character was not restored; movement depth was " \
+                   "outside the control's range"
+        prior_rev = self._rev_mute
+        prior_adopt = self._adopt_mute
+        # Selecting a character normally rewrites size/HP/pre-delay and sends.
+        # Adoption must move the controls only.
+        self._rev_mute = True
+        self._adopt_mute = True
+        try:
+            self.rev_type.set_selected(index)
+            self.rev_mod.set_active(movement)
+            self.s_rmoddep.set_value(depth)
+        finally:
+            self._rev_mute = prior_rev
+            self._adopt_mute = prior_adopt
+        return None
 
     def _mark_processing_mix_known(self, channel):
         self.processing_mix_rows[channel].set_subtitle(
@@ -4694,8 +4769,17 @@ class Win(Adw.ApplicationWindow):
         entry = self._host_slot_entry(slot)
         if entry is None or getattr(self, "PR", None) is None:
             return False
+        record = entry["record"]
+        # A Passive/Vintage body has no Standard-band representation, so there
+        # is nothing honest to put on these controls. Say that plainly instead
+        # of showing four bands derived from a model the record never used.
+        supported, reason = self.PR.direct_apply_support(record)
+        if not supported:
+            self.say("Recalled body is not shown on the controls: %s. They "
+                     "still show the previous sound." % reason)
+            return False
         try:
-            self._adopt_preset_record(entry["record"], (ch,), fx_channel=ch)
+            self._adopt_preset_record(record, (ch,), fx_channel=ch)
         except Exception as error:
             self.say("Recalled body could not be shown on the controls: %s"
                      % error)
@@ -4933,6 +5017,59 @@ class Win(Adw.ApplicationWindow):
         if not ok:
             self.say("Buffer change failed: %s" % msg)
 
+    def _set_device_fs(self, rate):
+        """Adopt the clock the device is actually running at.
+
+        Returns True only when a *change* needs re-sending. The first sighting
+        is adopted silently: at that point the Host has pushed nothing, so
+        there is nothing on the device computed at the wrong rate yet.
+        """
+        try:
+            rate = float(rate)
+        except (TypeError, ValueError):
+            return False
+        if not 8000.0 <= rate <= 192000.0:
+            return False
+        if rate == self._fs:
+            self._fs_seen = True
+            return False
+        self._fs = rate
+        if not self._fs_seen:
+            self._fs_seen = True
+            return False
+        return True
+
+    def _resend_rate_dependent_state(self):
+        """Re-send every write whose coefficients are a function of the clock.
+
+        The device stores coefficients, not the Hz and seconds they came from,
+        so a rate change silently moves every filter and time constant until
+        the Host recomputes them — at 96 kHz a 1 kHz band was landing at 2 kHz.
+        Nothing here changes what the user asked for; it restates it at the
+        new rate.
+        """
+        if self.ctl.dev is None:
+            return False
+        # set_hpf and _dyn_push already fan out across a linked pair, so
+        # driving both channels through them would send everything twice.
+        fanned = (1,) if self.link_both else (1, 2)
+        for ch in fanned:
+            self.set_hpf(ch, self.hpf_by_ch[ch])
+            for key in ("gate", "comp", "lim"):
+                self._dyn_push(key, ch)
+        for ch in (1, 2):
+            for index, band in enumerate(self.bands_by_ch[ch]):
+                self.ctl.submit(
+                    lambda dev, x=ch, j=index, bb=dict(band), fs=self._fs:
+                    dev.set_eq_band(x, j, bb["shape"], bb["freq"],
+                                    bb["gain"], bb["q"], fs=fs))
+        self._push_reverb()
+        self._push_fx()
+        self.say("Sample rate is now %.4g kHz; EQ, HPF, dynamics, reverb and "
+                 "Voice FX coefficients were recomputed and re-sent"
+                 % (self._fs / 1000.0))
+        return True
+
     def _refresh_device_page(self):
         st = pw_settings()
         allowed = st.get("clock.allowed-rates", "").strip("[] ").strip()
@@ -4951,6 +5088,8 @@ class Win(Adw.ApplicationWindow):
             pass
         forced = int(st.get("clock.force-rate", "0") or 0)
         cur_rate = live_rate or forced or int(st.get("clock.rate", "48000") or 48000)
+        if self._set_device_fs(cur_rate):
+            self._resend_rate_dependent_state()
         cur_q = int(st.get("clock.force-quantum", "0") or 0) or \
             int(st.get("clock.quantum", "1024") or 1024)
         self._dev_mute = True
@@ -5621,8 +5760,8 @@ class Win(Adw.ApplicationWindow):
             if c != ch:
                 self.bands_by_ch[c][i] = dict(b)
                 self._adopt_band(c)
-            self.ctl.submit(lambda dev, x=c: dev.set_eq_band(
-                x, i, b["shape"], b["freq"], b["gain"], b["q"]))
+            self.ctl.submit(lambda dev, x=c, fs=self._fs: dev.set_eq_band(
+                x, i, b["shape"], b["freq"], b["gain"], b["q"], fs=fs))
         for c in self.w:
             self.w[c]["curve"].queue_draw()
 
@@ -5853,16 +5992,21 @@ class Win(Adw.ApplicationWindow):
                                         else W["gkey"].get_value()),
                           keylisten=W["gklisten"].get_active(),
                           expander=W["gexp"].get_active())
-                self.ctl.submit(lambda dev, x=c, k=kw: dev.set_gate(x, on=True, **k)
-                                if on else dev.gate_off(x))
+                self.ctl.submit(
+                    lambda dev, x=c, k=kw, fs=self._fs:
+                    dev.set_gate(x, on=True, fs=fs, **k)
+                    if on else dev.gate_off(x))
             elif key == "comp":
                 model, kw = self._compressor_kwargs(ch)
                 self.ctl.submit(
-                    lambda dev, x=c, m=model, k=kw: dev.set_compressor(x, model=m, **k)
+                    lambda dev, x=c, m=model, k=kw, fs=self._fs:
+                    dev.set_compressor(x, model=m, fs=fs, **k)
                     if on else dev.compressor_off(x))
             else:
                 th = W["lth"].get_value()
-                self.ctl.submit(lambda dev, x=c: dev.set_limiter(x, on, th))
+                rel = W["lrel"].get_value()
+                self.ctl.submit(lambda dev, x=c, fs=self._fs:
+                                dev.set_limiter(x, on, th, release_s=rel, fs=fs))
         W["comp_curve"].queue_draw()
         for r in self.racks.values():
             r.queue_draw()
@@ -5972,6 +6116,9 @@ class Win(Adw.ApplicationWindow):
                     multiband = self._mbc_snapshot_state()
                     if multiband is not None:
                         host_features["multiband"] = multiband
+                    reverb_character = self._reverb_character_state()
+                    if reverb_character is not None:
+                        host_features["reverb_character"] = reverb_character
                 except Exception as error:
                     self.say("Save failed before writing: %s" % error)
                     return
@@ -6109,6 +6256,8 @@ class Win(Adw.ApplicationWindow):
                     self.w[ch]["lim_on"].set_active(on)
                     self.w[ch]["lth"].set_value(float(
                         limiter.get("threshold_db", -28.0)))
+                    self.w[ch]["lrel"].set_value(float(
+                        limiter.get("release_s", 0.4)))
 
                 if ch in state["order"]:
                     self.order_by_ch[ch] = state["order"][ch]
@@ -6196,8 +6345,10 @@ class Win(Adw.ApplicationWindow):
         if host_features:
             multiband_message = self._adopt_mbc_state(
                 host_features.get("multiband"))
+            reverb_message = self._adopt_reverb_character(
+                host_features.get("reverb_character"))
             host_messages = [message for message in
-                             (multiband_message,) if message]
+                             (multiband_message, reverb_message) if message]
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)

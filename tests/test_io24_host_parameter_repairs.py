@@ -64,6 +64,7 @@ class ReverbAudiblePathTests(unittest.TestCase):
         device = CallDevice()
         host = SimpleNamespace(
             _adopt_mute=False,
+            _fs=48000.0,
             rev_on=self.Value(True),
             s_rsize=self.Value(0.72), s_rmix=self.Value(0.38),
             s_rhp=self.Value(180.0), s_rpre=self.Value(0.027),
@@ -80,7 +81,7 @@ class ReverbAudiblePathTests(unittest.TestCase):
             ("set_send_assigned", ("fxreturn/ch1", "main", True), {}),
             ("set_reverb", (), {
                 "on": True, "size": 0.72, "mix": 0.38,
-                "hp_freq": 180.0, "predelay": 0.027,
+                "hp_freq": 180.0, "predelay": 0.027, "fs": 48000.0,
             }),
         ])
 
@@ -88,6 +89,7 @@ class ReverbAudiblePathTests(unittest.TestCase):
         device = CallDevice()
         host = SimpleNamespace(
             _adopt_mute=False,
+            _fs=48000.0,
             rev_on=self.Value(False),
             s_rsize=self.Value(0.5), s_rmix=self.Value(0.35),
             s_rhp=self.Value(200.0), s_rpre=self.Value(0.02),
@@ -792,6 +794,7 @@ class HostRefinementTests(unittest.TestCase):
         host = SimpleNamespace(
             link_both=False,
             _adopt_mute=False,
+            _fs=48000.0,
             hpf_by_ch={1: 24.0, 2: 24.0},
             ctl=SimpleNamespace(submit=submitted.append),
             _adopt_hpf_controls=lambda _ch, _hz: None,

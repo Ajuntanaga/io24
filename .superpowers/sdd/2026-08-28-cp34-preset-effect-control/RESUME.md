@@ -1,5 +1,49 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-10 controlling checkpoint: MAIN correction, preset saving, effect clock
+
+**Correction, controlling.** The previous checkpoint's claim that slot 0 `MAIN`
+holds a Detuner body with `on=1` is withdrawn. The authorized `MAIN` pinned in
+`re/cp34_channel1_main_slot_stage.py` is **Delay, `on=0`**, Standard EQ. The
+Detuner body is a registry entry written `2026-09-09T22:47:32Z` under source
+`voicefx-arm:MAIN` — a receipt, read as if it were the user's preset. The
+user's `MAIN` body was therefore very likely overwritten on the device by that
+write; it is `WRITE_SENT_UNVERIFIED` and slots have no readback, so it cannot
+be confirmed either way. It is recoverable from `build_main_record()`. Slot 1
+`B A S E` is untouched. Restoring `MAIN` is a separate authorized device write
+and has not been done.
+
+"Recall MAIN and listen" is consequently not a valid acceptance test; the
+authorized MAIN would produce a false negative. The acceptance test is **Save
+and activate**, which authors a body of known contents into the channel's
+inactive block and recalls it. The block-201 gate finding is unaffected — it
+rests on the firmware disassembly and the 2026-08-31 report, not on slot
+contents.
+
+Preset saving is repaired: presets can be named (refused when empty or over the
+record's 127-byte form), **Save and activate** writes then recalls while **Save
+only** leaves selection alone, a failed recall is never reported as a failed
+save, and a newly saved body is listed without restarting. A recalled body is
+adopted onto the controls; a Passive/Vintage body is not shown at all and says
+why, because it has no Standard-band form.
+
+Effects are repaired at the clock: no device write passed a sample rate, so
+every biquad, time constant, reverb and rate-dependent Voice FX payload was
+built for 48 kHz whatever the device was running — at 96 kHz a 1 kHz band
+landed at 2 kHz. The Host now tracks the real rate, passes it everywhere, and
+recomputes and re-sends on a change. The limiter's release is a control at last
+(every prior write used the 0.4 s default); it stays out of the slot record
+because UC's `limit` section has no such field. The Host-only reverb character,
+movement and movement depth now travel in `host_features` instead of resetting
+to Custom on every load.
+
+Offline implementation evidence only. No device write, recall, audio, Host
+launch, USB, Wine, install, network or firmware action occurred.
+
+Resume from
+`runs/20260910T000000-0700-save-presets-and-effects/PROGRESS.md`.
+
+
 ## 2026-09-09 controlling checkpoint: MAIN recalled; Voice FX gate opened
 
 The missing action identified by the prior checkpoint has now run on the live

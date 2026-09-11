@@ -1,20 +1,5 @@
 {
   "api_index": {
-    "HostHotKeySession.assign": [
-      "state.hotkey_ch1",
-      "state.hotkey_ch2"
-    ],
-    "HostHotKeySession.capture": [
-      "state.hotkey_ch1",
-      "state.hotkey_ch2"
-    ],
-    "HostHotKeySession.press": [
-      "state.hotkey_ch1",
-      "state.hotkey_ch2"
-    ],
-    "HostHotKeySession.release": [
-      "state.hotkey_release"
-    ],
     "apply_startup": [
       "state.startup_apply"
     ],
@@ -788,7 +773,7 @@
       "fat_order": 2,
       "host_device": 2,
       "host_process": 5,
-      "host_state": 19,
+      "host_state": 16,
       "host_telemetry": 16,
       "mixer_balance": 6,
       "mixer_cell": 42,
@@ -812,7 +797,7 @@
       "P3": 87,
       "P4": 142,
       "P5": 71,
-      "P6": 26,
+      "P6": 23,
       "P7": 64
     },
     "by_profile": {
@@ -822,7 +807,7 @@
       "dsp_audio_scalar": 110,
       "dsp_audio_toggle": 33,
       "front_panel_write_only": 1,
-      "host_mapping": 84,
+      "host_mapping": 81,
       "host_process": 10,
       "implementation_gap": 36,
       "mixer_assignment": 21,
@@ -840,7 +825,7 @@
     "fat_channel_parameter_rows": 142,
     "mixer_cell_rows": 42,
     "multiband_parameter_rows": 52,
-    "total_rows": 751,
+    "total_rows": 748,
     "vendor_descriptor_rows": 117,
     "voicefx_parameter_rows": 60
   },
@@ -22202,85 +22187,6 @@
       "stimuli": []
     },
     {
-      "api": [
-        "HostHotKeySession.assign",
-        "HostHotKeySession.capture",
-        "HostHotKeySession.press"
-      ],
-      "blockers": [],
-      "family": "host_state",
-      "id": "state.hotkey_ch1",
-      "parameter": "Channel 1 Host Hot Key snapshot override",
-      "phase": "P6",
-      "profile": "host_mapping",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {},
-      "source": [
-        "io24.py",
-        "io24gtk.py"
-      ],
-      "stimuli": []
-    },
-    {
-      "api": [
-        "HostHotKeySession.assign",
-        "HostHotKeySession.capture",
-        "HostHotKeySession.press"
-      ],
-      "blockers": [],
-      "family": "host_state",
-      "id": "state.hotkey_ch2",
-      "parameter": "Channel 2 Host Hot Key snapshot override",
-      "phase": "P6",
-      "profile": "host_mapping",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {},
-      "source": [
-        "io24.py",
-        "io24gtk.py"
-      ],
-      "stimuli": []
-    },
-    {
-      "api": [
-        "HostHotKeySession.release"
-      ],
-      "blockers": [],
-      "family": "host_state",
-      "id": "state.hotkey_release",
-      "parameter": "Host Hot Key release restores normal snapshot",
-      "phase": "P6",
-      "profile": "host_mapping",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {},
-      "source": [
-        "io24.py",
-        "io24gtk.py"
-      ],
-      "stimuli": []
-    },
-    {
       "api": [],
       "blockers": [],
       "family": "host_state",
@@ -25483,14 +25389,14 @@
   ],
   "schema": "io24-atomic-parameter-verification-matrix-v1",
   "source_sha256": {
-    "io24.py": "3eea5ea94929909bbebb4d528808a9870a1c95a5034d037fe4131e0e28b65e39",
+    "io24.py": "0982145b75569b7acbaf9b62ff5e5a7fffdd0ed50cc8e8d842aab3d1641dfcfe",
     "io24_dsp.py": "3a2b810257b7957ec3246893ce3f0f7e2280c53734987a07d772ef92a26e2407",
     "io24_fx.py": "9c6a9cb75d46260e340ccf7575dc4a90d0b360d897b52105b26e600460635e4c",
     "io24_mbc.py": "de6d5510042eed1f88df4a27e982a83e126b388f82f34635d8effed8c63509c8",
     "io24_presets.py": "2a7033b4f698de5843ae2984d9955fc8b7ad59d1ed2633ef87efd1bbef8568a3",
     "io24_scene.py": "8c5be86b1b44b80d84ff9e7346232bee05c20a408ca4cc4e52810adc173187e6",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "c97c5baa4fdd5910c60203a9de44d633f9ad181c7da17644d41e0c578334fc82",
+    "io24gtk.py": "7718638f7767734f5ab48550c32fd7669e10dd1ba3d43061ea4d9f8e7c6906e5",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

@@ -237,8 +237,8 @@ Control's window. Live meters for both inputs and all three buses, gain reductio
 for the gate, compressor and limiter, channel strips, monitoring, a four-band EQ
 with a 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
-the Presets page separates device slots, Host-known user presets, temporary
-Host-only A/B previews, and the searchable factory-sound library.
+the Presets page separates device slots, Host-known user presets, and the
+searchable factory-sound library.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is
@@ -707,8 +707,7 @@ Forgetting changes Host bookkeeping only; it emits no device command.
 GTK Host snapshot files may additionally contain `host_features.multiband`.
 Obsolete `host_features.pan` data from an older Host is ignored and is never
 re-saved. Host-only objects are never
-encoded into a device slot, included in a temporary A/B preview, or replayed
-because USB reconnected. If a required computer-side chain fails, the Host
+encoded into a device slot or replayed because USB reconnected. If a required computer-side chain fails, the Host
 reports the failure instead of claiming success.
 
 **Settings survive the host closing, but not a power cycle.** They live in the

@@ -176,9 +176,8 @@ The private core is not the shared Reverb section above. It does not use block
 its `voicefx` JSON object.
 
 UC remembers the selected algorithm as `voicefx.__classid`. On load it resolves
-that class, selects the model, and only then applies the model fields. The Hot
-Key uses this same complete-channel apply path; it is a momentary cached
-snapshot, not another hardware preset slot. The Linux host exposes the exact
+that class, selects the model, and only then applies the model fields. The
+Linux host exposes the exact
 route through `with_fx=True`, CLI `--voicefx`, and the GTK **Load + Voice FX**
 button. The opted-in load first assigns the singleton VoiceFX layer to the
 requested physical channel, then selects the model, then applies `voicefx.on`
@@ -506,7 +505,7 @@ GTK Host snapshots also save the complete multiband panel under the versioned
 separately. Obsolete `host_features.pan` data is discarded with a completed-load
 notice, regardless of its old contents, and is never re-saved. Other invalid
 Host-only data is rejected before any device setting is applied. These objects are deliberately absent
-from device-slot records, temporary-preview captures, cached-device reapply,
+from device-slot records, cached-device reapply,
 and standalone-device claims. Older snapshots without these objects continue
 to load and do not change the current Host-only state.
 

@@ -2656,8 +2656,6 @@ class Win(Adw.ApplicationWindow):
         self._order_mute = False
         self._fx_mute = False
         self._phones_source_mute = False
-        self._hotkey_sync = False
-        self.hotkeys = io24.HostHotKeySession()
         self.device_slot_registry = DeviceSlotRegistry(
             DEVICE_SLOT_REGISTRY_PATH)
         self._fx_push_id = None
@@ -4849,99 +4847,6 @@ class Win(Adw.ApplicationWindow):
             group.add(row)
             self._host_preset_rows.append(row)
 
-    def _host_hotkey_group(self):
-        """Momentary per-channel Host snapshots; never device preset slots."""
-        g = Adw.PreferencesGroup(
-            title="Temporary A/B previews (Host only)")
-        self.hotkey_rows = {}
-        for ch in (1, 2):
-            row = Adw.ActionRow(
-                title="Channel %d preview" % ch,
-                subtitle="Temporary and computer-controlled; not a device slot")
-            capture = Gtk.Button(label="Capture current sound",
-                                 valign=Gtk.Align.CENTER)
-            capture.connect("clicked", self._hotkey_capture, ch)
-            row.add_suffix(capture)
-            hold = Gtk.Button(label="Hold to preview", valign=Gtk.Align.CENTER)
-            hold.add_css_class("suggested-action")
-            gesture = Gtk.GestureClick()
-            gesture.connect("pressed", self._hotkey_pressed, ch)
-            gesture.connect("released", self._hotkey_released, ch)
-            hold.add_controller(gesture)
-            row.add_suffix(hold)
-            g.add(row)
-            self.hotkey_rows[ch] = (row, capture, hold)
-        return g
-
-    def _hotkey_capture(self, _button, ch):
-        if getattr(self, "_hotkey_sync", False):
-            return
-
-        def work(dev, channel=ch):
-            try:
-                snap = self.hotkeys.capture(dev, channel)
-                msg = ("Captured Channel %d temporary preview (%d known calls; "
-                       "device readback/standalone persistence unavailable)" %
-                       (channel, len(snap["calls"])))
-            except Exception as error:
-                msg = "Channel %d preview capture failed: %s" % (
-                    channel, error)
-            GLib.idle_add(self.say, msg)
-
-        self.ctl.submit(work)
-
-    def _hotkey_pressed(self, _gesture, _n_press, _x, _y, ch):
-        if getattr(self, "_hotkey_sync", False):
-            return
-
-        def work(dev, channel=ch):
-            try:
-                report = self.hotkeys.press(dev, channel)
-                status = report["status"]
-            except Exception as error:
-                GLib.idle_add(
-                    self.say,
-                    "Channel %d preview press failed: %s" % (channel, error))
-                return
-
-            def finished():
-                row = self.hotkey_rows[channel][0]
-                row.set_subtitle(
-                    "Preview active; release to restore"
-                    if status == "PREVIEW_ACTIVE" else
-                    status.lower().replace("_", " ").capitalize())
-                return False
-
-            GLib.idle_add(finished)
-
-        self.ctl.submit(work)
-
-    def _hotkey_released(self, _gesture, _n_press, _x, _y, ch):
-        if getattr(self, "_hotkey_sync", False):
-            return
-
-        def work(dev, channel=ch):
-            try:
-                report = self.hotkeys.release(dev, channel)
-                status = report["status"]
-            except Exception as error:
-                GLib.idle_add(
-                    self.say,
-                    "Channel %d preview release failed: %s" % (channel, error))
-                return
-
-            def finished():
-                row = self.hotkey_rows[channel][0]
-                row.set_subtitle(
-                    "Normal sound restored"
-                    if status == "NORMAL_RESTORED" else
-                    status.lower().replace("_", " ").capitalize())
-                return False
-
-            GLib.idle_add(finished)
-
-        self.ctl.submit(work)
-
     def _preset_mode_changed(self, row, _p):
         if getattr(self, "_preset_sync", False):
             return
@@ -5502,7 +5407,6 @@ class Win(Adw.ApplicationWindow):
         # it, and the group was built but never attached to any page at all.
         page.add(self._device_preset_group())
         page.add(self._host_preset_group())
-        page.add(self._host_hotkey_group())
         # One pointer to the written guide, in place of the paragraphs that used
         # to sit above every group on every page.
         hint = Adw.PreferencesGroup()

@@ -642,14 +642,6 @@ def build() -> dict:
         ("gtk_silent_adoption", "programmatic UI adoption emits no writes", "host_mapping", ()),
         ("factory_target", "factory preset target channel", "host_mapping", ()),
         ("factory_all_records", "all included factory records parse without silent field loss", "serializer", ()),
-        ("hotkey_ch1", "Channel 1 Host Hot Key snapshot override", "host_mapping",
-         ("HostHotKeySession.assign", "HostHotKeySession.capture",
-          "HostHotKeySession.press")),
-        ("hotkey_ch2", "Channel 2 Host Hot Key snapshot override", "host_mapping",
-         ("HostHotKeySession.assign", "HostHotKeySession.capture",
-          "HostHotKeySession.press")),
-        ("hotkey_release", "Host Hot Key release restores normal snapshot", "host_mapping",
-         ("HostHotKeySession.release",)),
         ("refuse_unproved_fx_gate", "unproved direct VoiceFX gate remains refused", "serializer", ("fx_on", "fx_off")),
     )
     for ident, parameter, profile, api in state_rows:

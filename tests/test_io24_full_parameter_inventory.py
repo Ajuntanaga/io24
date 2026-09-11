@@ -252,11 +252,8 @@ class FullParameterInventoryTests(unittest.TestCase):
                 "io24gtk.phones_source_row", "ucnet_shim.global/phonesSrc",
             ],
         })
-        self.assertEqual(supported["host_hot_key"], [
-            "channel1_snapshot_override",
-            "channel2_snapshot_override",
-            "release_restores_normal_snapshot",
-        ])
+        # Removed at the user's request (2026-09-11): no Host A/B preview.
+        self.assertNotIn("host_hot_key", supported)
 
 
 class AtomicParameterMatrixTests(unittest.TestCase):
@@ -275,9 +272,9 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertEqual(self.saved, self.generated)
 
     def test_matrix_is_atomic_pending_and_restoration_gated(self):
-        self.assertEqual(self.generated["coverage"]["total_rows"], 751)
-        self.assertEqual(len(self.rows), 751)
-        self.assertEqual(len({row["id"] for row in self.rows}), 751)
+        self.assertEqual(self.generated["coverage"]["total_rows"], 748)
+        self.assertEqual(len(self.rows), 748)
+        self.assertEqual(len({row["id"] for row in self.rows}), 748)
         ids = {row["id"] for row in self.rows}
         self.assertIn("native.channel1.processing_mix", ids)
         self.assertIn("native.channel2.processing_mix", ids)

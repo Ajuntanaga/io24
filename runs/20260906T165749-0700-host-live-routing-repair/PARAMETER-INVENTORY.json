@@ -6,104 +6,327 @@
       "route": "global/phonesSrc",
       "readback": "write_only_host_shadow",
       "entrypoints": [
-        "io24.set_phones_source", "io24d.phonesrc", "io24_scene",
-        "io24gtk.phones_source_row", "ucnet_shim.global/phonesSrc"
+        "io24.set_phones_source",
+        "io24d.phonesrc",
+        "io24_scene",
+        "io24gtk.phones_source_row",
+        "ucnet_shim.global/phonesSrc"
       ]
     },
-    "host_hot_key": [
-      "channel1_snapshot_override",
-      "channel2_snapshot_override",
-      "release_restores_normal_snapshot"
-    ],
     "standard_highshelf": {
-      "coefficient_format": ["b0", "-a1", "b1", "-a2", "b2"],
+      "coefficient_format": [
+        "b0",
+        "-a1",
+        "b1",
+        "-a2",
+        "b2"
+      ],
       "designer_selector": 9,
       "precision": "binary32 inputs, binary64 operations, binary32 outputs",
       "source": "exact retained UC 4.7.2 dspusbdevice.dll"
     }
   },
   "dimensions": {
-    "physical_channels": [1, 2],
-    "mixer_sources": ["line/ch1", "line/ch2", "line/ch3", "return/ch1", "return/ch2", "return/ch3", "fxreturn/ch1"],
-    "linux_host_mixer_sources": ["line/ch1", "line/ch2", "return/ch1", "return/ch2", "return/ch3", "fxreturn/ch1"],
-    "mixer_buses": ["main", "mixa", "mixb"],
-    "eq_bands": [0, 1, 2, 3],
-    "eq_shapes": ["off", "peaking", "lowshelf", "highshelf", "hp", "lp"]
+    "physical_channels": [
+      1,
+      2
+    ],
+    "mixer_sources": [
+      "line/ch1",
+      "line/ch2",
+      "line/ch3",
+      "return/ch1",
+      "return/ch2",
+      "return/ch3",
+      "fxreturn/ch1"
+    ],
+    "linux_host_mixer_sources": [
+      "line/ch1",
+      "line/ch2",
+      "return/ch1",
+      "return/ch2",
+      "return/ch3",
+      "fxreturn/ch1"
+    ],
+    "mixer_buses": [
+      "main",
+      "mixa",
+      "mixb"
+    ],
+    "eq_bands": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "eq_shapes": [
+      "off",
+      "peaking",
+      "lowshelf",
+      "highshelf",
+      "hp",
+      "lp"
+    ]
   },
   "readable_and_appl_controls": [
-    "hpVolume", "mainVolume", "monitorMix", "input1Gain", "input2Gain",
-    "input1PhantomPower", "input2PhantomPower", "input1Mute", "input2Mute",
-    "hpOutputMute", "mainPhysicalMute_read_only", "channelLink",
-    "input1HighPassFilter", "input2HighPassFilter", "input1FxMix",
-    "input2FxMix", "input1ProcessingChannel", "input2ProcessingChannel",
-    "outputDelay", "outputDelayBus", "presetMode", "input1PresetEnabled",
-    "input2PresetEnabled", "input1SlotIndex", "input2SlotIndex"
+    "hpVolume",
+    "mainVolume",
+    "monitorMix",
+    "input1Gain",
+    "input2Gain",
+    "input1PhantomPower",
+    "input2PhantomPower",
+    "input1Mute",
+    "input2Mute",
+    "hpOutputMute",
+    "mainPhysicalMute_read_only",
+    "channelLink",
+    "input1HighPassFilter",
+    "input2HighPassFilter",
+    "input1FxMix",
+    "input2FxMix",
+    "input1ProcessingChannel",
+    "input2ProcessingChannel",
+    "outputDelay",
+    "outputDelayBus",
+    "presetMode",
+    "input1PresetEnabled",
+    "input2PresetEnabled",
+    "input1SlotIndex",
+    "input2SlotIndex"
   ],
   "mixer_expansion": {
-    "per_source_bus_fields": ["level_db", "assigned"],
+    "per_source_bus_fields": [
+      "level_db",
+      "assigned"
+    ],
     "generic_backend_cartesian_cells": 21,
     "linux_host_cartesian_cells": 18,
     "line_ch3_disposition": "pending explicit io24 applicability classification",
-    "bus_master": ["main", "mixa", "mixb"],
-    "valid_balance_pairs": ["line/ch1+line/ch2", "return/ch1+return/ch2"],
-    "balance_buses": ["main", "mixa", "mixb"],
-    "host_actions": ["mirror_main_to_mixa", "mirror_main_to_mixb"]
+    "bus_master": [
+      "main",
+      "mixa",
+      "mixb"
+    ],
+    "valid_balance_pairs": [
+      "line/ch1+line/ch2",
+      "return/ch1+return/ch2"
+    ],
+    "balance_buses": [
+      "main",
+      "mixa",
+      "mixb"
+    ],
+    "host_actions": [
+      "mirror_main_to_mixa",
+      "mirror_main_to_mixb"
+    ]
   },
   "fat_channel_per_physical_channel": {
-    "low_cut": ["enabled_or_bypass", "frequency_hz"],
-    "eq_per_band": ["shape", "frequency_hz", "gain_db", "q"],
-    "gate": ["on", "threshold_db", "range_db", "attack_s", "release_s", "keyfilter_hz", "expander", "keylisten"],
-    "compressor_common": ["on", "model", "keyfilter_hz", "keylisten"],
-    "compressor_standard": ["threshold_db", "ratio", "attack_s", "release_s", "gain_db", "softknee", "automode"],
-    "compressor_tube": ["peak", "gain", "limit_mode", "keyfilter_hz", "keylisten"],
-    "compressor_fet": ["input_db", "output_db", "attack_s", "release_s", "ratio_index", "keyfilter_hz", "keylisten"],
-    "limiter": ["on", "threshold_db", "release_s"],
-    "chain": ["compressor_then_eq", "eq_then_compressor"]
+    "low_cut": [
+      "enabled_or_bypass",
+      "frequency_hz"
+    ],
+    "eq_per_band": [
+      "shape",
+      "frequency_hz",
+      "gain_db",
+      "q"
+    ],
+    "gate": [
+      "on",
+      "threshold_db",
+      "range_db",
+      "attack_s",
+      "release_s",
+      "keyfilter_hz",
+      "expander",
+      "keylisten"
+    ],
+    "compressor_common": [
+      "on",
+      "model",
+      "keyfilter_hz",
+      "keylisten"
+    ],
+    "compressor_standard": [
+      "threshold_db",
+      "ratio",
+      "attack_s",
+      "release_s",
+      "gain_db",
+      "softknee",
+      "automode"
+    ],
+    "compressor_tube": [
+      "peak",
+      "gain",
+      "limit_mode",
+      "keyfilter_hz",
+      "keylisten"
+    ],
+    "compressor_fet": [
+      "input_db",
+      "output_db",
+      "attack_s",
+      "release_s",
+      "ratio_index",
+      "keyfilter_hz",
+      "keylisten"
+    ],
+    "limiter": [
+      "on",
+      "threshold_db",
+      "release_s"
+    ],
+    "chain": [
+      "compressor_then_eq",
+      "eq_then_compressor"
+    ]
   },
   "alternate_eq_per_physical_channel": {
-    "model_selector": ["standard", "passive", "vintage"],
-    "passive": ["eqallon", "bboost", "batten", "bfreq", "mboost", "bbwidth", "mfreq", "hatten", "hsfreq"],
-    "vintage": ["eqallon", "lowgain", "lowfreq", "lowmidgain", "lowmidfreq", "himidgain", "himidfreq", "higain"],
+    "model_selector": [
+      "standard",
+      "passive",
+      "vintage"
+    ],
+    "passive": [
+      "eqallon",
+      "bboost",
+      "batten",
+      "bfreq",
+      "mboost",
+      "bbwidth",
+      "mfreq",
+      "hatten",
+      "hsfreq"
+    ],
+    "vintage": [
+      "eqallon",
+      "lowgain",
+      "lowfreq",
+      "lowmidgain",
+      "lowmidfreq",
+      "himidgain",
+      "himidfreq",
+      "higain"
+    ],
     "current_gate": "exact alternate-model coefficient builders and the Passive bfreq 20kHz vendor literal must be resolved before live verification",
     "direct_live_policy": "Passive and Vintage EQ are fail-closed; no Standard-biquad approximation may be emitted"
   },
   "shared_reverb": [
-    "on", "size", "mix", "hp_freq", "predelay", "channel1_send",
-    "channel2_send", "main_return_level_and_assign", "mixa_return_level_and_assign",
-    "mixb_return_level_and_assign", "character_mapping", "movement_host_modulation"
+    "on",
+    "size",
+    "mix",
+    "hp_freq",
+    "predelay",
+    "channel1_send",
+    "channel2_send",
+    "main_return_level_and_assign",
+    "mixa_return_level_and_assign",
+    "mixb_return_level_and_assign",
+    "character_mapping",
+    "movement_host_modulation"
   ],
   "voicefx": {
-    "assignment": ["channel1", "channel2"],
-    "common": ["model_before_state", "on"],
-    "transformer": ["lows", "width", "mix"],
-    "detuner": ["detune", "mix"],
-    "vocoder": ["vol", "carrier_type", "carrier_freq", "mix"],
-    "ringmod": ["carrier_hz", "dist", "vol", "carrier2", "carrier2_hz", "mix"],
-    "filters": ["pitch", "regeneration", "damping", "distortion", "volume", "mix"],
-    "delay": ["time_s", "feedback", "mix"],
-    "read_only": ["vocoder.avoiced"]
+    "assignment": [
+      "channel1",
+      "channel2"
+    ],
+    "common": [
+      "model_before_state",
+      "on"
+    ],
+    "transformer": [
+      "lows",
+      "width",
+      "mix"
+    ],
+    "detuner": [
+      "detune",
+      "mix"
+    ],
+    "vocoder": [
+      "vol",
+      "carrier_type",
+      "carrier_freq",
+      "mix"
+    ],
+    "ringmod": [
+      "carrier_hz",
+      "dist",
+      "vol",
+      "carrier2",
+      "carrier2_hz",
+      "mix"
+    ],
+    "filters": [
+      "pitch",
+      "regeneration",
+      "damping",
+      "distortion",
+      "volume",
+      "mix"
+    ],
+    "delay": [
+      "time_s",
+      "feedback",
+      "mix"
+    ],
+    "read_only": [
+      "vocoder.avoiced"
+    ]
   },
   "preset_and_state_paths": [
-    "host_snapshot", "host_save", "host_load", "shadow_normalization",
-    "explicit_reapply", "explicit_forget", "offline_attach", "hot_reconnect",
-    "channel1_enable_and_selector_only", "channel2_enable_and_selector",
-    "channel2_slot3_complete_record_write", "channel2_front_panel_recall",
-    "host_closed_audibility", "non_computer_powered_cold_boot_audibility"
+    "host_snapshot",
+    "host_save",
+    "host_load",
+    "shadow_normalization",
+    "explicit_reapply",
+    "explicit_forget",
+    "offline_attach",
+    "hot_reconnect",
+    "channel1_enable_and_selector_only",
+    "channel2_enable_and_selector",
+    "channel2_slot3_complete_record_write",
+    "channel2_front_panel_recall",
+    "host_closed_audibility",
+    "non_computer_powered_cold_boot_audibility"
   ],
   "host_only": [
-    "sample_rate_request", "pipewire_quantum", "channel_names", "meters",
-    "gain_reduction_display", "spectrum_page_lifecycle", "offline_banner",
-    "reconnect_banner", "factory_target_channel", "multiband_enable",
-    "multiband_crossovers", "multiband_four_band_character_threshold_ratio_knee_attack_release_makeup_auto_limit_keyfilter_keylisten"
+    "sample_rate_request",
+    "pipewire_quantum",
+    "channel_names",
+    "meters",
+    "gain_reduction_display",
+    "spectrum_page_lifecycle",
+    "offline_banner",
+    "reconnect_banner",
+    "factory_target_channel",
+    "multiband_enable",
+    "multiband_crossovers",
+    "multiband_four_band_character_threshold_ratio_knee_attack_release_makeup_auto_limit_keyfilter_keylisten"
   ],
   "catalog_classifications_required": [
-    "transmitted_device_field", "host_side_model_field", "read_only_telemetry",
-    "duplicate_across_component_class", "not_routed_on_io24", "unknown_unmapped"
+    "transmitted_device_field",
+    "host_side_model_field",
+    "read_only_telemetry",
+    "duplicate_across_component_class",
+    "not_routed_on_io24",
+    "unknown_unmapped"
   ],
   "known_unimplemented_or_unresolved": [
     "passive_eq_exact_builder",
     "vintage_eq_exact_builder",
-    "generic_backend_line/ch3_io24_applicability"
+    "generic_backend_line/ch3_io24_applicability",
+    "line/ch1/presetHotKey",
+    "line/ch2/presetHotKey"
   ],
-  "never_blind_write": ["unmapped_Para_or_Pari", "IFac", "FRst", "firmware", "DFU"]
+  "never_blind_write": [
+    "unmapped_Para_or_Pari",
+    "IFac",
+    "FRst",
+    "firmware",
+    "DFU"
+  ]
 }

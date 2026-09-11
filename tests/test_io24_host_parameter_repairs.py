@@ -412,8 +412,10 @@ class ArtifactAndResourceTests(unittest.TestCase):
         inventory = json.loads((self.RUN / "PARAMETER-INVENTORY.json").read_text())
         unresolved = set(inventory["known_unimplemented_or_unresolved"])
         self.assertNotIn("global/phonesSrc", unresolved)
-        self.assertNotIn("line/ch1/presetHotKey", unresolved)
-        self.assertNotIn("line/ch2/presetHotKey", unresolved)
+        # The Host A/B (Hot Key) was removed at the user's request
+        # (2026-09-11), so UC's Hot Key routes are unimplemented again.
+        self.assertIn("line/ch1/presetHotKey", unresolved)
+        self.assertIn("line/ch2/presetHotKey", unresolved)
         policy = inventory["alternate_eq_per_physical_channel"]["direct_live_policy"]
         self.assertIn("fail-closed", policy)
         self.assertIn("no Standard-biquad approximation", policy)
@@ -422,11 +424,7 @@ class ArtifactAndResourceTests(unittest.TestCase):
                          "global/phonesSrc")
         self.assertEqual(supported["phones_source"]["readback"],
                          "write_only_host_shadow")
-        self.assertEqual(set(supported["host_hot_key"]), {
-            "channel1_snapshot_override",
-            "channel2_snapshot_override",
-            "release_restores_normal_snapshot",
-        })
+        self.assertNotIn("host_hot_key", supported)
 
     def test_factory_preset_load_closes_its_input_file(self):
         records = [{"preset_name": "test", "comp": {}}]
@@ -1079,43 +1077,6 @@ class HostRefinementTests(unittest.TestCase):
                 "Voice FX send failed: broken transport",
             ])
 
-    def test_preview_hold_uses_inline_status_without_bottom_toast(self):
-        class PreviewRow:
-            def __init__(self):
-                self.subtitle = None
-
-            def set_subtitle(self, subtitle):
-                self.subtitle = subtitle
-
-        class Hotkeys:
-            def press(self, _dev, _channel):
-                return {"status": "PREVIEW_ACTIVE"}
-
-            def release(self, _dev, _channel):
-                return {"status": "NORMAL_RESTORED"}
-
-        class Controller:
-            dev = object()
-
-            def submit(self, callback):
-                callback(self.dev)
-
-        row = PreviewRow()
-        messages = []
-        host = SimpleNamespace(
-            _hotkey_sync=False, hotkeys=Hotkeys(), ctl=Controller(),
-            hotkey_rows={1: (row, object(), object())},
-            say=messages.append,
-        )
-        with mock.patch.object(io24gtk.GLib, "idle_add",
-                               side_effect=lambda fn, *args: fn(*args)):
-            io24gtk.Win._hotkey_pressed(host, None, 1, 0, 0, 1)
-            self.assertEqual(row.subtitle, "Preview active; release to restore")
-            io24gtk.Win._hotkey_released(host, None, 1, 0, 0, 1)
-
-        self.assertEqual(row.subtitle, "Normal sound restored")
-        self.assertEqual(messages, [])
-
     def test_factory_load_reports_worker_completion_not_early_queueing(self):
         class Toggle:
             def set_active(self, _active):
@@ -1408,18 +1369,6 @@ class HostRefinementTests(unittest.TestCase):
         self.assertIn("dev.load_preset(", source)
         self.assertNotIn("self.ctl.dev.save_preset(", source)
         self.assertNotIn("self.ctl.dev.load_preset(", source)
-
-    def test_preview_copy_drops_the_hotkey_metaphor(self):
-        source = "\n".join(inspect.getsource(method) for method in (
-            io24gtk.Win._host_hotkey_group,
-            io24gtk.Win._hotkey_capture,
-            io24gtk.Win._hotkey_pressed,
-            io24gtk.Win._hotkey_released,
-        ))
-
-        self.assertNotIn("Hot Key", source)
-        self.assertIn("Temporary A/B previews (Host only)", source)
-        self.assertIn("Hold to preview", source)
 
     def test_multiband_chain_start_failure_cleans_private_config(self):
         with tempfile.TemporaryDirectory() as parent:

@@ -516,7 +516,8 @@ to load and do not change the current Host-only state.
 
 The Host picks up where it left off, as Universal Control did. Everything it
 sends to the unit is kept on disk (`~/.cache/io24/shadow.json`), and its own
-features (the multiband panel, reverb character and movement) are saved to
+features (the multiband panel, reverb character and movement, and which inputs
+have Auto gain on) are saved to
 `~/.config/io24/last-session.json` every few seconds and on exit.
 
 Each time the io24 connects, the Host re-sends the settings the unit cannot
@@ -531,8 +532,9 @@ then sent again. Host-only features come back once per launch, not on every
 reconnect.
 
 Two consequences: settings changed from Universal Control on another computer in
-between are overwritten on the next connection, and Auto gain and solo start off
-each launch, as they did in Universal Control.
+between are overwritten on the next connection, and solo starts off each launch,
+as it did in Universal Control. Auto gain, which Universal Control also started
+off, comes back on for the inputs that had it.
 
 `io24.py startup save` and `systemd/io24-startup.service` remain for applying
 settings without the Host window — see

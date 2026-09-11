@@ -5991,6 +5991,31 @@ class Win(Adw.ApplicationWindow):
             self._autogain_timer = GLib.timeout_add(
                 self.AUTOGAIN_TICK_MS, self._autogain_tick)
 
+    def _adopt_autogain(self, state):
+        """Switch Auto back on for the inputs that had it.
+
+        Goes through the buttons, so linking, the locked fader and the
+        controller start exactly as a click would. Only ever switches on: a
+        session without it leaves Auto as it is, which at launch is off.
+        Returns a completed-load notice when the saved value is unusable.
+        """
+        if state is None:
+            return None
+        if not isinstance(state, dict) or not isinstance(state.get("on"), list):
+            return "auto gain was not restored; the saved value was unreadable"
+        try:
+            channels = [int(c) for c in state["on"]]
+        except (TypeError, ValueError):
+            return "auto gain was not restored; the saved value was unreadable"
+        if not channels or any(c not in (1, 2) for c in channels):
+            return "auto gain was not restored; unknown input"
+        toggles = getattr(self, "autogain_toggles", {})
+        for c in channels:
+            toggle = toggles.get(c)
+            if toggle is not None:
+                toggle.set_active(True)
+        return None
+
     def _autogain_groups(self):
         on = tuple(c for c in (1, 2)
                    if getattr(self, "_autogain_on", {}).get(c))
@@ -6472,7 +6497,9 @@ class Win(Adw.ApplicationWindow):
                 -2 * cw / a0, (1 - al) / a0)
 
     def _host_features_state(self):
-        """The Host-only half of a snapshot: multiband and reverb character."""
+        """The Host-only half of a snapshot: multiband, reverb character, and
+        which inputs have Auto gain on (remembered at the user's request,
+        2026-09-11; recorded only while one is on)."""
         host_features = {}
         multiband = self._mbc_snapshot_state()
         if multiband is not None:
@@ -6480,6 +6507,10 @@ class Win(Adw.ApplicationWindow):
         reverb_character = self._reverb_character_state()
         if reverb_character is not None:
             host_features["reverb_character"] = reverb_character
+        autogain = sorted(c for c, on in
+                          getattr(self, "_autogain_on", {}).items() if on)
+        if autogain:
+            host_features["autogain"] = {"version": 1, "on": autogain}
         return host_features
 
     def _save_last_session(self, path=None):
@@ -6820,8 +6851,11 @@ class Win(Adw.ApplicationWindow):
                 host_features.get("multiband"))
             reverb_message = self._adopt_reverb_character(
                 host_features.get("reverb_character"))
+            autogain_message = self._adopt_autogain(
+                host_features.get("autogain"))
             host_messages = [message for message in
-                             (multiband_message, reverb_message) if message]
+                             (multiband_message, reverb_message,
+                              autogain_message) if message]
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)

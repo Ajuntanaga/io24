@@ -234,5 +234,65 @@ class ResumeSessionTests(unittest.TestCase):
         self.assertEqual(backend.calls, [("reapply", io24gtk.RESUME_SKIP)])
 
 
+class AutoGainSessionTests(unittest.TestCase):
+    """The user (2026-09-11) asked that each input's Auto gain be remembered."""
+
+    def _gathering_host(self, autogain_on):
+        return _bind(SimpleNamespace(
+            _mbc_snapshot_state=lambda: None,
+            _reverb_character_state=lambda: None,
+            _autogain_on=autogain_on), "_host_features_state")
+
+    def _adopting_host(self):
+        switched = {1: [], 2: []}
+        toggles = {c: SimpleNamespace(set_active=switched[c].append)
+                   for c in (1, 2)}
+        host = _bind(SimpleNamespace(autogain_toggles=toggles),
+                     "_adopt_autogain")
+        return host, switched
+
+    def test_auto_gain_is_remembered_while_it_is_on(self):
+        host = self._gathering_host({1: True, 2: False})
+        self.assertEqual(host._host_features_state(),
+                         {"autogain": {"version": 1, "on": [1]}})
+
+    def test_a_session_without_auto_gain_is_unchanged(self):
+        host = self._gathering_host({1: False, 2: False})
+        self.assertEqual(host._host_features_state(), {})
+
+    def test_auto_gain_round_trips_through_the_session_file(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "last-session.json"
+        host = _bind(self._gathering_host({1: True, 2: True}),
+                     "_save_last_session")
+        self.assertTrue(host._save_last_session(path))
+        self.assertEqual(
+            io24gtk.load_last_session(path)["host_features"]["autogain"],
+            {"version": 1, "on": [1, 2]})
+
+    def test_saved_auto_gain_switches_those_inputs_back_on(self):
+        host, switched = self._adopting_host()
+        self.assertIsNone(host._adopt_autogain({"version": 1, "on": [2]}))
+        self.assertEqual(switched, {1: [], 2: [True]})
+
+    def test_no_saved_auto_gain_leaves_the_buttons_alone(self):
+        host, switched = self._adopting_host()
+        self.assertIsNone(host._adopt_autogain(None))
+        self.assertEqual(switched, {1: [], 2: []})
+
+    def test_an_unusable_saved_value_is_reported_and_not_applied(self):
+        host, switched = self._adopting_host()
+        for state in ({"on": [3]}, {"on": "1"}, {}, "on"):
+            with self.subTest(state=state):
+                self.assertIn("auto gain was not restored",
+                              host._adopt_autogain(state))
+        self.assertEqual(switched, {1: [], 2: []})
+
+    def test_loading_restores_auto_gain_with_the_other_host_features(self):
+        self.assertIn('self._adopt_autogain(\n                host_features.get("autogain"))',
+                      _function("_after_load"))
+
+
 if __name__ == "__main__":
     unittest.main()

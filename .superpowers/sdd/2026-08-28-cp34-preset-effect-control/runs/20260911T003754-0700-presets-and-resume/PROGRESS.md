@@ -147,7 +147,24 @@ firmware `0128`; Channel 1 on global slot 0, Channel 2 on slot 2, neither
 bypassed; gains 30.0 / 24.2878 dB; link, mutes and phantom off; main 0.75,
 headphones 0.50; Voice FX owned by input 1; flags 385. Battery 96 %.
 
-## MAIN restore, prepared and not run
+## MAIN restore, run on the user's go (2026-09-11)
+
+The user said "go, restore MAIN from Main.scene channel 1". With no process
+holding the device and the battery at 96 %, `io24_main_restore.py` (copied
+here) ran with `Io24(shadow=False)`: recall Channel 1 block 2, write the MAIN
+record to global slot 0 (1 fragment, 0 replies, `WRITE_SENT_UNVERIFIED`),
+recall Channel 1 block 1. State before and after was identical: Channel 1 on
+slot 0 and processing, Channel 2 on slot 2, gains 30.0 / 24.288 dB, link off,
+Voice FX owned by input 1. Registry slot 0 now holds MAIN, source
+`restored-user:MAIN (Main.scene line/ch1)`, canonical `f74cd983…d222`,
+replacing the fabricated `restored-authorized:MAIN` receipt. Exact output:
+`MAIN-RESTORE-OUTPUT.txt`. The record itself is not committed; it is the user's
+own preset data, rebuilt on demand from the rule below.
+
+Slot bodies have no readback on firmware 0128, so the stored sound is proven
+only by listening; that is the user's remaining acceptance step.
+
+### How the record was proven
 
 Offline proof: rebuilding B A S E from `B A S E.scene` `line/ch1` (the seven
 sections, name set) reproduces registry slot 1 exactly (`135a93f1…`), and the

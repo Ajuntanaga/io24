@@ -1,0 +1,8 @@
+$ python3 io24_main_restore.py   # user's go: "go, restore MAIN from Main.scene channel 1"
+before: {'slot': (0, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+step 1, recall Channel 1 block 2: {'channel': 1, 'slot': 1, 'relative_slot': 1, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+step 2, write MAIN to slot 0: {'slot': 0, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+step 3, recall Channel 1 block 1: {'channel': 1, 'slot': 0, 'relative_slot': 0, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+after: {'slot': (0, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+registry slot 0: MAIN restored-user:MAIN (Main.scene line/ch1) f74cd9837af8fb09 WRITE_SENT_UNVERIFIED
+RESULT: OK

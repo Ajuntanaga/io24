@@ -26,9 +26,11 @@ fixed: the worker passes jobs the Io24 driver itself, and the resume job
 unwrapped its `.dev` (the raw USB handle), so it would have restored nothing on
 hardware. The fix and a regression test are committed on the worktree branch
 (full suite 597 passed, 1 skipped). A read-only probe showed Channel 1 on slot 0,
-Channel 2 on slot 2, gains 30.0 / 24.29 dB. The MAIN restore from `Main.scene`
-`line/ch1` is proven offline against the pinned hash and scripted; it waits for
-the user's go.
+Channel 2 on slot 2, gains 30.0 / 24.29 dB. On the user's go, MAIN was then
+restored from `Main.scene` `line/ch1` to Channel 1 block 1 (slot 0): recall
+block 2, write, recall block 1, with every readable state identical before and
+after and registry slot 0 now `restored-user:MAIN` at the pinned `f74cd983…`.
+Listening is the remaining acceptance step, since slot bodies have no readback.
 
 Resume from
 `runs/20260911T003754-0700-presets-and-resume/PROGRESS.md`.

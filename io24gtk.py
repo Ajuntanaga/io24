@@ -6536,7 +6536,10 @@ class Win(Adw.ApplicationWindow):
         selected = list(self.ctl.snap.get("preset_slot") or [])
 
         def work(dev):
-            backend = getattr(dev, "dev", dev)
+            # The worker hands each job the Io24 driver itself
+            # (Ctl._loop: fn(self.dev.dev)). Its own `.dev` is the raw USB
+            # handle, so it must not be unwrapped again.
+            backend = dev
             mirror = json.loads(json.dumps(
                 getattr(backend, "_shadow", None) or {}))
             state = shadow_ui_state(mirror)

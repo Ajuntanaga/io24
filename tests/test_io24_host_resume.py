@@ -152,9 +152,14 @@ class ResumeTriggerTests(unittest.TestCase):
 
 
 class _Backend:
+    """Stands in for the Io24 driver the Host's worker passes to each job."""
+
     def __init__(self, shadow):
         self._shadow = shadow
         self.calls = []
+        # Like the real driver, it carries its raw USB handle as `.dev`; a
+        # resume that unwrapped `.dev` again would reach this and fail.
+        self.dev = object()
 
     def reapply_shadow(self, include_device_preset_state=False, skip=()):
         self.calls.append(("reapply", tuple(skip)))

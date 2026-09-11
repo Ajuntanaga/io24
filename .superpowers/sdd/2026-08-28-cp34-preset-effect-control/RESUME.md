@@ -18,8 +18,17 @@ deterministic at `7b4a9590…142e`. No device action.
 
 The user's standing goals: a device-resident multiband, Doubler reverb
 shaping, and new effects. All need custom firmware and a separate authorized
-plan. They also asked what UC's Hot Key quick loader did, to decide whether to
-rebuild it.
+plan. The user was asked what UC's Hot Key quick loader did, to decide whether
+to rebuild it.
+
+After the user fast-forwarded `main` to `98539ab`, a resume bug was found and
+fixed: the worker passes jobs the Io24 driver itself, and the resume job
+unwrapped its `.dev` (the raw USB handle), so it would have restored nothing on
+hardware. The fix and a regression test are committed on the worktree branch
+(full suite 597 passed, 1 skipped). A read-only probe showed Channel 1 on slot 0,
+Channel 2 on slot 2, gains 30.0 / 24.29 dB. The MAIN restore from `Main.scene`
+`line/ch1` is proven offline against the pinned hash and scripted; it waits for
+the user's go.
 
 Resume from
 `runs/20260911T003754-0700-presets-and-resume/PROGRESS.md`.

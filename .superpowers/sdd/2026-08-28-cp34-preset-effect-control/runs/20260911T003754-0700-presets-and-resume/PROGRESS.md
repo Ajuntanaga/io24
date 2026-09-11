@@ -123,3 +123,37 @@ Full digests of the present files are in `CHECKPOINT.sha256`.
   multiband compressor on the unit, and new effects; all require custom
   firmware because the stock firmware has no crossover or multiband code.
 - Channel-1 slot-0 MAIN rewrite from `Main.scene` ch1 remains staged.
+
+## Post-merge fix: the resume job reached the USB handle
+
+Found after the user fast-forwarded `main` to `98539ab`, while reading
+`Ctl._loop` for live work: the worker passes each job the Io24 driver itself
+(`fn(self.dev.dev)`), and the driver's own `.dev` is the raw pyusb handle. The
+resume job unwrapped `getattr(dev, "dev", dev)`, so on hardware it would have
+reached the USB handle, failed on `reapply_shadow`, and restored nothing. The
+tests missed it because their stand-in driver had no `.dev`. Fixed by using the
+job's argument directly; the stand-in now carries a `.dev` like the real driver,
+so the old code fails the resume tests.
+
+- Resume tests 16 passed; full suite **597 passed, 1 skipped, 125 subtests,
+  exit 0**; matrix `1fdb73c7…8a9d`, regenerated twice, identical.
+- The merged `main` (`98539ab`) was also run in the user's own checkout with
+  the real UC binaries: 597 passed, 1 skipped, exit 0.
+
+## Read-only device probe (2026-09-11 ~01:45, user-cleared)
+
+`Io24(shadow=False)`, GetP/JaSt reads only, then closed. Serial `AB7C22200355`,
+firmware `0128`; Channel 1 on global slot 0, Channel 2 on slot 2, neither
+bypassed; gains 30.0 / 24.2878 dB; link, mutes and phantom off; main 0.75,
+headphones 0.50; Voice FX owned by input 1; flags 385. Battery 96 %.
+
+## MAIN restore, prepared and not run
+
+Offline proof: rebuilding B A S E from `B A S E.scene` `line/ch1` (the seven
+sections, name set) reproduces registry slot 1 exactly (`135a93f1…`), and the
+same rule on `Main.scene` `line/ch1` (identical to its `presets/slots/0`) with
+name `MAIN` reproduces the pinned `f74cd983…d222`. The scene's separate user
+preset "Main" is a different body (`23e76d01…`); the user was asked which they
+meant. The live script (job tmp `io24_main_restore.py`) recalls block 2 first
+because Channel 1 is playing block 1, writes slot 0, recalls it, and checks
+Channel 2, gains, link and ownership unchanged. It waits for the user's go.

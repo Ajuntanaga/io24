@@ -14,8 +14,10 @@ f49f284b40bab31a32227448de2e08f64882e9ac0ea24401e193848334729d1b  tests/test_io2
 c732e96cb02cd502e4f38331173a059aade7cf38ecb2b9a33c7f0bd1c2085f42  tests/test_io24_preset_persistence.py
 adfff5d9ae6e6c1d301faddbc3fc7c926938817f8bf03011b123dfd4a7748175  tests/test_io24_presets_page.py
 46f67ebaabe93980a551d6692b21cc594960902328ef54c44bb233a5f69cfebc  tests/test_io24_host_resume.py
-fe985dfc016950804f76dbb6652f7fc106ca7cf3e3fcbd6bdbb9059f84618dc1  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+a75fc65cdd14fd75d56fdefa601c8d2874afd15ddcd29939b573152f640e87a6  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
 9f62fe281dcbf306bc23999aa819f4e53ab14887b5b3436c3679c9e00a0f4ebc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/SCOPE.md
-be85f777e07cc18b85003f78a39205e516a04952a219613b4baf3064e866f6a0  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/PROGRESS.md
+57646a02b8c271eafb2c83ace0da8cd58ac4e20043f124847f418211e970aadd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/PROGRESS.md
 3240f199e11a56970f9c5973972c38a4a0c5576540cda5bbef176f91e99ac4e0  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/io24_main_restore.py
 6fca3f0bd2eaa9e4c3e9204d4a2c9d491122197235c8f7bcb795bd14b1cd73fe  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/MAIN-RESTORE-OUTPUT.txt
+5254eb91dcf554e7bc9dd557df510caf95edbdf01feb2e27eeb85047e0a0d436  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/io24_two_slot_write.py
+2b88913962ccc3a5bd1d18f971f20d678e2fdb7a652f255bd8ff5649de4223e3  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260911T003754-0700-presets-and-resume/TWO-SLOT-WRITE-OUTPUT.txt

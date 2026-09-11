@@ -164,6 +164,24 @@ own preset data, rebuilt on demand from the rule below.
 Slot bodies have no readback on firmware 0128, so the stored sound is proven
 only by listening; that is the user's remaining acceptance step.
 
+## Two more unit writes, on the user's go (2026-09-11)
+
+The user asked for MAIN with the device-storable reverb on Channel 2 block 1.
+Firmware evidence (PROTOCOL.md, the second channel strip's state apply takes
+only `filt/gate/comp/eq/lim`; Component 201 is absent) says a Channel-2 block
+recall never loads Voice FX, so that was reported and not attempted. The user
+then chose: B A S E on Channel 2 block 1, MAIN + Reverb on Channel 1 block 2,
+reverb "maxed out" (taken as Wet/Dry 100 %; lows 0.06 and width 0.405 stay at
+UC's factory Reverb values).
+
+`io24_two_slot_write.py` (copied here): write MAIN + Doubler private reverb to
+global slot 1 (canonical `175724d1…025d`; Channel 1 left on block 1); recall
+Channel 2 block 2; write B A S E (registry body, `135a93f1…`) to slot 2; recall
+Channel 2 block 1. Readable state identical before and after; `RESULT: OK`.
+Exact output: `TWO-SLOT-WRITE-OUTPUT.txt`. Acceptance is audible: pressing
+Channel 1's Preset button should switch dry MAIN to MAIN + Reverb, no computer
+involved; Channel 2 block 1 should sound like B A S E without Voice FX.
+
 ### How the record was proven
 
 Offline proof: rebuilding B A S E from `B A S E.scene` `line/ch1` (the seven

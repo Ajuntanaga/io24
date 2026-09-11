@@ -1,0 +1,11 @@
+$ python3 io24_two_slot_write.py   # user's go: "Put BASE on channel 2 block 1; and MAIN + reverb on Channel 1 block 2" + "reverb needs to be maxed out"
+MAIN + Reverb canonical: 175724d1fadc9dc90dd326a18b180ba0e4afc79c9312b5e2f7c80ea510ec025d
+before: {'slot': (0, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+A. write MAIN + Reverb to slot 1: {'slot': 1, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+B1. recall Channel 2 block 2: {'channel': 2, 'slot': 3, 'relative_slot': 1, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+B2. write B A S E to slot 2: {'slot': 2, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+B3. recall Channel 2 block 1: {'channel': 2, 'slot': 2, 'relative_slot': 0, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+after: {'slot': (0, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+registry slot 1: MAIN + Reverb | restored-user:MAIN + factory Reverb | 175724d1fadc9dc9 | WRITE_SENT_UNVERIFIED
+registry slot 2: B A S E | restored-user:B A S E (B A S E.scene line/ch1) | 135a93f1e6b0b63c | WRITE_SENT_UNVERIFIED
+RESULT: OK

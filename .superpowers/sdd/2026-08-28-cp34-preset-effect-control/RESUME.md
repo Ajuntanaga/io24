@@ -31,6 +31,10 @@ restored from `Main.scene` `line/ch1` to Channel 1 block 1 (slot 0): recall
 block 2, write, recall block 1, with every readable state identical before and
 after and registry slot 0 now `restored-user:MAIN` at the pinned `f74cd983…`.
 Listening is the remaining acceptance step, since slot bodies have no readback.
+Then, also on the user's go: MAIN + Doubler private reverb (Wet/Dry 100 %) to
+Channel 1 block 2 (slot 1, replacing B A S E there) and B A S E to Channel 2
+block 1 (slot 2), all readable state unchanged. A Channel-2 block cannot carry
+Voice FX: the second strip's loader has no Voice FX component.
 
 Resume from
 `runs/20260911T003754-0700-presets-and-resume/PROGRESS.md`.

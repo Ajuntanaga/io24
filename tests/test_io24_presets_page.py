@@ -245,6 +245,25 @@ class VoiceFxOwnershipTests(unittest.TestCase):
 
 
 class PutOnUnitTests(unittest.TestCase):
+    def test_channel2_voicefx_confirmation_warns_effect_will_not_play(self):
+        confirmations = []
+        host = SimpleNamespace(
+            _host_slot_entries=[],
+            _prepare_record_slot_store=lambda name, record, relative_slot,
+            source: {
+                "target": 2, "slot": 2, "relative_slot": relative_slot,
+            },
+            _confirm=lambda *args: confirmations.append(args),
+        )
+
+        io24gtk.Win._put_on_unit(
+            host, "Delay", {"voicefx": {"on": True}}, 0, "user:Delay")
+
+        self.assertEqual(len(confirmations), 1)
+        body = confirmations[0][1]
+        self.assertIn("Channel 2 blocks do not load Voice FX", body)
+        self.assertIn("the effect will not play from that block", body)
+
     def test_the_chosen_block_is_written_and_then_loaded(self):
         host = SimpleNamespace(
             ctl=SimpleNamespace(dev=object(),

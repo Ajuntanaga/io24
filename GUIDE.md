@@ -448,6 +448,8 @@ Each preset's **⋯** menu has **Put on the unit's button, block 1** and
 **block 2**. That writes the complete preset into that block of the **Load
 into** channel and then loads it, after one confirmation that names what it
 replaces. The block the channel is playing is refused; choose the other one.
+Channel 2 blocks do not load Voice FX, so their confirmation warns that an
+included effect will not play from that block.
 Your own presets also have **Delete**, which removes them from this computer
 only.
 

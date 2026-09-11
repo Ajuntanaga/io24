@@ -5568,6 +5568,10 @@ class Win(Adw.ApplicationWindow):
                 % (replaced, where) if replaced else
                 "This replaces whatever %s on the unit holds, then loads it "
                 "there." % where)
+        if (plan["target"] == 2
+                and bool(record.get("voicefx", {}).get("on"))):
+            body += (" Channel 2 blocks do not load Voice FX, so the effect "
+                     "will not play from that block.")
         self._confirm("Put %s on the unit's button?" % name, body,
                       "Replace and load",
                       lambda: self._queue_factory_slot_store(plan))

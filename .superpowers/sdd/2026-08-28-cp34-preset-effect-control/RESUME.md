@@ -1,5 +1,30 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-11 controlling checkpoint: Presets tab, A/B removed, resume on connect
+
+Built offline from the user's answers. The A/B preview is gone (`2bf9e78`).
+The Presets tab is two drop-downs, User Presets (unit blocks tagged by channel
+and block, then presets saved on the computer in
+`~/.config/io24/user-presets.json`) and Factory Presets. A double-click loads
+into the Load into channel or both when linked, and a menu can put a preset on
+the unit's button (`3b703e6`). The Host now picks up where it left off, which
+reverses the old never-automatic rule at the user's request: on every connection
+it re-sends the write-only settings it last sent, except mute, headphone mute and
+link, which the unit reports itself. If Voice FX was on it first recalls the
+owner's selected block, then re-sends that channel's DSP amount. It restores
+Host-only features once per launch from `~/.config/io24/last-session.json`. Full
+suite 597 passed, 1 skipped, 125 subtests, exit 0; matrix 748 rows,
+deterministic at `7b4a9590…142e`. No device action.
+
+The user's standing goals: a device-resident multiband, Doubler reverb
+shaping, and new effects. All need custom firmware and a separate authorized
+plan. They also asked what UC's Hot Key quick loader did, to decide whether to
+rebuild it.
+
+Resume from
+`runs/20260911T003754-0700-presets-and-resume/PROGRESS.md`.
+
+
 ## 2026-09-10 controlling checkpoint: Bypass follows the unit's press-and-hold
 
 `main` was fast-forwarded to `0f2dc41` by the user. Handoff item 3 is done

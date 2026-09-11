@@ -695,9 +695,10 @@ volumes, phantom, blend) plus the meters. So the driver keeps a mirror of what i
 has written, in `~/.cache/io24/shadow.json`, and that mirror is what presets are
 built from. It is a claim about what was last sent, not a reading: after a power
 cycle, or after Universal Control has touched the device from another host, the
-cache is not proof of current hardware state. The GTK header no longer presents
-that cache as a standing reapply question; explicit Host snapshot save/load is
-the normal recovery path, and USB reconnect never silently replays the cache.
+cache is not proof of current hardware state. Since 2026-09-11 the GTK Host
+re-sends that cache on every connection so it resumes where it left off (see
+GUIDE.md, *Making settings persist*), leaving out what the unit reports itself:
+mute, headphone mute and stereo link.
 Device preset mode, slot selection, and enable calls are
 quarantined from ordinary snapshot and cached-state replay, so those actions
 cannot move or disable a selected device slot. Run `io24.py shadow clear` when
@@ -707,7 +708,8 @@ Forgetting changes Host bookkeeping only; it emits no device command.
 GTK Host snapshot files may additionally contain `host_features.multiband`.
 Obsolete `host_features.pan` data from an older Host is ignored and is never
 re-saved. Host-only objects are never
-encoded into a device slot or replayed because USB reconnected. If a required computer-side chain fails, the Host
+encoded into a device slot; the GTK Host restores them once per launch from
+`~/.config/io24/last-session.json`, not on a USB reconnect. If a required computer-side chain fails, the Host
 reports the failure instead of claiming success.
 
 **Settings survive the host closing, but not a power cycle.** They live in the

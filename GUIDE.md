@@ -512,9 +512,28 @@ to load and do not change the current Host-only state.
 
 ### Making settings persist
 
-For arbitrary host-controlled state, `io24.py startup save` and
-`systemd/io24-startup.service` remain available — see
-[README.md](README.md#making-settings-stick). For standalone Doubler private
-reverb, use the paired device-block save above. Until its physical acceptance
-run is complete, keep a host preset as the recovery copy.
+The Host picks up where it left off, as Universal Control did. Everything it
+sends to the unit is kept on disk (`~/.cache/io24/shadow.json`), and its own
+features (the multiband panel, reverb character and movement) are saved to
+`~/.config/io24/last-session.json` every few seconds and on exit.
+
+Each time the io24 connects, the Host re-sends the settings the unit cannot
+keep through a power cycle (EQ, dynamics, mixer, reverb, Voice FX, DSP amount
+and Bypass) and shows them on the controls. What the unit reports itself (gains,
+phantom power, mute, headphone mute, stereo link, volumes, the selected block)
+comes from the unit, so a change made on the hardware while the Host was closed
+stands. The selected block is never moved. If the last session had Voice FX on,
+the owning channel's selected block is loaded first, because the unit plays
+Voice FX only after loading a block, and that channel's saved DSP amount is
+then sent again. Host-only features come back once per launch, not on every
+reconnect.
+
+Two consequences: settings changed from Universal Control on another computer in
+between are overwritten on the next connection, and Auto gain and solo start off
+each launch, as they did in Universal Control.
+
+`io24.py startup save` and `systemd/io24-startup.service` remain for applying
+settings without the Host window — see
+[README.md](README.md#making-settings-stick). For a sound that plays with no
+computer at all, put a preset on the unit's button.
 

@@ -1921,13 +1921,16 @@ class Io24:
             calls, include_device_preset_state)
         return len(replayable)
 
-    def reapply_shadow(self, include_device_preset_state=False):
+    def reapply_shadow(self, include_device_preset_state=False, skip=()):
         """Explicitly replay cached write-only Host state after an attachment.
 
         Opening a USB handle is not proof that the device still contains the
         cache: it may have retained RAM under external power, or it may have
-        cold-booted to defaults.  The GTK Host therefore calls this only from
-        its visible **Reapply cached controls** action, never automatically.
+        cold-booted to defaults.  Since 2026-09-11 the GTK Host calls this on
+        every connection, at the user's request, so it always resumes where
+        it left off; ``skip`` names the setters the unit reports itself
+        (mute, headphone mute, stereo link), so a change made on the
+        hardware while the Host was closed is not undone.
 
         Device preset mode and selection are quarantined by default. They can
         be included only by an explicit backend opt-in; when included,
@@ -1976,10 +1979,14 @@ class Io24:
             ))
 
         applied = 0
+        by_request = 0
         skipped = []
         failed = []
         for _position, (key, call) in ordered:
             name = call.get("fn") or key.split("#", 1)[0]
+            if name in skip:
+                by_request += 1
+                continue
             if name not in _SHADOWED:
                 skipped.append(key)
                 continue
@@ -1995,6 +2002,7 @@ class Io24:
             "cached": len(calls),
             "applied": applied,
             "skipped": skipped,
+            "skipped_by_request": by_request,
             "failed": failed,
             "device_preset_state_included": bool(
                 include_device_preset_state),

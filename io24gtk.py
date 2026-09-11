@@ -65,6 +65,28 @@ DEVICE_SLOT_REGISTRY_PATH = os.path.join(
     os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
     "io24", "device-slots.json")
 
+# What the Host last had open, restored at launch. Added 2026-09-11 at the
+# user's request: pick up where the last session left off, as Universal Control
+# did. The device half is the driver's own write mirror, ~/.cache/io24/shadow.json.
+LAST_SESSION_PATH = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "io24", "last-session.json")
+# Setters the unit reports itself. A resume takes these from the unit, so a
+# change made on the hardware while the Host was closed stands.
+RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link")
+
+
+def load_last_session(path=None):
+    """The last session's Host-only state, or None when there is none."""
+    try:
+        with open(str(path) if path else LAST_SESSION_PATH) as stream:
+            data = json.load(stream)
+    except (OSError, ValueError):
+        return None
+    if isinstance(data, dict) and data.get("version") == 1:
+        return data
+    return None
+
 
 def db(x):
     return -99.0 if x is None or x <= 1e-12 else 20.0 * math.log10(x)
@@ -340,8 +362,9 @@ class Ctl:
             "mute": [False, False], "hpmute": False, "link": False,
             "mainmute": False,
             # DSP/mixer blocks cannot be read back.  A newly opened handle may
-            # follow a cold boot, so a disk cache is explicitly *pending*, not
-            # silently assumed to match the interface or automatically sent.
+            # follow a cold boot, so a disk cache is *pending* until the window
+            # resumes the last session, which re-sends it on every connection
+            # (2026-09-11, at the user's request).
             "shadow_pending": bool(cached), "shadow_calls": cached,
             "attach_generation": 1 if dev is not None else 0,
             "alive": False, "error": None,
@@ -2688,6 +2711,7 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(50, self._fx_anim)             # 20 fps, page-gated
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
+        GLib.timeout_add(5000, self._autosave_session)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
         self._page_changed(stack, None)                  # set the initial state
 
@@ -6443,6 +6467,104 @@ class Win(Adw.ApplicationWindow):
         return ((1 - cw) / 2 / a0, (1 - cw) / a0, (1 - cw) / 2 / a0,
                 -2 * cw / a0, (1 - al) / a0)
 
+    def _host_features_state(self):
+        """The Host-only half of a snapshot: multiband and reverb character."""
+        host_features = {}
+        multiband = self._mbc_snapshot_state()
+        if multiband is not None:
+            host_features["multiband"] = multiband
+        reverb_character = self._reverb_character_state()
+        if reverb_character is not None:
+            host_features["reverb_character"] = reverb_character
+        return host_features
+
+    def _save_last_session(self, path=None):
+        """Remember the Host-only state for the next launch.
+
+        The device half is already on disk: the driver keeps its mirror of
+        every write in shadow.json. Returns True when the file was written.
+        """
+        try:
+            state = {"version": 1,
+                     "host_features": self._host_features_state()}
+        except Exception:
+            return False
+        text = json.dumps(state, sort_keys=True, indent=1)
+        if text == getattr(self, "_last_session_text", None):
+            return False
+        target = str(path) if path else LAST_SESSION_PATH
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(target)),
+                        exist_ok=True)
+            tmp = target + ".tmp"
+            with open(tmp, "w") as stream:
+                stream.write(text)
+            os.replace(tmp, target)
+        except OSError:
+            return False
+        self._last_session_text = text
+        return True
+
+    def _autosave_session(self):
+        self._save_last_session()
+        return True
+
+    def _maybe_resume(self, snap):
+        """Resume once per connection; Host-only state only on the first."""
+        if not snap.get("alive"):
+            return
+        generation = snap.get("attach_generation")
+        previous = getattr(self, "_resumed_generation", None)
+        if generation == previous:
+            return
+        self._resumed_generation = generation
+        self._resume_session(first=previous is None)
+
+    def _resume_session(self, first=True, path=None):
+        """Pick up where the last session left off.
+
+        The unit keeps its gains, selected block, enable and stereo link
+        through a power cycle and loses every write-only DSP setting. So on
+        each connection the Host re-sends what it last sent, except what the
+        unit reports itself, and shows it on the controls. Its own Host-only
+        features come back once per launch. The unit plays Voice FX only after
+        the channel has loaded a block, so when the last session had it on,
+        the owning channel's selected block is loaded first.
+        """
+        session = load_last_session(path) if first else None
+        host_features = (session or {}).get("host_features") if first else None
+        selected = list(self.ctl.snap.get("preset_slot") or [])
+
+        def work(dev):
+            backend = getattr(dev, "dev", dev)
+            mirror = json.loads(json.dumps(
+                getattr(backend, "_shadow", None) or {}))
+            state = shadow_ui_state(mirror)
+            owner = state["voicefx_target"] or 1
+            recalled = False
+            if (state["voicefx"] or {}).get("on") and len(selected) == 2:
+                try:
+                    backend.recall_device_slot(owner, int(selected[owner - 1]))
+                    recalled = True
+                except Exception:
+                    pass
+            try:
+                report = backend.reapply_shadow(skip=RESUME_SKIP)
+            except Exception as error:
+                GLib.idle_add(self.say,
+                              "Could not restore the last session: %s" % error)
+                return
+            # Loading a block on a bypassed channel switches it on at full
+            # amount; the saved amount, bypass included, is what resumes.
+            amount = state["processing_mix"].get(owner)
+            if recalled and amount is not None:
+                backend.set_fx_mix(owner, amount)
+            message = ("Picked up where you left off"
+                       if report.get("applied") or host_features else None)
+            GLib.idle_add(self._after_load, mirror, host_features, [], message)
+
+        self.ctl.submit(work)
+
     def on_save(self, *_a):
         self._pick(True)
 
@@ -6463,13 +6585,7 @@ class Win(Adw.ApplicationWindow):
             host_features = None
             if saving:
                 try:
-                    host_features = {}
-                    multiband = self._mbc_snapshot_state()
-                    if multiband is not None:
-                        host_features["multiband"] = multiband
-                    reverb_character = self._reverb_character_state()
-                    if reverb_character is not None:
-                        host_features["reverb_character"] = reverb_character
+                    host_features = self._host_features_state()
                 except Exception as error:
                     self.say("Save failed before writing: %s" % error)
                     return
@@ -6758,6 +6874,7 @@ class Win(Adw.ApplicationWindow):
         # three "broken controls" with this single cause.
         if not s["alive"]:
             return True
+        self._maybe_resume(s)
         for ch in (1, 2):
             self.gain_faders[ch].pull(s["gain"][ch - 1])
             self.phantom_live[ch].pull(s["phantom"][ch - 1])
@@ -7022,6 +7139,11 @@ class App(Adw.Application):
             w.mbc.stop()                  # never leave an orphan sink behind
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()
+        # Remember this session for the next launch; a window that never
+        # finished building has nothing to remember.
+        save = getattr(w, "_save_last_session", None)
+        if callable(save):
+            save()
         release_host_solo(getattr(self, "ctl", None))
         Adw.Application.do_shutdown(self)
 

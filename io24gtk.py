@@ -4490,6 +4490,36 @@ class Win(Adw.ApplicationWindow):
         if report.get("enable_asserted"):
             self._adopt_processing_mix(channel, 1.0)
 
+    DEVICE_BYPASS_HOLD_S = 0.5
+
+    def _follow_device_bypass(self, poff, now=None):
+        """Follow the unit's own press-and-hold on the Bypass switches.
+
+        JaSt bits 5/6 latch while press-and-hold has bypassed a channel, but a
+        short Preset press only blips them, so a device state counts once it
+        has held for DEVICE_BYPASS_HOLD_S. Only a *change* in that state moves
+        a switch, never a mere disagreement: a poll taken before a Host write
+        lands shows the old state unchanged, so it cannot undo the write. The
+        switch is adopted, never sent. A channel the unit re-enables is at
+        full amount, because press-and-hold writes the Boolean form of wire 4.
+        """
+        now = time.monotonic() if now is None else now
+        seen = getattr(self, "_device_bypass", None)
+        if seen is None:
+            seen = self._device_bypass = {}
+        for ch in (1, 2):
+            off = bool(poff[ch - 1])
+            accepted, candidate, since = seen.get(ch, (None, None, now))
+            if off != candidate:
+                seen[ch] = (accepted, off, now)
+                continue
+            if off == accepted or now - since < self.DEVICE_BYPASS_HOLD_S:
+                continue
+            seen[ch] = (off, off, since)
+            control = getattr(self, "processing_mix_controls", {}).get(ch)
+            if control is not None and control.bypassed() != off:
+                self._adopt_processing_mix(ch, 0.0 if off else 1.0)
+
     SOURCES = [("line/ch1", "Input 1"), ("line/ch2", "Input 2"),
                ("return/ch1", "USB playback 1-2"), ("return/ch2", "USB playback 3-4"),
                ("return/ch3", "USB playback 5-6"), ("fxreturn/ch1", "FX return")]
@@ -6825,6 +6855,7 @@ class Win(Adw.ApplicationWindow):
         self.mon["hpmute"].pull(s["hpmute"])
         self.mon["link"].pull(s["link"])
         poff = s.get("preset_off", [False, False])
+        self._follow_device_bypass(poff)
         pslot = s.get("preset_slot", [0, 0])
         self._observe_device_slot_recalls(pslot)
         rows = getattr(self, "preset_rows", {})

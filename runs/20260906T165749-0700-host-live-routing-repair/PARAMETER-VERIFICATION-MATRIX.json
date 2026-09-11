@@ -25490,7 +25490,7 @@
     "io24_presets.py": "2a7033b4f698de5843ae2984d9955fc8b7ad59d1ed2633ef87efd1bbef8568a3",
     "io24_scene.py": "8c5be86b1b44b80d84ff9e7346232bee05c20a408ca4cc4e52810adc173187e6",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "ee01b21fec7398d3d1e178db2ed697358316eebb4066b74c392eb3b5805bb28b",
+    "io24gtk.py": "c97c5baa4fdd5910c60203a9de44d633f9ad181c7da17644d41e0c578334fc82",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

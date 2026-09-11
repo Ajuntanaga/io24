@@ -1,5 +1,20 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-10 controlling checkpoint: Bypass follows the unit's press-and-hold
+
+`main` was fast-forwarded to `0f2dc41` by the user. Handoff item 3 is done
+offline: the Device page's Bypass switches now follow the unit's own
+press-and-hold from JaSt bits 5/6 — debounced 0.5 s (a short Preset press only
+blips them), edge-triggered so a stale poll never undoes a Host write, adopted
+without sending, and a unit re-enable shows 100 %. Full suite 573 passed,
+1 skipped, 127 subtests, exit 0; matrix 751 rows, deterministic at
+`24bf6ad3…88fe`. No device action. The Presets-tab reorganization and the rest
+of the 2026-09-10 handoff in `.claude-peer/OUTBOX.md` remain with Codex.
+
+Resume from
+`runs/20260910T233132-0700-bypass-follows-unit/PROGRESS.md`.
+
+
 ## 2026-09-10 controlling checkpoint: DSP amount and Bypass on the Device page
 
 The user asked (2026-09-10 ~18:53 PDT, a message queued mid-turn) for UC's

@@ -391,9 +391,11 @@ channel: Bypass sends zero, which skips that channel's EQ, dynamics and
 effects; otherwise the amount is sent. The amount is remembered and greyed out
 while bypassed, and it cannot reach zero by itself, so a bypassed channel always
 shows as one. The device reports only bypassed versus processing, so the exact
-amount is what this Host last sent, and the switch shows what the Host sent —
-it does not follow the unit's press-and-hold. A slot recall on a bypassed
-channel turns processing back on at 100%, and the controls follow. UC's own
+amount is what this Host last sent. The switch also follows the unit's
+press-and-hold once the device has reported the new state for half a second (a
+short Preset press only blips it, and is ignored); a channel the unit turns
+back on shows 100%. A slot recall on a bypassed channel likewise turns
+processing back on at 100%, and the controls follow. UC's own
 `dspAmount`/`bypassDSP` routes have no recovered device binding; pairing them
 onto this one value is the Host's reading of UC's schema, whose amount minimum
 sits just above zero.

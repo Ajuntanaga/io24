@@ -218,5 +218,67 @@ class DevicePageTests(unittest.TestCase):
                       self._function("_after_load"))
 
 
+class DeviceBypassFollowTests(unittest.TestCase):
+    """The unit's press-and-hold, reported by JaSt bits 5/6, moves the switch."""
+
+    def _host(self, amount=0.4, bypassed=False):
+        host, device = _host(amount=amount, bypassed=bypassed)
+        host.DEVICE_BYPASS_HOLD_S = io24gtk.Win.DEVICE_BYPASS_HOLD_S
+        host._follow_device_bypass = \
+            io24gtk.Win._follow_device_bypass.__get__(host)
+        return host, device
+
+    @staticmethod
+    def _feed(host, readings):
+        for now, poff in readings:
+            host._follow_device_bypass(poff, now=now)
+
+    def test_a_held_press_and_hold_bypass_is_followed_without_sending(self):
+        host, device = self._host()
+        self._feed(host, [(0.0, [False, False]), (0.6, [False, False]),
+                          (1.0, [True, False]), (1.6, [True, False])])
+        self.assertTrue(host.processing_mix_controls[1].bypassed())
+        self.assertFalse(host.processing_mix_controls[2].bypassed())
+        self.assertEqual(host.processing_mix_controls[1].amount.get_value(), 0.4)
+        self.assertEqual(device.calls, [])
+
+    def test_a_short_preset_press_blip_is_ignored(self):
+        host, _device = self._host()
+        self._feed(host, [(0.0, [False, False]), (0.6, [False, False]),
+                          (1.0, [True, False]), (1.1, [False, False]),
+                          (1.8, [False, False])])
+        self.assertFalse(host.processing_mix_controls[1].bypassed())
+        self.assertEqual(host.processing_mix_controls[1].get_value(), 0.4)
+
+    def test_a_stale_poll_never_undoes_a_host_write(self):
+        host, _device = self._host()
+        self._feed(host, [(0.0, [False, False]), (0.6, [False, False])])
+        host.processing_mix_controls[1].bypass.set_active(True)  # Host bypass
+        self._feed(host, [(2.0, [False, False]), (3.0, [False, False])])
+        self.assertTrue(host.processing_mix_controls[1].bypassed())
+        self._feed(host, [(3.1, [True, False]), (3.7, [True, False])])
+        self.assertTrue(host.processing_mix_controls[1].bypassed())
+
+    def test_the_unit_re_enabling_a_channel_shows_full_amount(self):
+        host, device = self._host(bypassed=True)
+        self._feed(host, [(0.0, [True, True]), (0.6, [True, True]),
+                          (1.0, [False, True]), (1.6, [False, True])])
+        self.assertFalse(host.processing_mix_controls[1].bypassed())
+        self.assertEqual(host.processing_mix_controls[1].get_value(), 1.0)
+        self.assertTrue(host.processing_mix_controls[2].bypassed())
+        self.assertEqual(device.calls, [])
+
+    def test_a_channel_already_bypassed_at_startup_is_shown(self):
+        host, _device = self._host()
+        self._feed(host, [(0.0, [False, True]), (0.6, [False, True])])
+        self.assertTrue(host.processing_mix_controls[2].bypassed())
+
+    def test_the_tick_follows_only_while_the_device_is_alive(self):
+        tick = DevicePageTests._function("_tick")
+        self.assertIn("self._follow_device_bypass(poff)", tick)
+        self.assertLess(tick.index('if not s["alive"]:'),
+                        tick.index("self._follow_device_bypass(poff)"))
+
+
 if __name__ == "__main__":
     unittest.main()

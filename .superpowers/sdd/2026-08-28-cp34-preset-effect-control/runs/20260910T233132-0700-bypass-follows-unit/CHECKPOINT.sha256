@@ -1,0 +1,7 @@
+c97c5baa4fdd5910c60203a9de44d633f9ad181c7da17644d41e0c578334fc82  io24gtk.py
+da712469d0b1f7c574aeb767550c8e89d8de1c3c8956ec4635fea5f4ec3e8fbc  GUIDE.md
+302ead9080c1c05b95b419148fc2556d391ec585ff23978758365e0fd095d2aa  tests/test_io24_host_dsp_amount.py
+24bf6ad399074c2141219aa8ab0c0dbad90dfdfe3c5a3435c95bcbe46bd988fe  runs/20260906T165749-0700-host-live-routing-repair/PARAMETER-VERIFICATION-MATRIX.json
+26382c79dfbbbb3701fdbdb4856684cfdeb0ffaa616e715b02d65ec113c47033  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+deeac92670802cb9659126e884d1e55a3183641f2aa168ad86ca684006dc6d2b  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260910T233132-0700-bypass-follows-unit/SCOPE.md
+029024dabd74932cb184e64ff83f971c7db5bf14027f505433eaada8463cfb3e  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260910T233132-0700-bypass-follows-unit/PROGRESS.md

@@ -39,7 +39,8 @@ silence or a steady noise floor, only on the rise and fall of real playing or
 speech. The gain fader is locked while it is on. With stereo link on the two
 switches move together and both inputs get the gain the louder one needs. The
 firmware has nothing behind UC's own switch, so this runs in the Host: it works
-only while the Host is open, and it starts off each time the Host opens.
+only while the Host is open. The Host remembers which inputs had it on and
+switches them back on the next time it opens.
 
 Double-click any fader or knob to return it to its default.
 

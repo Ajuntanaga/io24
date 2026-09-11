@@ -392,7 +392,8 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertIn('title="Shared reverb"', rendered)
         self.assertIn('title="Shared reverb engine"', rendered)
         self.assertIn('title="Shared reverb returns"', rendered)
-        self.assertIn('title="Channel processing / effects mix"', rendered)
+        # DSP amount and Bypass moved to the Device page
+        self.assertNotIn("processing_mix_controls", rendered)
         self.assertNotIn('"0% bypasses EQ, compression, limiting and effects; "',
                          rendered)
         self.assertNotIn('"Channel %d send"', rendered)
@@ -409,11 +410,12 @@ class HostStateRepairTests(unittest.TestCase):
     def test_processing_mix_uses_the_slider_as_the_only_establish_action(self):
         source = (ROOT / "io24gtk.py").read_text()
         tree = ast.parse(source)
-        fx_page = next(
+        group = next(
             node for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "_fx_page"
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_processing_group"
         )
-        rendered = ast.get_source_segment(source, fx_page)
+        rendered = ast.get_source_segment(source, group)
 
         self.assertNotIn("Set 100%", rendered)
         self.assertNotIn("processing_mix_establish", source)

@@ -1,0 +1,8 @@
+ee01b21fec7398d3d1e178db2ed697358316eebb4066b74c392eb3b5805bb28b  io24gtk.py
+d03400a51114e5843b660f16307f9a1ad0372aecd3f889ffc78b27ac849100a4  GUIDE.md
+cf9a7938089a468563e025cce4efc2c7ded0dfb8d11e066aefdb1d484c4f3354  runs/20260906T165749-0700-host-live-routing-repair/PARAMETER-VERIFICATION-MATRIX.json
+078c4c6a0f618a00f0a18f0e33d630ba0b467fc053661f1dbe41bcc8cade698f  tests/test_io24_host_state_repair.py
+c842833655aa9f61799cdb20eb66a4aee9cf06d164f80e33d047d92afb7d89aa  tests/test_io24_host_dsp_amount.py
+3681c7ed06421b0ed3b8c2c354735859d7bb5412715abcc555b1ca9671721d7d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+7da979b835f879c5e770bf453fec429bf472f4d5fed1ca60b4569dcd5f273c53  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260910T193341-0700-dsp-amount-device-page/SCOPE.md
+649a628f6ff62e11bc5a6f1987fc0a91ac6129668c4050f4f0093acb7cf4f990  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260910T193341-0700-dsp-amount-device-page/PROGRESS.md

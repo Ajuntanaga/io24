@@ -2435,6 +2435,47 @@ class AutoGain:
         return new
 
 
+class ProcessingMix:
+    """One channel's DSP amount and Bypass, composed onto one device value.
+
+    The firmware keeps a single processing scalar per channel, wire id 4
+    (`input1FxMix` / `input2FxMix`): exact zero bypasses the whole channel
+    chain and any positive value is the amount. Universal Control's schema
+    shows the same thing as two controls -- `dspAmount`, whose minimum sits just
+    above zero, and a `bypassDSP` toggle -- and neither has a device binding of
+    its own (re/UCNET_SHIM_SPEC.md 4f). So the Host composes them: zero is
+    written while bypassed and the amount otherwise, and the amount survives a
+    bypass instead of being lost to it.
+
+    Callers read and adopt the composed value exactly as they did the single
+    slider this replaces. Adopting only moves the widgets; the window raises
+    `_adopt_mute` around it so nothing is sent.
+    """
+
+    AMOUNT_MIN = 0.001
+
+    def __init__(self, amount, bypass):
+        self.amount = amount
+        self.bypass = bypass
+
+    @staticmethod
+    def label(value):
+        pct = value * 100.0
+        return "%.0f %%" % pct if pct >= 9.95 else "%.1f %%" % pct
+
+    def bypassed(self):
+        return bool(self.bypass.get_active())
+
+    def get_value(self):
+        return 0.0 if self.bypassed() else float(self.amount.get_value())
+
+    def set_value(self, value):
+        value = max(0.0, min(1.0, float(value)))
+        if value > 0.0:
+            self.amount.set_value(max(self.AMOUNT_MIN, value))
+        self.bypass.set_active(value == 0.0)
+
+
 class Throttle:
     """Leading-edge throttle with a guaranteed trailing send.
 
@@ -3834,22 +3875,6 @@ class Win(Adw.ApplicationWindow):
         insert-FX models."""
         page = Adw.PreferencesPage()
 
-        pg = Adw.PreferencesGroup(
-            title="Channel processing / effects mix")
-        self.processing_mix_controls = {}
-        self.processing_mix_rows = {}
-        for ch in (1, 2):
-            r, sc = self._srow(
-                "Channel %d mix" % ch, 0, 1, 0.005, 1.0,
-                lambda v: "bypass" if v == 0 else "%.0f %%" % (v * 100),
-                lambda v, c=ch: self._set_processing_mix(c, v),
-                "Exact value unknown. Move the slider to establish an exact "
-                "Host value")
-            self.processing_mix_controls[ch] = sc
-            self.processing_mix_rows[ch] = r
-            pg.add(r)
-        page.add(pg)
-
         g = Adw.PreferencesGroup(
             title="Shared reverb",)
         self.rev_visual = ReverbVisual(self._reverb_live_params)
@@ -3857,8 +3882,8 @@ class Win(Adw.ApplicationWindow):
 
         self.rev_on = Adw.SwitchRow(
             title="Shared reverb engine",
-            subtitle="Needs a nonzero channel processing/effects mix and an "
-                     "FX return; device readback unavailable")
+            subtitle="Needs a processing channel (Device page) and an FX "
+                     "return; device readback unavailable")
         self.rev_on.connect(
             "notify::active",
             lambda *_a: (self._push_reverb(establish_path=True),
@@ -4300,7 +4325,10 @@ class Win(Adw.ApplicationWindow):
         on = self.rev_on.get_active()
         size, mix = self.s_rsize.get_value(), self.s_rmix.get_value()
         hp, pre = self.s_rhp.get_value(), self.s_rpre.get_value()
-        processing_mix = self.processing_mix_controls[1].get_value()
+        # Read only when it is about to be sent: the Effects page is built
+        # before the Device page that owns these controls.
+        processing_mix = (self.processing_mix_controls[1].get_value()
+                          if establish_path else None)
         main_return = self.rev_return_controls["main"].get_value()
 
         def work(dev, enable=on, establish=establish_path,
@@ -4400,6 +4428,67 @@ class Win(Adw.ApplicationWindow):
                 dev.set_send_db("fxreturn/ch1", "main", dev.DEFAULT_SEND_DB)
 
         self.ctl.submit(work)
+
+    def _processing_group(self):
+        """UC's DSP Amount and Bypass for both channels.
+
+        Both controls drive the channel's one wire-4 processing scalar (see
+        ProcessingMix). The amount row is greyed out while bypassed, so the
+        slider never looks live while it can change nothing.
+        """
+        g = Adw.PreferencesGroup(title="Channel processing")
+        self.processing_mix_controls = {}
+        self.processing_mix_rows = {}
+        for ch in (1, 2):
+            bypass = Adw.SwitchRow(
+                title="Channel %d bypass" % ch,
+                subtitle="Skips this channel's EQ, dynamics and effects")
+            row, amount = self._srow(
+                "Channel %d DSP amount" % ch, ProcessingMix.AMOUNT_MIN, 1,
+                0.005, 1.0, ProcessingMix.label,
+                lambda v, c=ch: self._set_processing_amount(c, v),
+                "Exact value unknown. Move the slider to establish an exact "
+                "Host value")
+            self.processing_mix_controls[ch] = ProcessingMix(amount, bypass)
+            self.processing_mix_rows[ch] = row
+            bypass.connect(
+                "notify::active",
+                lambda _row, _p, c=ch: self._processing_bypass_toggled(c))
+            g.add(bypass)
+            g.add(row)
+        return g
+
+    def _set_processing_amount(self, channel, value):
+        """Send a moved DSP amount, but only while the channel is processing."""
+        if self.processing_mix_controls[channel].bypassed():
+            return
+        self._set_processing_mix(channel, value)
+
+    def _processing_bypass_toggled(self, channel):
+        """Bypass writes zero; releasing it writes the remembered amount."""
+        control = self.processing_mix_controls[channel]
+        self.processing_mix_rows[channel].set_sensitive(not control.bypassed())
+        if self._adopt_mute:
+            return
+        self._set_processing_mix(channel, control.get_value())
+
+    def _adopt_processing_mix(self, channel, value):
+        """Show a wire-4 value the device already holds, sending nothing."""
+        control = getattr(self, "processing_mix_controls", {}).get(channel)
+        if control is None:
+            return
+        prior = self._adopt_mute
+        self._adopt_mute = True
+        try:
+            control.set_value(value)
+        finally:
+            self._adopt_mute = prior
+        self._mark_processing_mix_known(channel)
+
+    def _follow_recall_processing(self, channel, report):
+        """A recall on a bypassed channel enabled it at full amount; show that."""
+        if report.get("enable_asserted"):
+            self._adopt_processing_mix(channel, 1.0)
 
     SOURCES = [("line/ch1", "Input 1"), ("line/ch2", "Input 2"),
                ("return/ch1", "USB playback 1-2"), ("return/ch2", "USB playback 3-4"),
@@ -4602,8 +4691,9 @@ class Win(Adw.ApplicationWindow):
         """The device's four global slots — one pair per channel, selectable.
 
         What the protocol actually allows, established by measurement:
-          * 'Pari' id 4 is a Boolean alias for the same processing/effects mix
-            exposed on the Effects page: 0 bypasses, 1 selects full processing.
+          * 'Pari' id 4 is a Boolean alias for the same processing scalar the
+            Device page shows as DSP amount and Bypass: 0 bypasses, 1 selects
+            full processing.
             JaSt slot 42 bits 5/6 report only zero versus nonzero.
           * 'Pari' id 16 selects one of four global slots; each channel's hardware
             button owns a pair. The device accepts 0..3 and hard-clamps higher.
@@ -4640,8 +4730,8 @@ class Win(Adw.ApplicationWindow):
         for ch in (1, 2):
             srow = Adw.ActionRow(
                 title="Channel %d slot" % ch,
-                subtitle="Processing status follows the unit; exact mix is "
-                         "on the Effects page")
+                subtitle="Processing status follows the unit; DSP amount "
+                         "and Bypass are on the Device page")
             # Two blocks, not four: the device's four slot indexes are GLOBAL,
             # two owned per channel (resting state reads ch1=0, ch2=2, and the
             # hardware button lands on the pair's first slot). Offering all
@@ -4909,6 +4999,7 @@ class Win(Adw.ApplicationWindow):
             pair[1].set_selected(local if 0 <= local < 2 else -1)
         self._update_fx_gate_row()
         self._adopt_recalled_slot(ch, slot)
+        self._follow_recall_processing(ch, report)
         label = name or intent["name"]
         if report.get("enable_asserted"):
             self.say("Recalled %s on Channel %d; the channel was bypassed, so "
@@ -5044,7 +5135,7 @@ class Win(Adw.ApplicationWindow):
         self.ctl.submit(work)
 
     def _device_page(self):
-        """Sample rate, buffer size and device identity.
+        """Sample rate, buffer size, channel processing and device identity.
 
         Rate and buffer are host-side on Linux: the io24 is class-compliant, so
         it advertises rates over USB Audio Class and PipeWire chooses. There is
@@ -5131,6 +5222,8 @@ class Win(Adw.ApplicationWindow):
         # not what the hardware holds.
         self.delay_scale.set_sensitive(False)
         page.add(od)
+
+        page.add(self._processing_group())
 
         lv = Adw.PreferencesGroup(title="Live stream")
         self.live_rows = {}
@@ -5729,7 +5822,7 @@ class Win(Adw.ApplicationWindow):
             (plan["name"], plan["target"], plan["relative_slot"] + 1),
             "The current Fat Channel and Voice FX controls will replace that "
             "unreadable device-resident body, using %s only for hidden archive "
-            "fields. Processing/effects mix is not part of the slot body. %s"
+            "fields. DSP amount and Bypass are not part of the slot body. %s"
             % (plan["base_name"], tail))
         dialog.add_response("cancel", "Cancel")
         dialog.add_response(
@@ -6586,10 +6679,7 @@ class Win(Adw.ApplicationWindow):
                 self.s_rhp.set_value(float(reverb.get("hp_freq", 200.0)))
                 self.s_rpre.set_value(float(reverb.get("predelay", 0.02)))
             for ch, value in state["processing_mix"].items():
-                control = getattr(self, "processing_mix_controls", {}).get(ch)
-                if control is not None:
-                    control.set_value(value)
-                    self._mark_processing_mix_known(ch)
+                self._adopt_processing_mix(ch, value)
             for bus, value in state["reverb_return"].items():
                 control = getattr(self, "rev_return_controls", {}).get(bus)
                 if control is not None and value is not None:
@@ -6747,8 +6837,8 @@ class Win(Adw.ApplicationWindow):
                     if poff[ch - 1]:
                         status_row.set_subtitle(
                             (prefix + " — " if prefix else "") +
-                            "Device reports bypass (exact 0%); set mix on "
-                            "the Effects page")
+                            "Device reports bypass (exact 0%); DSP amount "
+                            "and Bypass are on the Device page")
                     else:
                         status_row.set_subtitle(
                             (prefix + " — " if prefix else "") +

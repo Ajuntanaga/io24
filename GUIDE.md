@@ -123,15 +123,17 @@ node turns the switch back off and reports the failure.
 
 ### Reverb
 
-A shared effect on block 202. It needs a nonzero **Channel processing / effects
-mix** and the **FX return up in a bus** — set both, or nothing is audible. The
-channel control is not an isolated reverb send: zero bypasses that channel's EQ,
-compression, limiting and effects, while 100% is fully processed. Both channels
-can feed the shared engine, but their exact positive mix values are write-only;
-device readback reports only bypass versus nonzero.
+A shared effect on block 202. It needs a channel that is processing — **Bypass**
+off and a **DSP amount** above zero, both on the Device page — and the **FX
+return up in a bus**; set both, or nothing is audible. The channel control is
+not an isolated reverb send: bypass skips that channel's EQ, compression,
+limiting and effects, while 100% is fully processed. Both channels can feed the
+shared engine, but their exact amounts are write-only; device readback reports
+only bypass versus nonzero.
 
-Turning the shared reverb switch on applies the Channel 1 mix and Main-return
-level currently displayed beside it and assigns that return to Main. Moving
+Turning the shared reverb switch on re-sends Channel 1's processing as set on
+the Device page — a bypassed channel stays bypassed — and the Main-return level
+displayed beside the switch, and assigns that return to Main. Moving
 reverb-character controls updates only the engine. Turning the switch off
 disables only the shared engine, preserving the displayed path for the next use.
 
@@ -181,8 +183,8 @@ route through `with_fx=True`, CLI `--voicefx`, and the GTK **Load + Voice FX**
 button. The opted-in load first assigns the singleton VoiceFX layer to the
 requested physical channel, then selects the model, then applies `voicefx.on`
 and its model fields. A direct model edit sends the owner once, then the selected
-model and state; the visible processing/effects-mix control is the shared reverb
-path and is not part of Voice FX activation. Detuner starts at the factory
+model and state; the Device page's DSP amount and Bypass are the shared reverb
+path and are not part of Voice FX activation. Detuner starts at the factory
 Detuned Vocal values (minus 7 semitones, 80 percent wet) instead of the neutral
 zero-semitone position.
 
@@ -281,9 +283,9 @@ separately parameterized effects. Any two records would be written
 sequentially, not atomically.
 
 Do not substitute a nearby stock control for these fields: `dspAmount` and
-`bypassDSP` are host-schema/shadow values with no io24 device binding; the
-channel processing/effects mix also feeds block 202 but bypasses the whole
-channel chain at zero; and `processingChannel` changes
+`bypassDSP` have no io24 device binding of their own, and the Host's DSP amount
+and Bypass drive the whole-channel processing scalar, which also feeds block
+202 but bypasses the whole channel chain at zero; and `processingChannel` changes
 input routing rather than an effect gain. None represents a Doubler private
 reverb wet control.
 
@@ -383,6 +385,19 @@ tighter but works the CPU harder and risks dropouts.
 signal — a co-host on a call, or a stream's video path. 0–500 ms in 2 ms steps.
 It is one global delay plus a bus selector, not an independent delay per bus.
 
+**Channel processing** gives each input Universal Control's **DSP amount** and
+**Bypass**. Behind both is the one processing value the device keeps per
+channel: Bypass sends zero, which skips that channel's EQ, dynamics and
+effects; otherwise the amount is sent. The amount is remembered and greyed out
+while bypassed, and it cannot reach zero by itself, so a bypassed channel always
+shows as one. The device reports only bypassed versus processing, so the exact
+amount is what this Host last sent, and the switch shows what the Host sent —
+it does not follow the unit's press-and-hold. A slot recall on a bypassed
+channel turns processing back on at 100%, and the controls follow. UC's own
+`dspAmount`/`bypassDSP` routes have no recovered device binding; pairing them
+onto this one value is the Host's reading of UC's schema, whose amount minimum
+sits just above zero.
+
 **Channel names** are read from the device's own table.
 
 ---
@@ -419,8 +434,9 @@ re-asserting it would silently force a partial mix to full. A slot outside the
 channel's own pair is refused before any write.
 
 There is no separate per-channel preset-enable switch. Press-and-hold writes
-the Boolean 0/1 form of the same processing/effects mix shown on the Effects
-page. The slot row reports bypass or active from the device, but an active flag
+the Boolean 0/1 form of the same processing value the Device page shows as DSP
+amount and Bypass. The slot row reports bypass or active from the device, but
+an active flag
 means only “greater than zero,” not an exact percentage.
 
 The four device slots are global, two per channel (channel 1 owns the first

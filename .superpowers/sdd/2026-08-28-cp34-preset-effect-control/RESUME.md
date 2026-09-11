@@ -1,5 +1,31 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-10 controlling checkpoint: DSP amount and Bypass on the Device page
+
+The user asked (2026-09-10 ~18:53 PDT, a message queued mid-turn) for UC's
+`dspAmount`/`bypassDSP` as settings in the Host's settings tab. Built offline on
+worktree branch `worktree-io24-dsp-device-tab`: per channel a Bypass switch and
+a DSP amount slider on the Device page, composed onto the one wire-4 processing
+scalar — zero while bypassed, the amount otherwise, the amount never below
+0.1 % so it cannot read as bypass. The Effects-page processing slider is gone.
+A recall that had to assert the enable now shows 100 %, not bypassed. The
+pairing is the Host's reading of UC's schema, not a recovered UC binding; the
+matrix component rows stay `PENDING`, and partial amounts are unmeasured on the
+main path. Full suite 567 passed, 1 skipped, 127 subtests, exit 0; matrix 751
+rows, deterministic at `cf9a7938…3354`. No device action.
+
+Worktrees: a fresh one lacks six gitignored UC 4.7.2 binaries under `runs/`,
+and 7 UC-analysis tests then fail on missing inputs; symlink them from the main
+checkout. Commit `1fc5245` carries the solo/auto gain/Vintage EQ run
+byte-for-byte; the main checkout still holds those changes uncommitted.
+
+The Channel-1 slot-0 MAIN rewrite from `Main.scene` ch1 is still staged (see
+the correction in the next section).
+
+Resume from
+`runs/20260910T193341-0700-dsp-amount-device-page/PROGRESS.md`.
+
+
 ## 2026-09-10 controlling checkpoint: Host solo, auto gain, Vintage EQ view
 
 Built offline the three Host gaps from Codex's 2026-09-09 audit that remained

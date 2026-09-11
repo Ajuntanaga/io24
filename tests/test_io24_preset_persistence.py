@@ -757,12 +757,13 @@ class PresetPersistenceTests(unittest.TestCase):
              for entry in entries],
             [(0, "MAIN"), (1, "B A S E")])
 
-    def test_presets_page_exposes_host_registry_presets_separately(self):
+    def test_presets_page_lists_host_registry_presets_among_user_presets(self):
         source = (Path(__file__).parents[1] / "io24gtk.py").read_text()
 
-        self.assertIn('title="Host presets"', source)
-        self.assertIn("self._host_preset_group()", source)
+        self.assertNotIn('title="Host presets"', source)
         self.assertIn("self.device_slot_registry.entries", source)
+        self.assertIn('getattr(self, "_host_slot_entries", [])', source)
+        self.assertIn("self._load_device_entry(e)", source)
 
     def test_capture_baseline_records_parameters_not_an_unknown_gate(self):
         tree = ast.parse((Path(__file__).with_name("usbtap_py.py")).read_text())
@@ -796,7 +797,9 @@ class PresetPersistenceTests(unittest.TestCase):
         web_source = (root / "io24web.py").read_text()
 
         self.assertIn("Saved %d host-file settings to %s", gtk_source)
-        self.assertIn('title="Device slots"', gtk_source)
+        # 2026-09-11: presets on the unit are listed among User Presets,
+        # tagged by where they live, rather than in a section of their own.
+        self.assertIn('"On the unit · Channel %d, block %d"', gtk_source)
         self.assertNotIn("selected device slot", gtk_source)
         self.assertIn('"scope": "host-file"', web_source)
 

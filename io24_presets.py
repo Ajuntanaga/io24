@@ -342,6 +342,99 @@ def names():
     return sorted(load())
 
 
+# ---------------------------------------------------------------- user presets
+# The user's own presets live on this computer, in the same list-of-records
+# format as the factory file, so one loader and one apply path serve both.
+USER_PRESETS_PATH = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "io24", "user-presets.json")
+
+
+def _user_path(path):
+    return str(path) if path else USER_PRESETS_PATH
+
+
+def _preset_name(name):
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("a preset needs a name")
+    return name.strip()
+
+
+def _read_user_records(path=None):
+    p = _user_path(path)
+    if not os.path.exists(p):
+        return []
+    with open(p) as stream:
+        text = stream.read()
+    try:
+        raw = json.loads(text)
+    except ValueError as error:
+        raise ValueError("the saved presets in %s are damaged: %s"
+                         % (p, error)) from error
+    if not isinstance(raw, list) or not all(
+            isinstance(r, dict) and isinstance(r.get("preset_name"), str)
+            for r in raw):
+        raise ValueError("the saved presets in %s are not a list of named "
+                         "presets" % p)
+    return raw
+
+
+def _write_user_records(records, path=None):
+    """Write via a temp file and rename, so a crash never leaves half a file."""
+    p = _user_path(path)
+    os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
+    tmp = p + ".tmp"
+    with open(tmp, "w") as stream:
+        json.dump(records, stream, indent=1)
+    os.replace(tmp, p)
+
+
+def load_user_presets(path=None):
+    """The user's own presets, keyed by name, in the order they were saved.
+
+    A missing file is simply no presets; a damaged one is refused rather than
+    read as empty, so a later save cannot silently overwrite it.
+    """
+    return {r["preset_name"]: r for r in _read_user_records(path)}
+
+
+def save_user_preset(name, record, path=None):
+    """Store one preset under ``name``, replacing a same-named one in place."""
+    name = _preset_name(name)
+    records = _read_user_records(path)
+    record = dict(record)
+    record["preset_name"] = name
+    for index, existing in enumerate(records):
+        if existing["preset_name"] == name:
+            records[index] = record
+            break
+    else:
+        records.append(record)
+    _write_user_records(records, path)
+
+
+def delete_user_preset(name, path=None):
+    records = _read_user_records(path)
+    kept = [r for r in records if r["preset_name"] != name]
+    if len(kept) == len(records):
+        raise KeyError(name)
+    _write_user_records(kept, path)
+
+
+def rename_user_preset(old, new, path=None):
+    new = _preset_name(new)
+    records = _read_user_records(path)
+    names = [r["preset_name"] for r in records]
+    if old not in names:
+        raise KeyError(old)
+    if new != old and new in names:
+        raise ValueError("a preset named %r already exists" % new)
+    for record in records:
+        if record["preset_name"] == old:
+            record["preset_name"] = new
+    _write_user_records(records, path)
+
+
 def describe(p):
     """A one-line summary, for a UI list."""
     bits = []

@@ -237,8 +237,8 @@ Control's window. Live meters for both inputs and all three buses, gain reductio
 for the gate, compressor and limiter, channel strips, monitoring, a four-band EQ
 with a 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
-the Presets page separates device slots, Host-known user presets, and the
-searchable factory-sound library.
+the Presets page holds your presets and the factory presets in two drop-downs,
+loads one with a double-click, and can put one on the unit's Preset button.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is

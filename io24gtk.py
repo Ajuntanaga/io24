@@ -1526,79 +1526,6 @@ MODEL_TITLES = ["Doubler / Transformer", "Detuner", "Vocoder", "Ring Modulator",
                 "Filters", "Delay"]
 
 
-class SlotBlocks(Gtk.Box):
-    """The device's preset slots as blocks, not a dropdown.
-
-    The unit has two Preset buttons per channel on its face, and the wire
-    parameter ('Pari' 16) addresses four slots — the firmware clamps anything
-    higher. So four blocks, with the first two marked as the ones the hardware
-    buttons reach, which is the mapping a user actually has in their hands.
-
-    Exposes get_selected/set_selected so it drops straight into the code that
-    was driving an Adw.ComboRow.
-    """
-
-    def __init__(self, count=4, hardware=2, on_change=None):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        self.add_css_class("linked")
-        self.set_halign(Gtk.Align.CENTER)
-        self._on_change = on_change
-        self._mute = False
-        self.buttons = []
-        for i in range(count):
-            b = Gtk.ToggleButton(label=str(i + 1))
-            b.set_size_request(46, 34)
-            b.add_css_class("io24-slot")
-            if i < hardware:
-                b.add_css_class("io24-slot-hw")
-                b.set_tooltip_text("Slot %d — reachable from the unit's Preset "
-                                   "button" % (i + 1))
-            else:
-                b.set_tooltip_text("Slot %d — host-selectable only" % (i + 1))
-            b.connect("toggled", self._toggled, i)
-            self.buttons.append(b)
-            self.append(b)
-        # Seed the initial block with the handler muted. Letting it fire meant a
-        # slot write went to the device merely because the window was built, and
-        # say() ran before the toast overlay existed.
-        self._mute = True
-        try:
-            self.buttons[0].set_active(True)
-        finally:
-            self._mute = False
-
-    def _toggled(self, btn, idx):
-        if self._mute or not btn.get_active():
-            return
-        self._mute = True
-        try:
-            for j, b in enumerate(self.buttons):
-                if j != idx:
-                    b.set_active(False)
-        finally:
-            self._mute = False
-        if self._on_change:
-            self._on_change(idx)
-
-    def get_selected(self):
-        for i, b in enumerate(self.buttons):
-            if b.get_active():
-                return i
-        return 0
-
-    def set_selected(self, idx):
-        """idx -1 deselects everything — the device can be pointing at a slot
-        outside this widget's pair, and lighting a wrong block would lie."""
-        if idx == self.get_selected() and idx >= 0:
-            return
-        self._mute = True
-        try:
-            for i, b in enumerate(self.buttons):
-                b.set_active(i == idx)
-        finally:
-            self._mute = False
-
-
 class Knob(Canvas):
     """A rotary control. Drag vertically to turn, double-click to centre.
 
@@ -4715,64 +4642,6 @@ class Win(Adw.ApplicationWindow):
             self._mix_mute = False
         return False
 
-    def _device_preset_group(self):
-        """The device's four global slots — one pair per channel, selectable.
-
-        What the protocol actually allows, established by measurement:
-          * 'Pari' id 4 is a Boolean alias for the same processing scalar the
-            Device page shows as DSP amount and Bypass: 0 bypasses, 1 selects
-            full processing.
-            JaSt slot 42 bits 5/6 report only zero versus nonzero.
-          * 'Pari' id 16 selects one of four global slots; each channel's hardware
-            button owns a pair. The device accepts 0..3 and hard-clamps higher.
-          * A sweep changed only the readable index among all 503 state floats.
-            The DSP is write-only, so that does not exclude internal recall. The
-            device has factory content, but its preset component cannot be read
-            or written through the decoded direct-control resolver. This app's
-            custom settings therefore live in host-side preset files.
-        """
-        g = Adw.PreferencesGroup(title="Device slots")
-        self.preset_rows = {}
-        self._load_host_slot_entries()
-        # These rows are also driven FROM the device by _sync (slot 42 bits 5/6
-        # and slots 40/41), and set_active/set_selected fire the same signals a
-        # user click does. Without this guard the app would echo the device's own
-        # reported state straight back as a write — so pressing and holding on the
-        # front panel would provoke a host write describing what the panel just
-        # did, and the two could fight. The flag makes programmatic updates silent.
-        self._preset_sync = False
-
-        # The device-wide preset mode: how many blocks the unit shows and its
-        # button cycles. 'Pari' wire 17 (internal id 2). Write-only — nothing
-        # in the state blob reports it — so this row commands, it cannot
-        # follow the hardware.
-        self.preset_mode_row = Adw.ComboRow(
-            title="Preset blocks on the unit",
-            subtitle="Write-only \u2014 but in Two mode the slots below do "
-                     "follow the unit's button",
-            model=Gtk.StringList.new(["One", "Two", "None"]))
-        self.preset_mode_row.set_selected(1)
-        self.preset_mode_row.connect("notify::selected", self._preset_mode_changed)
-        g.add(self.preset_mode_row)
-
-        for ch in (1, 2):
-            srow = Adw.ActionRow(
-                title="Channel %d slot" % ch,
-                subtitle="Processing status follows the unit; DSP amount "
-                         "and Bypass are on the Device page")
-            # Two blocks, not four: the device's four slot indexes are GLOBAL,
-            # two owned per channel (resting state reads ch1=0, ch2=2, and the
-            # hardware button lands on the pair's first slot). Offering all
-            # four let a channel point into the other's pair, which the
-            # 2026-08-10 button test showed produces exactly the half-broken
-            # states it looked like it would.
-            sl = SlotBlocks(2, 2,
-                            lambda idx, c=ch: self._preset_block_changed(c, idx))
-            srow.add_suffix(sl)
-            g.add(srow)
-            self.preset_rows[ch] = (srow, sl)
-        return g
-
     def _load_host_slot_entries(self):
         """Read the identity-bound registry into the Host's own slot view."""
         try:
@@ -4795,57 +4664,7 @@ class Win(Adw.ApplicationWindow):
         the gate row could not name it either.
         """
         self._load_host_slot_entries()
-        self._populate_host_preset_group()
-
-    def _host_preset_group(self):
-        """List complete slot bodies the Host has actually sent."""
-        group = Adw.PreferencesGroup(title="Host presets")
-        self.host_preset_group = group
-        self._host_preset_rows = []
-        self._populate_host_preset_group()
-        return group
-
-    def _populate_host_preset_group(self):
-        """Fill or refill the Host preset list from the current registry view."""
-        group = getattr(self, "host_preset_group", None)
-        if group is None:
-            return
-        for row in getattr(self, "_host_preset_rows", []):
-            group.remove(row)
-        self._host_preset_rows = []
-        entries = getattr(self, "_host_slot_entries", [])
-        if not entries:
-            row = Adw.ActionRow(
-                title="No Host-known user presets",
-                subtitle="A device slot may still contain unreadable content")
-            group.add(row)
-            self._host_preset_rows.append(row)
-            return
-        for entry in entries:
-            slot = entry["slot"]
-            channel = entry["physical_channel"]
-            relative = slot - self.PRESET_BASE[channel] + 1
-            fx = entry["record"].get("voicefx") or {}
-            row = Adw.ActionRow(
-                title=entry["record"]["preset_name"],
-                subtitle="Channel %d block %d · Voice FX %s · "
-                         "sent-write receipt · %s" %
-                         (channel, relative,
-                          "on" if fx.get("on") else "off",
-                          entry["device_identity"]["serial"]))
-            # Storing a body is not recalling it. Without this the list was a
-            # receipt the user could read and never act on, and the device's
-            # own Stat load — the only decoded thing that opens block 201's
-            # gate — had no trigger anywhere in the Host.
-            recall = Gtk.Button(label="Recall on device",
-                                valign=Gtk.Align.CENTER)
-            if fx.get("on"):
-                recall.add_css_class("suggested-action")
-            recall.connect("clicked", self._recall_host_preset, entry)
-            row.add_suffix(recall)
-            row.set_activatable_widget(recall)
-            group.add(row)
-            self._host_preset_rows.append(row)
+        self._populate_user_presets()
 
     def _preset_mode_changed(self, row, _p):
         if getattr(self, "_preset_sync", False):
@@ -4854,11 +4673,6 @@ class Win(Adw.ApplicationWindow):
         self.ctl.submit(lambda dev: dev.set_preset_mode(mode))
 
     PRESET_BASE = {1: 0, 2: 2}           # each channel's first global slot
-
-    def _preset_block_changed(self, ch, idx):
-        if getattr(self, "_preset_sync", False):
-            return
-        self._slot_changed(ch, self.PRESET_BASE[ch] + idx)
 
     def _slot_changed(self, ch, slot):
         """Selecting a block recalls it — the device runs its own Stat load.
@@ -5159,6 +4973,7 @@ class Win(Adw.ApplicationWindow):
         page.add(od)
 
         page.add(self._processing_group())
+        page.add(self._preset_button_group())
 
         lv = Adw.PreferencesGroup(title="Live stream")
         self.live_rows = {}
@@ -5398,132 +5213,358 @@ class Win(Adw.ApplicationWindow):
         return True
 
     def _presets_page(self):
-        """Universal Control's own factory presets, recovered from the installer."""
-        page = Adw.PreferencesPage()
-        # The device's own slots go first, and OUTSIDE the try below: they are a
-        # property of the hardware and have nothing to do with whether the
-        # recovered factory-preset data happens to be present. Adding them after
-        # the try is what left this group orphaned — every early return skipped
-        # it, and the group was built but never attached to any page at all.
-        page.add(self._device_preset_group())
-        page.add(self._host_preset_group())
-        # One pointer to the written guide, in place of the paragraphs that used
-        # to sit above every group on every page.
-        hint = Adw.PreferencesGroup()
-        row = Adw.ActionRow(title="What these controls do",
-                            subtitle="GUIDE.md, next to the app")
-        row.add_prefix(Gtk.Image.new_from_icon_name("help-about-symbolic"))
-        hint.add(row)
-        page.add(hint)
-        try:
-            import io24_presets as PR
-            self.PR = PR
-            names = PR.names()
-        except SystemExit as e:
-            self.PR = None
-            g = Adw.PreferencesGroup(title="Factory sounds")
-            g.add(Adw.ActionRow(title="Preset data not present",
-                                subtitle=str(e).split("\n")[0]))
-            page.add(g)
-            return page
-        except Exception as e:
-            self.PR = None
-            g = Adw.PreferencesGroup(title="Factory sounds")
-            g.add(Adw.ActionRow(title="Could not load presets", subtitle=str(e)))
-            page.add(g)
-            return page
+        """User presets and factory presets, as two drop-downs.
 
-        g = Adw.PreferencesGroup(title="Factory sounds")
-        search_row = Adw.ActionRow(
-            title="Find a factory sound",
-            subtitle="Filters names and sound descriptions")
-        self.factory_search = Gtk.SearchEntry(
-            placeholder_text="Search factory sounds…",
-            valign=Gtk.Align.CENTER)
-        self.factory_search.set_size_request(240, -1)
-        search_row.add_suffix(self.factory_search)
-        g.add(search_row)
+        One list per origin and one way to load: double-click a preset and its
+        Fat Channel and Voice FX go to the channel chosen in Load into, or to
+        both while the channels are linked. Presets the user saves live on this
+        computer; putting one on the unit's Preset button is an action on the
+        preset, not a section of its own.
+        """
+        page = Adw.PreferencesPage()
+        g = Adw.PreferencesGroup(title="Presets")
+
         self.factory_target = Adw.ComboRow(
-            title="Target channel",
-            subtitle="Unlinked: loads this strip. Linked: loads both strips and "
-                     "assigns Voice FX to this input.",
+            title="Load into",
+            subtitle="Both channels while they are linked",
             model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
         self.factory_target.set_selected(0)
         g.add(self.factory_target)
-        self.factory_device_slot = Adw.ComboRow(
-            title="Device-store destination",
-            subtitle="Writes a complete body only; selection and recall stay "
-                     "separate",
-            model=Gtk.StringList.new(["Slot 1", "Slot 2"]))
-        self.factory_device_slot.set_selected(1)
-        g.add(self.factory_device_slot)
-        self.factory_names = list(names)
-        self.factory_device_base = Adw.ComboRow(
-            title="Complete-body base",
-            subtitle="Supplies archive fields the live Host does not expose; "
-                     "all visible channel and Voice FX controls are replaced",
-            model=Gtk.StringList.new(self.factory_names))
-        if "Broadcast" in self.factory_names:
-            self.factory_device_base.set_selected(
-                self.factory_names.index("Broadcast"))
-        g.add(self.factory_device_base)
-        # A preset you cannot name is a preset you cannot find again. The
-        # record builder has always taken a name; the Host never asked for one
-        # and hardcoded "Current Channel N" into every body it wrote.
+
+        search_row = Adw.ActionRow(title="Find a preset")
+        self.factory_search = Gtk.SearchEntry(
+            placeholder_text="Search presets…", valign=Gtk.Align.CENTER)
+        self.factory_search.set_size_request(240, -1)
+        self.factory_search.connect(
+            "search-changed", lambda _entry: self._filter_presets())
+        search_row.add_suffix(self.factory_search)
+        g.add(search_row)
+
+        # A preset you cannot name is a preset you cannot find again.
         self.slot_name_row = Adw.EntryRow(title="Preset name")
+        save = Gtk.Button(label="Save", valign=Gtk.Align.CENTER)
+        save.add_css_class("suggested-action")
+        save.set_tooltip_text(
+            "Saves the Load into channel's current sound, Voice FX included, "
+            "to your presets on this computer")
+        save.connect("clicked", self._save_user_preset_clicked)
+        self.slot_name_row.add_suffix(save)
         g.add(self.slot_name_row)
 
-        current_row = Adw.ActionRow(
-            title="Current sound",
-            subtitle="Stores the selected channel and current Voice FX as one "
-                     "complete body")
-        # Saving a body the device never loads is half an action. Activating
-        # writes the chosen block and then recalls it, which is also the only
-        # decoded way to open the Voice FX gate.
-        current_activate = Gtk.Button(
-            label="Save and activate…", valign=Gtk.Align.CENTER)
-        current_activate.add_css_class("suggested-action")
-        current_activate.connect(
-            "clicked", self._store_current_slot_clicked, True)
-        current_store = Gtk.Button(
-            label="Save only…", valign=Gtk.Align.CENTER)
-        current_store.connect(
-            "clicked", self._store_current_slot_clicked, False)
-        current_row.add_suffix(current_store)
-        current_row.add_suffix(current_activate)
-        current_row.set_activatable_widget(current_activate)
-        g.add(current_row)
-        self.factory_preset_rows = []
-        for n in names:
-            pr = PR.load()[n]
-            supported, reason = PR.direct_apply_support(pr)
-            summary = PR.describe(pr)
-            if not supported:
-                summary = "%s — %s" % (summary, reason)
-            row = Adw.ActionRow(title=n, subtitle=summary)
-            if supported:
-                b = Gtk.Button(label="Load strip", valign=Gtk.Align.CENTER)
-                b.connect("clicked", self._load_factory, n, False)
-                row.add_suffix(b)
-                row.set_activatable_widget(b)
-                if pr.get("voicefx", {}).get("on"):
-                    fx = Gtk.Button(label="Load + Voice FX",
-                                    valign=Gtk.Align.CENTER)
-                    fx.add_css_class("suggested-action")
-                    fx.connect("clicked", self._load_factory, n, True)
-                    row.add_suffix(fx)
-            g.add(row)
-            self.factory_preset_rows.append((row, n, summary))
-
-        def filter_factory(entry):
-            query = entry.get_text()
-            for preset_row, preset_name, preset_summary in self.factory_preset_rows:
-                preset_row.set_visible(factory_preset_matches(
-                    query, preset_name, preset_summary))
-
-        self.factory_search.connect("search-changed", filter_factory)
+        self.user_presets_row = Adw.ExpanderRow(
+            title="User Presets", expanded=True)
+        g.add(self.user_presets_row)
+        self.factory_presets_row = Adw.ExpanderRow(title="Factory Presets")
+        g.add(self.factory_presets_row)
         page.add(g)
+
+        # The module always serves the user's own presets; only the factory
+        # list depends on the recovered installer data being present.
+        self.PR = io24_presets
+        self._factory_unavailable = None
+        try:
+            self.factory_names = list(io24_presets.names())
+        except SystemExit as error:
+            self.factory_names = []
+            self._factory_unavailable = str(error).split("\n")[0]
+        except Exception as error:
+            self.factory_names = []
+            self._factory_unavailable = str(error)
+        self._preset_rows_by_origin = {"user": [], "factory": []}
+        self._load_host_slot_entries()
+        self._populate_user_presets()
+        self._populate_factory_presets()
         return page
+
+    def _populate_user_presets(self):
+        """Fill User Presets: the unit's known blocks, then presets saved here."""
+        expander = getattr(self, "user_presets_row", None)
+        if expander is None:
+            return
+        by_origin = self._preset_rows_by_origin
+        for row in by_origin["user"]:
+            expander.remove(row)
+        rows = by_origin["user"] = []
+        self._unit_preset_rows = {}
+        self._marked_pslot = None
+        for entry in getattr(self, "_host_slot_entries", []):
+            channel = entry["physical_channel"]
+            block = entry["slot"] - self.PRESET_BASE[channel] + 1
+            subtitle = "On the unit · Channel %d, block %d" % (channel, block)
+            row = Adw.ActionRow(title=entry["record"]["preset_name"],
+                                subtitle=subtitle)
+            self._on_double_click(
+                row, lambda e=entry: self._load_device_entry(e))
+            self._unit_preset_rows[entry["slot"]] = (row, subtitle)
+            rows.append(row)
+        try:
+            saved = self.PR.load_user_presets()
+        except (OSError, ValueError) as error:
+            saved = {}
+            rows.append(Adw.ActionRow(
+                title="Your saved presets could not be read",
+                subtitle=str(error)))
+        for name, record in saved.items():
+            row = Adw.ActionRow(title=name,
+                                subtitle=self._preset_summary(record))
+            self._on_double_click(
+                row, lambda n=name, r=record:
+                self._load_factory(None, n, True, record=r))
+            row.add_suffix(self._preset_menu(
+                name, record, "user:%s" % name, deletable=True))
+            rows.append(row)
+        if not rows:
+            rows.append(Adw.ActionRow(
+                title="No saved presets yet",
+                subtitle="Name the current sound above and press Save"))
+        for row in rows:
+            expander.add_row(row)
+        self._mark_playing_unit_blocks(self.ctl.snap.get("preset_slot"))
+        self._filter_presets()
+
+    def _populate_factory_presets(self):
+        """Fill Factory Presets from Universal Control's recovered library."""
+        expander = getattr(self, "factory_presets_row", None)
+        if expander is None:
+            return
+        by_origin = self._preset_rows_by_origin
+        for row in by_origin["factory"]:
+            expander.remove(row)
+        rows = by_origin["factory"] = []
+        if self._factory_unavailable:
+            rows.append(Adw.ActionRow(title="Factory presets are not present",
+                                      subtitle=self._factory_unavailable))
+        records = self.PR.load() if self.factory_names else {}
+        for name in self.factory_names:
+            record = records[name]
+            supported, reason = self.PR.direct_apply_support(record)
+            summary = self._preset_summary(record)
+            row = Adw.ActionRow(
+                title=name,
+                subtitle=summary if supported
+                else "%s — %s" % (summary, reason))
+            if supported:
+                self._on_double_click(
+                    row, lambda n=name: self._load_factory(None, n, True))
+                row.add_suffix(self._preset_menu(
+                    name, record, "factory:%s" % name))
+            rows.append(row)
+        for row in rows:
+            expander.add_row(row)
+        self._filter_presets()
+
+    def _preset_summary(self, record):
+        try:
+            return self.PR.describe(record)
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _on_double_click(row, callback):
+        """Load on a double-click, as Universal Control's preset list did."""
+        gesture = Gtk.GestureClick()
+
+        def pressed(_gesture, n_press, _x, _y):
+            if n_press == 2:
+                callback()
+
+        gesture.connect("pressed", pressed)
+        row.add_controller(gesture)
+        row.set_tooltip_text("Double-click to load")
+
+    def _preset_menu(self, name, record, source, deletable=False):
+        """One preset's actions: put it on the unit's button, or delete it."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        popover = Gtk.Popover(child=box)
+
+        def item(label, action):
+            button = Gtk.Button(label=label)
+            button.add_css_class("flat")
+
+            def clicked(_button):
+                popover.popdown()
+                action()
+
+            button.connect("clicked", clicked)
+            box.append(button)
+
+        for block in (1, 2):
+            item("Put on the unit's button, block %d" % block,
+                 lambda b=block: self._put_on_unit(name, record, b - 1, source))
+        if deletable:
+            item("Delete", lambda: self._confirm_user_delete(name))
+        menu = Gtk.MenuButton(icon_name="view-more-symbolic", popover=popover,
+                              valign=Gtk.Align.CENTER)
+        menu.add_css_class("flat")
+        menu.set_tooltip_text("Put on the unit, or delete")
+        return menu
+
+    def _filter_presets(self):
+        """Filter both drop-downs by name and description."""
+        search = getattr(self, "factory_search", None)
+        query = search.get_text() if search is not None else ""
+        for rows in getattr(self, "_preset_rows_by_origin", {}).values():
+            for row in rows:
+                row.set_visible(factory_preset_matches(
+                    query, row.get_title(), row.get_subtitle() or ""))
+        if query.strip():
+            for expander in (getattr(self, "user_presets_row", None),
+                             getattr(self, "factory_presets_row", None)):
+                if expander is not None:
+                    expander.set_expanded(True)
+
+    def _mark_playing_unit_blocks(self, pslot):
+        """Mark each unit preset whose block its channel is playing."""
+        if not isinstance(pslot, (list, tuple)) or len(pslot) != 2:
+            return
+        if list(pslot) == getattr(self, "_marked_pslot", None):
+            return
+        self._marked_pslot = list(pslot)
+        for slot, (row, subtitle) in getattr(
+                self, "_unit_preset_rows", {}).items():
+            row.set_subtitle(subtitle + (" · playing" if slot in pslot else ""))
+
+    def _load_device_entry(self, entry):
+        """Load a preset that lives on the unit.
+
+        On its own channel the unit loads it from the block itself, the Stat
+        load that also opens the Voice FX gate. Anywhere else the Host applies
+        the same record, as it does a factory preset.
+        """
+        channel = entry["physical_channel"]
+        name = entry["record"].get("preset_name", "that preset")
+        target = self._factory_target_channel()
+        chans = (1, 2) if self.link_both else (target,)
+        if channel in chans:
+            self._recall_host_preset(None, entry)
+            others = tuple(ch for ch in chans if ch != channel)
+            if others:
+                self._load_factory(None, name, False, record=entry["record"],
+                                   channels=others)
+        else:
+            self._load_factory(None, name, True, record=entry["record"],
+                               channels=chans)
+
+    def _slot_base_name(self):
+        """The factory record that supplies fields the Host does not expose."""
+        names = getattr(self, "factory_names", [])
+        if not names:
+            raise io24.HostActionError(
+                "the factory preset data is not present, so there is no "
+                "complete base to save onto")
+        return "Broadcast" if "Broadcast" in names else names[0]
+
+    def _save_user_preset_clicked(self, _button):
+        """Save the Load into channel's current sound as one of your presets."""
+        try:
+            name = self._current_slot_name()
+            target = self._factory_target_channel()
+            record = self._current_slot_record(
+                self._slot_base_name(), target, name, strict_voicefx=False)
+            exists = name in self.PR.load_user_presets()
+        except Exception as error:
+            self.say("Preset not saved: %s" % error)
+            return
+        if exists:
+            self._confirm_user_overwrite(name, record)
+            return
+        self._store_user_preset(name, record)
+
+    def _store_user_preset(self, name, record):
+        try:
+            self.PR.save_user_preset(name, record)
+        except Exception as error:
+            self.say("Preset not saved: %s" % error)
+            return
+        self._populate_user_presets()
+        self.say("Saved %s to your presets" % name)
+
+    def _confirm(self, heading, body, verb, action):
+        dialog = Adw.MessageDialog.new(self, heading, body)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("go", verb)
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("cancel")
+        dialog.set_response_appearance("go", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def responded(_dialog, response):
+            if response == "go":
+                action()
+
+        dialog.connect("response", responded)
+        dialog.present()
+
+    def _confirm_user_overwrite(self, name, record):
+        self._confirm(
+            "Replace %s?" % name,
+            "One of your presets already has this name. Saving replaces it "
+            "with the current sound.",
+            "Replace", lambda: self._store_user_preset(name, record))
+
+    def _confirm_user_delete(self, name):
+        self._confirm(
+            "Delete %s?" % name,
+            "It is removed from your presets on this computer. A copy you put "
+            "on the unit's button stays there.",
+            "Delete", lambda: self._delete_user_preset(name))
+
+    def _delete_user_preset(self, name):
+        try:
+            self.PR.delete_user_preset(name)
+        except Exception as error:
+            self.say("%s was not deleted: %s" % (name, error))
+            return
+        self._populate_user_presets()
+        self.say("Deleted %s" % name)
+
+    def _prepare_record_slot_store(self, name, record, relative_slot, source):
+        """Plan writing one preset into a block of the Load into channel, then
+        loading it there so it is heard."""
+        plan = self._prepare_slot_store_target(relative_slot=relative_slot)
+        body = complete_device_slot_record(record)
+        body["preset_name"] = name
+        plan.update({"name": name, "record": body, "source": source,
+                     "activate": True})
+        return plan
+
+    def _put_on_unit(self, name, record, relative_slot, source):
+        """Confirm, then write the preset to the unit's button and load it."""
+        try:
+            plan = self._prepare_record_slot_store(
+                name, record, relative_slot, source)
+        except Exception as error:
+            self.say("%s was not put on the unit: %s" % (name, error))
+            return
+        replaced = next((entry["record"]["preset_name"]
+                         for entry in getattr(self, "_host_slot_entries", [])
+                         if entry["slot"] == plan["slot"]), None)
+        where = "Channel %d block %d" % (plan["target"],
+                                         plan["relative_slot"] + 1)
+        body = ("This replaces %s in %s on the unit, then loads it there."
+                % (replaced, where) if replaced else
+                "This replaces whatever %s on the unit holds, then loads it "
+                "there." % where)
+        self._confirm("Put %s on the unit's button?" % name, body,
+                      "Replace and load",
+                      lambda: self._queue_factory_slot_store(plan))
+
+    def _preset_button_group(self):
+        """How many blocks the unit's Preset button steps through."""
+        g = Adw.PreferencesGroup(title="Preset button")
+        # Guards programmatic updates so they are never echoed back as writes.
+        self._preset_sync = False
+        # 'Pari' wire 17 (internal id 2). Write-only: nothing in the state
+        # blob reports it, so this row commands and cannot follow the unit.
+        self.preset_mode_row = Adw.ComboRow(
+            title="Preset blocks on the unit",
+            subtitle="How many blocks the unit's Preset button steps "
+                     "through; the unit cannot report it back",
+            model=Gtk.StringList.new(["One", "Two", "None"]))
+        self.preset_mode_row.set_selected(1)
+        self.preset_mode_row.connect("notify::selected",
+                                     self._preset_mode_changed)
+        g.add(self.preset_mode_row)
+        return g
 
     def _factory_target_channel(self):
         row = getattr(self, "factory_target", None)
@@ -5564,7 +5605,7 @@ class Win(Adw.ApplicationWindow):
                 "(127 bytes)")
         return text
 
-    def _prepare_slot_store_target(self):
+    def _prepare_slot_store_target(self, relative_slot=None):
         """Return one connected, live, inactive device-slot destination."""
         if self.ctl.dev is None:
             raise io24.HostActionError("io24 is not connected")
@@ -5572,7 +5613,8 @@ class Win(Adw.ApplicationWindow):
             raise io24.HostActionError(
                 "live device slot state is not available yet")
         target = self._factory_target_channel()
-        relative_slot = int(self.factory_device_slot.get_selected())
+        if relative_slot is None:
+            relative_slot = int(self.factory_device_slot.get_selected())
         if relative_slot not in (0, 1):
             raise io24.HostActionError("device slot must be Slot 1 or Slot 2")
         slot = self.PRESET_BASE[target] + relative_slot
@@ -5590,13 +5632,32 @@ class Win(Adw.ApplicationWindow):
             "slot": slot,
         }
 
-    def _current_slot_record(self, base_name, target, preset_name):
-        """Build a complete slot body from the current visible controls."""
+    def _record_voicefx(self, target, strict=True):
+        """The Voice FX a saved sound of ``target`` carries.
+
+        Voice FX is one engine that belongs to one input at a time. A unit
+        write refuses a channel that does not own it; a preset saved on this
+        computer stores it switched off instead, so saving either channel
+        always works.
+        """
         fx_target = 2 if self.fx_target.get_selected() == 1 else 1
+        fx_model = self.FX_ORDER[max(
+            0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))]
+        voicefx = self._fx_live_params()
+        voicefx["on"] = self.fx_arm.get_active()
         if fx_target != target:
-            raise io24.HostActionError(
-                "Voice FX targets Channel %d; choose Channel %d as the preset "
-                "target before storing this sound" % (fx_target, fx_target))
+            if strict:
+                raise io24.HostActionError(
+                    "Voice FX targets Channel %d; choose Channel %d as the "
+                    "preset target before storing this sound"
+                    % (fx_target, fx_target))
+            voicefx["on"] = False
+        return fx_model, voicefx
+
+    def _current_slot_record(self, base_name, target, preset_name,
+                             strict_voicefx=True):
+        """Build a complete slot body from the current visible controls."""
+        fx_model, voicefx = self._record_voicefx(target, strict_voicefx)
         W = self.w[target]
         gate = {
             "on": self.dyn_by_ch[target]["gate"],
@@ -5615,10 +5676,6 @@ class Win(Adw.ApplicationWindow):
             "on": self.dyn_by_ch[target]["lim"],
             "threshold_db": W["lth"].get_value(),
         }
-        fx_model = self.FX_ORDER[max(
-            0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))]
-        voicefx = self._fx_live_params()
-        voicefx["on"] = self.fx_arm.get_active()
         try:
             base = self.PR.load()[base_name]
         except KeyError as error:
@@ -5636,24 +5693,6 @@ class Win(Adw.ApplicationWindow):
             compressor=compressor, limiter=limiter,
             voicefx_model=fx_model, voicefx=voicefx,
             alternate_eq=None if alt is None else alt["eq"])
-
-    def _prepare_current_slot_store(self, activate=False):
-        plan = self._prepare_slot_store_target()
-        base_index = self.factory_device_base.get_selected()
-        if not 0 <= base_index < len(self.factory_names):
-            raise io24.HostActionError("choose a complete-body base")
-        base_name = self.factory_names[base_index]
-        preset_name = self._current_slot_name()
-        plan.update({
-            "name": preset_name,
-            "record": self._current_slot_record(
-                base_name, plan["target"], preset_name),
-            "source": "current:channel%d;base:%s" %
-                      (plan["target"], base_name),
-            "base_name": base_name,
-            "activate": bool(activate),
-        })
-        return plan
 
     def _queue_factory_slot_store(self, plan):
         """Queue the confirmed body write, its registry commit, and — only when
@@ -5739,36 +5778,6 @@ class Win(Adw.ApplicationWindow):
         dialog.connect("response", self._factory_slot_store_response, plan)
         dialog.present()
 
-    def _store_current_slot_clicked(self, _button, activate=False):
-        try:
-            plan = self._prepare_current_slot_store(activate)
-        except Exception as error:
-            self.say("Device-slot store unavailable: %s" % error)
-            return
-        tail = ("It will then be recalled, which loads it on Channel %d and "
-                "is what opens the device's Voice FX gate." % plan["target"]
-                if plan["activate"] else
-                "The Host records a sent write only; selection, recall, and "
-                "audibility remain unchanged.")
-        dialog = Adw.MessageDialog.new(
-            self,
-            "Save %s over Channel %d block %d?" %
-            (plan["name"], plan["target"], plan["relative_slot"] + 1),
-            "The current Fat Channel and Voice FX controls will replace that "
-            "unreadable device-resident body, using %s only for hidden archive "
-            "fields. DSP amount and Bypass are not part of the slot body. %s"
-            % (plan["base_name"], tail))
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response(
-            "store", "Save and activate" if plan["activate"]
-            else "Overwrite body")
-        dialog.set_close_response("cancel")
-        dialog.set_default_response("cancel")
-        dialog.set_response_appearance(
-            "store", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.connect("response", self._factory_slot_store_response, plan)
-        dialog.present()
-
     def _adopt_preset_record(self, pr, chans, fx_channel=None):
         """Show one complete preset record on the visible controls.
 
@@ -5847,14 +5856,18 @@ class Win(Adw.ApplicationWindow):
             self._fx_mute = prior
         return True
 
-    def _load_factory(self, _b, name, with_fx=False):
-        pr = self.PR.load()[name]
+    def _load_factory(self, _b, name, with_fx=False, record=None,
+                      channels=None):
+        pr = record if record is not None else self.PR.load()[name]
         supported, reason = self.PR.direct_apply_support(pr)
         if not supported:
             self.say("%s was not loaded: %s" % (name, reason))
             return
         target = self._factory_target_channel()
-        chans = (1, 2) if self.link_both else (target,)
+        if channels is not None:
+            chans = tuple(channels)
+        else:
+            chans = (1, 2) if self.link_both else (target,)
 
         def adopt():
             self._adopt_preset_record(pr, chans)
@@ -6762,6 +6775,7 @@ class Win(Adw.ApplicationWindow):
         self._follow_device_bypass(poff)
         pslot = s.get("preset_slot", [0, 0])
         self._observe_device_slot_recalls(pslot)
+        self._mark_playing_unit_blocks(pslot)
         rows = getattr(self, "preset_rows", {})
         if rows:
             self._preset_sync = True          # suppress the write-back handlers

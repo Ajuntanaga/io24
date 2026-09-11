@@ -432,12 +432,12 @@ class HostStateRepairTests(unittest.TestCase):
         )
         rendered = ast.get_source_segment(source, preset_page)
 
-        self.assertIn("Save only…", rendered)
-        self.assertIn("Save and activate…", rendered)
+        # 2026-09-11: saving goes to the user's presets on this computer;
+        # putting one on the unit is an action on the preset itself.
         self.assertIn("Preset name", rendered)
-        self.assertIn("Complete-body base", rendered)
+        self.assertIn("self._save_user_preset_clicked", rendered)
         self.assertNotIn("Store in device slot…", rendered)
-        self.assertIn("_store_current_slot_clicked", rendered)
+        self.assertNotIn("Complete-body base", rendered)
 
     def test_gtk_separates_fixed_preamp_hpf_from_fat_channel_cutoff(self):
         source = (ROOT / "io24gtk.py").read_text()

@@ -328,10 +328,9 @@ class HostRecallWiringTests(unittest.TestCase):
             self.assertEqual(window._observe_device_slot_recalls([0, 2]), [])
         self.assertIsNone(window._fx_gate_recalled[1])
 
-    def test_host_preset_rows_offer_a_recall_action(self):
+    def test_unit_presets_load_by_recall_on_their_own_channel(self):
         import inspect
-        source = inspect.getsource(io24gtk.Win._populate_host_preset_group)
-        self.assertIn("Recall on device", source)
+        source = inspect.getsource(io24gtk.Win._load_device_entry)
         self.assertIn("_recall_host_preset", source)
 
 

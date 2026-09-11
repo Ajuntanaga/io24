@@ -405,79 +405,80 @@ sits just above zero.
 
 ## Presets
 
-### Device slots
+The page has a **Load into** row, a search box, a **Preset name** field with
+**Save**, and two drop-downs: **User Presets** and **Factory Presets**. The
+search filters both by name and description.
 
-Two blocks per channel — the channel's own pair of the device's four global
-slots, the ones its hardware Preset button reaches.
+### Loading
 
-The active block is a solid blue dot with a pronounced brightness breath;
-its size stays fixed. Block 1 completes a cycle in 1.8 seconds and Block 2 in
-0.9 seconds. Bypass is an outlined dot. With reduced motion enabled, both dots
-stay steady and use slightly different static sizes to preserve block identity.
+Double-click a preset to load it, Fat Channel and Voice FX together, into the
+channel chosen in **Load into**. While the channels are linked it loads into
+both, and the chosen channel owns Voice FX.
 
-**Preset blocks on the unit** sets how many preset blocks the hardware screen
-shows and its Preset button cycles: **One**, **Two**, or **None**. Two is what
-the manual describes and what the unit ships with. It is device-wide and
-write-only — the app commands it but cannot read it back.
+A preset that lives on the unit loads from the unit itself when it belongs to
+that channel: the device runs its own `Stat` load for that block, which is also
+what opens the Voice FX gate. Loaded into the other channel, the Host applies
+the same record instead. Because a bypassed channel never reaches the device's
+load, the Host turns processing on when, and only when, the device reports the
+channel bypassed; a channel that is already processing keeps its exact amount.
 
-> In **Two**-block mode the unit's Preset button is fully visible to the app:
-> pressing it walks that channel's slot pair and the blocks here follow, and
-> press-and-hold bypasses the channel while the status text follows too. (In
-> One-block mode a press has nowhere to go, so nothing moves.) The mode setting
-> itself is the one exception — the device never reports it back.
+A loaded preset is shown on the controls, so the pages stop describing the
+previous sound. A recalled Passive/Vintage EQ has no Standard-band form, so the
+Fat Channel shows it read-only rather than as four derived bands.
 
-Selecting a block is a **recall**, not just an index change: the device runs
-its own `Stat` load for that slot. Because a bypassed channel never reaches
-that load, the Host asserts the channel enable when — and only when — the
-device reports the channel bypassed. A channel that is already processing keeps
-its exact mix, since the nonzero value of that control is write-only and
-re-asserting it would silently force a partial mix to full. A slot outside the
-channel's own pair is refused before any write.
+### User Presets
 
-There is no separate per-channel preset-enable switch. Press-and-hold writes
-the Boolean 0/1 form of the same processing value the Device page shows as DSP
-amount and Bypass. The slot row reports bypass or active from the device, but
-an active flag
-means only “greater than zero,” not an exact percentage.
+First come the presets this Host has put on the unit, tagged **On the unit ·
+Channel N, block M**, with **· playing** on the block each channel currently
+has selected. Those entries are the Host's own record of what it wrote: the
+io24 reports which block is selected but cannot return a block's contents, so
+a block the Host never wrote is not listed.
 
-The four device slots are global, two per channel (channel 1 owns the first
-pair, channel 2 the second); the app shows each channel its own two blocks.
-The hardware button lands on the pair's first slot.
+Then come the presets you saved on this computer.
 
-### Host presets
+### Saving, and putting a preset on the unit
 
-The **Host presets** list shows the complete device-slot bodies this Host has
-actually sent, in global slot order. Their names also appear in the matching
-device-slot row. These are identity-bound sent-write receipts, not a readback:
-the io24 reports the selected block but cannot return its stored body. Each row
-also says whether that stored body's Voice FX is on or off.
+Type a name and press **Save**: the **Load into** channel's current sound,
+Voice FX included, joins your presets on this computer, in
+`~/.config/io24/user-presets.json` (the factory file's format). Saving over an
+existing name asks first. Voice FX belongs to one input at a time, so saving
+the channel that does not own it stores its Voice FX switched off.
 
-**Preset name** names the body you are about to write. A preset you cannot
-name is one you cannot find again, and every body written before this was
-called `Current Channel N`. Saving without a name is refused.
+Each preset's **⋯** menu has **Put on the unit's button, block 1** and
+**block 2**. That writes the complete preset into that block of the **Load
+into** channel and then loads it, after one confirmation that names what it
+replaces. The block the channel is playing is refused; choose the other one.
+Your own presets also have **Delete**, which removes them from this computer
+only.
 
-**Save and activate** writes the current sound to the chosen block and then
-recalls it, which is the decoded way to open the Voice FX gate. **Save only**
-writes the body and leaves the device pointing where it was. Either way the
-destination must not be the block that is currently selected, and a newly
-saved preset appears in this list straight away rather than after a restart.
+A unit write is a complete-record `MemP/Stat` operation: global slots 0/1 are
+channel 1's two blocks and 2/3 are channel 2's. Each write leaves a
+device-identity-bound receipt in `~/.local/state/io24/device-slots.json` (or
+`$XDG_STATE_HOME`) marked `WRITE_SENT_UNVERIFIED`, because the device cannot
+return the stored body for comparison.
 
-A recalled body is also shown on the controls, so the pages stop describing the
-previous sound. A Passive/Vintage body has no Standard-band form, so it is not
-shown at all and the Host says why — showing four derived bands would describe
-a sound the device is not making.
+### Factory presets
 
-**Recall on device** selects that entry's own slot on its own channel. This is
-the action that opens the Voice FX gate described above, so an entry whose
-Voice FX is on is drawn as the suggested action. Recalling is not overwriting:
-it never writes a slot body.
+The originals from Universal Control, decoded from the installer and applied
+through this driver. Any module a preset needs that the io24 does not implement
+is skipped rather than silently dropped. A preset the Host cannot apply
+directly (Passive/Vintage EQ) says why and cannot be loaded.
 
-The device-slot write is a complete-record operation, not a normal readable
-parameter. `MemP/Stat` saves one scene-shaped channel record to a global slot;
-slots 0/1 are channel 1's two blocks and slots 2/3 are channel 2's. The normal
-Effects page does not expose the retired Channel-2 and paired private-reverb
-experiment actions. Slot selection never implies permission to overwrite the
-selected slot body.
+### The unit's Preset button
+
+**Preset blocks on the unit** (Device page, **Preset button**) sets how many
+blocks the unit's Preset button steps through: **One**, **Two** (what the unit
+ships with), or **None**. It is write-only; the device never reports it back.
+
+> In **Two**-block mode the Preset button is visible to the app: pressing it
+> walks that channel's two blocks and the **· playing** tag follows, and
+> press-and-hold bypasses the channel while the Device page's **Bypass**
+> follows. In One-block mode a press has nowhere to go, so nothing moves.
+
+The button lands on the pair's first block. On the Mixer, each strip's dot shows
+its active block: solid with a breathing brightness (block 1 every 1.8 s, block
+2 every 0.9 s), and an outlined dot when bypassed. With reduced motion the dots
+stay steady and differ slightly in size.
 
 ### Host snapshots
 
@@ -517,22 +518,3 @@ For arbitrary host-controlled state, `io24.py startup save` and
 reverb, use the paired device-block save above. Until its physical acceptance
 run is complete, keep a host preset as the recovery copy.
 
-### Factory presets
-
-The originals from Universal Control, decoded from the installer and applied
-through this driver. Any module a preset needs that the io24 does not implement
-is skipped rather than silently dropped.
-
-Choose **Target channel** above the preset list. Unlinked, both **Load strip**
-and **Load + Voice FX** address that channel. Linked, the Fat Channel loads onto
-both strips while the selected target remains the single Voice FX owner.
-
-**Store in device slot…** is different from either Load button. Choose the
-target channel and destination Slot 1 or Slot 2, then use that action on the
-factory record you want. The destination must not be the slot currently
-selected on that channel. After confirmation, the Host writes the complete
-record and stores a device-identity-bound local receipt under
-`~/.local/state/io24/device-slots.json` (or `$XDG_STATE_HOME`). The receipt says
-only `WRITE_SENT_UNVERIFIED`: the action does not select, enable, recall, or
-directly apply the slot, and the device cannot return the stored body for
-comparison.

@@ -39,6 +39,11 @@
     "clear_shadow": [
       "state.shadow_forget"
     ],
+    "clear_solo": [
+      "mixer.main.solo",
+      "mixer.mixa.solo",
+      "mixer.mixb.solo"
+    ],
     "close": [
       "host.device_close"
     ],
@@ -709,11 +714,21 @@
       "mixer.return_ch3.mixa.level_db",
       "mixer.return_ch3.mixb.level_db"
     ],
+    "set_solo": [
+      "mixer.main.solo",
+      "mixer.mixa.solo",
+      "mixer.mixb.solo"
+    ],
     "set_voicefx_channel": [
       "native.voicefx_owner_alias"
     ],
     "snapshot": [
       "state.snapshot"
+    ],
+    "soloed": [
+      "mixer.main.solo",
+      "mixer.mixa.solo",
+      "mixer.mixb.solo"
     ],
     "start": [
       "multiband.enabled"
@@ -777,7 +792,7 @@
       "host_telemetry": 16,
       "mixer_balance": 6,
       "mixer_cell": 42,
-      "mixer_mapping": 2,
+      "mixer_mapping": 5,
       "mixer_master": 3,
       "multiband": 52,
       "native_control": 24,
@@ -794,7 +809,7 @@
     "by_phase": {
       "P0": 5,
       "P1": 356,
-      "P3": 84,
+      "P3": 87,
       "P4": 142,
       "P5": 71,
       "P6": 26,
@@ -807,7 +822,7 @@
       "dsp_audio_scalar": 110,
       "dsp_audio_toggle": 33,
       "front_panel_write_only": 1,
-      "host_mapping": 81,
+      "host_mapping": 84,
       "host_process": 10,
       "implementation_gap": 36,
       "mixer_assignment": 21,
@@ -825,7 +840,7 @@
     "fat_channel_parameter_rows": 142,
     "mixer_cell_rows": 42,
     "multiband_parameter_rows": 52,
-    "total_rows": 748,
+    "total_rows": 751,
     "vendor_descriptor_rows": 117,
     "voicefx_parameter_rows": 60
   },
@@ -17888,6 +17903,42 @@
     },
     {
       "api": [
+        "set_solo",
+        "clear_solo",
+        "soloed"
+      ],
+      "blockers": [],
+      "family": "mixer_mapping",
+      "id": "mixer.main.solo",
+      "parameter": "host solo",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [
+        "all_bus_sends_materialized",
+        "deterministic_audio_rig@batch"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "main"
+      },
+      "source": [
+        "io24.py send fold"
+      ],
+      "stimuli": [
+        "one_source",
+        "two_sources",
+        "release",
+        "clear_all"
+      ]
+    },
+    {
+      "api": [
         "set_bus_master",
         "bus_master"
       ],
@@ -17953,6 +18004,42 @@
     },
     {
       "api": [
+        "set_solo",
+        "clear_solo",
+        "soloed"
+      ],
+      "blockers": [],
+      "family": "mixer_mapping",
+      "id": "mixer.mixa.solo",
+      "parameter": "host solo",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [
+        "all_bus_sends_materialized",
+        "deterministic_audio_rig@batch"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "mixa"
+      },
+      "source": [
+        "io24.py send fold"
+      ],
+      "stimuli": [
+        "one_source",
+        "two_sources",
+        "release",
+        "clear_all"
+      ]
+    },
+    {
+      "api": [
         "set_bus_master",
         "bus_master"
       ],
@@ -18014,6 +18101,42 @@
       "stimuli": [
         "known_sparse_main",
         "known_full_main"
+      ]
+    },
+    {
+      "api": [
+        "set_solo",
+        "clear_solo",
+        "soloed"
+      ],
+      "blockers": [],
+      "family": "mixer_mapping",
+      "id": "mixer.mixb.solo",
+      "parameter": "host solo",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [
+        "all_bus_sends_materialized",
+        "deterministic_audio_rig@batch"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "mixb"
+      },
+      "source": [
+        "io24.py send fold"
+      ],
+      "stimuli": [
+        "one_source",
+        "two_sources",
+        "release",
+        "clear_all"
       ]
     },
     {
@@ -25360,14 +25483,14 @@
   ],
   "schema": "io24-atomic-parameter-verification-matrix-v1",
   "source_sha256": {
-    "io24.py": "52e034edbc2fb8f5ceafe86f2ad1c2324644e1dd008823c304adae612bcbfda7",
+    "io24.py": "3eea5ea94929909bbebb4d528808a9870a1c95a5034d037fe4131e0e28b65e39",
     "io24_dsp.py": "3a2b810257b7957ec3246893ce3f0f7e2280c53734987a07d772ef92a26e2407",
     "io24_fx.py": "9c6a9cb75d46260e340ccf7575dc4a90d0b360d897b52105b26e600460635e4c",
     "io24_mbc.py": "de6d5510042eed1f88df4a27e982a83e126b388f82f34635d8effed8c63509c8",
-    "io24_presets.py": "8beeccc2cafec8f91b29bb8def12ff35a2e75121f40687816fe5fbefea1fc1eb",
+    "io24_presets.py": "2a7033b4f698de5843ae2984d9955fc8b7ad59d1ed2633ef87efd1bbef8568a3",
     "io24_scene.py": "8c5be86b1b44b80d84ff9e7346232bee05c20a408ca4cc4e52810adc173187e6",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "09702c85212e9a7548132bcc5e259e52b9a52d404a8a0a6fb2814e0b312568b8",
+    "io24gtk.py": "ec83eb812c93affd6d9cd09e8cdd8a4a21f1d7354e7c779a0f399b468d28886f",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

@@ -1936,6 +1936,15 @@ class EQCurve(ChannelBound, Canvas):
             fill_poly(sn, poly, pal(acc, 0.13))
             polyline(sn, poly[1:-1], pal(acc, 0.42), 1.0)
 
+        alt = self.win._alt_eq(self.channel)
+        if alt is not None:
+            # No exact curve exists for this body. Say so on the graph itself
+            # rather than draw a flat line or bands it never had.
+            label(self, sn, "%s EQ from the recalled preset: curve not drawable"
+                  % alt["model"].title(), 8, h / 2 - 18, pal(INK, 0.8), 9)
+            label(self, sn, "its switch frequencies are not decoded; the stored "
+                  "values are listed below", 8, h / 2, pal(INK, 0.5), 8)
+            return
         pts = self.win.curve_points(w, h, self.channel)
         if any(b["shape"] != "off" for b in self.bands):
             fill_poly(sn, pts + [(w, h / 2), (0, h / 2)], pal(acc, 0.14))
@@ -2188,7 +2197,10 @@ class Rack(ChannelBound, Canvas):
         gr = self.win.ctl.snap["gr"].get(self.channel, {})
         lvl = self.win.ctl.snap["in"][self.channel - 1]
         acc = pal(chan_col(self.channel)) if on else pal(INK, 0.30)
-        if mod == "EQ":
+        alt = self.win._alt_eq(self.channel) if mod == "EQ" else None
+        if alt is not None:
+            label(self, sn, alt["model"].upper(), x + 4, y + h / 2 - 6, acc, 8)
+        elif mod == "EQ":
             bands = tuple(dict(b) for b in self.win.bands_by_ch[self.channel])
             pts = []
             for i in range(0, int(w) + 1, 3):
@@ -2252,8 +2264,10 @@ class Rack(ChannelBound, Canvas):
         state = {"HPF": self.win.hpf_hz(self.channel) > 25,
                  "GATE": self.win.dyn_for(self.channel)["gate"],
                  "COMP": self.win.dyn_for(self.channel)["comp"],
-                 "EQ": any(b["shape"] != "off"
-                           for b in self.win.bands_by_ch[self.channel]),
+                 "EQ": (self.win._alt_eq(self.channel)["on"]
+                        if self.win._alt_eq(self.channel) is not None
+                        else any(b["shape"] != "off"
+                                 for b in self.win.bands_by_ch[self.channel])),
                  "LIM": self.win.dyn_for(self.channel)["lim"]}
         for i, mod in enumerate(self.order):
             x = i * uw
@@ -2322,6 +2336,105 @@ class Rack(ChannelBound, Canvas):
 # --------------------------------------------------------------------------
 # a control that follows the hardware without fighting the user's hand
 # --------------------------------------------------------------------------
+class AutoGain:
+    """Continuous Host-side automatic preamp gain for one input or a linked pair.
+
+    Universal Control's Automatic Preamp Gain is a per-input switch, but the
+    io24 firmware has no descriptor behind `autogain`, so writing it does
+    nothing (re/UCNET_SHIM_SPEC.md 4c): automatic gain is a host feature.
+    While the switch is on, this watches the JaSt input meter (slots 4 and 6)
+    and moves the preamp toward the target by itself, with no listening step
+    and nothing to confirm.
+
+    It steers the 95th percentile of the last few seconds of readings, so the
+    gaps between words do not count and one stray peak does not pull it
+    around. The meter reads the converter, after the analog preamp, so a dB of
+    gain moves it by a dB. It corrects only outside a small deadband, at most
+    once a second, rising slowly and falling faster, and a reading at clip
+    drops the gain at once. It never lifts silence or a steady noise floor: a
+    rise needs the spread between loud and quiet moments that real playing or
+    speech has. Every change clears the window, because those readings
+    describe the old gain. Linked inputs share one controller, and the louder
+    one sets the single gain for both.
+    """
+
+    TARGET_DB = -12.0        # about 12 dB of headroom above the performance
+    DEADBAND_DB = 3.0
+    WINDOW_S = 3.0
+    MIN_READINGS = 20
+    SETTLE_S = 0.4           # a change takes a moment to reach the meter
+    HOLD_S = 1.0             # minimum spacing between corrections
+    MAX_RISE_DB = 2.0
+    MAX_FALL_DB = 4.0
+    CLIP_DB = -0.5
+    CLIP_FALL_DB = 6.0
+    SILENT_DB = -60.0
+    MIN_SPREAD_DB = 10.0     # loud-versus-quiet spread a rise requires
+    GAIN_MIN_DB, GAIN_MAX_DB = 0.0, 60.0
+
+    def __init__(self, channels, target_db=TARGET_DB):
+        self.channels = tuple(int(c) for c in channels)
+        if not self.channels:
+            raise ValueError("auto gain needs at least one channel")
+        self.target_db = float(target_db)
+        self.readings = {c: [] for c in self.channels}     # (time, dBFS)
+        self.settle_until = float("-inf")
+        self.next_change = float("-inf")
+
+    @staticmethod
+    def _percentile(values, fraction):
+        ordered = sorted(values)
+        return ordered[max(0, math.ceil(fraction * len(ordered)) - 1)]
+
+    def step(self, now, levels, gains):
+        """Take one meter reading; return the gain to set now, or None."""
+        if now < self.settle_until:
+            return None
+        heard = {c: float(levels[c]) for c in self.channels
+                 if levels.get(c) is not None and math.isfinite(levels[c])}
+        if not heard:
+            return None
+        loudest = max(sorted(heard), key=lambda c: heard[c])
+        if heard[loudest] >= self.CLIP_DB:
+            return self._change(now, gains[loudest], -self.CLIP_FALL_DB)
+        horizon = now - self.WINDOW_S
+        for c, value in heard.items():
+            window = self.readings[c]
+            window.append((now, value))
+            while window and window[0][0] < horizon:
+                window.pop(0)
+        if now < self.next_change:
+            return None
+        levels95 = {c: self._percentile([v for _t, v in window], 0.95)
+                    for c, window in self.readings.items()
+                    if len(window) >= self.MIN_READINGS}
+        if not levels95:
+            return None
+        loud = max(sorted(levels95), key=lambda c: levels95[c])
+        level = levels95[loud]
+        if level < self.SILENT_DB:
+            return None
+        error = self.target_db - level
+        if abs(error) <= self.DEADBAND_DB:
+            return None
+        if error > 0:
+            quiet = self._percentile([v for _t, v in self.readings[loud]], 0.10)
+            if level - quiet < self.MIN_SPREAD_DB:
+                return None                  # steady noise or hum: never lift it
+        delta = max(-self.MAX_FALL_DB, min(self.MAX_RISE_DB, error))
+        return self._change(now, gains[loud], delta)
+
+    def _change(self, now, gain, delta):
+        new = round(max(self.GAIN_MIN_DB, min(self.GAIN_MAX_DB, gain + delta)), 1)
+        if new == round(gain, 1):
+            return None                      # already at the end of the range
+        self.settle_until = now + self.SETTLE_S
+        self.next_change = now + self.HOLD_S
+        for window in self.readings.values():
+            window.clear()
+        return new
+
+
 class Throttle:
     """Leading-edge throttle with a guaranteed trailing send.
 
@@ -2886,6 +2999,16 @@ class Win(Adw.ApplicationWindow):
         self.live.append(Live(f, lambda v, c=ch: self._set("gain", c, v)))
         self.gain_faders = getattr(self, "gain_faders", {})
         self.gain_faders[ch] = self.live[-1]
+        auto = Gtk.ToggleButton(label="Auto")
+        auto.set_margin_start(6); auto.set_margin_end(6)
+        auto.set_tooltip_text(
+            "Automatic preamp gain: keeps this input near %.0f dBFS while you "
+            "play or speak. The gain fader is locked while it is on."
+            % AutoGain.TARGET_DB)
+        auto.connect("toggled", self._autogain_toggled, ch)
+        box.append(auto)
+        self.autogain_toggles = getattr(self, "autogain_toggles", {})
+        self.autogain_toggles[ch] = auto
 
         for label, param in (("48V", "phantom"), ("Mute", "mute"),
                              ("HPF", "hpf")):
@@ -3465,6 +3588,23 @@ class Win(Adw.ApplicationWindow):
         flat = Gtk.Button(label="Flatten", margin_top=6)
         flat.connect("clicked", lambda _b, c=ch: self._eq_flat(c))
         e.add(flat)
+        W["eq_flat"] = flat
+        # Shown only while a recalled Passive/Vintage body is on the device:
+        # its fields as stored, plus the one way back to the Standard editor.
+        W["alt_eq_note"] = Gtk.Label(xalign=0, wrap=True, margin_top=8)
+        W["alt_eq_note"].add_css_class("caption")
+        W["alt_eq_note"].set_visible(False)
+        e.add(W["alt_eq_note"])
+        W["alt_eq_release"] = Gtk.Button(
+            label="Edit with Standard EQ instead", margin_top=4)
+        W["alt_eq_release"].set_tooltip_text(
+            "Unlocks the Standard band controls. Nothing is sent until you "
+            "change a band; from then on the Standard bands are written over "
+            "the recalled EQ.")
+        W["alt_eq_release"].connect(
+            "clicked", lambda _b, c=ch: self._release_alternate_eq(c))
+        W["alt_eq_release"].set_visible(False)
+        e.add(W["alt_eq_release"])
 
         gt = Adw.PreferencesGroup(
             title="Gate / expander",)
@@ -4284,6 +4424,7 @@ class Win(Adw.ApplicationWindow):
         """
         self.mix_widgets = {}
         self.bus_master_widgets = {}
+        self.solo_widgets = {}
         self._mix_mute = False
 
         # A matrix, not three stacked lists. Sources are rows, buses are
@@ -4388,9 +4529,17 @@ class Win(Adw.ApplicationWindow):
                         self.ctl.submit(
                             lambda dev: dev.set_send_assigned(s2, b, on))
                 off.connect("toggled", cut)
+                solo = Gtk.ToggleButton(label="S", valign=Gtk.Align.CENTER)
+                solo.add_css_class("flat")
+                solo.set_tooltip_text(
+                    "Solo in this bus: the bus's other sources go silent until "
+                    "released, then come back at the levels they had")
+                solo.connect("toggled", self._solo_toggled, src, bus)
                 cellbox.append(sc); cellbox.append(lbl); cellbox.append(off)
+                cellbox.append(solo)
                 grid.attach(cellbox, 1 + col, 3 + rown, 1, 1)
                 self.mix_widgets[(src, bus)] = (sc, off)
+                self.solo_widgets[(src, bus)] = solo
 
         g.add(grid)
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -4403,6 +4552,14 @@ class Win(Adw.ApplicationWindow):
         sc.set_child(clamp)
         sc.set_vexpand(True)
         return sc
+
+    def _solo_toggled(self, button, src, bus):
+        if self._mix_mute:
+            return
+        on = button.get_active()
+        self.ctl.submit(lambda dev: dev.set_solo(src, bus, on))
+        # a first solo can materialise unset sends; show them afterwards
+        GLib.timeout_add(140, self._sync_mix_widgets)
 
     def _sync_mix_widgets(self):
         """Pull the sliders back into line with the driver's send model.
@@ -4435,6 +4592,8 @@ class Win(Adw.ApplicationWindow):
                         "unmute to create a 0 dB send")
             for bus, msc in self.bus_master_widgets.items():
                 msc.set_value(max(-40.0, min(10.0, dev.bus_master(bus))))
+            for (src, bus), solo in getattr(self, "solo_widgets", {}).items():
+                solo.set_active(dev.soloed(src, bus))
         finally:
             self._mix_mute = False
         return False
@@ -4770,21 +4929,103 @@ class Win(Adw.ApplicationWindow):
         if entry is None or getattr(self, "PR", None) is None:
             return False
         record = entry["record"]
-        # A Passive/Vintage body has no Standard-band representation, so there
-        # is nothing honest to put on these controls. Say that plainly instead
-        # of showing four bands derived from a model the record never used.
-        supported, reason = self.PR.direct_apply_support(record)
+        # A Passive/Vintage body has no Standard-band representation, so its
+        # EQ cannot go on the band controls. Everything else in it can, and the
+        # EQ is listed read-only as stored rather than drawn as four bands
+        # derived from a model the record never used.
+        view = self.PR.alternate_eq_view(record)
+        shown = record if view is None else \
+            {key: value for key, value in record.items() if key != "eq"}
+        supported, reason = self.PR.direct_apply_support(shown)
         if not supported:
             self.say("Recalled body is not shown on the controls: %s. They "
                      "still show the previous sound." % reason)
             return False
         try:
-            self._adopt_preset_record(record, (ch,), fx_channel=ch)
+            self._adopt_preset_record(shown, (ch,), fx_channel=ch)
         except Exception as error:
             self.say("Recalled body could not be shown on the controls: %s"
                      % error)
             return False
+        if view is not None:
+            self._show_alternate_eq(ch, view)
+            self.say("Channel %d is running a %s EQ the Host can show but not "
+                     "draw; it is listed read-only on the Equaliser page"
+                     % (ch, view["model"].title()))
         return True
+
+    # ------------------------------------------------- alternate-model EQ
+    _ALT_EQ_CONTROLS = ("curve", "shape", "freq", "gain", "q", "eq_flat")
+
+    def _alt_eq(self, ch):
+        """The recalled Passive/Vintage EQ shown on a channel, or None."""
+        return getattr(self, "alt_eq_by_ch", {}).get(ch)
+
+    def _show_alternate_eq(self, ch, view):
+        """Show a recalled Passive/Vintage EQ read-only, or clear it (None).
+
+        While one is shown the Standard editor on that channel is paused: a
+        band edit would send Standard bands over an EQ the Host cannot draw,
+        and a later save would store them in its place.
+        """
+        if not hasattr(self, "alt_eq_by_ch"):
+            self.alt_eq_by_ch = {1: None, 2: None}
+        prior = self.alt_eq_by_ch.get(ch)
+        self.alt_eq_by_ch[ch] = view
+        self._alt_eq_warned = None
+        if view is None and prior is None:
+            return
+        W = getattr(self, "w", {}).get(ch)
+        if not W:
+            return
+        editable = view is None
+        for key in self._ALT_EQ_CONTROLS:
+            if key in W:
+                W[key].set_sensitive(editable)
+        for button in W.get("bands", ()):
+            button.set_sensitive(editable)
+        if "alt_eq_note" in W:
+            W["alt_eq_note"].set_text("" if editable else self._alt_eq_text(view))
+            W["alt_eq_note"].set_visible(not editable)
+        if "alt_eq_release" in W:
+            W["alt_eq_release"].set_visible(not editable)
+        if "curve" in W:
+            W["curve"].queue_draw()
+        for rack in getattr(self, "racks", {}).values():
+            rack.queue_draw()
+
+    @staticmethod
+    def _alt_eq_text(view):
+        lines = ["%s EQ from the recalled preset%s, shown as stored:"
+                 % (view["model"].title(), "" if view["on"] else " (switched off)")]
+        for name, where, gain in view["rows"]:
+            lines.append("  %s: %s" % (name, ", ".join(
+                part for part in (where, gain) if part)))
+        lines.append("Its switch frequencies are not decoded, so the curve "
+                     "cannot be drawn and the band controls are paused. Saving "
+                     "this channel keeps the EQ exactly as stored.")
+        return "\n".join(lines)
+
+    def _release_alternate_eq(self, ch):
+        chans = (1, 2) if getattr(self, "link_both", False) else (ch,)
+        for c in chans:
+            self._show_alternate_eq(c, None)
+        self.say("Standard EQ unlocked on Channel %s. Nothing was sent; the "
+                 "next band change writes the Standard bands over the recalled "
+                 "EQ." % " and ".join(str(c) for c in chans))
+
+    def _eq_write_targets(self, ch):
+        """The channels an EQ edit may reach: never one still holding a
+        recalled Passive/Vintage body the user has not released."""
+        chans = (1, 2) if self.link_both else (ch,)
+        held = tuple(c for c in chans if self._alt_eq(c) is not None)
+        if held and getattr(self, "_alt_eq_warned", None) != held:
+            self._alt_eq_warned = held
+            self.say("Channel %s keeps its recalled %s EQ; use \"Edit with "
+                     "Standard EQ instead\" there first"
+                     % (" and ".join(str(c) for c in held),
+                        self._alt_eq(held[0])["model"].title()))
+        return tuple(c for c in chans if c not in held)
 
     def _recall_host_preset(self, _button, entry):
         """Select one Host-known slot on the device and follow it in the UI."""
@@ -5356,6 +5597,9 @@ class Win(Adw.ApplicationWindow):
         except KeyError as error:
             raise io24.HostActionError(
                 "complete-body base %r is unavailable" % base_name) from error
+        # A recalled Passive/Vintage EQ the Host cannot rebuild is carried
+        # through verbatim instead of being replaced by the paused bands.
+        alt = self._alt_eq(target)
         return self.PR.current_slot_record(
             base, preset_name,
             bands=[dict(band) for band in self.bands_by_ch[target]],
@@ -5363,7 +5607,8 @@ class Win(Adw.ApplicationWindow):
             eq_first=self.order_by_ch[target],
             gate=gate, compressor_model=comp_model,
             compressor=compressor, limiter=limiter,
-            voicefx_model=fx_model, voicefx=voicefx)
+            voicefx_model=fx_model, voicefx=voicefx,
+            alternate_eq=None if alt is None else alt["eq"])
 
     def _prepare_current_slot_store(self, activate=False):
         plan = self._prepare_slot_store_target()
@@ -5511,6 +5756,10 @@ class Win(Adw.ApplicationWindow):
             return False
         for ch in chans:
             self.bands_by_ch[ch] = self.PR.to_bands(pr)
+            # This record's EQ (or its absence) now describes the channel; a
+            # recall re-marks a Passive/Vintage body after adopting the rest.
+            if getattr(self, "alt_eq_by_ch", {}).get(ch) is not None:
+                self._show_alternate_eq(ch, None)
             self.dyn_by_ch[ch] = {
                 "gate": bool(pr.get("gate", {}).get("on")),
                 "comp": bool(pr.get("comp", {}).get("on")),
@@ -5641,6 +5890,68 @@ class Win(Adw.ApplicationWindow):
         row.add_suffix(sc); row.add_suffix(lbl)
         return row, sc
 
+    # ------------------------------------------------------------ auto gain
+    AUTOGAIN_TICK_MS = 50
+
+    def _autogain_toggled(self, button, ch):
+        """UC's per-input Automatic Preamp Gain switch; linked inputs share it.
+
+        Silent by design: switching it on is the whole interaction, and the
+        corrections that follow are shown only by the gain fader moving.
+        """
+        if getattr(self, "_autogain_sync", False):
+            return
+        on = button.get_active()
+        chans = (1, 2) if getattr(self, "link_both", False) else (ch,)
+        if not hasattr(self, "_autogain_on"):
+            self._autogain_on = {1: False, 2: False}
+        self._autogain_sync = True
+        try:
+            for c in chans:
+                self._autogain_on[c] = on
+                toggle = getattr(self, "autogain_toggles", {}).get(c)
+                if toggle is not None and toggle.get_active() != on:
+                    toggle.set_active(on)
+                fader = getattr(self, "gain_faders", {}).get(c)
+                if fader is not None:
+                    # the controller owns the gain while it is on
+                    fader.w.set_sensitive(not on)
+        finally:
+            self._autogain_sync = False
+        if any(self._autogain_on.values()) and \
+                getattr(self, "_autogain_timer", None) is None:
+            self._autogain_timer = GLib.timeout_add(
+                self.AUTOGAIN_TICK_MS, self._autogain_tick)
+
+    def _autogain_groups(self):
+        on = tuple(c for c in (1, 2)
+                   if getattr(self, "_autogain_on", {}).get(c))
+        if getattr(self, "link_both", False) and on == (1, 2):
+            return [on]
+        return [(c,) for c in on]
+
+    def _autogain_tick(self):
+        groups = self._autogain_groups()
+        if not groups:
+            self._autogain_timer = None
+            self._autogain_ctl = {}
+            return False
+        s = self.ctl.snap
+        if not s["alive"]:
+            # nothing to hear; start fresh when the unit comes back
+            self._autogain_ctl = {}
+            return True
+        previous = getattr(self, "_autogain_ctl", {})
+        self._autogain_ctl = {g: previous.get(g) or AutoGain(g) for g in groups}
+        now = time.monotonic()
+        for group, controller in self._autogain_ctl.items():
+            gain = controller.step(now, {c: s["in"][c - 1] for c in group},
+                                   {c: s["gain"][c - 1] for c in group})
+            if gain is not None:
+                for c in group:
+                    self._set("gain", c, gain)
+        return True
+
     # ------------------------------------------------------------- actions
     def _set(self, param, channel, value):
         ch = channel or 1
@@ -5756,7 +6067,7 @@ class Win(Adw.ApplicationWindow):
         self.invalidate_curve()
         i = self.cur_band_by_ch[ch]
         b = dict(self.bands_by_ch[ch][i])
-        for c in ((1, 2) if self.link_both else (ch,)):
+        for c in self._eq_write_targets(ch):
             if c != ch:
                 self.bands_by_ch[c][i] = dict(b)
                 self._adopt_band(c)
@@ -5767,7 +6078,7 @@ class Win(Adw.ApplicationWindow):
 
     def _eq_flat(self, ch):
         self.invalidate_curve()
-        for c in ((1, 2) if self.link_both else (ch,)):
+        for c in self._eq_write_targets(ch):
             for b in self.bands_by_ch[c]:
                 b["shape"] = "off"
             self.ctl.submit(lambda dev, x=c: dev.eq_off(x))
@@ -6218,6 +6529,8 @@ class Win(Adw.ApplicationWindow):
                 for band, values in state["eq"][ch].items():
                     self.bands_by_ch[ch][band] = dict(values)
                 if state["eq"][ch]:
+                    # the load has just written Standard bands to this channel
+                    self._show_alternate_eq(ch, None)
                     self._adopt_band(ch)
 
                 gate = state["gate"].get(ch)
@@ -6639,6 +6952,24 @@ def install_style():
             disp, prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 
+def release_host_solo(ctl):
+    """Release every mixer solo before the Host goes away.
+
+    Solo is Host monitoring state that no snapshot keeps. Leaving a bus
+    silenced on the device after the Host has closed would be a mute nobody
+    can see or undo, so it is released on the way out. Best effort: a device
+    that is already gone has nothing to release.
+    """
+    dev = getattr(ctl, "dev", None)
+    if dev is None:
+        return 0
+    try:
+        with dev.lock:
+            return dev.dev.clear_solo()
+    except Exception:
+        return 0
+
+
 class App(Adw.Application):
     def __init__(self, ctl):
         super().__init__(application_id="org.io24.Mixer")
@@ -6652,6 +6983,7 @@ class App(Adw.Application):
             w.mbc.stop()                  # never leave an orphan sink behind
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()
+        release_host_solo(getattr(self, "ctl", None))
         Adw.Application.do_shutdown(self)
 
     def do_activate(self):

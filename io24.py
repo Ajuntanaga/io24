@@ -1522,6 +1522,11 @@ class Io24:
         s = self._sends()
         if not s["assign"].get((source, bus), True):
             return self._write_mix(source, bus, None)
+        soloed = self._solo_state().get(bus)
+        if soloed and source not in soloed:
+            # Another source is soloed in this bus. Only the wire value goes
+            # off; level, assign and pan stay put, so releasing restores them.
+            return self._write_mix(source, bus, None)
         if (source, bus) not in s["level"]:
             return None                       # never set: leave the device alone
         lvl = s["level"][(source, bus)]
@@ -1584,6 +1589,78 @@ class Io24:
             if (source, bus) in self._sends()["level"]:
                 last = self._push_send(source, bus)
         return last
+
+    # -- solo --------------------------------------------------------------
+    # Block 100 has no solo, so the Host makes one, as UC does: every other
+    # source in the bus is written off while their level, assign and pan are
+    # left exactly where they were, and releasing the solo writes them back.
+    # Solo is monitoring state, not mix state. It lives apart from the send
+    # model (which a shadow reload rebuilds) and is never shadowed, so a preset
+    # saved while soloing still holds the real mix.
+    #
+    # line/ch3 is the generic backend's third analog input. The io24 has two,
+    # and nothing has shown that source id 6 exists here (the parameter matrix
+    # blocks it on applicability), so solo never writes it.
+    SOLO_SOURCES = tuple(s for s in MIXER_SOURCES if s != "line/ch3")
+
+    def _solo_state(self):
+        if getattr(self, "_solo", None) is None:
+            self._solo = {}
+        return self._solo
+
+    def soloed(self, source, bus):
+        """Whether a source is soloed in a bus."""
+        return source in self._solo_state().get(self._bus(bus), ())
+
+    def set_solo(self, source, bus, on=True):
+        """Solo one source in one bus; several may be soloed at once.
+
+        A source the Host has never placed in the bus is first given the unity
+        send its fader already shows, so releasing the solo has a real level to
+        return it to rather than leaving it off. Returns the number of sources
+        rewritten; repeating the current state rewrites nothing.
+        """
+        bus = self._bus(bus)
+        if source not in self.SOLO_SOURCES:
+            raise ValueError("%r cannot be soloed (have %s)"
+                             % (source, "/".join(self.SOLO_SOURCES)))
+        solo = self._solo_state()
+        before = set(solo.get(bus, ()))
+        members = set(before)
+        if on:
+            members.add(source)
+        else:
+            members.discard(source)
+        if members == before:
+            return 0
+        if members:
+            solo[bus] = members
+        else:
+            solo.pop(bus, None)
+        return self._push_solo_bus(bus, materialise=bool(members))
+
+    def clear_solo(self, bus=None):
+        """Release every solo, in one bus or in all of them."""
+        solo = self._solo_state()
+        buses = list(solo) if bus is None else [self._bus(bus)]
+        n = 0
+        for b in buses:
+            if solo.pop(b, None):
+                n += self._push_solo_bus(b, materialise=False)
+        return n
+
+    def _push_solo_bus(self, bus, materialise):
+        sends = self._sends()
+        n = 0
+        for source in self.SOLO_SOURCES:
+            if (source, bus) in sends["level"]:
+                self._push_send(source, bus)
+            elif materialise:
+                self.set_send_db(source, bus, self.DEFAULT_SEND_DB)
+            else:
+                continue
+            n += 1
+        return n
 
     def set_pan(self, source, bus, pan):
         """Place a source in the stereo field of a bus. 0.0 left, 0.5 centre, 1.0 right.

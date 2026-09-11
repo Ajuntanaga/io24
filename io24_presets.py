@@ -256,6 +256,56 @@ def direct_apply_support(preset):
     return True, "exact direct-live mapping"
 
 
+def alternate_eq_view(preset):
+    """Read-only rows for a Passive/Vintage EQ body, or None for any other.
+
+    Those models have no exact live builder and no Standard-band form, so the
+    Host can neither draw nor edit them. Their stored fields are still plain
+    numbers it can show as they are. The Vintage frequency switches are
+    positions; the Hz beside each is the Neve 1073 table io24_scene uses as a
+    labelled guess, because the device's own table was never recovered
+    (PROTOCOL.md 12N/12Q).
+    """
+    eq = preset.get("eq") or {}
+    if not eq:
+        return None
+    try:
+        model = eq_model(eq)
+    except ValueError:
+        return None
+    if model not in ("passive", "vintage"):
+        return None
+    if model == "vintage":
+        import io24_scene
+
+        def switch(field, table):
+            pos = int(round(float(eq.get(field, 0))))
+            if not 0 <= pos < len(table):
+                return "position %d (outside the %d-way switch)" % (
+                    pos + 1, len(table))
+            return "position %d of %d (~%g Hz, unverified)" % (
+                pos + 1, len(table), table[pos])
+
+        def gain(field):
+            return "%+.1f dB" % float(eq.get(field, 0.0))
+
+        rows = [
+            ("Low shelf", switch("lowfreq", io24_scene.VINTAGE_LOW_HZ),
+             gain("lowgain")),
+            ("Low mid", switch("lowmidfreq", io24_scene.VINTAGE_LOWMID_HZ),
+             gain("lowmidgain")),
+            ("High mid", switch("himidfreq", io24_scene.VINTAGE_HIMID_HZ),
+             gain("himidgain")),
+            ("High shelf", "fixed frequency", gain("higain")),
+        ]
+    else:
+        rows = [(field, "", "%g" % value) for field, value in sorted(eq.items())
+                if not field.startswith("__") and field != "eqallon"
+                and isinstance(value, (int, float))]
+    return {"model": model, "on": bool(eq.get("eqallon", 1)),
+            "rows": rows, "eq": dict(eq)}
+
+
 def load(path=None):
     """Every factory preset, de-duplicated by content, keyed by name."""
     global _CACHE
@@ -421,25 +471,8 @@ def to_bands(preset):
     return _standard_eq_bands(eq)
 
 
-def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
-                        gate, compressor_model, compressor, limiter,
-                        voicefx_model, voicefx):
-    """Overlay current Host controls onto one explicit complete slot base.
-
-    The base supplies archive sections that the live UI does not model.  Every
-    Fat Channel and Voice FX field that the UI *does* own is replaced, never
-    merged with a stale model.  The result remains a complete-body candidate;
-    it does not imply device readback, selection, recall, or audibility.
-    """
-    from io24_preset_record import complete_device_slot_record
-
-    record = complete_device_slot_record(base)
-    if not isinstance(preset_name, str) or not preset_name.strip():
-        raise ValueError("current slot preset name must be non-empty text")
-    record["preset_name"] = preset_name.strip()
-    record["opt"] = {"swapcompeq": int(bool(eq_first))}
-    record["filter"] = {"hpf": float(hpf_hz)}
-
+def _standard_slot_eq(bands):
+    """Four Host bands as one complete Standard EQ record section."""
     if not isinstance(bands, (list, tuple)) or len(bands) != 4:
         raise ValueError("current slot EQ must contain four bands")
     eq = {
@@ -470,7 +503,41 @@ def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
             shelf = "lowshelf" if index == 1 else "highshelf"
             eq["eqbandop%d" % index] = int(shape == shelf)
     _standard_eq_bands(eq)
-    record["eq"] = eq
+    return eq
+
+
+def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
+                        gate, compressor_model, compressor, limiter,
+                        voicefx_model, voicefx, alternate_eq=None):
+    """Overlay current Host controls onto one explicit complete slot base.
+
+    The base supplies archive sections that the live UI does not model.  Every
+    Fat Channel and Voice FX field that the UI *does* own is replaced, never
+    merged with a stale model.  The result remains a complete-body candidate;
+    it does not imply device readback, selection, recall, or audibility.
+
+    ``alternate_eq`` is a recalled Passive/Vintage EQ section the Host shows
+    but cannot rebuild. When given it is stored verbatim and ``bands`` is not
+    used, so saving such a channel never turns its EQ into four Standard bands
+    the user did not set.
+    """
+    from io24_preset_record import complete_device_slot_record
+
+    record = complete_device_slot_record(base)
+    if not isinstance(preset_name, str) or not preset_name.strip():
+        raise ValueError("current slot preset name must be non-empty text")
+    record["preset_name"] = preset_name.strip()
+    record["opt"] = {"swapcompeq": int(bool(eq_first))}
+    record["filter"] = {"hpf": float(hpf_hz)}
+
+    if alternate_eq is not None:
+        if not isinstance(alternate_eq, dict) or \
+                eq_model(alternate_eq) not in ("passive", "vintage"):
+            raise ValueError(
+                "alternate_eq must be a complete Passive or Vintage EQ section")
+        record["eq"] = dict(alternate_eq)
+    else:
+        record["eq"] = _standard_slot_eq(bands)
 
     gate_fields = {
         "on", "threshold_db", "range_db", "attack_s", "release_s",

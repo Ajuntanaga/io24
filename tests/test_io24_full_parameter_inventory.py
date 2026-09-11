@@ -275,9 +275,9 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertEqual(self.saved, self.generated)
 
     def test_matrix_is_atomic_pending_and_restoration_gated(self):
-        self.assertEqual(self.generated["coverage"]["total_rows"], 748)
-        self.assertEqual(len(self.rows), 748)
-        self.assertEqual(len({row["id"] for row in self.rows}), 748)
+        self.assertEqual(self.generated["coverage"]["total_rows"], 751)
+        self.assertEqual(len(self.rows), 751)
+        self.assertEqual(len({row["id"] for row in self.rows}), 751)
         ids = {row["id"] for row in self.rows}
         self.assertIn("native.channel1.processing_mix", ids)
         self.assertIn("native.channel2.processing_mix", ids)

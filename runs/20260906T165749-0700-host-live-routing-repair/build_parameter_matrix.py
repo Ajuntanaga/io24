@@ -397,6 +397,13 @@ def build() -> dict:
             "one-shot mirror main", "host_mapping", scope={"bus": bus},
             stimuli=["known_sparse_main", "known_full_main"], api=("mirror_main",),
             source=("io24.py",), requires=("all_bus_sends_materialized",))
+    for bus in mixer_buses:
+        add("mixer.%s.solo" % bus, "P3", "mixer_mapping", "host solo",
+            "host_mapping", scope={"bus": bus},
+            stimuli=["one_source", "two_sources", "release", "clear_all"],
+            api=("set_solo", "clear_solo", "soloed"),
+            source=("io24.py send fold",),
+            requires=("all_bus_sends_materialized", "deterministic_audio_rig@batch"))
 
     # P4: Fat Channel.  Every field gets a per-physical-channel row.  Builder
     # instance 0, instance 1, and the default both-instance path are obligations
@@ -863,6 +870,7 @@ def _safe_public_api() -> set[str]:
                         "snapshot", "apply_startup", "send_fx", "apply_voicefx_snapshot",
                         "configure_voice_fx_intent", "fx_on", "fx_off", "preset_enabled",
                         "reverb_off", "eq_off", "running", "start", "stop",
+                        "soloed",
                     }):
                 names.add(node.name)
     return names

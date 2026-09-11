@@ -29,6 +29,18 @@ API cannot place an independent mono input in the stereo field.
 
 **Blend** sets playback against direct monitoring. Centre is an even mix.
 
+**Auto** (under each input's fader) is automatic preamp gain, as in Universal
+Control: switch it on and the Host keeps that input's typical loud level (the
+95th percentile of its meter over the last few seconds) near −12 dBFS by
+itself, with nothing to confirm. It corrects only when the level drifts more
+than 3 dB, at most once a second, rising up to 2 dB and falling up to 4 dB per
+step; a reading at clip drops the gain 6 dB at once. It never raises the gain on
+silence or a steady noise floor, only on the rise and fall of real playing or
+speech. The gain fader is locked while it is on. With stereo link on the two
+switches move together and both inputs get the gain the louder one needs. The
+firmware has nothing behind UC's own switch, so this runs in the Host: it works
+only while the Host is open, and it starts off each time the Host opens.
+
 Double-click any fader or knob to return it to its default.
 
 ---
@@ -49,6 +61,17 @@ taken a release coefficient and the driver has always computed it exactly; the
 page simply never offered the control, so every limiter write before this used
 the 0.4 s default. UC keeps no release field in its preset record, so release
 is live Host state — it rides a Host snapshot, not a device slot body.
+
+**Passive and Vintage EQ.** A device preset stored with the Passive Program or
+Vintage 1970s EQ can be recalled, but the Host can neither draw nor edit those
+models: the Vintage switch frequencies were never recovered, and Passive has
+never appeared in a real preset. After such a recall the rest of the chain is
+shown as usual, and the Equaliser lists the stored EQ read-only, each switch as
+a position with the Neve 1073 frequency beside it marked unverified. The
+Standard band controls are paused on that channel, and saving the channel to a
+slot keeps the stored EQ exactly. **Edit with Standard EQ instead** lifts the
+pause; nothing is sent until you move a band, and from then on the Standard
+bands are written over it.
 
 **High-pass filters**: the Mixer strip's **HPF** is the unit's
 fixed preamp switch. The Fat Channel's digital HPF is separate: choose Off,
@@ -304,6 +327,15 @@ source out of a bus while keeping its fader position, so toggling it twice lands
 on exactly the level you left. A route for which the Host has never sent a
 level is shown parked, not falsely active at 0 dB; unmuting it materializes the
 displayed 0 dB send.
+
+**S** solos a source within one bus: the bus's other sources go silent and come
+back at exactly their previous levels when the solo is released. Several
+sources can be soloed in a bus at once, and each bus has its own solo. The
+hardware has no solo, so the Host writes the others off without touching their
+faders or assigns. Solo is never saved in a snapshot, and the Host releases any
+active solo when it closes. A route the Host had never set is given the 0 dB it
+displays the first time its bus is soloed, so releasing has a real level to
+return to.
 
 **Bus master** offsets every send in a bus at once. The hardware has no such
 control — block 100 holds one level per source and nothing above them — so it is

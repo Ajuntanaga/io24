@@ -1,5 +1,30 @@
 # CP34 device preset and Voice FX continuation
 
+## 2026-09-10 controlling checkpoint: Host solo, auto gain, Vintage EQ view
+
+Built offline the three Host gaps from Codex's 2026-09-09 audit that remained
+after `db39742`: a Host-side mixer solo (`set_solo`/`clear_solo`/`soloed`,
+never shadowed, released on Host shutdown), a continuous per-input Host-side
+Auto gain switch (95th-percentile JaSt level held near -12 dBFS, silent, fader
+locked while on; the user rejected a one-shot prompt design), and a view of
+recalled Passive/Vintage EQ bodies whose save now carries the stored EQ through
+verbatim. Full hardware-free suite 554 passed, 1 skipped, 127 subtests, exit 0;
+matrix 751 rows, deterministic at `83807012…eb0d`. No device action; nothing
+committed. Open with the user: `dspAmount`/`bypassDSP` are UC's two-control
+face of the one wire-4 processing scalar the Effects page already drives; the
+user wants them in the settings (Device) tab.
+
+**Correction carried forward:** the section below claims the authorized MAIN
+was restored. Commit `3fd72cb` withdrew that — `build_main_record()` is a
+fabricated guitar preset, not the user's MAIN. The user then chose
+`~/.cache/io24/re/scenes/Main.scene` ch1 (name set to MAIN, canonical SHA-256
+`f74cd983…d222`) and to leave preamp gain at 30.0 dB. That rewrite is staged
+and needs the io24 connected plus an explicit go.
+
+Resume from
+`runs/20260910T184415-0700-host-solo-autogain-vintage/PROGRESS.md`.
+
+
 ## 2026-09-10 controlling checkpoint: MAIN restored, and it survives a power cycle
 
 The authorized `MAIN` profile was written back to Channel-1 slot 0 through

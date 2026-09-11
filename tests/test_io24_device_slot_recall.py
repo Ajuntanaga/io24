@@ -449,19 +449,23 @@ class RecalledBodyDisplayTests(unittest.TestCase):
         def direct_apply_support(self, record):
             return self._supported, self._reason
 
+        def alternate_eq_view(self, record):
+            return None
+
         def to_bands(self, record):
             raise AssertionError("must not be reached for an unsupported body")
 
     def test_an_unsupported_body_is_not_shown_and_says_why(self):
-        # B A S E is a real Vintage-EQ record: it has no Standard-band form,
-        # so showing four derived bands would describe a sound that is not
-        # on the device.
-        window = _window(entries=[_entry(1, 1, "B A S E", False)])
+        # A body whose non-EQ sections the Host cannot model is not put on
+        # the controls at all. (A Passive/Vintage EQ alone no longer blocks
+        # this: the rest is shown and the EQ is listed read-only -- see
+        # test_io24_vintage_eq_view.)
+        window = _window(entries=[_entry(1, 1, "ODD", False)])
         window.PR = self._PR(
-            False, "Vintage EQ is device-slot only; exact live builder pending")
+            False, "Compressor model is missing an unambiguous class id")
         self.assertFalse(window._adopt_recalled_slot(1, 1))
         joined = " ".join(window.messages)
-        self.assertIn("Vintage EQ is device-slot only", joined)
+        self.assertIn("missing an unambiguous class id", joined)
         self.assertIn("still show the previous sound", joined)
 
     def test_a_body_the_host_never_wrote_is_not_shown(self):

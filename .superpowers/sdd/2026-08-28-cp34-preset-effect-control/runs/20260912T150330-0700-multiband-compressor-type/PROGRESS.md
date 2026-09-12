@@ -191,3 +191,50 @@ input's own feed, its round-trip delay while playing, whether the six-channel
 capture and playback positions link as written on this machine, and the fully
 wet reverb. All are first-run acceptance items, and the insert has never been
 started.
+
+## 9. The UI sizing pass
+
+The user asked for "the sizing of the program, the sizing of everything, and
+the visible layout of everything", then chose **use more of the window** and
+named Routing/Device/Presets, Mixer and Effects as the pages that bother them.
+
+**How it was seen.** A headless harness renders the real window with the
+project's own stub device (`tests/paint_smoke.py`'s `FakeDev`/`FakeInner`, the
+real `Ctl`, `FakeSpectrum`) and PipeWire stubbed out, under a `gtk4-broadwayd`
+display on a private unix socket: no USB, no ALSA, no PipeWire, nothing on the
+user's screen and nothing on the network. Four of six pages render that way;
+Mixer and Fat channel produce no render node offscreen at all (the project's
+own `capture_window` raises "GTK produced no render node"), so with the user's
+explicit go the window was opened briefly on the desktop with the same stubs
+and all six pages captured at 1040x800 and 1440x900.
+
+**What was wrong.** Effects, Device and Presets are `Adw.PreferencesPage`,
+which clamps its content at 600sp; Fat channel clamped at 580 and Routing at
+760. At the size the Host opens at, that left roughly a third of the width
+empty on either side — the pages sat in a centre strip while the window was
+1090 px wide.
+
+**The change.** One `PAGE_WIDTH` (900sp) and `PAGE_TIGHTEN` (640sp) for every
+page. `Adw.PreferencesPage` exposes no width API, so `widen_page()` walks a
+built page and widens every clamp inside it (anything taking both a maximum
+size and a tightening threshold), and `wide_preferences_page()` is what the
+three preference pages are built from. The two pages that clamp themselves use
+the same constants. Verified by re-rendering: Device, Effects, Presets, Fat
+channel and Routing now span the window; Mixer was already full width.
+
+Tests: `tests/test_io24_host_layout.py` (the helper against a fake widget tree,
+and source contracts that every page goes through it).
+
+**Still open on the Mixer**, the one page the width change does not touch: each
+input strip ends with an explicit `Gtk.Box(vexpand=True)` spacer above a fixed
+260 px meter/fader row, so the bottom third of the strip is empty and the
+meters stay short however tall the window is.
+
+**The Mixer, vertically.** The width change does not touch it — it was already
+full width — but each input strip fixed its meter/fader row at 260 px and then
+pushed everything up with a `Gtk.Box(vexpand=True)` spacer, leaving the bottom
+third of the card empty however tall the window was; the bus strip did the
+same. Both now treat 260 px as a floor and expand, so the meters and faders use
+the window's height (visibly taller at 1440x900), with a fixed 8 px pad keeping
+the Gain reduction rows off the card's edge. The Monitoring strip is unchanged:
+its content is buttons, which should not stretch.

@@ -81,6 +81,48 @@ COMP_MODELS = ("standard", "tube", "fet", "multiband")
 MULTIBAND_MODEL = 3
 
 
+# How wide a page's content may get. Adw.PreferencesPage clamps itself at
+# 600sp, which left roughly a third of the window empty on either side at the
+# sizes this Host opens at; the user asked (2026-09-12) that the window be
+# used. Pages that build their own clamp use the same number, so every page
+# widens together.
+PAGE_WIDTH = 900
+PAGE_TIGHTEN = 640
+
+
+def widen_page(root, maximum=PAGE_WIDTH, tighten=PAGE_TIGHTEN):
+    """Widen every clamp inside a built page and return how many were found.
+
+    Adw.PreferencesPage keeps its clamp as an internal child and exposes no
+    width API, so the page is walked instead. Anything that takes both a
+    maximum size and a tightening threshold is a clamp; nothing else in these
+    pages does.
+    """
+    widened, stack = 0, [root]
+    while stack:
+        widget = stack.pop()
+        if widget is None:
+            continue
+        if hasattr(widget, "set_maximum_size") and \
+                hasattr(widget, "set_tightening_threshold"):
+            widget.set_maximum_size(maximum)
+            widget.set_tightening_threshold(tighten)
+            widened += 1
+        child = (widget.get_first_child()
+                 if hasattr(widget, "get_first_child") else None)
+        while child is not None:
+            stack.append(child)
+            child = child.get_next_sibling()
+    return widened
+
+
+def wide_preferences_page():
+    """An Adw.PreferencesPage that uses the window instead of a centre strip."""
+    page = Adw.PreferencesPage()
+    widen_page(page)
+    return page
+
+
 def load_last_session(path=None):
     """The last session's Host-only state, or None when there is none."""
     try:
@@ -2981,7 +3023,8 @@ class Win(Adw.ApplicationWindow):
         box = self._strip("Channel %d" % ch, title_suffix=indicator)
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                       halign=Gtk.Align.CENTER)
-        row.set_size_request(-1, 260)
+        row.set_size_request(-1, 260)      # a floor, not the height:
+        row.set_vexpand(True)              # meters grow with the window
         m = Meter()
         self.meters["in%d" % ch] = m
         row.append(m)
@@ -3045,15 +3088,16 @@ class Win(Adw.ApplicationWindow):
                 self.gr_bars[ch][key] = bar
                 r.append(l); r.append(bar)
                 box.append(r)
-        box.append(Gtk.Box(vexpand=True))
-        return box
+        box.append(Gtk.Box(height_request=8))   # keep the card's
+        return box                             # edge off the rows
 
     def _bus_strip(self):
         box = self._strip("Buses")
         grid = Gtk.Grid(column_spacing=10, row_spacing=6,
                         column_homogeneous=True,
                         halign=Gtk.Align.CENTER)
-        grid.set_size_request(228, 260)
+        grid.set_size_request(228, 260)    # a floor, not the height
+        grid.set_vexpand(True)
         for column, (key, visible_name, detail) in enumerate(
                 bus_meter_columns()):
             header = Gtk.Label(label=visible_name, halign=Gtk.Align.CENTER)
@@ -3070,7 +3114,7 @@ class Win(Adw.ApplicationWindow):
                 pair.append(m)
             grid.attach(pair, column, 1, 1, 1)
         box.append(grid)
-        box.append(Gtk.Box(vexpand=True))
+        box.append(Gtk.Box(height_request=8))
         return box
 
     def _set_bus_source_status(self, bus, status, notify=False):
@@ -3260,7 +3304,8 @@ class Win(Adw.ApplicationWindow):
         outer.append(self.chan_stack)
         self._rebuild_chains()
         outer.set_margin_top(10); outer.set_margin_bottom(24)
-        clamp = Adw.Clamp(maximum_size=580, tightening_threshold=400)
+        clamp = Adw.Clamp(maximum_size=PAGE_WIDTH,
+                          tightening_threshold=PAGE_TIGHTEN)
         clamp.set_child(outer)
         sc = Gtk.ScrolledWindow()
         sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -4027,7 +4072,7 @@ class Win(Adw.ApplicationWindow):
     def _fx_page(self):
         """Reverb, plus the send/return it needs, plus an honest note on the
         insert-FX models."""
-        page = Adw.PreferencesPage()
+        page = wide_preferences_page()
 
         g = Adw.PreferencesGroup(
             title="Shared reverb",)
@@ -4823,7 +4868,8 @@ class Win(Adw.ApplicationWindow):
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         outer.set_margin_top(10); outer.set_margin_bottom(24)
         outer.append(g)
-        clamp = Adw.Clamp(maximum_size=760, tightening_threshold=560)
+        clamp = Adw.Clamp(maximum_size=PAGE_WIDTH,
+                          tightening_threshold=PAGE_TIGHTEN)
         clamp.set_child(outer)
         sc = Gtk.ScrolledWindow()
         sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -5127,7 +5173,7 @@ class Win(Adw.ApplicationWindow):
         vocabulary at all. So this page reads the real state from ALSA and
         drives PipeWire, instead of pretending to write to the device.
         """
-        page = Adw.PreferencesPage()
+        page = wide_preferences_page()
 
         g = Adw.PreferencesGroup(
             title="Sample rate",)
@@ -5458,7 +5504,7 @@ class Win(Adw.ApplicationWindow):
         computer; putting one on the unit's Preset button is an action on the
         preset, not a section of its own.
         """
-        page = Adw.PreferencesPage()
+        page = wide_preferences_page()
         g = Adw.PreferencesGroup(title="Presets")
 
         self.factory_target = Adw.ComboRow(

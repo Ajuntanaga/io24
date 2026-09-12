@@ -27,6 +27,7 @@ sys.path.insert(0, ROOT)
 os.chdir(ROOT)
 
 import io24gtk as G                                          # noqa: E402
+import io24_mbc                                              # noqa: E402
 from gi.repository import GLib, Graphene, Gsk, Gtk          # noqa: E402
 
 
@@ -134,6 +135,18 @@ def main():
     # real Spectrum constructor here would make visiting the Channel page open
     # ALSA whenever an interface happened to be attached.
     G.Spectrum = FakeSpectrum
+    # PipeWire is the same problem by another route: the Mixer page's watchdog
+    # looks for the io24's nodes and starts the real bus-source chains, and
+    # Multiband would look for its own, whenever an interface happened to be
+    # attached. A rendering harness must not touch the audio graph at all.
+    io24_mbc.find_io24_sink = lambda: None
+    io24_mbc.find_io24_capture_source = lambda: None
+    io24_mbc.node_id = lambda node_name: None
+    io24_mbc.set_default_output = lambda node_name: False
+    io24_mbc.set_default_input = lambda node_name: False
+    io24_mbc._present_nodes = lambda: set()
+    G.pw_settings = lambda: {"clock.rate": "48000", "clock.quantum": "1024"}
+    G.pw_set = lambda key, value: (True, "")
     ctl = G.Ctl(FakeDev())
     app = G.App(ctl)
     # A unique id per run: sharing org.io24.Mixer with an already-running

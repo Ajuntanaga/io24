@@ -24,6 +24,45 @@ import io24gtk
 import ucnet_shim
 
 
+class _Control:
+    """A stand-in for one GTK row or scale."""
+
+    def __init__(self):
+        self.value, self.active, self.selected = 0.0, False, 0
+        self.sensitive = True
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        self.value = value
+
+    def get_active(self):
+        return self.active
+
+    def set_active(self, active):
+        self.active = active
+
+    def get_selected(self):
+        return self.selected
+
+    def set_selected(self, selected):
+        self.selected = selected
+
+    def set_sensitive(self, sensitive):
+        self.sensitive = sensitive
+
+
+def _multiband_controls():
+    """Every control one channel's Multiband page holds, by its key."""
+    controls = {"x%d" % index: _Control() for index in range(3)}
+    for index in range(len(io24_mbc.BANDS)):
+        for key in ("type", "thr", "ratio", "attack", "release", "knee",
+                    "makeup", "keyf", "auto", "limit", "keyon", "listen"):
+            controls[(index, key)] = _Control()
+    return controls
+
+
 class ProtocolDevice(io24.Io24):
     def __init__(self):
         self.payloads = []
@@ -643,54 +682,25 @@ class HostRefinementTests(unittest.TestCase):
                 io24_mbc.find_io24_sink(),
                 "alsa_output.usb-PreSonus_Revelator_io24-00.pro-output-0")
 
-    def test_multiband_switch_routes_playback_and_restores_io24(self):
-        class Row:
-            def __init__(self):
-                self.active = True
-                self.subtitle = ""
-
-            def get_active(self):
-                return self.active
-
-            def set_active(self, active):
-                self.active = active
-
-            def set_subtitle(self, subtitle):
-                self.subtitle = subtitle
-
-        class Chain:
-            def __init__(self):
-                self.starts = []
-                self.stops = 0
-
-            def start(self, **kwargs):
-                self.starts.append(kwargs)
-                return True
-
-            def stop(self):
-                self.stops += 1
-
-        row, chain, routed = Row(), Chain(), []
+    def test_old_playback_multiband_settings_seed_both_inputs_switched_off(self):
+        # 2026-09-11: the playback multiband became the compressor type
+        # Multiband. An older session or snapshot still carries its panel.
+        state = self._multiband_state()
         host = SimpleNamespace(
-            _mbc_mute=False, mbc=chain,
-            _mbc_snapshot_state=lambda: {"enabled": True},
-            say=lambda _message: None,
-        )
-        with mock.patch.object(io24_mbc, "sc4_available",
-                               return_value="/usr/lib/ladspa/sc3_1427.so"), \
-                mock.patch.object(io24_mbc, "find_io24_sink",
-                                  return_value="alsa_output.io24"), \
-                mock.patch.object(io24_mbc, "set_default_output",
-                                  side_effect=lambda name: routed.append(name) or True):
-            io24gtk.Win._mbc_toggled(host, row, None)
-            row.active = False
-            io24gtk.Win._mbc_toggled(host, row, None)
+            mbc_ctl={ch: _multiband_controls() for ch in (1, 2)},
+            _mbc_mute=False, _insert_stale=False,
+            _insert_wanted=lambda: ())
+        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state"):
+            setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
 
-        self.assertEqual(chain.starts, [{
-            "target": "alsa_output.io24", "state": {"enabled": True},
-        }])
-        self.assertEqual(routed, [io24_mbc.SINK_NAME, "alsa_output.io24"])
-        self.assertEqual(chain.stops, 1)
+        status = io24gtk.Win._adopt_legacy_multiband(host, state)
+
+        self.assertIn("switched off", status)
+        expected = dict(state, enabled=False)
+        for ch in (1, 2):
+            self.assertEqual(host._mbc_snapshot_state(ch), expected)
+        self.assertTrue(host._insert_stale)
+        self.assertFalse(host._mbc_mute)
 
     def test_invalid_multiband_file_fails_before_device_state_is_applied(self):
         class SnapshotIo24(io24.Io24):
@@ -1123,6 +1133,7 @@ class HostRefinementTests(unittest.TestCase):
             bands_by_ch={1: []}, dyn_by_ch={1: {}},
             hpf_by_ch={1: 24.0}, order_by_ch={1: False},
             invalidate_curve=lambda: None, _adopt_mute=False,
+            _insert_reconcile=lambda restart=False: None,
             _adopt_band=lambda _ch: None,
             _adopt_hpf_controls=lambda _ch, _hz: None,
             _adopt_dynamics=lambda _ch, _preset: None,
@@ -1227,140 +1238,25 @@ class HostRefinementTests(unittest.TestCase):
             {"freq": 300.0, "gain": 2.0},
         ])
 
-    def test_multiband_controls_capture_and_restore_one_exact_chain(self):
-        class Control:
-            def __init__(self, value=0.0, active=False, selected=0):
-                self.value = value
-                self.active = active
-                self.selected = selected
-                self.sensitive = True
-
-            def get_value(self):
-                return self.value
-
-            def set_value(self, value):
-                self.value = value
-
-            def get_active(self):
-                return self.active
-
-            def set_active(self, active):
-                self.active = active
-
-            def get_selected(self):
-                return self.selected
-
-            def set_selected(self, selected):
-                self.selected = selected
-
-            def set_sensitive(self, sensitive):
-                self.sensitive = sensitive
-
-        class Chain:
-            def __init__(self):
-                self.stops = 0
-                self.starts = []
-
-            def stop(self):
-                self.stops += 1
-
-            def start(self, **kwargs):
-                self.starts.append(kwargs)
-                return True
-
+    def test_multiband_controls_capture_and_restore_one_channel_exactly(self):
+        # Each input has its own Multiband page since it became a
+        # compressor type; a failed start is covered in
+        # test_io24_multiband_insert.py.
         state = self._multiband_state()
-        controls = {"x%d" % index: Control(value)
-                    for index, value in enumerate(state["xovers"])}
-        for index, band in enumerate(io24_mbc.BANDS):
-            values = state["bands"][band]
-            controls[(index, "type")] = Control(
-                selected=("standard", "tube", "fet").index(values["type"]))
-            for key, field in (("thr", "threshold"), ("ratio", "ratio"),
-                               ("attack", "attack"),
-                               ("release", "release"), ("knee", "knee"),
-                               ("makeup", "makeup"), ("keyf", "key")):
-                controls[(index, key)] = Control(values[field])
-            for key, field in (("auto", "auto"), ("limit", "limit"),
-                               ("keyon", "key_filter"),
-                               ("listen", "listen")):
-                controls[(index, key)] = Control(active=values[field])
-        chain = Chain()
-        host = SimpleNamespace(
-            mbc_widget=object(), mbc_row=Control(active=True),
-            mbc_ctl=controls, mbc=chain, _mbc_mute=False)
+        controls = _multiband_controls()
+        host = SimpleNamespace(mbc_ctl={1: controls}, _mbc_mute=False,
+                               _insert_wanted=lambda: (1,))
+        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state"):
+            setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
 
-        self.assertEqual(io24gtk.Win._mbc_snapshot_state(host), state)
-        for control in controls.values():
-            control.value = 0.0
-            control.active = False
-            control.selected = 0
-        with mock.patch.object(io24_mbc, "sc4_available",
-                               return_value="/usr/lib/ladspa/sc3_1427.so"), \
-                mock.patch.object(io24_mbc, "find_io24_sink",
-                                  return_value="alsa_output.io24"), \
-                mock.patch.object(io24_mbc, "set_default_output",
-                                  return_value=True):
-            status = io24gtk.Win._adopt_mbc_state(host, state)
+        host._adopt_mbc_controls(1, state)
 
-        self.assertEqual(status, "multiband restored on (Host only)")
-        self.assertEqual(chain.stops, 1)
-        self.assertEqual(chain.starts, [{
-            "target": "alsa_output.io24", "state": state,
-        }])
-        self.assertTrue(host.mbc_row.active)
-        self.assertEqual(io24gtk.Win._mbc_snapshot_state(host), state)
+        self.assertEqual(host._mbc_snapshot_state(1), state)
         self.assertFalse(controls[(0, "makeup")].sensitive)
-
-    def test_multiband_restore_never_claims_enabled_after_chain_failure(self):
-        state = self._multiband_state()
-
-        class Control:
-            def __init__(self):
-                self.value = 0.0
-                self.active = False
-                self.selected = 0
-
-            def set_value(self, value):
-                self.value = value
-
-            def set_active(self, active):
-                self.active = active
-
-            def get_active(self):
-                return self.active
-
-            def set_selected(self, selected):
-                self.selected = selected
-
-            def set_sensitive(self, _sensitive):
-                pass
-
-        class Chain:
-            def stop(self):
-                pass
-
-            def start(self, **_kwargs):
-                return False
-
-        controls = {"x%d" % index: Control() for index in range(3)}
-        for index in range(4):
-            controls[(index, "type")] = Control()
-            for key in ("thr", "ratio", "attack", "release", "knee",
-                        "makeup", "keyf", "auto", "limit", "keyon",
-                        "listen"):
-                controls[(index, key)] = Control()
-        host = SimpleNamespace(
-            mbc_widget=object(), mbc_row=Control(), mbc_ctl=controls,
-            mbc=Chain(), _mbc_mute=False)
-        with mock.patch.object(io24_mbc, "sc4_available",
-                               return_value="/usr/lib/ladspa/sc3_1427.so"), \
-                mock.patch.object(io24_mbc, "find_io24_sink",
-                                  return_value="alsa_output.io24"):
-            status = io24gtk.Win._adopt_mbc_state(host, state)
-
-        self.assertIn("did not start", status)
-        self.assertFalse(host.mbc_row.active)
+        self.assertTrue(controls[(1, "makeup")].sensitive)
         self.assertFalse(host._mbc_mute)
+        host._insert_wanted = lambda: ()
+        self.assertFalse(host._mbc_snapshot_state(1)["enabled"])
 
     def test_host_file_worker_uses_its_serialized_device_argument(self):
         source = inspect.getsource(io24gtk.Win._pick)

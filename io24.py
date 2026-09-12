@@ -2848,17 +2848,32 @@ def _normalise_host_features(features):
         return {}, []
     if not isinstance(features, dict):
         raise ValueError("host_features must be an object")
-    unknown = set(features) - {"multiband", "pan"}
+    # reverb_character and autogain are the GTK Host's own; it checks their
+    # contents when it adopts them and reports what it could not use. They
+    # were saved but refused here, so a snapshot with either failed to save.
+    unknown = set(features) - {"multiband", "multiband_insert", "pan",
+                               "reverb_character", "autogain"}
     if unknown:
         raise ValueError("unknown host feature%s: %s" %
                          ("" if len(unknown) == 1 else "s",
                           ", ".join(sorted(str(name) for name in unknown))))
     normalized = {}
     migrations = []
+    for name in ("reverb_character", "autogain"):
+        if name in features:
+            if not isinstance(features[name], dict):
+                raise ValueError("host feature %s must be an object" % name)
+            normalized[name] = json.loads(json.dumps(features[name]))
     if "multiband" in features:
+        # The retired computer-playback multiband. Still read, so its band
+        # settings can seed the Multiband compressor type; never switched on.
         import io24_mbc
         normalized["multiband"] = io24_mbc.validate_snapshot(
             features["multiband"])
+    if "multiband_insert" in features:
+        import io24_mbc
+        normalized["multiband_insert"] = io24_mbc.validate_insert_state(
+            features["multiband_insert"])
     if "pan" in features:
         migrations.append(
             "legacy Host bus pan was ignored; bus pan controls were removed")

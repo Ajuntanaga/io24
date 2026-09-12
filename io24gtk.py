@@ -75,6 +75,11 @@ LAST_SESSION_PATH = os.path.join(
 # change made on the hardware while the Host was closed stands.
 RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link")
 
+# Compressor models on the Fat Channel page. The first three are the unit's;
+# Multiband runs on the computer, right after the Fat Channel (io24_mbc).
+COMP_MODELS = ("standard", "tube", "fet", "multiband")
+MULTIBAND_MODEL = 3
+
 
 def load_last_session(path=None):
     """The last session's Host-only state, or None when there is none."""
@@ -399,8 +404,8 @@ class Ctl:
         self._next_probe = 0.0
         while self.running:
             if self.dev is None:
-                # OFFLINE: the app runs without the interface now — the
-                # multiband and the UI itself never needed it. Queued control
+                # OFFLINE: the app runs without the interface now — the UI
+                # itself never needed it. Queued control
                 # writes are dropped (there is no hardware to take them), and
                 # every couple of seconds we try to attach, so plugging the
                 # device in brings everything live without a restart.
@@ -2598,6 +2603,19 @@ class Win(Adw.ApplicationWindow):
                           for c in (1, 2)}
         self.cur_band_by_ch = {1: 0, 2: 0}
         self.link_both = False
+        # Multiband, the compressor type that runs on the computer
+        # (io24_mbc's insert): its process, per-channel controls, and what it
+        # changed in the unit's mixer and in PipeWire, so it can be undone.
+        self.insert = io24_mbc.InsertChain()
+        self.mbc_ctl = {}
+        self.mbc_status = {}
+        self._mbc_mute = False
+        self._mbc_prev = {}
+        self._insert_routing = None
+        self._insert_quantum_before = None
+        self._insert_default_input = False
+        self._insert_stale = False
+        self._insert_pending = 0
         # Widget adoption is not a user edit.  Factory loads, band selection,
         # and per-channel page changes all populate controls programmatically;
         # without one shared guard those GTK signals enqueue fresh DSP writes
@@ -2682,12 +2700,10 @@ class Win(Adw.ApplicationWindow):
         tv = Adw.ToolbarView()
         tv.add_top_bar(header)
         # Offline is a state, not an error: the app opens without the
-        # interface (the multiband never needed it) and attaches live when it
-        # is plugged in. The banner is the one place that says which mode
-        # you are in.
+        # interface and attaches live when it is plugged in. The banner is
+        # the one place that says which mode you are in.
         self.offline_banner = Adw.Banner(
-            title="io24 not connected — device controls are parked; "
-                  "the multiband compressor still works")
+            title="io24 not connected — device controls are parked")
         self.offline_banner.set_revealed(self.ctl.dev is None)
         tv.add_top_bar(self.offline_banner)
         self._was_offline = self.ctl.dev is None
@@ -2711,6 +2727,7 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(50, self._fx_anim)             # 20 fps, page-gated
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
+        GLib.timeout_add(2000, self._insert_watchdog)
         GLib.timeout_add(5000, self._autosave_session)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
         self._page_changed(stack, None)                  # set the initial state
@@ -2726,8 +2743,7 @@ class Win(Adw.ApplicationWindow):
             self.offline_banner.set_title(
                 "io24 is connected but held by another program"
                 if err and "busy" in err else
-                "io24 not connected — device controls are parked; "
-                "the multiband compressor still works")
+                "io24 not connected — device controls are parked")
         if off != self._was_offline:
             self._was_offline = off
             self.offline_banner.set_revealed(off)
@@ -2870,14 +2886,6 @@ class Win(Adw.ApplicationWindow):
         if getattr(self, "mod_title", None) is not None:
             self.mod_title.set_text("Channel %d — %s"
                                     % (ch, Rack.TITLES.get(mod, mod)))
-        # the shared multiband group follows the visible compressor page
-        mbcw = getattr(self, "mbc_widget", None)
-        if mod == "COMP" and mbcw is not None:
-            holder = self._comp_holders.get(ch)
-            if holder is not None and mbcw.get_parent() is not holder:
-                if mbcw.get_parent() is not None:
-                    mbcw.get_parent().remove(mbcw)
-                holder.append(mbcw)
         self.current_module = (ch, mod)
         for r in self.racks.values():
             r.queue_draw()
@@ -3250,10 +3258,6 @@ class Win(Adw.ApplicationWindow):
             self.chan_stack.add_named(col, str(ch))
         self.chan_stack.set_visible_child_name("1")
         outer.append(self.chan_stack)
-        self.mbc_widget = self._mbc_group()
-        if self.mbc_widget is not None:
-            self._comp_holders[1].append(self.mbc_widget)
-
         self._rebuild_chains()
         outer.set_margin_top(10); outer.set_margin_bottom(24)
         clamp = Adw.Clamp(maximum_size=580, tightening_threshold=400)
@@ -3264,54 +3268,49 @@ class Win(Adw.ApplicationWindow):
         sc.set_vexpand(True)
         return sc
 
-    def _mbc_group(self):
-        """The 4-band compressor, living inside the Compressor section.
+    def _mbc_group(self, ch):
+        """Channel `ch`'s Multiband, the compressor type that runs on the
+        computer right after the unit's Fat Channel (io24_mbc's insert).
 
-        The device's own compressor is single-band by hardware; this one runs
-        as a PipeWire chain and appears as the "io24 Multiband" output device;
-        the details live in GUIDE.md — the UI just offers the controls.
-        Each band carries the same vocabulary as the device compressors: a
-        character (Standard / Tube / FET, mapped onto sc3's time constants and
-        knee), threshold/ratio/knee, auto makeup like the FET model's, a Tube
-        limit mode, and a key filter with key listen via sc3's sidechain.
+        Choosing it switches the unit's single-band compressor off and
+        processes the input from USB capture, where it arrives after the
+        limiter; GUIDE.md has the details. Each band carries the device
+        compressors' vocabulary: a character (Standard / Tube / FET, mapped
+        onto sc3's time constants and knee), threshold/ratio/knee, auto makeup
+        like the FET model's, a Tube limit mode, and a key filter with key
+        listen via sc3's sidechain.
         """
-        if not io24_mbc.pipewire_available():
-            return None
-        self.mbc = io24_mbc.Chain()
-        self.mbc_ctl = {}
-        self._mbc_mute = False
-        g = Adw.PreferencesGroup(title="Multiband")
-
-        row = Adw.SwitchRow(
-            title="Multiband",
-            subtitle="Off · adds the \u201cio24 Multiband\u201d output device")
-        row.connect("notify::active", self._mbc_toggled)
-        self.mbc_row = row
-        g.add(row)
-        if io24_mbc.sc4_available() is None:
-            note = Adw.ActionRow(title="Needs swh-plugins",
-                                 subtitle="sudo apt install swh-plugins")
+        ctl = self.mbc_ctl.setdefault(ch, {})
+        g = Adw.PreferencesGroup()
+        status = Adw.ActionRow(title="Multiband", subtitle="Off")
+        self.mbc_status[ch] = status
+        g.add(status)
+        missing = self._insert_missing()
+        if missing:
+            note = Adw.ActionRow(title="Unavailable", subtitle=missing)
             note.add_prefix(Gtk.Image.new_from_icon_name(
                 "dialog-warning-symbolic"))
             g.add(note)
 
-        def slider(parent, title, lo, hi, step, dv, fmt, keys):
+        def slider(parent, cid, title, lo, hi, step, dv, fmt, keys):
             r, sc = self._srow(title, lo, hi, step, dv, fmt,
-                               lambda v, k=keys: self._mbc_set(k, v))
-            parent.add_row(r) if isinstance(parent, Adw.ExpanderRow) else parent.add(r)
-            return sc
+                               lambda v, i=cid, k=keys:
+                               self._mbc_set(ch, i, k, v))
+            if isinstance(parent, Adw.ExpanderRow):
+                parent.add_row(r)
+            else:
+                parent.add(r)
+            ctl[cid] = sc
 
-        # crossovers: each split drives the four biquads that realise it
-        XNODES = (("b0_0", "b0_1", "b1_0", "b1_1"),
-                  ("b1_2", "b1_3", "b2_0", "b2_1"),
-                  ("b2_2", "b2_3", "b3_0", "b3_1"))
-        for i, ttl in enumerate(("Split low / low-mid", "Split low-mid / high-mid",
+        # crossovers: each split drives every biquad and all-pass tuned to it
+        XNODES = io24_mbc.crossover_nodes()
+        for i, ttl in enumerate(("Split low / low-mid",
+                                 "Split low-mid / high-mid",
                                  "Split high-mid / high")):
             lo, hi = ((40, 400), (300, 2500), (2000, 12000))[i]
-            self.mbc_ctl["x%d" % i] = slider(
-                g, ttl, lo, hi, 1, io24_mbc.DEFAULTS["xovers"][i],
-                lambda v: "%.0f Hz" % v,
-                tuple(n + ":Freq" for n in XNODES[i]))
+            slider(g, "x%d" % i, ttl, lo, hi, 1,
+                   io24_mbc.DEFAULTS["xovers"][i], lambda v: "%.0f Hz" % v,
+                   tuple(n + ":Freq" for n in XNODES[i]))
 
         for bi, (band, bname) in enumerate(zip(
                 io24_mbc.BANDS, ("Low", "Low mid", "High mid", "High"))):
@@ -3322,224 +3321,432 @@ class Win(Adw.ApplicationWindow):
             trow = Adw.ComboRow(title="Character",
                                 model=Gtk.StringList.new(
                                     ["Standard", "Tube", "FET"]))
-            trow.connect("notify::selected", self._mbc_type, bi)
+            trow.connect("notify::selected", self._mbc_type, ch, bi)
             ex.add_row(trow)
-            self.mbc_ctl[(bi, "type")] = trow
+            ctl[(bi, "type")] = trow
 
-            self.mbc_ctl[(bi, "thr")] = slider(
-                ex, "Threshold", -40, 0, 0.5, d["threshold"],
-                lambda v: "%.1f dB" % v, (comp + ":Threshold level (dB)",))
-            self.mbc_ctl[(bi, "ratio")] = slider(
-                ex, "Ratio", 1, 20, 0.1, d["ratio"],
-                lambda v: "%.1f:1" % v, (comp + ":Ratio (1:n)",))
-            self.mbc_ctl[(bi, "knee")] = slider(
-                ex, "Knee", 0, 12, 0.5, d["knee"],
-                lambda v: "%.1f dB" % v, (comp + ":Knee radius (dB)",))
-            self.mbc_ctl[(bi, "attack")] = slider(
-                ex, "Attack", 1, 100, 0.5, d["attack"],
-                lambda v: "%.1f ms" % v, (comp + ":Attack time (ms)",))
-            self.mbc_ctl[(bi, "release")] = slider(
-                ex, "Release", 10, 800, 5, d["release"],
-                lambda v: "%.0f ms" % v, (comp + ":Release time (ms)",))
-            self.mbc_ctl[(bi, "makeup")] = slider(
-                ex, "Makeup", 0, 24, 0.5, d["makeup"],
-                lambda v: "+%.1f dB" % v, (comp + ":Makeup gain (dB)",))
-
-            arow = Adw.SwitchRow(title="Auto makeup")
-            arow.connect("notify::active", self._mbc_auto, bi)
-            ex.add_row(arow)
-            self.mbc_ctl[(bi, "auto")] = arow
-
-            lrow = Adw.SwitchRow(title="Limit mode")
-            lrow.connect("notify::active", self._mbc_limit, bi)
-            ex.add_row(lrow)
-            self.mbc_ctl[(bi, "limit")] = lrow
-
-            krow = Adw.SwitchRow(title="Key filter")
-            krow.connect("notify::active",
-                         lambda r_, _p, b=bi: self._mbc_set(
-                             ("c%d:Chain balance" % b,),
-                             1.0 if r_.get_active() else 0.0))
-            ex.add_row(krow)
-            self.mbc_ctl[(bi, "keyon")] = krow
-            self.mbc_ctl[(bi, "keyf")] = slider(
-                ex, "Key frequency", 30, 16000, 5, d["key"],
-                lambda v: "%.0f Hz" % v, ("k%d:Freq" % bi,))
-
+            slider(ex, (bi, "thr"), "Threshold", -40, 0, 0.5, d["threshold"],
+                   lambda v: "%.1f dB" % v, (comp + ":Threshold level (dB)",))
+            slider(ex, (bi, "ratio"), "Ratio", 1, 20, 0.1, d["ratio"],
+                   lambda v: "%.1f:1" % v, (comp + ":Ratio (1:n)",))
+            slider(ex, (bi, "knee"), "Knee", 0, 12, 0.5, d["knee"],
+                   lambda v: "%.1f dB" % v, (comp + ":Knee radius (dB)",))
+            slider(ex, (bi, "attack"), "Attack", 1, 100, 0.5, d["attack"],
+                   lambda v: "%.1f ms" % v, (comp + ":Attack time (ms)",))
+            slider(ex, (bi, "release"), "Release", 10, 800, 5, d["release"],
+                   lambda v: "%.0f ms" % v, (comp + ":Release time (ms)",))
+            slider(ex, (bi, "makeup"), "Makeup", 0, 24, 0.5, d["makeup"],
+                   lambda v: "+%.1f dB" % v, (comp + ":Makeup gain (dB)",))
+            for cid, title, handler in (
+                    ("auto", "Auto makeup", self._mbc_auto),
+                    ("limit", "Limit mode", self._mbc_limit),
+                    ("keyon", "Key filter", self._mbc_keyon)):
+                row = Adw.SwitchRow(title=title)
+                row.connect("notify::active", handler, ch, bi)
+                ex.add_row(row)
+                ctl[(bi, cid)] = row
+            slider(ex, (bi, "keyf"), "Key frequency", 30, 16000, 5, d["key"],
+                   lambda v: "%.0f Hz" % v, ("k%d:Freq" % bi,))
             srow = Adw.SwitchRow(title="Key listen")
-            srow.connect("notify::active", self._mbc_listen, bi)
+            srow.connect("notify::active", self._mbc_listen, ch, bi)
             ex.add_row(srow)
-            self.mbc_ctl[(bi, "listen")] = srow
+            ctl[(bi, "listen")] = srow
             g.add(ex)
         return g
 
-    def _mbc_type(self, row, _p, bi):
+    def _mbc_type(self, row, _p, ch, bi):
         """Apply a character's time constants and knee to the band's sliders —
         visible state, not hidden state, so what you hear is what you see."""
         if self._mbc_mute:
             return
-        t = ("standard", "tube", "fet")[row.get_selected()]
-        vals = io24_mbc.TYPES[t]
-        for key, v in (("attack", vals["attack"]), ("release", vals["release"]),
-                       ("knee", vals["knee"])):
-            self.mbc_ctl[(bi, key)].set_value(v)   # fires the live push
+        self._mbc_mirror(ch, (bi, "type"))
+        vals = io24_mbc.TYPES[("standard", "tube", "fet")[row.get_selected()]]
+        for key in ("attack", "release", "knee"):
+            self.mbc_ctl[ch][(bi, key)].set_value(vals[key])  # fires the push
 
-    def _mbc_limit(self, row, _p, bi):
+    def _mbc_limit(self, row, _p, ch, bi):
         if self._mbc_mute:
             return
+        self._mbc_mirror(ch, (bi, "limit"))
+        ctl = self.mbc_ctl[ch]
+        prev = self._mbc_prev.setdefault(ch, {})
         if row.get_active():
-            self._mbc_prev = getattr(self, "_mbc_prev", {})
-            self._mbc_prev[bi] = (self.mbc_ctl[(bi, "ratio")].get_value(),
-                                  self.mbc_ctl[(bi, "attack")].get_value())
-            self.mbc_ctl[(bi, "ratio")].set_value(io24_mbc.TUBE_LIMIT["ratio"])
-            self.mbc_ctl[(bi, "attack")].set_value(io24_mbc.TUBE_LIMIT["attack"])
-        else:
-            prev = getattr(self, "_mbc_prev", {}).get(bi)
-            if prev:
-                self.mbc_ctl[(bi, "ratio")].set_value(prev[0])
-                self.mbc_ctl[(bi, "attack")].set_value(prev[1])
+            prev[bi] = (ctl[(bi, "ratio")].get_value(),
+                        ctl[(bi, "attack")].get_value())
+            ctl[(bi, "ratio")].set_value(io24_mbc.TUBE_LIMIT["ratio"])
+            ctl[(bi, "attack")].set_value(io24_mbc.TUBE_LIMIT["attack"])
+        elif prev.get(bi):
+            ratio, attack = prev.pop(bi)
+            ctl[(bi, "ratio")].set_value(ratio)
+            ctl[(bi, "attack")].set_value(attack)
 
-    def _mbc_auto(self, row, _p, bi):
+    def _mbc_auto(self, row, _p, ch, bi):
         if self._mbc_mute:
             return
-        self.mbc_ctl[(bi, "makeup")].set_sensitive(not row.get_active())
-        self._mbc_recompute_makeup(bi)
+        self._mbc_mirror(ch, (bi, "auto"))
+        self._mbc_recompute_makeup(ch, bi)
 
-    def _mbc_recompute_makeup(self, bi):
-        if not self.mbc_ctl[(bi, "auto")].get_active():
-            return
-        mk = io24_mbc.auto_makeup(self.mbc_ctl[(bi, "thr")].get_value(),
-                                  self.mbc_ctl[(bi, "ratio")].get_value())
-        self.mbc_ctl[(bi, "makeup")].set_value(mk)   # fires the live push
+    def _mbc_recompute_makeup(self, ch, bi):
+        ctl = self.mbc_ctl[ch]
+        auto = ctl[(bi, "auto")].get_active()
+        ctl[(bi, "makeup")].set_sensitive(not auto)
+        if auto:
+            ctl[(bi, "makeup")].set_value(io24_mbc.auto_makeup(
+                ctl[(bi, "thr")].get_value(), ctl[(bi, "ratio")].get_value()))
+        return False                      # also an idle callback: run once
 
-    def _mbc_listen(self, row, _p, bi):
+    def _mbc_keyon(self, row, _p, ch, bi):
         if self._mbc_mute:
             return
+        self._mbc_mirror(ch, (bi, "keyon"))
+        self._mbc_push(ch, ("c%d:Chain balance" % bi,),
+                       1.0 if row.get_active() else 0.0)
+
+    def _mbc_listen(self, row, _p, ch, bi):
+        if self._mbc_mute:
+            return
+        self._mbc_mirror(ch, (bi, "listen"))
         on = row.get_active()
-        self._mbc_set(("lc%d:Mult" % bi,), 0.0 if on else 1.0)
-        self._mbc_set(("lk%d:Mult" % bi,), 1.0 if on else 0.0)
+        self._mbc_push(ch, ("lc%d:Mult" % bi,), 0.0 if on else 1.0)
+        self._mbc_push(ch, ("lk%d:Mult" % bi,), 1.0 if on else 0.0)
 
-    def _mbc_toggled(self, row, _p):
+    def _mbc_set(self, ch, cid, keys, value):
+        """One slider move, pushed live to every graph that carries it. A move
+        while the insert is down is a no-op; auto makeup rides along with
+        threshold and ratio, exactly as the device compressors compensate."""
         if self._mbc_mute:
             return
-        if row.get_active():
-            if io24_mbc.sc4_available() is None:
-                self._mbc_mute = True
-                try:
-                    row.set_active(False)
-                finally:
-                    self._mbc_mute = False
-                self.say("Multiband unavailable — install swh-plugins first")
-                return
-            target = io24_mbc.find_io24_sink()
-            ok = self.mbc.start(
-                target=target, state=self._mbc_snapshot_state())
-            if ok and io24_mbc.set_default_output(io24_mbc.SINK_NAME):
-                row.set_subtitle(
-                    "On · system playback is routed through multiband")
+        self._mbc_mirror(ch, cid)
+        if isinstance(cid, tuple) and cid[1] in ("thr", "ratio"):
+            GLib.idle_add(self._mbc_recompute_makeup, ch, cid[0])
+        self._mbc_push(ch, keys, value)
+
+    def _mbc_targets(self, ch):
+        """Channels a Multiband edit reaches: both while linked."""
+        return (1, 2) if self.link_both else (ch,)
+
+    def _mbc_push(self, ch, keys, value):
+        insert = getattr(self, "insert", None)
+        if insert is None or not insert.running:
+            return
+        for c in self._mbc_targets(ch):
+            insert.set_channel_controls(c, {key: value for key in keys})
+
+    def _mbc_mirror(self, ch, cid):
+        """While linked, copy one control to the other channel without an
+        echo; _mbc_push then sends the move to both graphs."""
+        if not self.link_both:
+            return
+        other = 2 if ch == 1 else 1
+        src = self.mbc_ctl.get(ch, {}).get(cid)
+        dst = self.mbc_ctl.get(other, {}).get(cid)
+        if src is None or dst is None:
+            return
+        prior, self._mbc_mute = self._mbc_mute, True
+        try:
+            if isinstance(src, Adw.SwitchRow):
+                dst.set_active(src.get_active())
+            elif isinstance(src, Adw.ComboRow):
+                dst.set_selected(src.get_selected())
             else:
-                self.mbc.stop()
-                self.say("Multiband failed to start or route through PipeWire")
-                row.set_active(False)
-        else:
-            io24_mbc.set_default_output(io24_mbc.find_io24_sink())
-            self.mbc.stop()
-            row.set_subtitle(
-                "Off · adds the \u201cio24 Multiband\u201d output device")
+                dst.set_value(src.get_value())
+        finally:
+            self._mbc_mute = prior
+        if isinstance(cid, tuple) and cid[1] == "auto":
+            self.mbc_ctl[other][(cid[0], "makeup")].set_sensitive(
+                not dst.get_active())
 
-    def _mbc_set(self, keys, value):
-        """Push one control move to every node that carries it. A move while
-        the chain is down is a no-op; auto-makeup rides along with threshold
-        and ratio changes, exactly as the device compressors compensate."""
-        if self._mbc_mute:
-            return
-        for k in keys:
-            if "Threshold" in k or "Ratio" in k:
-                bi = int(k[1])
-                GLib.idle_add(self._mbc_recompute_makeup, bi)
-                break
-        if not getattr(self, "mbc", None) or not self.mbc.running:
-            return
-        self.mbc.set_controls({k: value for k in keys})
-
-    def _mbc_snapshot_state(self):
-        """Capture every visible computer-side multiband control."""
-        if getattr(self, "mbc_widget", None) is None:
+    def _mbc_snapshot_state(self, ch):
+        """Capture one channel's visible Multiband controls."""
+        ctl = getattr(self, "mbc_ctl", {}).get(ch)
+        if not ctl:
             return None
-        state = io24_mbc.default_snapshot(
-            enabled=self.mbc_row.get_active())
-        state["xovers"] = [
-            self.mbc_ctl["x%d" % index].get_value() for index in range(3)]
+        state = io24_mbc.default_snapshot(enabled=ch in self._insert_wanted())
+        state["xovers"] = [ctl["x%d" % index].get_value() for index in range(3)]
         for index, band in enumerate(io24_mbc.BANDS):
-            controls = self.mbc_ctl
             state["bands"][band] = {
                 "type": ("standard", "tube", "fet")[
-                    controls[(index, "type")].get_selected()],
-                "threshold": controls[(index, "thr")].get_value(),
-                "ratio": controls[(index, "ratio")].get_value(),
-                "attack": controls[(index, "attack")].get_value(),
-                "release": controls[(index, "release")].get_value(),
-                "knee": controls[(index, "knee")].get_value(),
-                "makeup": controls[(index, "makeup")].get_value(),
-                "auto": controls[(index, "auto")].get_active(),
-                "limit": controls[(index, "limit")].get_active(),
-                "key_filter": controls[(index, "keyon")].get_active(),
-                "key": controls[(index, "keyf")].get_value(),
-                "listen": controls[(index, "listen")].get_active(),
+                    ctl[(index, "type")].get_selected()],
+                "threshold": ctl[(index, "thr")].get_value(),
+                "ratio": ctl[(index, "ratio")].get_value(),
+                "attack": ctl[(index, "attack")].get_value(),
+                "release": ctl[(index, "release")].get_value(),
+                "knee": ctl[(index, "knee")].get_value(),
+                "makeup": ctl[(index, "makeup")].get_value(),
+                "auto": ctl[(index, "auto")].get_active(),
+                "limit": ctl[(index, "limit")].get_active(),
+                "key_filter": ctl[(index, "keyon")].get_active(),
+                "key": ctl[(index, "keyf")].get_value(),
+                "listen": ctl[(index, "listen")].get_active(),
             }
         return io24_mbc.validate_snapshot(state)
 
-    def _adopt_mbc_state(self, state):
-        """Restore Host-only multiband controls and one exact chain instance."""
-        if state is None:
-            return None
-        state = io24_mbc.validate_snapshot(state)
-        if getattr(self, "mbc_widget", None) is None:
-            return "multiband state retained in file; controls unavailable here"
-        self._mbc_mute = True
+    def _adopt_mbc_controls(self, ch, state):
+        """Show one channel's saved Multiband settings without pushing them."""
+        ctl = self.mbc_ctl[ch]
+        prior, self._mbc_mute = self._mbc_mute, True
         try:
             for index, value in enumerate(state["xovers"]):
-                self.mbc_ctl["x%d" % index].set_value(value)
+                ctl["x%d" % index].set_value(value)
             for index, band in enumerate(io24_mbc.BANDS):
                 values = state["bands"][band]
-                self.mbc_ctl[(index, "type")].set_selected(
+                ctl[(index, "type")].set_selected(
                     ("standard", "tube", "fet").index(values["type"]))
                 for key, field in (("thr", "threshold"), ("ratio", "ratio"),
                                    ("attack", "attack"),
                                    ("release", "release"), ("knee", "knee"),
                                    ("makeup", "makeup"), ("keyf", "key")):
-                    self.mbc_ctl[(index, key)].set_value(values[field])
+                    ctl[(index, key)].set_value(values[field])
                 for key, field in (("auto", "auto"), ("limit", "limit"),
                                    ("keyon", "key_filter"),
                                    ("listen", "listen")):
-                    self.mbc_ctl[(index, key)].set_active(values[field])
-                self.mbc_ctl[(index, "makeup")].set_sensitive(
-                    not values["auto"])
-            self.mbc_row.set_active(state["enabled"])
+                    ctl[(index, key)].set_active(values[field])
+                ctl[(index, "makeup")].set_sensitive(not values["auto"])
         finally:
-            self._mbc_mute = False
+            self._mbc_mute = prior
 
-        self.mbc.stop()
-        if not state["enabled"]:
-            return "multiband restored off (Host only)"
-        if io24_mbc.sc4_available() is None:
-            self._mbc_mute = True
-            try:
-                self.mbc_row.set_active(False)
-            finally:
-                self._mbc_mute = False
-            return "multiband settings restored, but swh-plugins is unavailable"
-        ok = self.mbc.start(
-            target=io24_mbc.find_io24_sink(), state=state)
-        if ok and io24_mbc.set_default_output(io24_mbc.SINK_NAME):
-            return "multiband restored on (Host only)"
-        self.mbc.stop()
-        self._mbc_mute = True
+    def _mbc_copy(self, source, target):
+        """Linked channels share one Multiband setting."""
+        state = self._mbc_snapshot_state(source)
+        if state is not None and self.mbc_ctl.get(target):
+            self._adopt_mbc_controls(target, state)
+
+    def _adopt_legacy_multiband(self, state):
+        """The retired computer-playback multiband. Its bands seed both
+        inputs' Multiband settings; it is never switched on by a load."""
+        if state is None:
+            return None
+        state = io24_mbc.validate_snapshot(state)
+        if not getattr(self, "mbc_ctl", None):
+            return "multiband state retained in file; controls unavailable here"
+        for ch in io24_mbc.INSERT_CHANNELS:
+            self._adopt_mbc_controls(ch, state)
+        self._insert_stale = True
+        return ("the playback multiband is now the compressor type Multiband; "
+                "its settings were loaded into both inputs, switched off")
+
+    def _insert_state(self):
+        """The Multiband compressor type's Host-only state: both inputs'
+        settings (enabled = selected with the Compressor on), what the Host
+        changed in the unit's mixer, and the buffer to give back."""
+        if not getattr(self, "mbc_ctl", None):
+            return None
+        channels = {}
+        for ch in io24_mbc.INSERT_CHANNELS:
+            snapshot = self._mbc_snapshot_state(ch)
+            if snapshot is None:
+                return None
+            channels[str(ch)] = snapshot
+        return io24_mbc.validate_insert_state({
+            "version": io24_mbc.INSERT_VERSION, "channels": channels,
+            "routing": self._insert_routing,
+            "quantum_before": self._insert_quantum_before})
+
+    def _adopt_insert_state(self, state):
+        """Restore both inputs' Multiband: settings, and the selection with
+        the Compressor on where it was. Only a Host with nothing rerouted of
+        its own takes the saved routing, which is how a crashed session's
+        changes to the unit's mixer are undone or carried on."""
+        if state is None:
+            return None
+        state = io24_mbc.validate_insert_state(state)
+        if not getattr(self, "mbc_ctl", None):
+            return "multiband state retained in file; controls unavailable here"
+        insert = getattr(self, "insert", None)
+        if self._insert_routing is None and not (insert and insert.running):
+            self._insert_routing = state["routing"]
+            if self._insert_quantum_before is None:
+                self._insert_quantum_before = state["quantum_before"]
+        on = []
+        prior, self._adopt_mute = self._adopt_mute, True
         try:
-            self.mbc_row.set_active(False)
+            for ch in io24_mbc.INSERT_CHANNELS:
+                snapshot = state["channels"][str(ch)]
+                self._adopt_mbc_controls(ch, snapshot)
+                if snapshot["enabled"]:
+                    on.append(ch)
+                    W = self.w[ch]
+                    W["model"].set_selected(MULTIBAND_MODEL)
+                    self.dyn_by_ch[ch]["comp"] = True
+                    W["comp_on"].set_active(True)
+                    W["comp_curve"].queue_draw()
         finally:
-            self._mbc_mute = False
-        return "multiband settings restored, but the PipeWire chain did not start"
+            self._adopt_mute = prior
+        self._insert_stale = True
+        if not on:
+            return None
+        return "Multiband restored on Input %s" % " and ".join(map(str, on))
+
+    @staticmethod
+    def _insert_missing():
+        """What this computer lacks for Multiband, or None."""
+        if not io24_mbc.pipewire_available():
+            return "needs PipeWire (pipewire and pw-cli)"
+        if io24_mbc.sc4_available() is None:
+            return "needs swh-plugins: sudo apt install swh-plugins"
+        return None
+
+    def _multiband_selected(self, ch):
+        model = (getattr(self, "w", {}).get(ch) or {}).get("model")
+        return model is not None and model.get_selected() == MULTIBAND_MODEL
+
+    def _insert_wanted(self):
+        """Inputs with Multiband selected and the Compressor switched on."""
+        return tuple(ch for ch in io24_mbc.INSERT_CHANNELS
+                     if self._multiband_selected(ch)
+                     and self.dyn_by_ch[ch]["comp"])
+
+    def _insert_reconcile(self, restart=False):
+        """Bring the running insert, the unit's mixer and PipeWire into line
+        with the controls.
+
+        The processing starts before an input's own feed leaves the mixer,
+        and the feed goes back whenever the processing is not running, so a
+        failure never leaves an input silent.
+        """
+        insert = getattr(self, "insert", None)
+        if insert is None:
+            return
+        wanted = self._insert_wanted()
+        waiting = None
+        if wanted:
+            missing = self._insert_missing()
+            if missing:
+                self._insert_give_up(wanted, "Multiband %s" % missing)
+                return
+            if restart or self._insert_stale or not insert.running or \
+                    insert.channels != wanted:
+                capture = io24_mbc.find_io24_capture_source()
+                sink = io24_mbc.find_io24_sink()
+                if not capture or not sink:
+                    insert.stop()
+                    waiting = "Waiting for the io24's audio in PipeWire"
+                else:
+                    states = {ch: self._mbc_snapshot_state(ch)
+                              for ch in wanted}
+                    if not insert.start(states, capture, sink):
+                        self._insert_give_up(
+                            wanted, "Multiband did not start: %s"
+                            % insert.last_error)
+                        return
+                    self._insert_stale = False
+                    self._insert_lower_quantum()
+                    if io24_mbc.set_default_input(io24_mbc.INSERT_SOURCE_NAME):
+                        self._insert_default_input = True
+        elif insert.running:
+            insert.stop()
+        running = insert.channels if insert.running else ()
+        self._insert_sync_mixer(running)
+        if not running and waiting is None:
+            self._insert_restore_system()
+        self._insert_show(waiting)
+
+    def _insert_give_up(self, channels, message):
+        """The insert cannot run: those Compressor switches go off, the
+        inputs' own feeds come back, and the user is told why."""
+        prior, self._adopt_mute = self._adopt_mute, True
+        try:
+            for ch in channels:
+                self.dyn_by_ch[ch]["comp"] = False
+                self.w[ch]["comp_on"].set_active(False)
+                self.w[ch]["comp_curve"].queue_draw()
+        finally:
+            self._adopt_mute = prior
+        self.insert.stop()
+        self._insert_sync_mixer(())
+        self._insert_restore_system()
+        self._insert_show()
+        self.say(message)
+
+    def _insert_sync_mixer(self, running):
+        """Queue one job that makes the unit's mixer match `running`: an input
+        whose insert runs plays from USB playback 1-2, every other input from
+        its own feed. The job reads the routing record when it runs, so jobs
+        queued back to back cannot undo each other."""
+        target = tuple(running)
+        if not target and self._insert_routing is None and \
+                not self._insert_pending:
+            return
+        self._insert_pending += 1
+
+        def work(dev, target=target):
+            routing = self._insert_routing
+            try:
+                moved = {int(key) for key in
+                         ((routing or {}).get("moved") or {})}
+                for ch in sorted(moved - set(target)):
+                    routing = io24_mbc.unroute_insert(dev, ch, routing)
+                for ch in sorted(set(target) - moved):
+                    routing = io24_mbc.route_insert(dev, ch, routing)
+            except Exception as error:
+                GLib.idle_add(self.say, "Multiband could not reroute the "
+                              "mixer: %s" % error)
+            finally:
+                self._insert_routing = routing if routing and (
+                    routing["moved"] or routing["return_prior"]) else None
+                self._insert_pending -= 1
+            GLib.idle_add(self._sync_mix_widgets)
+        self.ctl.submit(work)
+
+    def _insert_lower_quantum(self):
+        """Hold PipeWire's buffer at INSERT_QUANTUM while an insert runs,
+        unless it is already that small, remembering what to give back."""
+        if self._insert_quantum_before is not None:
+            return
+        forced = int(pw_settings().get("clock.force-quantum", "0") or 0)
+        if forced and forced <= io24_mbc.INSERT_QUANTUM:
+            return
+        ok, _message = pw_set("clock.force-quantum", io24_mbc.INSERT_QUANTUM)
+        if ok:
+            self._insert_quantum_before = forced
+
+    def _insert_restore_system(self):
+        """Give PipeWire back the buffer and default input the insert took."""
+        if self._insert_quantum_before is not None:
+            pw_set("clock.force-quantum", self._insert_quantum_before)
+            self._insert_quantum_before = None
+        if self._insert_default_input:
+            io24_mbc.set_default_input(io24_mbc.find_io24_capture_source())
+            self._insert_default_input = False
+
+    def _insert_show(self, waiting=None):
+        insert = getattr(self, "insert", None)
+        running = insert.channels if insert is not None and insert.running \
+            else ()
+        wanted = self._insert_wanted()
+        for ch, row in getattr(self, "mbc_status", {}).items():
+            if ch in running:
+                text = ("On · after the limiter · records as “%s”"
+                        " · returns on USB playback 1-2"
+                        % io24_mbc.INSERT_SOURCE_DESC)
+            elif ch in wanted:
+                text = waiting or "Starting"
+            else:
+                text = "Off"
+            row.set_subtitle(text)
+
+    def _insert_watchdog(self):
+        """Put right what the controls want but is not running: a process
+        that died, an io24 whose audio came back."""
+        insert = getattr(self, "insert", None)
+        if insert is not None:
+            wanted = self._insert_wanted()
+            if (wanted and (not insert.running or insert.channels != wanted)) \
+                    or (not wanted and insert.running):
+                self._insert_reconcile()
+        return True
+
+    def _insert_shutdown(self):
+        """On the way out the unit gets its own feeds back and PipeWire its
+        buffer and default input. Which inputs had Multiband stays in the
+        session, so the next launch puts it back."""
+        insert = getattr(self, "insert", None)
+        if insert is None:
+            return
+        insert.stop()
+        self._insert_routing = release_insert_routing(
+            getattr(self, "ctl", None), self._insert_routing)
+        self._insert_restore_system()
 
     def _channel_column(self, ch):
         """One channel's fat channel. The rack above selects which module's
@@ -3634,7 +3841,8 @@ class Win(Adw.ApplicationWindow):
         W["comp_on"].connect("notify::active", self._dyn_toggle, "comp", ch)
         d.add(W["comp_on"])
         W["model"] = Adw.ComboRow(
-            title="Model", model=Gtk.StringList.new(["Standard", "Tube", "FET"]))
+            title="Model", model=Gtk.StringList.new(
+                ["Standard", "Tube", "FET", "Multiband"]))
         W["model"].connect("notify::selected",
                            lambda *_a, c=ch: self._comp_model_changed(c))
         d.add(W["model"])
@@ -3710,15 +3918,18 @@ class Win(Adw.ApplicationWindow):
                             lambda *_a, c=ch: self._dyn_push("comp", c))
         fet.add(W["fratio"])
         W["comp_param_stack"].add_named(fet, "fet")
+        W["comp_param_stack"].add_named(self._mbc_group(ch), "multiband")
         W["comp_param_stack"].set_visible_child_name("standard")
         d.add(W["comp_param_stack"])
 
-        # These are genuine common inputs on all three builders.
+        # These are genuine common inputs on all three device builders;
+        # Multiband has its own, per band.
         r, W["ckey"] = self._srow(
             "Key filter", 40, 16000, 1, 40,
             lambda v: ("off" if v <= 41 else "%.0f Hz" % v),
             lambda v, c=ch: self._dyn_push("comp", c),
             "Side-chain band; 40 Hz = off")
+        W["ckey_row"] = r
         d.add(r)
         W["cklisten"] = Adw.SwitchRow(
             title="Key listen", subtitle="Hear the side-chain")
@@ -3781,12 +3992,6 @@ class Win(Adw.ApplicationWindow):
             holder.append(group)          # no nested PreferencesPage: it owns
             stack.add_named(holder, key)  # a ScrolledWindow, which is exactly
                                           # the split-page artifact
-            if key == "COMP":
-                # the multiband lives INSIDE the compressor section; one shared
-                # widget, reparented to whichever channel's page is showing
-                if not hasattr(self, "_comp_holders"):
-                    self._comp_holders = {}
-                self._comp_holders[ch] = holder
         self.mod_stacks[ch] = stack
         stack.set_visible_child_name("EQ")
         page.append(stack)
@@ -3872,10 +4077,14 @@ class Win(Adw.ApplicationWindow):
                                      lambda v: (self._reverb_touched(), self._push_reverb(),
                                               self._repaint_reverb()))
         g.add(r)
-        r, self.s_rmix = self._srow("Wet mix", 0, 1, 0.005, 0.35,
+        # 100 %, as every Universal Control scene of the user's keeps it: the
+        # FX return is a send return, so a dry share doubles the input that
+        # is already in the bus. The return level sets how much reverb.
+        r, self.s_rmix = self._srow("Wet mix", 0, 1, 0.005, 1.0,
                                     lambda v: "%.0f %%" % (v * 100),
                                     lambda v: (self._reverb_touched(), self._push_reverb(),
-                                              self._repaint_reverb()))
+                                              self._repaint_reverb()),
+                                    "100 % puts only reverb on the FX return")
         g.add(r)
         r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
                                    lambda v: ("off" if v < 1 else "%.0f Hz" % v),
@@ -4194,6 +4403,7 @@ class Win(Adw.ApplicationWindow):
             self.s_rsize.set_value(size)
             self.s_rhp.set_value(hp)
             self.s_rpre.set_value(pre)
+            self.s_rmix.set_value(1.0)     # every character is fully wet
             if move is not None:
                 self.s_rmoddep.set_value(move)
                 self.rev_mod.set_active(True)
@@ -5122,7 +5332,10 @@ class Win(Adw.ApplicationWindow):
             return
         q = self._quanta[row.get_selected()]
         ok, msg = pw_set("clock.force-quantum", q)
-        if not ok:
+        if ok:
+            # the user's buffer now stands; Multiband will not put back its own
+            self._insert_quantum_before = None
+        else:
             self.say("Buffer change failed: %s" % msg)
 
     def _set_device_fs(self, rate):
@@ -5699,7 +5912,10 @@ class Win(Adw.ApplicationWindow):
             "expander": W["gexp"].get_active(),
         }
         comp_model, compressor = self._compressor_kwargs(target)
-        compressor["on"] = self.dyn_by_ch[target]["comp"]
+        # Multiband runs on the computer; a block keeps the unit's
+        # compressor off, which is what the unit is doing under it.
+        compressor["on"] = (self.dyn_by_ch[target]["comp"]
+                            and not self._multiband_selected(target))
         limiter = {
             "on": self.dyn_by_ch[target]["lim"],
             "threshold_db": W["lth"].get_value(),
@@ -5850,6 +6066,7 @@ class Win(Adw.ApplicationWindow):
             rack.queue_draw()
         if fx_channel is not None:
             self._adopt_record_voicefx(pr, fx_channel)
+        self._insert_reconcile()     # a loaded compressor replaces Multiband
         return True
 
     def _adopt_record_voicefx(self, pr, channel):
@@ -6195,9 +6412,12 @@ class Win(Adw.ApplicationWindow):
 
     def _comp_model_changed(self, ch):
         W = self.w[ch]
-        model = max(0, min(2, W["model"].get_selected()))
-        W["comp_param_stack"].set_visible_child_name(
-            ("standard", "tube", "fet")[model])
+        model = max(0, min(MULTIBAND_MODEL, W["model"].get_selected()))
+        W["comp_param_stack"].set_visible_child_name(COMP_MODELS[model])
+        # the key filter and listen rows belong to the unit's compressors
+        for name in ("ckey_row", "cklisten"):
+            if name in W:
+                W[name].set_visible(model != MULTIBAND_MODEL)
         W["comp_curve"].queue_draw()
         if not self._adopt_mute:
             self._dyn_push("comp", ch)
@@ -6205,7 +6425,11 @@ class Win(Adw.ApplicationWindow):
     def _compressor_kwargs(self, ch):
         """Return the exact selected compressor builder call."""
         W = self.w[ch]
+        # Under Multiband the unit's compressor is off; its Standard settings
+        # are kept, unused, for when a device model is chosen again.
         model = max(0, min(2, W["model"].get_selected()))
+        if W["model"].get_selected() == MULTIBAND_MODEL:
+            model = 0
         common = {
             "on": True,
             "keyfilter_hz": (0.0 if W["ckey"].get_value() <= 41
@@ -6241,6 +6465,8 @@ class Win(Adw.ApplicationWindow):
 
     def compressor_transfer(self, ch):
         """Transfer parameters decoded from the same cpxt blob we transmit."""
+        if self._multiband_selected(ch):
+            return 0.0, 1.0, 0.0, "Multiband"   # the unit's compressor is off
         model, kw = self._compressor_kwargs(ch)
         builder = (io24_dsp.cpxt_comp, io24_dsp.cpxt_tube,
                    io24_dsp.cpxt_fet)[model]
@@ -6345,15 +6571,18 @@ class Win(Adw.ApplicationWindow):
                 model = src["model"].get_selected()
                 dst["model"].set_selected(model)
                 dst["comp_param_stack"].set_visible_child_name(
-                    ("standard", "tube", "fet")[model])
+                    COMP_MODELS[model])
                 slider_names = {
                     0: ("cth", "rat", "catk", "crel", "mk"),
                     1: ("tpeak", "tgain"),
                     2: ("finput", "foutput", "fatk", "frel"),
+                    MULTIBAND_MODEL: (),
                 }[model]
                 for name in slider_names + ("ckey",):
                     dst[name].set_value(src[name].get_value())
                 dst["cklisten"].set_active(src["cklisten"].get_active())
+                if model == MULTIBAND_MODEL:
+                    self._mbc_copy(source, target)
                 if model == 0:
                     for name in ("knee", "auto"):
                         dst[name].set_active(src[name].get_active())
@@ -6402,10 +6631,12 @@ class Win(Adw.ApplicationWindow):
                     if on else dev.gate_off(x))
             elif key == "comp":
                 model, kw = self._compressor_kwargs(ch)
+                # Multiband replaces the unit's compressor, which goes off
+                device_on = on and not self._multiband_selected(c)
                 self.ctl.submit(
-                    lambda dev, x=c, m=model, k=kw, fs=self._fs:
+                    lambda dev, x=c, m=model, k=kw, fs=self._fs, o=device_on:
                     dev.set_compressor(x, model=m, fs=fs, **k)
-                    if on else dev.compressor_off(x))
+                    if o else dev.compressor_off(x))
             else:
                 th = W["lth"].get_value()
                 rel = W["lrel"].get_value()
@@ -6414,6 +6645,8 @@ class Win(Adw.ApplicationWindow):
         W["comp_curve"].queue_draw()
         for r in self.racks.values():
             r.queue_draw()
+        if key == "comp":
+            self._insert_reconcile()
 
     def invalidate_curve(self):
         self._curves = {}
@@ -6497,13 +6730,13 @@ class Win(Adw.ApplicationWindow):
                 -2 * cw / a0, (1 - al) / a0)
 
     def _host_features_state(self):
-        """The Host-only half of a snapshot: multiband, reverb character, and
+        """The Host-only half of a snapshot: Multiband, reverb character, and
         which inputs have Auto gain on (remembered at the user's request,
         2026-09-11; recorded only while one is on)."""
         host_features = {}
-        multiband = self._mbc_snapshot_state()
-        if multiband is not None:
-            host_features["multiband"] = multiband
+        insert = self._insert_state()
+        if insert is not None:
+            host_features["multiband_insert"] = insert
         reverb_character = self._reverb_character_state()
         if reverb_character is not None:
             host_features["reverb_character"] = reverb_character
@@ -6554,6 +6787,9 @@ class Win(Adw.ApplicationWindow):
             return
         self._resumed_generation = generation
         self._resume_session(first=previous is None)
+        if previous is not None:
+            # a new connection: the insert's streams went with the old one
+            self._insert_reconcile(restart=True)
 
     def _resume_session(self, first=True, path=None):
         """Pick up where the last session left off.
@@ -6623,7 +6859,8 @@ class Win(Adw.ApplicationWindow):
             host_features = None
             if saving:
                 try:
-                    host_features = self._host_features_state()
+                    host_features = snapshot_host_features(
+                        self._host_features_state())
                 except Exception as error:
                     self.say("Save failed before writing: %s" % error)
                     return
@@ -6749,7 +6986,10 @@ class Win(Adw.ApplicationWindow):
                             gate.get("expander", True)))
 
                 comp = state["compressor"].get(ch)
-                if comp is not None:
+                # Under Multiband the unit's compressor is off by design, and
+                # that off is not the Compressor switch, which drives Multiband.
+                if comp is not None and (comp.get("on") or
+                                         not self._multiband_selected(ch)):
                     on = bool(comp.get("on"))
                     self.dyn_by_ch[ch]["comp"] = on
                     self.w[ch]["comp_on"].set_active(on)
@@ -6847,15 +7087,18 @@ class Win(Adw.ApplicationWindow):
             rack.queue_draw()
         host_messages = []
         if host_features:
-            multiband_message = self._adopt_mbc_state(
+            multiband_message = self._adopt_legacy_multiband(
                 host_features.get("multiband"))
+            insert_message = self._adopt_insert_state(
+                host_features.get("multiband_insert"))
             reverb_message = self._adopt_reverb_character(
                 host_features.get("reverb_character"))
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
             host_messages = [message for message in
-                             (multiband_message, reverb_message,
-                              autogain_message) if message]
+                             (multiband_message, insert_message,
+                              reverb_message, autogain_message) if message]
+        self._insert_reconcile()
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)
@@ -7167,6 +7410,37 @@ def release_host_solo(ctl):
         return 0
 
 
+def release_insert_routing(ctl, routing):
+    """Give every input its own mixer feed back before the Host goes away.
+
+    Returns what could not be undone (None when everything was); the session
+    keeps it, so the next launch finishes the job.
+    """
+    if not routing:
+        return None
+    dev = getattr(ctl, "dev", None)
+    if dev is None:
+        return routing
+    try:
+        with dev.lock:
+            for key in sorted(routing.get("moved") or {}):
+                routing = io24_mbc.unroute_insert(dev.dev, int(key), routing)
+    except Exception:
+        return routing
+    return routing if routing["moved"] or routing["return_prior"] else None
+
+
+def snapshot_host_features(features):
+    """Host features as a snapshot file keeps them. What the Host changed in
+    the unit's mixer and in PipeWire belongs to this session, not the file."""
+    features = dict(features or {})
+    insert = features.get("multiband_insert")
+    if insert is not None:
+        features["multiband_insert"] = dict(
+            insert, routing=None, quantum_before=None)
+    return features
+
+
 class App(Adw.Application):
     def __init__(self, ctl):
         super().__init__(application_id="org.io24.Mixer")
@@ -7175,9 +7449,10 @@ class App(Adw.Application):
 
     def do_shutdown(self):
         w = self.win
-        if w is not None and getattr(w, "mbc", None) is not None:
-            io24_mbc.set_default_output(io24_mbc.find_io24_sink())
-            w.mbc.stop()                  # never leave an orphan sink behind
+        # Multiband: the unit's own feeds back, PipeWire's buffer and default
+        # input back, and no orphan process left behind
+        if w is not None and getattr(w, "insert", None) is not None:
+            w._insert_shutdown()
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()
         # Remember this session for the next launch; a window that never

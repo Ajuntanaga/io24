@@ -1,26 +1,31 @@
-"""Host-side multiband compressor for the io24's monitor path.
+"""Host-side multiband compressor for the io24.
 
 The device cannot do this: the firmware capability sweep in PROTOCOL.md is a
 clean, measured negative — no `multiband`, `crossover` or `fft` vocabulary
 exists anywhere in it. So this is not a device feature and never pretends to
-be one. It is a PipeWire filter-chain running on the computer, presented as a
-sink called "io24 Multiband": point an application (or the system default) at
-that sink and its audio passes through a 4-band compressor on its way to the
-interface. This module also owns two distinct passive capture-bus sources;
-those paths never route themselves to playback or pretend to be device DSP.
+be one. It is a PipeWire filter-chain running on the computer. Since
+2026-09-11 it is the Fat Channel's fourth compressor type, Multiband: the
+input insert below takes each input from USB capture, right after the unit's
+Fat Channel, and plays it back into the unit in place of the input's own feed.
+The older sink form (`Chain`, "io24 Multiband" for application playback) is
+kept for the command line; the GTK Host no longer offers it. This module also
+owns two distinct passive capture-bus sources; those paths never route
+themselves to playback or pretend to be device DSP.
 
-Topology, all standard pieces:
+Topology of one channel's graph, all standard pieces:
 
-    in -> [LR4 low  ] -> sc4 -> \\
-       -> [LR4 mid  ] -> sc4 ->  mixer -> out (the io24's sink)
-       -> [LR4 high ] -> sc4 -> /
+    in -> [LR4 low     ] -> sc3 -> \\
+       -> [LR4 low-mid ] -> sc3 ->  mixer -> out
+       -> [LR4 high-mid] -> sc3 ->
+       -> [LR4 high    ] -> sc3 -> /
 
 * The crossover is Linkwitz-Riley 4th order, built from PipeWire's builtin
   biquads (two cascaded Butterworth 2nd-order sections per leg — that IS an
-  LR4). LR4 legs sum flat, which is the whole point of using them.
-* The per-band compressor is `sc4` from swh-plugins — the standard LADSPA
-  stereo compressor. PipeWire 1.6's filter-chain hosts LADSPA and builtins
-  only (no LV2), and sc4 is the canonical choice it can host.
+  LR4), and each band also passes the all-pass of the splits it does not
+  use, so the four bands sum flat (CROSSOVER_LEGS).
+* The per-band compressor is `sc3` from swh-plugins, the LADSPA stereo
+  compressor with a sidechain input (see SC3_SO). PipeWire 1.6's filter-chain
+  hosts LADSPA and builtins only (no LV2).
 * The chain runs in PipeWire's own process graph (C, realtime scheduled), not
   in this Python process — enabling it costs the app nothing.
 
@@ -218,9 +223,44 @@ def pipewire_available():
             and shutil.which("pw-cli") is not None)
 
 
+# Q of one Butterworth section, and of the all-pass a Linkwitz-Riley pair's
+# low and high halves sum to. Set on every crossover biquad rather than left to
+# the builtin's default.
+BUTTERWORTH_Q = 1.0 / math.sqrt(2.0)
+
+# Each band as a cascade of (biquad, split index). A Linkwitz-Riley half is
+# two Butterworth sections at its split, and LP + HP of one pair is an
+# all-pass A. So low = LP0.A1.A2, low-mid = HP0.LP1.A2, high-mid = HP0.HP1.LP2
+# and high = HP0.HP1.HP2 sum to A0.A1.A2: a flat magnitude. The earlier
+# parallel legs (LP0 | HP0.LP1 | HP1.LP2 | HP2) lacked those phase terms and
+# summed to a dip of about 1.2 dB near the middle split at the defaults.
+CROSSOVER_LEGS = (
+    (("bq_lowpass", 0), ("bq_lowpass", 0),
+     ("bq_allpass", 1), ("bq_allpass", 2)),
+    (("bq_highpass", 0), ("bq_highpass", 0),
+     ("bq_lowpass", 1), ("bq_lowpass", 1), ("bq_allpass", 2)),
+    (("bq_highpass", 0), ("bq_highpass", 0),
+     ("bq_highpass", 1), ("bq_highpass", 1),
+     ("bq_lowpass", 2), ("bq_lowpass", 2)),
+    (("bq_highpass", 0), ("bq_highpass", 0),
+     ("bq_highpass", 1), ("bq_highpass", 1),
+     ("bq_highpass", 2), ("bq_highpass", 2)),
+)
+
+
+def crossover_nodes():
+    """For each split, every biquad tuned to it (its filters and the
+    all-passes that compensate for it), so a split moves as one."""
+    nodes = ([], [], [])
+    for band, leg in enumerate(CROSSOVER_LEGS):
+        for index, (_label, split) in enumerate(leg):
+            nodes[split].append("b%d_%d" % (band, index))
+    return tuple(tuple(names) for names in nodes)
+
+
 def _bq(name, label, freq):
     return {"type": "builtin", "name": name, "label": label,
-            "control": {"Freq": float(freq)}}
+            "control": {"Freq": float(freq), "Q": BUTTERWORTH_Q}}
 
 
 def _sc3(name, band, values=None):
@@ -274,14 +314,11 @@ def build_graph(xovers, with_comp, state=None):
             prev = nm
         return "%s0:In" % prefix, prev
 
-    # LR4 crossover tree: each 2x cascade of same-frequency Butterworth 2nd
+    # Linkwitz-Riley crossover, all-pass compensated (CROSSOVER_LEGS)
     band_tails = []
-    legs = [
-        [("bq_lowpass", f0)] * 2,                              # low
-        [("bq_highpass", f0)] * 2 + [("bq_lowpass", f1)] * 2,  # low-mid
-        [("bq_highpass", f1)] * 2 + [("bq_lowpass", f2)] * 2,  # high-mid
-        [("bq_highpass", f2)] * 2,                             # high
-    ]
+    splits = (f0, f1, f2)
+    legs = [[(label, splits[split]) for label, split in leg]
+            for leg in CROSSOVER_LEGS]
     for bi, kinds in enumerate(legs):
         entry, tail = leg("b%d_" % bi, kinds)
         links.append({"output": "split:Out", "input": entry})
@@ -423,6 +460,316 @@ def build_bus_source_conf(bus, capture_target):
             "    args = %s\n"
             "  }\n"
             "]\n" % json.dumps(args, indent=2))
+
+
+# --------------------------------------------------------------------------
+# Multiband as a compressor type: the input insert.
+#
+# Asked for on 2026-09-11: the multiband as "just another type of compression
+# that can be selected, replacing the normal compressor block", and, since the
+# unit's own chain cannot be split, "immediately" after the Fat Channel. The
+# io24 delivers each input to USB capture after the whole Fat Channel, limiter
+# included (its manual: it records "just as you hear it in your headphones,
+# complete with the Fat Channel preset"; firmware 0128 has no parameter that
+# changes that). So the insert takes the input there:
+#
+#   capture 1 -> [in1_ 4-band] -> out1 \  Audio/Source "io24 Input 1+2
+#   capture 2 -> [in2_ 4-band] -> out2 /  Multiband" (left Input 1, right 2)
+#   that source -> [mixer: channels with Multiband] -> USB playback 1-2
+#
+# An input without Multiband passes through untouched, so the published source
+# stands in for capture 1+2 whichever channels are processed. The return is
+# centred, both legs at unity, as a mono input sits in the unit's mixer. It
+# arrives on USB playback 1-2, the user's choice, so it shares that fader with
+# computer audio. route_insert then takes the input's own feed out of each bus
+# it was in and makes USB playback 1-2 audible there; unroute_insert undoes
+# exactly that.
+# --------------------------------------------------------------------------
+INSERT_VERSION = 1
+INSERT_CHANNELS = (1, 2)
+INSERT_CAPTURE_INDEX = {1: 0, 2: 1}      # USB capture channel of each input
+INSERT_PROCESS_NAME = "io24-input-multiband-process"
+INSERT_SOURCE_NAME = "io24-input-multiband"
+INSERT_SOURCE_DESC = "io24 Input 1+2 Multiband"
+INSERT_RETURN_NAME = "io24-input-multiband-return"
+INSERT_RETURN_SOURCE = "return/ch1"      # the mixer's USB playback 1-2
+INSERT_BUSES = ("main", "mixa", "mixb")
+# Monitoring now goes to the computer and back, so the buffer is held small
+# while an insert runs (GUIDE.md: latency is quantum / rate).
+INSERT_QUANTUM = 128
+
+
+def insert_prefix(channel):
+    """Node-name prefix of one channel's 4-band graph inside the insert."""
+    return "in%d_" % channel
+
+
+def _prefixed(graph, prefix):
+    """The same graph with every node renamed, so two fit in one chain."""
+    def port(ref):
+        node, _sep, rest = ref.partition(":")
+        return "%s%s:%s" % (prefix, node, rest)
+    return {
+        "nodes": [dict(node, name=prefix + node["name"])
+                  for node in graph["nodes"]],
+        "links": [{"output": port(link["output"]),
+                   "input": port(link["input"])} for link in graph["links"]],
+        "inputs": [port(name) for name in graph["inputs"]],
+        "outputs": [port(name) for name in graph["outputs"]],
+    }
+
+
+def _insert_states(states):
+    """{channel: snapshot} for the channels with Multiband, validated."""
+    if not isinstance(states, dict) or not states:
+        raise ValueError("the multiband insert needs at least one channel")
+    normalized = {}
+    for channel, state in states.items():
+        if isinstance(channel, bool) or channel not in INSERT_CHANNELS:
+            raise ValueError("multiband insert channel must be 1 or 2")
+        normalized[channel] = validate_snapshot(state)
+    return normalized
+
+
+def build_insert_graph(states, with_comp=True):
+    """Both inputs from the six-channel capture, each through its own 4-band
+    graph when its channel has Multiband, otherwise straight through."""
+    states = _insert_states(states)
+    nodes = [{"type": "builtin", "name": "src%d" % index, "label": "copy"}
+             for index in range(len(CAPTURE_POSITIONS))]
+    links = []
+    for channel in INSERT_CHANNELS:
+        tap = "src%d:Out" % INSERT_CAPTURE_INDEX[channel]
+        out = "out%d" % channel
+        nodes.append({"type": "builtin", "name": out, "label": "copy"})
+        if channel in states:
+            sub = _prefixed(build_graph(None, with_comp, state=states[channel]),
+                            insert_prefix(channel))
+            nodes.extend(sub["nodes"])
+            links.extend(sub["links"])
+            links.append({"output": tap, "input": sub["inputs"][0]})
+            links.append({"output": sub["outputs"][0], "input": out + ":In"})
+        else:
+            links.append({"output": tap, "input": out + ":In"})
+    return {"nodes": nodes, "links": links,
+            "inputs": ["src%d:In" % index
+                       for index in range(len(CAPTURE_POSITIONS))],
+            "outputs": ["out%d:Out" % channel for channel in INSERT_CHANNELS]}
+
+
+def build_insert_return_graph(channels):
+    """Only the processed inputs, centred, for USB playback 1-2."""
+    channels = tuple(channels)
+    if not channels or any(isinstance(channel, bool) or
+                           channel not in INSERT_CHANNELS
+                           for channel in channels):
+        raise ValueError("the multiband return needs channel 1 and/or 2")
+    gains = {"Gain %d" % (index + 1): 1.0 if channel in channels else 0.0
+             for index, channel in enumerate(INSERT_CHANNELS)}
+    return {
+        "nodes": [
+            {"type": "builtin", "name": "take1", "label": "copy"},
+            {"type": "builtin", "name": "take2", "label": "copy"},
+            {"type": "builtin", "name": "mix", "label": "mixer",
+             "control": gains},
+            {"type": "builtin", "name": "ret_l", "label": "copy"},
+            {"type": "builtin", "name": "ret_r", "label": "copy"},
+        ],
+        "links": [
+            {"output": "take1:Out", "input": "mix:In 1"},
+            {"output": "take2:Out", "input": "mix:In 2"},
+            {"output": "mix:Out", "input": "ret_l:In"},
+            {"output": "mix:Out", "input": "ret_r:In"},
+        ],
+        "inputs": ["take1:In", "take2:In"],
+        "outputs": ["ret_l:Out", "ret_r:Out"],
+    }
+
+
+def build_insert_conf(states, capture_target, playback_target, with_comp=None):
+    """PipeWire config for the insert: the processing, published as a source,
+    and its return into the io24's USB playback 1-2.
+
+    Every device-facing stream names its node and may not fall back to another
+    device: an insert that lost the io24 must go quiet, not process the
+    laptop's microphone into its speakers.
+    """
+    states = _insert_states(states)
+    if not capture_target or not playback_target:
+        raise ValueError("the multiband insert needs the io24's capture and "
+                         "playback nodes")
+    if with_comp is None:
+        with_comp = sc4_available() is not None
+    process = {
+        "node.description": INSERT_SOURCE_DESC,
+        "media.name": INSERT_SOURCE_DESC,
+        "filter.graph": build_insert_graph(states, with_comp),
+        "capture.props": {
+            "node.name": INSERT_PROCESS_NAME,
+            "media.class": "Stream/Input/Audio",
+            "target.object": capture_target,
+            "node.dont-fallback": True,
+            "stream.dont-remix": True,
+            "audio.channels": len(CAPTURE_POSITIONS),
+            "audio.position": list(CAPTURE_POSITIONS),
+        },
+        "playback.props": {
+            "node.name": INSERT_SOURCE_NAME,
+            "node.description": INSERT_SOURCE_DESC,
+            "media.class": "Audio/Source",
+            "stream.dont-remix": True,
+            "audio.channels": 2,
+            "audio.position": ["FL", "FR"],
+        },
+    }
+    ret = {
+        "node.description": "io24 Multiband return",
+        "media.name": "io24 Multiband return",
+        "filter.graph": build_insert_return_graph(sorted(states)),
+        "capture.props": {
+            "node.name": INSERT_RETURN_NAME + "-in",
+            "media.class": "Stream/Input/Audio",
+            "target.object": INSERT_SOURCE_NAME,
+            "node.dont-fallback": True,
+            "stream.dont-remix": True,
+            "audio.channels": 2,
+            "audio.position": ["FL", "FR"],
+        },
+        "playback.props": {
+            "node.name": INSERT_RETURN_NAME,
+            "media.class": "Stream/Output/Audio",
+            "target.object": playback_target,
+            "node.dont-fallback": True,
+            "channelmix.upmix": False,
+            "audio.channels": 2,
+            "audio.position": ["FL", "FR"],
+        },
+    }
+    modules = "\n".join(
+        "  { name = libpipewire-module-filter-chain\n"
+        "    args = %s\n"
+        "  }" % json.dumps(args, indent=2) for args in (process, ret))
+    return ("context.properties = { log.level = 2 }\n"
+            "context.modules = [\n%s\n]\n" % modules)
+
+
+def default_insert_state():
+    """Both inputs' Multiband settings, neither selected, nothing rerouted."""
+    return {"version": INSERT_VERSION,
+            "channels": {str(channel): default_snapshot()
+                         for channel in INSERT_CHANNELS},
+            "routing": None, "quantum_before": None}
+
+
+def _validate_routing(routing):
+    """A copy of what route_insert changed in the mixer, or None."""
+    if routing is None:
+        return None
+    if not isinstance(routing, dict) or \
+            set(routing) != {"moved", "return_prior"}:
+        raise ValueError("multiband routing must hold moved and return_prior")
+    moved = routing["moved"]
+    if not isinstance(moved, dict) or \
+            not set(moved) <= {str(c) for c in INSERT_CHANNELS}:
+        raise ValueError("multiband routing moved channels must be 1 or 2")
+    normalized = {"moved": {}, "return_prior": {}}
+    for key, buses in moved.items():
+        if not isinstance(buses, list) or len(set(buses)) != len(buses) or \
+                not set(buses) <= set(INSERT_BUSES):
+            raise ValueError("multiband routing buses must be main/mixa/mixb")
+        normalized["moved"][key] = [bus for bus in INSERT_BUSES if bus in buses]
+    prior = routing["return_prior"]
+    if not isinstance(prior, dict) or not set(prior) <= set(INSERT_BUSES):
+        raise ValueError("multiband routing return buses must be main/mixa/mixb")
+    for bus, was in prior.items():
+        if not isinstance(was, dict) or set(was) != {"assigned", "off"} or \
+                not all(isinstance(was[k], bool) for k in was):
+            raise ValueError("multiband routing return state is invalid")
+        normalized["return_prior"][bus] = dict(was)
+    return normalized
+
+
+def validate_insert_state(state):
+    """Validate and normalize the Host-only Multiband compressor state."""
+    if not isinstance(state, dict):
+        raise ValueError("multiband insert state must be an object")
+    expected = {"version", "channels", "routing", "quantum_before"}
+    if set(state) != expected:
+        raise ValueError("multiband insert fields must be %s" %
+                         ", ".join(sorted(expected)))
+    if state["version"] != INSERT_VERSION:
+        raise ValueError("multiband insert version must be 1")
+    channels = state["channels"]
+    if not isinstance(channels, dict) or \
+            set(channels) != {str(c) for c in INSERT_CHANNELS}:
+        raise ValueError("multiband insert channels must be 1 and 2")
+    quantum = state["quantum_before"]
+    if quantum is not None and (isinstance(quantum, bool) or
+                                not isinstance(quantum, int) or
+                                not 0 <= quantum <= 8192):
+        raise ValueError("multiband insert quantum_before must be 0..8192")
+    return {"version": INSERT_VERSION,
+            "channels": {key: validate_snapshot(channels[key])
+                         for key in sorted(channels)},
+            "routing": _validate_routing(state["routing"]),
+            "quantum_before": quantum}
+
+
+def _audible(dev, source, bus):
+    return (dev.send_assigned(source, bus) and dev.has_send_level(source, bus)
+            and dev.send_db(source, bus) is not None)
+
+
+def route_insert(dev, channel, routing=None):
+    """Put one input's Multiband return in place of its own feed.
+
+    `dev` is the Io24 driver. In every bus the input is assigned to, USB
+    playback 1-2 is made audible (and how it was is noted when it was
+    unassigned or off), then the input's send is switched off with its fader
+    position kept. Returns the new routing record; `routing` is not changed.
+    """
+    routing = _validate_routing(routing) or {"moved": {}, "return_prior": {}}
+    key = str(channel)
+    if key in routing["moved"]:
+        return routing
+    source = "line/ch%d" % channel
+    ret = INSERT_RETURN_SOURCE
+    moved = []
+    for bus in INSERT_BUSES:
+        if not dev.send_assigned(source, bus):
+            continue
+        if bus not in routing["return_prior"] and not _audible(dev, ret, bus):
+            was = {"assigned": bool(dev.send_assigned(ret, bus)),
+                   "off": bool(dev.has_send_level(ret, bus) and
+                               dev.send_db(ret, bus) is None)}
+            if not was["assigned"] or was["off"]:
+                routing["return_prior"][bus] = was
+            if was["off"] or not dev.has_send_level(ret, bus):
+                dev.set_send_db(ret, bus, dev.DEFAULT_SEND_DB)
+            if not was["assigned"]:
+                dev.set_send_assigned(ret, bus, True)
+        dev.set_send_assigned(source, bus, False)
+        moved.append(bus)
+    routing["moved"][key] = moved
+    return routing
+
+
+def unroute_insert(dev, channel, routing):
+    """Undo route_insert for one input. USB playback 1-2 goes back to how it
+    was in a bus only once no other input's return still needs it there."""
+    routing = _validate_routing(routing) or {"moved": {}, "return_prior": {}}
+    for bus in routing["moved"].pop(str(channel), []):
+        dev.set_send_assigned("line/ch%d" % channel, bus, True)
+    still = {bus for buses in routing["moved"].values() for bus in buses}
+    for bus in INSERT_BUSES:
+        if bus in still or bus not in routing["return_prior"]:
+            continue
+        was = routing["return_prior"].pop(bus)
+        if was["off"]:
+            dev.set_send_db(INSERT_RETURN_SOURCE, bus, None)
+        if not was["assigned"]:
+            dev.set_send_assigned(INSERT_RETURN_SOURCE, bus, False)
+    return routing
 
 
 def _find_io24_node(direction):
@@ -705,6 +1052,87 @@ class BusSourceManager:
             self.chains[bus].stop()
             self.statuses[bus] = "unavailable"
             self._started_at[bus] = None
+
+
+def set_default_input(node_name):
+    """Make an existing PipeWire source the default for new recording.
+    `wpctl set-default` picks sink or source from the node itself."""
+    return set_default_output(node_name)
+
+
+def _present_nodes():
+    """Every PipeWire node name present now, from one listing."""
+    try:
+        out = subprocess.run(["pw-cli", "ls", "Node"], capture_output=True,
+                             text=True, timeout=5).stdout
+    except Exception:
+        return set()
+    names = set()
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("node.name = "):
+            names.add(line.split("=", 1)[1].strip().strip('"'))
+    return names
+
+
+class InsertChain(Chain):
+    """Owns the input insert: one child process with the processing and its
+    return. The processed channels are fixed per process, so changing which
+    channels have Multiband restarts it with the current settings; control
+    moves in between are live."""
+
+    NODE_NAME = INSERT_PROCESS_NAME
+    CONF_PREFIX = "io24-insert-"
+    FRAGMENT = "io24-insert.conf"
+    START_TIMEOUT_S = 3.0
+    READY_NODES = (INSERT_PROCESS_NAME, INSERT_SOURCE_NAME, INSERT_RETURN_NAME)
+
+    def __init__(self):
+        super().__init__()
+        self.channels = ()
+        self._configuration = None
+
+    def start(self, states, capture_target=None, playback_target=None,
+              with_comp=None):
+        """Run the insert for exactly these channels. True once all three of
+        its nodes are present; anything short of that stops it again."""
+        configuration = build_insert_conf(
+            states, capture_target, playback_target, with_comp=with_comp)
+        channels = tuple(sorted(states))
+        if self.running and configuration == self._configuration:
+            return True
+        self.last_error = None
+        if not self._launch(configuration, configured=True):
+            self.channels = ()
+            self.last_error = "PipeWire process could not start"
+            return False
+        self._configuration = configuration
+        deadline = time.monotonic() + self.START_TIMEOUT_S
+        while self.running:
+            if set(self.READY_NODES) <= _present_nodes():
+                self.channels = channels
+                return True
+            if time.monotonic() >= deadline:
+                self.last_error = "the io24 Input Multiband nodes did not appear"
+                break
+            time.sleep(0.05)
+        if self.last_error is None:
+            self.last_error = "PipeWire process exited before its nodes appeared"
+        self.stop()
+        return False
+
+    def stop(self):
+        super().stop()
+        self.channels = ()
+        self._configuration = None
+
+    def set_channel_controls(self, channel, controls):
+        """Live moves for one channel's graph, keyed as for Chain."""
+        if channel not in self.channels:
+            return False
+        prefix = insert_prefix(channel)
+        return self.set_controls(
+            {prefix + key: value for key, value in controls.items()})
 
 
 if __name__ == "__main__":

@@ -101,22 +101,46 @@ Three models, and they do not share a parameter set:
 > slider at minimum. That is faithful to the model — Universal Control behaves
 > the same way — but bring monitors down before exploring it.
 
-**Multiband compressor** (bottom of the page) is host-side, and says so: the
-firmware capability sweep is a clean negative — no multiband, crossover or FFT
-vocabulary exists in the device — so this one runs as a PipeWire filter-chain
-on the computer instead. Enabling it creates an **"io24 Multiband"** output
-device; route an application (or the system output) through it and the audio
-passes a 4th-order Linkwitz-Riley four-band split with an `sc3` compressor per
-band on its way to the interface. The compression stage needs
-`sudo apt install swh-plugins`; without it the Host refuses to show the
-multiband switch as enabled and tells you what is missing. The processing runs
-inside PipeWire's own
-realtime graph — not in this app — so it adds no load to the mixer and cannot
-touch the device's latency.
+**Multiband** is the fourth compressor **Model**, next to Standard, Tube and
+FET. The unit's firmware has no multiband, crossover or FFT vocabulary at all,
+so this one runs on the computer, and choosing it switches the unit's own
+compressor off: Multiband replaces it. It cannot sit inside the unit's chain,
+so it comes straight after it. The io24 sends each input to the computer after
+the whole Fat Channel, limiter included (its manual: it records "just as you
+hear it in your headphones, complete with the Fat Channel preset"), and the
+Host takes it there.
 
-The switch reports **On** only after the public **io24 Multiband** node appears.
-Starting a child process is not treated as success; an early exit or missing
-node turns the switch back off and reports the failure.
+With **Multiband** selected and the **Compressor** switched on, the input
+passes a 4th-order Linkwitz-Riley four-band split with an `sc3` compressor per
+band, and then:
+
+- **Recording.** A new input device, **io24 Input 1+2 Multiband**, carries
+  Input 1 on the left and Input 2 on the right, each processed when its channel
+  has Multiband. It is the default input while Multiband is on; in a recording
+  app, pick it instead of the io24's own input.
+- **Listening and the stream mixes.** The processed input plays back into the
+  io24 on **USB playback 1-2**. The Host takes the input's own feed out of
+  Main, Mix A and Mix B wherever it was, and turns USB playback 1-2 on there
+  if it was off. The input's fader keeps its position and comes back when
+  Multiband is off. USB playback 1-2 also carries the computer's own audio, so
+  that one fader sets both.
+- **Buffer.** Monitoring now goes to the computer and back, so while Multiband
+  runs the Host holds PipeWire's buffer at 128 frames (about 2.7 ms a period
+  at 48 kHz) unless it is already smaller, and puts back what it was
+  afterwards. Changing **Buffer** yourself keeps your choice.
+
+Each input has its own Multiband settings; linked channels share them. The
+status row says **On** only once the processing and its return are both
+running. If the io24's audio is not in PipeWire yet, it says so and waits with
+the input's own feed in place. If the processing cannot start, the Compressor
+switch goes off and the Host says why. It needs `swh-plugins`
+(`sudo apt install swh-plugins`). Closing the Host gives every input its own
+feed back, and the next launch puts Multiband back where it was on. A device
+block cannot hold Multiband: saving one while it is selected stores the unit's
+compressor off.
+
+Not yet heard on this unit: the level match between an input's own feed and
+its Multiband return, and the round-trip delay you hear while playing.
 
 ---
 
@@ -151,6 +175,12 @@ separate reverb engines, and saying so would be a lie about the hardware:
 
 Moving any slider by hand drops the character back to Custom, so the label never
 claims a preset that is no longer loaded.
+
+**Wet mix** is the engine's own dry/wet, and it starts at 100 %. The reverb is a
+send effect: the FX return carries what comes back from the engine, so any dry
+share doubles the input that is already in the bus. Every character sets it to
+100 %, which is where each Universal Control scene recovered from this unit
+keeps it. Set how much reverb you hear with the FX return level, not with this.
 
 **Movement** is genuine host-side augmentation rather than a preset: the host
 drifts room size on a slow sine (about a 14-second period). The device's tail is
@@ -504,9 +534,14 @@ controls cannot move or disable either channel's device slot. The lower-level
 API has an explicit opt-in for workflows that intentionally include those
 selectors.
 
-GTK Host snapshots also save the complete multiband panel under the versioned
-`host_features.multiband` object. The passive source lifecycle is reconciled
-separately. Obsolete `host_features.pan` data is discarded with a completed-load
+GTK Host snapshots also save both inputs' Multiband settings under the versioned
+`host_features.multiband_insert` object, with the reverb character and which
+inputs have Auto gain on. What the Host changed in the unit's mixer for
+Multiband, and the buffer it borrowed, belong to the running session and are
+left out of snapshot files. A snapshot written before 2026-09-11 carries the
+retired playback multiband as `host_features.multiband`: its settings are
+loaded into both inputs' Multiband, switched off, and a completed-load notice
+says so. The passive source lifecycle is reconciled separately. Obsolete `host_features.pan` data is discarded with a completed-load
 notice, regardless of its old contents, and is never re-saved. Other invalid
 Host-only data is rejected before any device setting is applied. These objects are deliberately absent
 from device-slot records, cached-device reapply,
@@ -517,8 +552,8 @@ to load and do not change the current Host-only state.
 
 The Host picks up where it left off, as Universal Control did. Everything it
 sends to the unit is kept on disk (`~/.cache/io24/shadow.json`), and its own
-features (the multiband panel, reverb character and movement, and which inputs
-have Auto gain on) are saved to
+features (both inputs' Multiband, reverb character and movement, and which
+inputs have Auto gain on) are saved to
 `~/.config/io24/last-session.json` every few seconds and on exit.
 
 Each time the io24 connects, the Host re-sends the settings the unit cannot

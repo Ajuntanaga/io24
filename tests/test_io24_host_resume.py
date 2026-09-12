@@ -115,10 +115,10 @@ class LastSessionFileTests(unittest.TestCase):
 
     def test_host_features_gather_multiband_and_reverb_character(self):
         host = _bind(SimpleNamespace(
-            _mbc_snapshot_state=lambda: {"on": False},
+            _insert_state=lambda: {"version": 1},
             _reverb_character_state=lambda: None), "_host_features_state")
         self.assertEqual(host._host_features_state(),
-                         {"multiband": {"on": False}})
+                         {"multiband_insert": {"version": 1}})
 
     def test_the_snapshot_dialog_uses_the_same_gathering(self):
         self.assertIn("self._host_features_state()", _function("_pick"))
@@ -126,8 +126,11 @@ class LastSessionFileTests(unittest.TestCase):
 
 class ResumeTriggerTests(unittest.TestCase):
     def _host(self):
-        calls = []
-        host = SimpleNamespace(_resume_session=lambda first: calls.append(first))
+        calls, self.restarts = [], []
+        host = SimpleNamespace(
+            _resume_session=lambda first: calls.append(first),
+            _insert_reconcile=lambda restart=False: self.restarts.append(
+                restart))
         return _bind(host, "_maybe_resume"), calls
 
     def test_each_connection_resumes_once_and_only_the_first_restores_host_features(self):
@@ -136,6 +139,14 @@ class ResumeTriggerTests(unittest.TestCase):
         host._maybe_resume({"alive": True, "attach_generation": 1})
         host._maybe_resume({"alive": True, "attach_generation": 2})
         self.assertEqual(calls, [True, False])
+
+    def test_a_reconnect_restarts_multiband_whose_streams_went_with_the_unit(self):
+        # the first connection restores Multiband with the session instead
+        host, _calls = self._host()
+        host._maybe_resume({"alive": True, "attach_generation": 1})
+        self.assertEqual(self.restarts, [])
+        host._maybe_resume({"alive": True, "attach_generation": 2})
+        self.assertEqual(self.restarts, [True])
 
     def test_nothing_resumes_while_the_unit_is_not_answering(self):
         host, calls = self._host()
@@ -239,7 +250,7 @@ class AutoGainSessionTests(unittest.TestCase):
 
     def _gathering_host(self, autogain_on):
         return _bind(SimpleNamespace(
-            _mbc_snapshot_state=lambda: None,
+            _insert_state=lambda: None,
             _reverb_character_state=lambda: None,
             _autogain_on=autogain_on), "_host_features_state")
 

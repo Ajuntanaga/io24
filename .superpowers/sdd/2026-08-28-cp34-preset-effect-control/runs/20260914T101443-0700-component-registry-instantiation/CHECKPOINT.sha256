@@ -1,0 +1,4 @@
+9c9c1807a2e81fe24534bcf65ae496d10dc2df92910aaf677fd7f7ce9968a2a8  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T101443-0700-component-registry-instantiation/PROGRESS.md
+291078d98b7611b34517a6569bdee05d9fcbdc40fb6b1faf38a3ad529c307719  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T101443-0700-component-registry-instantiation/REGISTRY.json
+75331970888387b0be39fe788ba6e3a291f196b868e9c68b24717abf28fe7ed0  re/cp34_uc472_component_registry.py
+0860d32932132c968fc95e923ee1e3ec4802a64a90dd00d0a54110055e9662cb  tests/test_cp34_uc472_component_registry.py

@@ -2,6 +2,40 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-14 controlling firmware correction: block 201's gate is satisfied at construction
+
+13c's three gate conditions are reconfirmed byte-exact, and so is the 2026-08-31
+finding that the native `Stat` loader supplies all three. What is new is that
+the **block-201 constructor supplies them too**, so the gate is open from device
+boot and a shut gate cannot be the explanation for silent block-201 writes.
+
+Constructor `0x591bc`:
+
+```
+0x591e6  movs   r5, #0
+0x591ec  strh   r0, [r4, #0x38]     ; r0 = 0x101 -> byte +0x39 = 1
+0x59202  strb.w r5, [r4, #0x44]     ; +0x44 = 0
+0x59214  strd   r5, r5, [r4, #0x3c] ; +0x40 = 0
+0x59240  mov    r1, r5              ; model = 0
+0x59248  bl     0x55388             ; sets +0x44 = 1 for any model 0..5
+```
+
+Selector `0x55388` rejects only a negative model or one >= 6; its `bne 0x553cc`
+branch calls a delegate and returns to the same check, so it is not an exit.
+`r5` is callee-saved across the intervening `bl 0x10d7e0`.
+
+Read the 2026-08-31 note as "the `Stat` load **also** supplies the three
+conditions", not "uniquely supplies". Why direct block-201 writes were
+inaudible in 12S and in the 2026-09-14 live runs is therefore open again, with
+13a's point -- that the FX slot is a chain member which must be *installed* --
+now the stronger candidate.
+
+Scope: the construction path only. No claim is made that nothing later changes
+those fields; a whole-image displacement scan cannot be attributed to this
+object and is not evidence either way.
+
+Evidence: `.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102032-0700-block201-gate-open-at-construction/`.
+
 ## 2026-09-14 controlling host result: UC recalls a channel preset host-side
 
 The companion to the absent assignment edge below. Universal Control does not

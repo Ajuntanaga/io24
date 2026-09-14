@@ -1,0 +1,49 @@
+{
+  "component_count": 6,
+  "components": [
+    {
+      "component": "EQCompSelectorComponent",
+      "creator": "0x18004b2e0",
+      "destroyer": "0x18004b350",
+      "name_address": "0x180436198"
+    },
+    {
+      "component": "FilterComponent",
+      "creator": "0x18004b420",
+      "destroyer": "0x18004b460",
+      "name_address": "0x1804361b0"
+    },
+    {
+      "component": "GateComponent",
+      "creator": "0x18004b530",
+      "destroyer": "0x18004b570",
+      "name_address": "0x1804361c0"
+    },
+    {
+      "component": "LimiterComponent",
+      "creator": "0x18004b640",
+      "destroyer": "0x18004b680",
+      "name_address": "0x1804361d0"
+    },
+    {
+      "component": "InsertFXSelectorComponent",
+      "creator": "0x18004b750",
+      "destroyer": "0x18004b7b0",
+      "name_address": "0x1804361e8"
+    },
+    {
+      "component": "VocalReverbComponent",
+      "creator": "0x18004b880",
+      "destroyer": "0x18004b8c0",
+      "name_address": "0x1804362e8"
+    }
+  ],
+  "crt_initializer_slots": [
+    "0x1800e4898"
+  ],
+  "note": "creators are referenced only by a RIP-relative lea inside a CRT static initializer, so they appear in no pointer table and are the target of no call",
+  "registered_at_load": true,
+  "registry_builder": "0x180001990",
+  "schema": "cp34-uc472-component-registry-v1",
+  "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
+}

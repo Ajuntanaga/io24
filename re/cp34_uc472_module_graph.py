@@ -84,6 +84,18 @@ class Module:
                 return entry
         raise ModuleGraphError("no %s section" % want)
 
+    def cstring(self, address, limit=128):
+        """NUL-terminated ASCII at `address`, or None."""
+        offset = self.offset_of(address)
+        if offset is None:
+            return None
+        raw = self.data[offset:offset + limit].split(b"\0")[0]
+        try:
+            text = raw.decode("ascii")
+        except UnicodeDecodeError:
+            return None
+        return text if text.isprintable() else None
+
     def address_of_offset(self, file_offset):
         """Virtual address for a file offset, using RAW extents only."""
         for _name, va, _size, ra, rsz in self.sections:

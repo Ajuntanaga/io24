@@ -1,5 +1,36 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-14 controlling checkpoint: instantiation resolved, and the gate reopens
+
+Two results, the second of which corrects the controlling narrative.
+
+**Who instantiates the 0xE8 component.** It is `InsertFXSelectorComponent`,
+created by name from a DSP component registry that a CRT static initializer
+fills at DLL load (`0x180001990`, pointer at `0x1800e4898`), and instantiated
+during device-object construction via `0x180046350` -> `0x1800303a0`. Creator
+`0x18004b750`, destroyer `0x18004b7b0`; six components are registered in all.
+It was missed because the creator is referenced by neither a pointer nor a
+call -- only by a RIP-relative `lea` inside the initializer. Absence of
+pointers and calls is not absence of references.
+See `runs/20260914T101443-0700-component-registry-instantiation/`.
+
+**Block 201's gate is satisfied at construction.** 13c's three conditions and
+the 2026-08-31 `Stat` loader stores are both reconfirmed byte-exact, but the
+block-201 constructor `0x591bc` also sets `+0x39 = 1` and `+0x40 = 0` and then
+calls selector `0x55388` with model 0, which sets `+0x44 = 1`. The gate is
+therefore open from device boot.
+
+That means a shut gate is **not** a sufficient explanation for block-201 writes
+producing no audio, and the earlier framing in this project -- including the
+2026-09-09 checkpoint that attributed the silence to the gate -- is too strong.
+Read 2026-08-31 as "the `Stat` load also supplies the conditions". Why the
+writes are inaudible is open again, and 13a's point that the FX slot is a chain
+member which must be *installed* is now the stronger candidate.
+See `runs/20260914T102032-0700-block201-gate-open-at-construction/`.
+
+Scope: construction path only; no claim that nothing later changes those fields.
+Offline only. 839 tests pass.
+
 ## 2026-09-14 controlling checkpoint: UC never recalls a channel preset through a record
 
 Resume from

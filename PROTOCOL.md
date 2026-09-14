@@ -2,6 +2,43 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-14 controlling live result: block 201 is inert with the gate open and the path open
+
+12S reproduces on a cold-booted unit, and this time with the two explanations
+that could have excused it both eliminated by measurement in the same session.
+
+Setup: physical cold boot (`devnum` 2 -> 4), Host closed, Voice FX owner read
+from the device (Channel 1), Main-to-Input-1 ratio, 40-sample windows.
+
+**Positive control first.** Direct `set_gate` on Channel 1 moved the ratio
+**-19.475 dB** against a 5.46 dB threshold with 0.018 dB drift. The meter sees
+Channel-1 processing.
+
+**Block 201, channel gate at its power-on state so the path is open:**
+
+| model | delta | threshold |
+|---|---|---|
+| delay, fully wet, feedback 1.0 | +0.126 dB | 1.78 dB |
+| filters, fully wet | -0.129 dB | 2.15 dB |
+| ringmod 220 Hz, fully wet | -0.051 dB | 2.18 dB |
+
+So the gate conditions are satisfied at construction, the channel reaches Main,
+three fully wet models are armed, and nothing happens. **13a is what is left:
+the insert-FX slot is a chain member that must be installed.** Block 201 is
+present, addressable, accepts writes, and is not in the audio chain.
+
+**Separately: selection does not re-apply a stored preset.** After forcing the
+power-on gate, selecting slot 0 left the ratio at -0.294 dB; a real re-apply of
+`MAIN` would have closed the gate to about -20 dB. `Pari` 16 selects an index
+and does not make the firmware reload the body.
+
+**But power-on does apply it.** The cold-boot baseline was -20.894 dB, exactly
+`MAIN`'s stored gate closing on a -61 dBFS noise floor against its -48.72 dB
+threshold. Re-applying that gate directly reproduced -19.388 dB. The device
+holds `MAIN` in slot 0 and applies it at boot.
+
+Evidence: `.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/`.
+
 ## 2026-09-14 controlling firmware correction: block 201's gate is satisfied at construction
 
 13c's three gate conditions are reconfirmed byte-exact, and so is the 2026-08-31

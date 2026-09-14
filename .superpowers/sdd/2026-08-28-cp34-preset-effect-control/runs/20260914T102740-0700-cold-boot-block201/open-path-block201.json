@@ -1,0 +1,184 @@
+{
+  "device": {
+    "bcd_device": "0128",
+    "product_id": "0422",
+    "serial": "AB7C22200355",
+    "vendor_id": "194f"
+  },
+  "owner": 1,
+  "readable_after": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_before": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "results": {
+    "delay": {
+      "analysis": {
+        "classification": "NO_COLD_BOOT_BLOCK201_EFFECT_DETECTED",
+        "detection_threshold_db": 1.7833073147620664,
+        "drift_db": -0.036969565360264744,
+        "effect_delta_db": 0.12584926876858182,
+        "effect_detected": false,
+        "maximum_window_mad_db": 0.29721788579367775,
+        "stable": true
+      },
+      "kwargs": {
+        "feedback": 1.0,
+        "mix": 1.0,
+        "time_s": 0.25
+      },
+      "windows": [
+        {
+          "label": "delay_off_before",
+          "mad_db": 0.22815829225036877,
+          "max_db": 1.1924755547721513,
+          "median_main": 0.0008701956394361332,
+          "median_ratio_db": -0.24142281716440273,
+          "median_source": 0.0008854001061990857,
+          "min_db": -1.2545431719560476,
+          "samples": 40
+        },
+        {
+          "label": "delay_on",
+          "mad_db": 0.2388612523034057,
+          "max_db": 1.121823333844615,
+          "median_main": 0.0008820886141620576,
+          "median_ratio_db": -0.13405833107595327,
+          "median_source": 0.0008971581410150975,
+          "min_db": -1.220167809553053,
+          "samples": 40
+        },
+        {
+          "label": "delay_off_after",
+          "mad_db": 0.29721788579367775,
+          "max_db": 0.6309525219847931,
+          "median_main": 0.0008878011140041053,
+          "median_ratio_db": -0.27839238252466747,
+          "median_source": 0.0009255761688109487,
+          "min_db": -1.5293776191731734,
+          "samples": 40
+        }
+      ]
+    },
+    "filters": {
+      "analysis": {
+        "classification": "NO_COLD_BOOT_BLOCK201_EFFECT_DETECTED",
+        "detection_threshold_db": 2.147095240844159,
+        "drift_db": 0.13934622773928668,
+        "effect_delta_db": -0.12934025755158407,
+        "effect_detected": false,
+        "maximum_window_mad_db": 0.3578492068073599,
+        "stable": true
+      },
+      "kwargs": {
+        "damping": 0.1,
+        "mix": 1.0,
+        "pitch": 0.05,
+        "regeneration": 0.9
+      },
+      "windows": [
+        {
+          "label": "filters_off_before",
+          "mad_db": 0.26520519407604953,
+          "max_db": 1.2741836552057229,
+          "median_main": 0.0008771952416282147,
+          "median_ratio_db": -0.3497349391103942,
+          "median_source": 0.0008690126414876431,
+          "min_db": -1.2086696172321953,
+          "samples": 40
+        },
+        {
+          "label": "filters_on",
+          "mad_db": 0.3096817195587044,
+          "max_db": 0.6780419457631592,
+          "median_main": 0.0008854351763147861,
+          "median_ratio_db": -0.4094020827923349,
+          "median_source": 0.0009057059360202402,
+          "min_db": -0.9977345143530415,
+          "samples": 40
+        },
+        {
+          "label": "filters_off_after",
+          "mad_db": 0.3578492068073599,
+          "max_db": 1.1879508093349491,
+          "median_main": 0.0008949612238211557,
+          "median_ratio_db": -0.21038871137110754,
+          "median_source": 0.0008909790776669979,
+          "min_db": -2.219365849127363,
+          "samples": 40
+        }
+      ]
+    },
+    "ringmod": {
+      "analysis": {
+        "classification": "NO_COLD_BOOT_BLOCK201_EFFECT_DETECTED",
+        "detection_threshold_db": 2.1827018192923915,
+        "drift_db": -0.032136136140516414,
+        "effect_delta_db": -0.05089324744708268,
+        "effect_detected": false,
+        "maximum_window_mad_db": 0.3637836365487319,
+        "stable": true
+      },
+      "kwargs": {
+        "carrier_hz": 220.0,
+        "dist": 0.0,
+        "mix": 1.0,
+        "vol": 1.0
+      },
+      "windows": [
+        {
+          "label": "ringmod_off_before",
+          "mad_db": 0.34966021228512834,
+          "max_db": 0.8140120553925339,
+          "median_main": 0.0009136012668022886,
+          "median_ratio_db": -0.26123365530274445,
+          "median_source": 0.000944035011343658,
+          "min_db": -1.4546846708718473,
+          "samples": 40
+        },
+        {
+          "label": "ringmod_on",
+          "mad_db": 0.3637836365487319,
+          "max_db": 0.6627801554356403,
+          "median_main": 0.0008633717952761799,
+          "median_ratio_db": -0.3281949708200853,
+          "median_source": 0.0009051541273947805,
+          "min_db": -1.167283717102193,
+          "samples": 40
+        },
+        {
+          "label": "ringmod_off_after",
+          "mad_db": 0.3428086783087983,
+          "max_db": 0.3624145014690179,
+          "median_main": 0.0008883567934390157,
+          "median_ratio_db": -0.29336979144326086,
+          "median_source": 0.0009167797106783837,
+          "min_db": -1.2389578223526367,
+          "samples": 40
+        }
+      ]
+    }
+  },
+  "schema": "io24-open-path-block201-v1"
+}

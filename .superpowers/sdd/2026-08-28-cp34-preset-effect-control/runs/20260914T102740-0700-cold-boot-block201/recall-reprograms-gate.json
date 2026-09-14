@@ -1,0 +1,48 @@
+{
+  "readable_after": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "schema": "io24-recall-reprograms-gate-v1",
+  "windows": [
+    {
+      "label": "after_recall_of_MAIN",
+      "mad_db": 0.3542932747036645,
+      "max_db": 0.8828643299841457,
+      "median_main": 0.0008675151038914919,
+      "median_ratio_db": -0.052655070106798194,
+      "median_source": 0.0008904878923203796,
+      "min_db": -1.4021554950949056,
+      "samples": 40
+    },
+    {
+      "label": "forced_power_on_gate",
+      "mad_db": 0.3462235384352731,
+      "max_db": 1.2406549012241617,
+      "median_main": 0.0008851587190292776,
+      "median_ratio_db": -0.34725054750998885,
+      "median_source": 0.0008979366684798151,
+      "min_db": -1.1577155748416703,
+      "samples": 40
+    },
+    {
+      "label": "after_second_recall",
+      "mad_db": 0.24677904532638079,
+      "max_db": 0.8938007333689664,
+      "median_main": 0.0008512557833455503,
+      "median_ratio_db": -0.29402457797767245,
+      "median_source": 0.0008926493756007403,
+      "min_db": -1.8064019093166785,
+      "samples": 40
+    }
+  ]
+}

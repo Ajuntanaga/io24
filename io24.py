@@ -2412,12 +2412,17 @@ class Io24:
     def recall_device_slot(self, channel, slot):
         """Select one stored slot and leave that channel processing it.
 
-        This recalls the physical Fat Channel preset only. The latest framing
-        trace shows the tagged UC record reaches block 201 with an archive word
-        where the native loader requires ``2``, so slot recall is not claimed
-        as an FX activation path.
+        This selects a slot index. It was measured on 2026-09-14 **not** to
+        make the firmware reload the stored body: after forcing Channel 1's
+        gate to its power-on state, selecting slot 0 left the Main/Input-1
+        ratio at -0.294 dB, where a genuine re-apply of the stored ``MAIN``
+        would have closed that gate to about -20 dB. The same session showed
+        the device does apply its stored body at power-on, so storage works and
+        it is the host-triggered re-apply that is missing. Do not describe this
+        as a recall that reprograms the channel, and do not claim it as an FX
+        activation path.
 
-        A bypassed channel never reaches the load, so the enable is asserted
+        A bypassed channel is still worth enabling, so the enable is asserted
         only when the device reports this channel bypassed.  A channel that is
         already processing keeps its exact mix, because wire id 4 is a float
         whose nonzero value is write-only: re-asserting it would silently

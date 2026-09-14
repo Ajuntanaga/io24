@@ -4917,10 +4917,13 @@ class Win(Adw.ApplicationWindow):
     PRESET_BASE = {1: 0, 2: 2}           # each channel's first global slot
 
     def _slot_changed(self, ch, slot):
-        """Selecting a block recalls it — the device runs its own Stat load.
+        """Select a slot on the device, and enable a bypassed channel.
 
-        Sending only the slot index left a bypassed channel silently pointing
-        at a preset it was not processing, and never opened block 201's gate.
+        This is not a recall in the sense of reprogramming the chain. Measured
+        on 2026-09-14: selecting a slot does not make the firmware reload the
+        stored body, though the unit does apply it at power-on. Sending the
+        index alone still left a bypassed channel pointing at a preset it was
+        not processing, which is why the enable is asserted here.
         """
         def work(dev):
             try:

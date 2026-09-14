@@ -1,0 +1,98 @@
+{
+  "analysis": {
+    "classification": "NO_COLD_BOOT_BLOCK201_EFFECT_DETECTED",
+    "detection_threshold_db": 5.96157061974473,
+    "drift_db": -0.654503356480415,
+    "effect_delta_db": 0.5120083702986875,
+    "effect_detected": false,
+    "maximum_window_mad_db": 0.9935951032907884,
+    "stable": true
+  },
+  "battery_after": 98,
+  "battery_before": 98,
+  "device": {
+    "bcd_device": "0128",
+    "product_id": "0422",
+    "serial": "AB7C22200355",
+    "vendor_id": "194f"
+  },
+  "finished": "2026-09-14T10:27:48.374431-07:00",
+  "model": "delay",
+  "model_kwargs": {
+    "feedback": 1.0,
+    "mix": 1.0,
+    "time_s": 0.25
+  },
+  "readable_after": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_before": {
+    "flags": 385,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "restored": [
+    "preamp_gain",
+    "main_volume"
+  ],
+  "schema": "io24-cold-boot-block201-probe-v1",
+  "source_meter_slot": 4,
+  "started": "2026-09-14T10:27:40.417448-07:00",
+  "voicefx_owner_channel": 1,
+  "windows": [
+    {
+      "label": "cold_boot_baseline",
+      "mad_db": 0.7107345253859343,
+      "max_db": -19.347914690750542,
+      "median_main": 7.94117477198597e-05,
+      "median_ratio_db": -20.894014807654944,
+      "median_source": 0.0008985405438579619,
+      "min_db": -24.502423952731167,
+      "samples": 40
+    },
+    {
+      "label": "block201_armed",
+      "mad_db": 0.7538576440820588,
+      "max_db": -18.777243142456058,
+      "median_main": 8.130768947012257e-05,
+      "median_ratio_db": -20.709258115596462,
+      "median_source": 0.0008856479253154248,
+      "min_db": -23.397980489436346,
+      "samples": 40
+    },
+    {
+      "label": "block201_off",
+      "mad_db": 0.9935951032907884,
+      "max_db": -18.173144330560696,
+      "median_main": 7.851190275687259e-05,
+      "median_ratio_db": -21.54851816413536,
+      "median_source": 0.0009079688170459121,
+      "min_db": -23.292073259101734,
+      "samples": 40
+    }
+  ],
+  "writes": [
+    "set_main_volume",
+    "set_gain",
+    "set_fx on",
+    "set_fx off"
+  ]
+}

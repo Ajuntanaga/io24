@@ -1,0 +1,85 @@
+{
+  "analysis": {
+    "classification": "COLD_BOOT_BLOCK201_EFFECT_DETECTED",
+    "detection_threshold_db": 5.460604941947491,
+    "drift_db": 0.018094443400743232,
+    "effect_delta_db": -19.47531802007519,
+    "effect_detected": true,
+    "maximum_window_mad_db": 0.9101008236579151,
+    "stable": true
+  },
+  "device": {
+    "bcd_device": "0128",
+    "product_id": "0422",
+    "serial": "AB7C22200355",
+    "vendor_id": "194f"
+  },
+  "finished": "2026-09-14T10:28:37.090434-07:00",
+  "owner": 1,
+  "readable_after": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_before": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "restored": [
+    "gate_poweron",
+    "gain",
+    "main"
+  ],
+  "schema": "io24-channel1-gate-positive-control-v1",
+  "source_meter_slot": 4,
+  "started": "2026-09-14T10:28:28.603067-07:00",
+  "windows": [
+    {
+      "label": "gate_off_before",
+      "mad_db": 0.32278721459769216,
+      "max_db": 0.9857864965480383,
+      "median_main": 0.0008735061128390953,
+      "median_ratio_db": -0.24187379325478153,
+      "median_source": 0.0008929434115998447,
+      "min_db": -1.2357598271651817,
+      "samples": 40
+    },
+    {
+      "label": "gate_on",
+      "mad_db": 0.9101008236579151,
+      "max_db": -17.37587185217735,
+      "median_main": 9.141792543232441e-05,
+      "median_ratio_db": -19.708144591629598,
+      "median_source": 0.000907972949789837,
+      "min_db": -22.619175136334967,
+      "samples": 40
+    },
+    {
+      "label": "gate_off_after",
+      "mad_db": 0.28735052553685114,
+      "max_db": 0.8020433977592711,
+      "median_main": 0.0008646258793305606,
+      "median_ratio_db": -0.2237793498540383,
+      "median_source": 0.0008811844163574278,
+      "min_db": -0.8055202453223049,
+      "samples": 40
+    }
+  ]
+}

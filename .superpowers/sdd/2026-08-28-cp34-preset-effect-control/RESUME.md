@@ -1,5 +1,39 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-14 controlling checkpoint: block 201 inert; boot applies presets, selection does not
+
+Cold-boot live test, authorized and run. Unit `A20260914T102740-0700-cold-boot-block201C22200355`, firmware `0128`,
+battery 98%, Host closed, physical unplug confirmed by `devnum` 2 -> 4.
+
+**Block 201 is inert.** With the channel gate at its power-on state so the path
+is open, three fully wet models -- delay with feedback 1.0, filters, ringmod --
+moved the Main/Input-1 ratio by at most 0.13 dB against thresholds of 1.78 to
+2.18 dB. A same-session positive control using direct `set_gate` on the same
+channel moved it -19.475 dB, so the rig is not blind.
+
+Both available excuses are now eliminated by measurement: the gate conditions
+are satisfied at construction, and Channel-1 processing demonstrably reaches
+Main. 13a survives -- the insert-FX slot is a chain member that must be
+**installed** in the signal path.
+
+**Selection does not re-apply a stored preset.** After forcing the power-on
+gate, `recall_device_slot(1, 0)` left the ratio at -0.294 dB instead of
+returning to `MAIN`'s closed gate near -20 dB. `Pari` 16 selects an index; it
+does not make the firmware reload the body. The Host's Presets tab must not
+imply otherwise, and the earlier description of recall as "the decoded way to
+run that load" is withdrawn.
+
+**Power-on does apply it, and slot 0 really is MAIN.** The cold-boot baseline
+was -20.894 dB, exactly `MAIN`'s stored gate closing. That is the first
+objective confirmation that the restored body is on the device and that the
+unit applies it at boot.
+
+Restoration: Channel 1's gate was left at power-on by the probes and was
+restored by re-applying `MAIN`'s exact stored values, verified at -19.388 dB.
+Gain 30.00 dB, main volume 0.7599995732307434, Channel 2 untouched.
+
+Resume from `runs/20260914T102740-0700-cold-boot-block201/PROGRESS.md`.
+
 ## 2026-09-14 controlling checkpoint: instantiation resolved, and the gate reopens
 
 Two results, the second of which corrects the controlling narrative.

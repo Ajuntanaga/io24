@@ -1,0 +1,6 @@
+6220b20d2eabd986bafce5ced666a4508093190b11140e3a5842f72477b6f916  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/channel1-gate-control.json
+cde6fa0490e384bf5dc6c361709f58edcdd0c0aae7dc23d15d11fe6c6e6d03e4  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/delay-report.json
+6968eae2ac531b1345f763dde973f528bce4288c0c75f2fd9387f78b61417818  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/open-path-block201.json
+f86382972eb9797a7f099bda95c6d4eb3c960d675e06ca3d8b2ee28639184328  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/recall-reprograms-gate.json
+814a031be0aa71c7dc8b0dd1d1fb7a106f8578d82a024f444c0c7c6e82289a0d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/PROGRESS.md
+2e10677ee46f28816cc74abf2836665c692b05181e0827842e778fbdb3ac08ac  re/io24_cold_boot_block201_probe.py

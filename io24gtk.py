@@ -3152,9 +3152,15 @@ class Win(Adw.ApplicationWindow):
     def _set_bus_source_status(self, bus, status, notify=False):
         previous = self._bus_source_status.get(bus, "unavailable")
         self._bus_source_status[bus] = status
-        if notify and status == "failed" and previous != "failed":
-            self.say("%s source failed to start" %
-                     io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
+        if notify and status != previous:
+            if status == "failed":
+                self.say("%s source failed to start" %
+                         io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
+            elif status == "profile":
+                # not a failure: this card profile has no such capture channel
+                self.say("%s needs the io24's Pro Audio profile; this one has "
+                         "no such capture channel" %
+                         io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
 
     def _bus_source_watchdog(self):
         """Slowly reconcile source visibility; ordinary transitions are quiet."""
@@ -3162,7 +3168,8 @@ class Win(Adw.ApplicationWindow):
         statuses = self.bus_sources.reconcile(capture)
         for bus in io24_mbc.BUS_SOURCE_KEYS:
             self._set_bus_source_status(
-                bus, statuses[bus], notify=statuses[bus] == "failed")
+                bus, statuses[bus],
+                notify=statuses[bus] in ("failed", "profile"))
         return True
 
     def _master_strip(self):

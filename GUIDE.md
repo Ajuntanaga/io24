@@ -335,6 +335,16 @@ sources route nowhere by default. Main is not exposed by USB capture. None of
 these facts makes either bus audible at Main or headphones without an explicit
 route in another host application.
 
+Both need the card profile to expose those capture channels. The io24's six
+channels are only all present in the **Pro Audio** profile (and in the
+six-channel surround input profiles); the Analog Surround 2.1 profile carries
+three, so Mix A and Mix B are not there at all. The Host reads the profile
+rather than assuming, and when a bus is missing it says so instead of
+publishing a source fed by channels that do not exist. Change the profile in
+your desktop's sound settings, or with `wpctl`/`pactl`, and the sources appear
+on the next reconcile. The Multiband compressor type is unaffected: it needs
+only Inputs 1 and 2, which every profile with a stereo pair carries.
+
 > The mixer has **no read-back**. The device accepts a level and will not report
 > one, so these sliders show what this app last sent, not what the hardware
 > holds. USB reconnect never silently replays the cache, and the GTK header no

@@ -1454,7 +1454,7 @@ class HostRefinementTests(unittest.TestCase):
                 self.starts = []
                 self.stops = 0
 
-            def start(self, capture_target):
+            def start(self, capture_target, positions=None):
                 self.starts.append(capture_target)
                 self.running = bool(started)
                 return bool(started)
@@ -1474,7 +1474,8 @@ class HostRefinementTests(unittest.TestCase):
         manager = io24_mbc.BusSourceManager(
             chains={"mixa": mixa, "mixb": mixb})
 
-        statuses = manager.reconcile("capture-node", now=10.0)
+        statuses = manager.reconcile("capture-node", now=10.0,
+                                    positions=io24_mbc.CAPTURE_POSITIONS)
 
         self.assertEqual(statuses, {"mixa": "failed", "mixb": "ready"})
         self.assertEqual(mixa.starts, ["capture-node"])
@@ -1485,7 +1486,8 @@ class HostRefinementTests(unittest.TestCase):
         mixb = self._fake_bus_chain(started=True, node_id="84")
         manager = io24_mbc.BusSourceManager(
             chains={"mixa": mixa, "mixb": mixb})
-        first = manager.reconcile("capture-node", now=10.0)
+        first = manager.reconcile("capture-node", now=10.0,
+                                    positions=io24_mbc.CAPTURE_POSITIONS)
         expired = manager.reconcile("capture-node", now=15.1)
 
         self.assertEqual(first["mixa"], "starting")

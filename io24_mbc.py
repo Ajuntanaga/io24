@@ -45,7 +45,15 @@ import time
 
 SINK_NAME = "io24-multiband"
 SINK_DESC = "io24 Multiband"
-BUS_CAPTURE_PAIRS = {"mixa": (2, 3), "mixb": (4, 5)}
+# Which of the io24's six capture channels each bus is, 1-based. A PipeWire
+# node's index i is always device capture channel i+1; what changes with the
+# card profile is how many of them the node exposes. `analog-surround-21`
+# publishes three (FL, FR, LFE), so Mix A and Mix B are simply not there;
+# `pro-audio` publishes all six. Reading the node is the only way to know.
+BUS_DEVICE_CHANNELS = {"mixa": (3, 4), "mixb": (5, 6)}
+BUS_CAPTURE_PAIRS = {bus: (left - 1, right - 1)
+                     for bus, (left, right) in BUS_DEVICE_CHANNELS.items()}
+_POSITION_CACHE = {}
 BUS_SOURCE_NAMES = {
     "mixa": "io24-host-mixa",
     "mixb": "io24-host-mixb",
@@ -401,15 +409,69 @@ def _validate_bus(bus):
     return bus
 
 
-def build_bus_source_graph(bus):
+def capture_positions(node_name):
+    """The capture node's channel positions in order, or () when unknown.
+
+    Cached per node name, which is safe because changing the card profile
+    changes the name (`...analog-surround-21` vs `...pro-audio`).
+    """
+    if not node_name:
+        return ()
+    cached = _POSITION_CACHE.get(node_name)
+    if cached is not None:
+        return cached
+    try:
+        output = subprocess.run(["pw-dump"], capture_output=True, text=True,
+                                timeout=10).stdout
+        objects = json.loads(output)
+    except Exception:
+        return ()
+    positions = ()
+    for obj in objects:
+        props = ((obj.get("info") or {}).get("props") or {})
+        if props.get("node.name") != node_name:
+            continue
+        raw = props.get("audio.position")
+        if isinstance(raw, str):
+            raw = [part.strip()
+                   for part in raw.strip("[] ").split(",") if part.strip()]
+        if raw:
+            positions = tuple(raw)
+        elif isinstance(props.get("audio.channels"), int):
+            positions = tuple("CH%d" % index
+                              for index in range(props["audio.channels"]))
+        break
+    if positions:
+        _POSITION_CACHE[node_name] = positions
+    return positions
+
+
+def bus_source_indices(bus, positions=CAPTURE_POSITIONS):
+    """Node indices carrying one bus's pair, or None when this profile does
+    not expose them. Publishing silence from absent channels is the bug this
+    replaces: `analog-surround-21` has three channels, so Mix A took the LFE
+    channel plus one that did not exist and Mix B took two that did not."""
+    left, right = BUS_DEVICE_CHANNELS[_validate_bus(bus)]
+    if len(positions) < right:
+        return None
+    return (left - 1, right - 1)
+
+
+def build_bus_source_graph(bus, positions=CAPTURE_POSITIONS):
     """Select one exact capture pair and expose it at fixed unity gain."""
     bus = _validate_bus(bus)
+    indices = bus_source_indices(bus, positions)
+    if indices is None:
+        raise ValueError(
+            "%s needs device capture channel %d; this profile exposes %d"
+            % (BUS_SOURCE_DESCRIPTIONS[bus], BUS_DEVICE_CHANNELS[bus][1],
+               len(positions)))
     nodes = [
         {"type": "builtin", "name": "src%d" % index, "label": "copy"}
-        for index in range(len(CAPTURE_POSITIONS))
+        for index in range(len(positions))
     ]
     nodes.extend((_lin("source_l", 1.0), _lin("source_r", 1.0)))
-    left_index, right_index = BUS_CAPTURE_PAIRS[bus]
+    left_index, right_index = indices
     return {
         "nodes": nodes,
         "links": [
@@ -418,13 +480,12 @@ def build_bus_source_graph(bus):
             {"output": "src%d:Out" % right_index,
              "input": "source_r:In"},
         ],
-        "inputs": ["src%d:In" % index
-                   for index in range(len(CAPTURE_POSITIONS))],
+        "inputs": ["src%d:In" % index for index in range(len(positions))],
         "outputs": ["source_l:Out", "source_r:Out"],
     }
 
 
-def build_bus_source_conf(bus, capture_target):
+def build_bus_source_conf(bus, capture_target, positions=CAPTURE_POSITIONS):
     """PipeWire config for one passive Mix A or Mix B virtual source."""
     bus = _validate_bus(bus)
     if not capture_target:
@@ -434,15 +495,15 @@ def build_bus_source_conf(bus, capture_target):
     args = {
         "node.description": description,
         "media.name": description,
-        "filter.graph": build_bus_source_graph(bus),
+        "filter.graph": build_bus_source_graph(bus, positions),
         "capture.props": {
             "node.name": name + "-capture",
             "media.class": "Stream/Input/Audio",
             "target.object": capture_target,
             "node.passive": True,
             "stream.dont-remix": True,
-            "audio.channels": len(CAPTURE_POSITIONS),
-            "audio.position": list(CAPTURE_POSITIONS),
+            "audio.channels": len(positions),
+            "audio.position": list(positions),
         },
         "playback.props": {
             "node.name": name,
@@ -531,12 +592,21 @@ def _insert_states(states):
     return normalized
 
 
-def build_insert_graph(states, with_comp=True):
-    """Both inputs from the six-channel capture, each through its own 4-band
-    graph when its channel has Multiband, otherwise straight through."""
+def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS):
+    """Both inputs from the capture node, each through its own 4-band graph
+    when its channel has Multiband, otherwise straight through.
+
+    Only device capture channels 1 and 2 are needed, so every profile that
+    exposes a stereo pair carries the insert.
+    """
     states = _insert_states(states)
+    if len(positions) < max(INSERT_CAPTURE_INDEX.values()) + 1:
+        raise ValueError(
+            "the Multiband insert needs both inputs; this profile exposes %d "
+            "capture channel%s" % (len(positions),
+                                   "" if len(positions) == 1 else "s"))
     nodes = [{"type": "builtin", "name": "src%d" % index, "label": "copy"}
-             for index in range(len(CAPTURE_POSITIONS))]
+             for index in range(len(positions))]
     links = []
     for channel in INSERT_CHANNELS:
         tap = "src%d:Out" % INSERT_CAPTURE_INDEX[channel]
@@ -552,8 +622,7 @@ def build_insert_graph(states, with_comp=True):
         else:
             links.append({"output": tap, "input": out + ":In"})
     return {"nodes": nodes, "links": links,
-            "inputs": ["src%d:In" % index
-                       for index in range(len(CAPTURE_POSITIONS))],
+            "inputs": ["src%d:In" % index for index in range(len(positions))],
             "outputs": ["out%d:Out" % channel for channel in INSERT_CHANNELS]}
 
 
@@ -586,7 +655,8 @@ def build_insert_return_graph(channels):
     }
 
 
-def build_insert_conf(states, capture_target, playback_target, with_comp=None):
+def build_insert_conf(states, capture_target, playback_target,
+                      with_comp=None, positions=CAPTURE_POSITIONS):
     """PipeWire config for the insert: the processing, published as a source,
     and its return into the io24's USB playback 1-2.
 
@@ -603,15 +673,15 @@ def build_insert_conf(states, capture_target, playback_target, with_comp=None):
     process = {
         "node.description": INSERT_SOURCE_DESC,
         "media.name": INSERT_SOURCE_DESC,
-        "filter.graph": build_insert_graph(states, with_comp),
+        "filter.graph": build_insert_graph(states, with_comp, positions),
         "capture.props": {
             "node.name": INSERT_PROCESS_NAME,
             "media.class": "Stream/Input/Audio",
             "target.object": capture_target,
             "node.dont-fallback": True,
             "stream.dont-remix": True,
-            "audio.channels": len(CAPTURE_POSITIONS),
-            "audio.position": list(CAPTURE_POSITIONS),
+            "audio.channels": len(positions),
+            "audio.position": list(positions),
         },
         "playback.props": {
             "node.name": INSERT_SOURCE_NAME,
@@ -986,8 +1056,11 @@ class BusSourceChain(Chain):
         self.FRAGMENT = self.NODE_NAME + ".conf"
         self._configuration = None
 
-    def start(self, capture_target=None):
-        configuration = build_bus_source_conf(self.bus, capture_target)
+    def start(self, capture_target=None, positions=None):
+        if positions is None:
+            positions = capture_positions(capture_target) or CAPTURE_POSITIONS
+        configuration = build_bus_source_conf(
+            self.bus, capture_target, positions)
         if self.running and configuration == self._configuration:
             return True
         started = self._launch(configuration, configured=True)
@@ -1028,17 +1101,29 @@ class BusSourceManager:
         self.statuses = {bus: "unavailable" for bus in BUS_SOURCE_KEYS}
         self._started_at = {bus: None for bus in BUS_SOURCE_KEYS}
 
-    def reconcile(self, capture_target, now=None):
-        """Start, observe, and independently classify both virtual sources."""
+    def reconcile(self, capture_target, now=None, positions=None):
+        """Start, observe, and independently classify both virtual sources.
+
+        A bus whose capture channels this card profile does not expose is
+        reported `profile` and left stopped: publishing a source fed by absent
+        channels is silence wearing the name of a mix.
+        """
         now = time.monotonic() if now is None else float(now)
         if not capture_target:
             self.stop()
             return dict(self.statuses)
+        if positions is None:
+            positions = capture_positions(capture_target) or CAPTURE_POSITIONS
 
         for bus in BUS_SOURCE_KEYS:
             chain = self.chains[bus]
+            if bus_source_indices(bus, positions) is None:
+                chain.stop()
+                self.statuses[bus] = "profile"
+                self._started_at[bus] = None
+                continue
             if not chain.running:
-                if not chain.start(capture_target):
+                if not chain.start(capture_target, positions):
                     self.statuses[bus] = "failed"
                     self._started_at[bus] = None
                     continue
@@ -1107,11 +1192,14 @@ class InsertChain(Chain):
         self._configuration = None
 
     def start(self, states, capture_target=None, playback_target=None,
-              with_comp=None):
+              with_comp=None, positions=None):
         """Run the insert for exactly these channels. True once all three of
         its nodes are present; anything short of that stops it again."""
+        if positions is None:
+            positions = capture_positions(capture_target) or CAPTURE_POSITIONS
         configuration = build_insert_conf(
-            states, capture_target, playback_target, with_comp=with_comp)
+            states, capture_target, playback_target, with_comp=with_comp,
+            positions=positions)
         channels = tuple(sorted(states))
         if self.running and configuration == self._configuration:
             return True

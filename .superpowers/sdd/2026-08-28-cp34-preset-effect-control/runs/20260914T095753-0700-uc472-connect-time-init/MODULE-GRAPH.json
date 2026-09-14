@@ -1,0 +1,19 @@
+{
+  "direct_edges": 4050,
+  "functions": 3452,
+  "image_base": "0x180000000",
+  "limit": "direct call/jmp edges only; this module dispatches through vtables, so absence of a path is not absence of a caller",
+  "query": {
+    "address": "0x180049752",
+    "direct_callers": [
+      "0x18003e6e3",
+      "0x18003e746",
+      "0x1800491f0"
+    ],
+    "function": "0x180049260..0x180049870",
+    "pointer_slots": [],
+    "reaching_functions": 3
+  },
+  "schema": "cp34-uc472-module-graph-v1",
+  "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
+}

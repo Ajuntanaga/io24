@@ -1,0 +1,4 @@
+5c22cb1f4d641f90cdd6ff49afff4d65b7f403b0b7f584e9d9c66d8cc8dd7273  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T095753-0700-uc472-connect-time-init/PROGRESS.md
+c180634839db4d75c85754697547858bf943db8c423c96d3a0881e30120a9028  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T095753-0700-uc472-connect-time-init/MODULE-GRAPH.json
+4c9bf99533a6699c51c17d89a049bfed7bbde2abb4cd6a496f18da037a1d5b6d  re/cp34_uc472_module_graph.py
+9ea1129af84fb78da5bcb24349e0b20d04c6f5a8c64986713cbbf962b4cae669  tests/test_cp34_uc472_module_graph.py

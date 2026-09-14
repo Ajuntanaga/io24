@@ -1,0 +1,299 @@
+{
+  "schema": "io24-device-slot-registry-v2",
+  "slots": {
+    "0": {
+      "canonical_sha256": "f74cd9837af8fb093ae1260381bf98b21b4549d40cc58cbf531d209910efd222",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 1,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 32.952857971191406
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999992370605469
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "MAIN",
+        "voicefx": {
+          "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+          "feedback": 1.0,
+          "mix": 1.0,
+          "on": 0,
+          "time": 0.035086002200841904
+        }
+      },
+      "slot": 0,
+      "source": "restored-user:MAIN (Main.scene line/ch1)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T08:52:14.055445+00:00"
+    },
+    "1": {
+      "canonical_sha256": "135a93f1e6b0b63cd8102cf1309eb2ffb6e627cd21490fecd4481ef884fb2384",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 1,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 30.019147872924805
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999999523162842
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "B A S E",
+        "voicefx": {
+          "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+          "feedback": 1.0,
+          "mix": 1.0,
+          "on": 0,
+          "time": 0.02259100042283535
+        }
+      },
+      "slot": 1,
+      "source": "restored-user:B A S E (B A S E.scene line/ch1)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T12:42:26.020861+00:00"
+    },
+    "2": {
+      "canonical_sha256": "f74cd9837af8fb093ae1260381bf98b21b4549d40cc58cbf531d209910efd222",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 2,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 32.952857971191406
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999992370605469
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "MAIN",
+        "voicefx": {
+          "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+          "feedback": 1.0,
+          "mix": 1.0,
+          "on": 0,
+          "time": 0.035086002200841904
+        }
+      },
+      "slot": 2,
+      "source": "restored-user:MAIN (Main.scene line/ch1)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T12:42:26.331158+00:00"
+    },
+    "3": {
+      "canonical_sha256": "d58136ce09a602d5b291233ba2f2f742023a4bb56459edd771eea20e335bbd8f",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 2,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}",
+          "attack": 0.0002300000051036477,
+          "input": -27.200000762939453,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "output": -15.0,
+          "ratio": 0,
+          "release": 0.18173997104167938
+        },
+        "eq": {
+          "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+          "eqallon": 1,
+          "eqbandon1": 1,
+          "eqbandon2": 1,
+          "eqbandon3": 1,
+          "eqbandon4": 0,
+          "eqbandop1": 1,
+          "eqbandop4": 0,
+          "eqfreq1": 59.99999237060547,
+          "eqfreq2": 275.4999694824219,
+          "eqfreq3": 6249.99853515625,
+          "eqfreq4": 4999.9990234375,
+          "eqgain1": -1.7500001192092896,
+          "eqgain2": -0.9999999403953552,
+          "eqgain3": -2.999999761581421,
+          "eqgain4": 0.0,
+          "eqq1": 1.0000001192092896,
+          "eqq2": 1.0000001192092896,
+          "eqq3": 2.3000004291534424,
+          "eqq4": 0.6000000834465027
+        },
+        "filter": {
+          "hpf": 39.99998474121094
+        },
+        "gate": {
+          "attack": 0.02499997988343239,
+          "expander": 1,
+          "keyfilter": 730.000244140625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -60.0,
+          "release": 0.699999988079071,
+          "threshold": -47.5
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -1.4999992847442627
+        },
+        "opt": {
+          "swapcompeq": 0
+        },
+        "preset_name": "Piano Accomany"
+      },
+      "slot": 3,
+      "source": "restored-user:Piano Accomany (Piano Accomany.scene line/ch2)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T12:42:26.144673+00:00"
+    }
+  }
+}

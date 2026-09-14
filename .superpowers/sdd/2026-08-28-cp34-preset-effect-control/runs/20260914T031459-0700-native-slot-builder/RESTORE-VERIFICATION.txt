@@ -1,0 +1,12 @@
+Channel 1 restore verification (offline, no device)
+
+path 1 - the backed-up registry's own bodies:
+   slot 0 MAIN     f74cd9837af8fb09  MATCHES PIN
+   slot 1 B A S E  135a93f1e6b0b63c  MATCHES PIN
+
+path 2 - rebuilt independently from the scene files:
+   Main.scene     MAIN     f74cd9837af8fb09  MATCHES PIN
+   B A S E.scene  B A S E  135a93f1e6b0b63c  MATCHES PIN
+
+pinned MAIN   : f74cd9837af8fb093ae1260381bf98b21b4549d40cc58cbf531d209910efd222
+pinned B A S E: 135a93f1e6b0b63cd8102cf1309eb2ffb6e627cd21490fecd4481ef884fb2384

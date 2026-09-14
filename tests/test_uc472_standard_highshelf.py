@@ -265,7 +265,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
 
     def test_only_standard_shape_rows_drop_the_recovery_blocker(self):
         matrix = json.loads(MATRIX.read_text())
-        self.assertEqual(matrix["coverage"]["total_rows"], 748)
+        self.assertEqual(matrix["coverage"]["total_rows"], 709)
         standard_shape_rows = [
             row for row in matrix["rows"]
             if row["family"] == "fat_eq" and row["parameter"] == "shape"

@@ -1,0 +1,212 @@
+{
+  "auto_gain": {
+    "decision_db": 24.0,
+    "gain_before_db": 30.0,
+    "input": "synthetic clip decision at -0.2 dBFS",
+    "readback_db": 24.0,
+    "result": "HOST_DECISION_AND_DEVICE_GAIN_WRITE_CONFIRMED"
+  },
+  "battery_after": 100,
+  "battery_before": 100,
+  "clock_after": {
+    "force_quantum": 512,
+    "force_rate": 96000
+  },
+  "clock_before": {
+    "force_quantum": 512,
+    "force_rate": 96000
+  },
+  "clock_during": {
+    "force_quantum": 512,
+    "force_rate": 96000
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "dsp_amount": "UNTOUCHED",
+  "finished": "2026-09-14T00:57:56.190-07:00",
+  "mix_a_b": {
+    "nodes": {
+      "mixa": "io24-host-mixa",
+      "mixb": "io24-host-mixb"
+    },
+    "result": "PASSIVE_SOURCES_PUBLISHED",
+    "statuses": {
+      "mixa": "ready",
+      "mixb": "ready"
+    }
+  },
+  "mixer_routes": "UNTOUCHED",
+  "multiband": {
+    "channels": [
+      1
+    ],
+    "device_mixer_reroute": "NOT_PERFORMED",
+    "live_control_update": true,
+    "ready_nodes": [
+      "io24-input-multiband",
+      "io24-input-multiband-process",
+      "io24-input-multiband-return"
+    ],
+    "result": "PROCESS_STARTED_CONTROLLED_AND_STOPPED"
+  },
+  "pipewire_targets": {
+    "capture": "alsa_input.usb-PreSonus_Revelator_IO_24_AB7C22200355-00.analog-surround-21",
+    "playback": "alsa_output.usb-PreSonus_Revelator_IO_24_AB7C22200355-00.analog-surround-21"
+  },
+  "preset_slots": "UNTOUCHED",
+  "processing_channel": "UNTOUCHED",
+  "readable_after": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_before": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_guarded": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.009999999776482582,
+    "input1_gain_db": 30.0,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "main_volume": 0.009999999776482582
+  },
+  "restoration": {
+    "errors": [],
+    "mixer_routes": "UNTOUCHED",
+    "readable_exact": true,
+    "temporary_nodes_remaining": []
+  },
+  "schema": "io24-host-feature-smoke-v1",
+  "solo": {
+    "live": "NOT_RUN_WRITE_ONLY_ROUTING_PRESTATE_INCOMPLETE",
+    "reason": "Solo rewrites every source in one bus and the current Host shadow does not contain an exact value for every write-only source"
+  },
+  "started": "2026-09-14T00:57:54.276-07:00",
+  "status": "SMOKE_PASSED_AND_RESTORED",
+  "transport": [
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "f62b7ba2b23b844ace782b6afce1b410fd065240d1d1e96c3670681e1336d391",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "4b31b48cc0a2a91b68e53c1a5243aa6111be2e0c619a5e6ac65f7d8cdeadc056",
+      "timestamp": "2026-09-14T00:57:54.378-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 2
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "a360d53219cc39aabec184eaac62d49335fe468304c360286de02d4fc73e76cd",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-14T00:57:54.378-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "daad95b1c8c8bd234bc2e769ef2487c92fd22689e79ad579ad970f68835059ba",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-14T00:57:54.378-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "4f38e2ac9c7629c28652fe9a26db63c6cf3e81e6915a6800b3f4cc2854f69981",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c48b805b2853084a0419d31d542e84beda9af9626926721a41d94d4936fc9cf9",
+      "timestamp": "2026-09-14T00:57:54.879-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 6
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "8a9f15be1e2721e129a7eb9826e7ac169bdc2eb6df0677b1df329d631c67a9f4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "529d79c63ffe6ef8f8717061f39321be7801599bfaced42387131727d91770c9",
+      "timestamp": "2026-09-14T00:57:55.599-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 8
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "91d823c51cd1920db627b0ba9421ccf5958f90c9058d050d42d3754836946c28",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f7c3abcab4414193e711f83775fa791fd0d11d33dfe9d5372255ef15b8429e2a",
+      "timestamp": "2026-09-14T00:57:55.599-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 9
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "df82d6c1762a589fe42ae94a66bd7608a61ef216f170986c4e40b7a6b561b580",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "93a2b314ed6ff64574a6a1beb28567a33ed5611ef087c0740ec6bd94e567e11b",
+      "timestamp": "2026-09-14T00:57:55.618-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 10
+    }
+  ]
+}

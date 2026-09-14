@@ -141,8 +141,25 @@ class PresetsPageShapeTests(unittest.TestCase):
         self.assertIn('"Preset blocks on the unit"',
                       _function("_preset_button_group"))
 
-    def test_rows_load_on_double_click(self):
-        self.assertIn("n_press", _function("_on_double_click"))
+    def test_every_loadable_row_has_a_visible_load_button(self):
+        self.assertEqual(
+            _function("_populate_user_presets").count(
+                "self._preset_load_button("), 2)
+        self.assertEqual(
+            _function("_populate_factory_presets").count(
+                "self._preset_load_button("), 1)
+        self.assertIn('Gtk.Button(label="Load"',
+                      _function("_preset_load_button"))
+
+    def test_load_is_single_click_only(self):
+        self.assertNotIn(
+            "_on_double_click", _function("_populate_user_presets"))
+        self.assertNotIn(
+            "_on_double_click", _function("_populate_factory_presets"))
+        self.assertNotIn(
+            "Double-click to load", (ROOT / "io24gtk.py").read_text())
+        self.assertIn(
+            'button.connect("clicked"', _function("_preset_load_button"))
 
 
 class LoadingTests(unittest.TestCase):
@@ -220,32 +237,32 @@ class SavingTests(unittest.TestCase):
         self.assertEqual(events, [("confirm", "Warm")])
 
 
-class VoiceFxOwnershipTests(unittest.TestCase):
-    def _host(self, owner, armed=True):
+class GlobalFxPresetTests(unittest.TestCase):
+    def _host(self, armed=True):
         host = SimpleNamespace(
-            fx_target=_Selected(owner - 1),
             FX_ORDER=["transformer", "detuner"],
             fx_model=_Selected(1),
             _fx_live_params=lambda: {"detune": 1.0},
             fx_arm=SimpleNamespace(get_active=lambda: armed))
         return _bind(host, "_record_voicefx")
 
-    def test_the_owning_channel_keeps_its_voice_fx(self):
-        model, voicefx = self._host(owner=1)._record_voicefx(1)
+    def test_channel_one_keeps_the_global_fx_state(self):
+        model, voicefx = self._host()._record_voicefx(1)
         self.assertEqual(model, "detuner")
         self.assertTrue(voicefx["on"])
 
-    def test_a_unit_write_still_refuses_another_channels_voice_fx(self):
-        with self.assertRaises(io24.HostActionError):
-            self._host(owner=1)._record_voicefx(2, strict=True)
+    def test_channel_two_keeps_the_same_global_fx_state(self):
+        first = self._host()._record_voicefx(1, strict=True)
+        second = self._host()._record_voicefx(2, strict=True)
+        self.assertEqual(first, second)
 
-    def test_a_saved_preset_of_the_other_channel_stores_voice_fx_off(self):
-        _model, voicefx = self._host(owner=1)._record_voicefx(2, strict=False)
-        self.assertFalse(voicefx["on"])
+    def test_non_strict_host_save_does_not_switch_global_fx_off(self):
+        _model, voicefx = self._host()._record_voicefx(2, strict=False)
+        self.assertTrue(voicefx["on"])
 
 
 class PutOnUnitTests(unittest.TestCase):
-    def test_channel2_voicefx_confirmation_warns_effect_will_not_play(self):
+    def test_channel2_confirmation_does_not_claim_fx_is_owner_bound(self):
         confirmations = []
         host = SimpleNamespace(
             _host_slot_entries=[],
@@ -261,8 +278,8 @@ class PutOnUnitTests(unittest.TestCase):
 
         self.assertEqual(len(confirmations), 1)
         body = confirmations[0][1]
-        self.assertIn("Channel 2 blocks do not load Voice FX", body)
-        self.assertIn("the effect will not play from that block", body)
+        self.assertNotIn("Channel 2 blocks do not load", body)
+        self.assertNotIn("effect will not play", body)
 
     def test_the_chosen_block_is_written_and_then_loaded(self):
         host = SimpleNamespace(

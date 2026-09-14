@@ -239,27 +239,17 @@ class PresetPersistenceTests(unittest.TestCase):
             io24._build_uc_slot_json_frames(
                 2, {"preset_name": "effect only", "voicefx": {"on": 1}})
 
-    def test_source_bound_uc_slot_api_sends_the_tagged_complete_record(self):
+    def test_tagged_uc_slot_api_is_refused_before_transport(self):
         device = _HardwareFreeIo24()
         slot = self._complete_slot_record()
 
-        report = device.save_uc_device_slot(3, slot)
-
-        self.assertEqual(report, {
-            "slot": 3,
-            "fragments_sent": 1,
-            "replies_received": 0,
-        })
-        kind, frame, _wait = device.protocol_writes[-1]
-        self.assertEqual(kind, "exec")
-        self.assertEqual(struct.unpack_from("<I", frame, 24)[0], 3)
-        size = struct.unpack_from("<H", frame, 35)[0]
-        self.assertEqual(frame[41:41 + size], encode_preset_record(slot))
-
-        writes = list(device.protocol_writes)
-        with self.assertRaisesRegex(ValueError, "incomplete"):
+        with self.assertRaisesRegex(
+                io24.HostActionError, "tagged UC Stat archives"):
+            device.save_uc_device_slot(3, slot)
+        with self.assertRaisesRegex(
+                io24.HostActionError, "tagged UC Stat archives"):
             device.save_uc_device_slot(3, {"preset_name": "partial"})
-        self.assertEqual(device.protocol_writes, writes)
+        self.assertEqual(device.protocol_writes, [])
 
     def test_slot_registry_records_a_complete_host_write_without_claiming_readback(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -321,40 +311,29 @@ class PresetPersistenceTests(unittest.TestCase):
                 })
             self.assertFalse(Path(registry.path).exists())
 
-    def test_save_known_slot_validates_then_writes_then_registers_only(self):
+    def test_save_known_tagged_slot_is_refused_without_registry_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
             device = _HardwareFreeIo24()
 
-            result = device.save_known_device_slot(
-                2, self._complete_slot_record(), registry,
-                source="factory:Reverb",
-                written_at="2026-09-08T07:31:00+00:00")
+            with self.assertRaisesRegex(
+                    io24.HostActionError, "no native Stat body"):
+                device.save_known_device_slot(
+                    2, self._complete_slot_record(), registry,
+                    source="factory:Reverb",
+                    written_at="2026-09-08T07:31:00+00:00")
 
-        self.assertEqual(result["transport"], {
-            "slot": 2, "fragments_sent": 1, "replies_received": 0,
-        })
-        self.assertEqual(result["registry"]["status"],
-                         "WRITE_SENT_UNVERIFIED")
-        self.assertEqual(result["registry"]["device_identity"], {
-            "serial": "TEST-IO24-001",
-            "vendor_id": "194f",
-            "product_id": "0422",
-            "bcd_device": "0128",
-        })
-        self.assertEqual([kind for kind, *_rest in device.protocol_writes],
-                         ["exec"])
-        self.assertFalse(any(
-            kind == "param" and payload[0] in (4, 16, 17)
-            for kind, *payload in device.protocol_writes))
+            self.assertFalse(Path(registry.path).exists())
+        self.assertEqual(device.protocol_writes, [])
 
-    def test_save_known_slot_rejects_missing_device_identity_before_transport(self):
+    def test_save_known_slot_refuses_before_identity_or_transport(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
             device = _HardwareFreeIo24()
             device.dev.serial_number = ""
 
-            with self.assertRaisesRegex(ValueError, "serial"):
+            with self.assertRaisesRegex(
+                    io24.HostActionError, "no native Stat body"):
                 device.save_known_device_slot(
                     0, self._complete_slot_record(), registry,
                     source="factory:Reverb")
@@ -510,7 +489,7 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertFalse(disabled["audible"])
         self.assertEqual(device.protocol_writes, writes_after_arm)
 
-    def test_gtk_voicefx_sends_owner_and_model_without_retired_dual_save(self):
+    def test_gtk_fx_sends_one_global_model_without_routing_mutation(self):
         tree = ast.parse((Path(__file__).parents[1] / "io24gtk.py").read_text())
         push_fx = next(node for node in ast.walk(tree)
                        if isinstance(node, ast.FunctionDef)
@@ -522,13 +501,13 @@ class PresetPersistenceTests(unittest.TestCase):
 
         self.assertNotIn("configure_voice_fx_intent", push_attributes)
         self.assertIn("submit", push_attributes)
-        self.assertIn("set_voicefx_channel", push_attributes)
+        self.assertNotIn("set_voicefx_channel", push_attributes)
         self.assertIn("set_fx", push_attributes)
         for forbidden in ("fx_on", "fx_off", "set_fx_mix", "set_reverb"):
             self.assertNotIn(forbidden, push_attributes)
         self.assertNotIn("_save_private_reverb_both", methods)
 
-    def test_gtk_voicefx_parameter_edits_do_not_resend_same_target_assignment(self):
+    def test_gtk_fx_parameter_edits_never_send_owner_assignment(self):
         class Value:
             def __init__(self, value):
                 self.value = value
@@ -586,11 +565,11 @@ class PresetPersistenceTests(unittest.TestCase):
             window.fx_params["transformer"]["mix"].value = 0.7
             window._push_fx()
 
-        self.assertEqual(device.assignments, [1])
+        self.assertEqual(device.assignments, [])
         self.assertEqual(len(device.models), 2)
         self.assertEqual(device.models[-1][2]["mix"], 0.7)
 
-    def test_gtk_voicefx_reassigns_after_target_or_device_changes(self):
+    def test_gtk_fx_state_stays_global_across_edits_and_devices(self):
         class Value:
             def __init__(self, value):
                 self.value = value
@@ -648,8 +627,8 @@ class PresetPersistenceTests(unittest.TestCase):
             window.ctl.dev = second
             window._push_fx()
 
-        self.assertEqual(first.assignments, [1, 2])
-        self.assertEqual(second.assignments, [2])
+        self.assertEqual(first.assignments, [])
+        self.assertEqual(second.assignments, [])
 
     def test_factory_device_store_refuses_the_currently_selected_slot(self):
         class Selected:

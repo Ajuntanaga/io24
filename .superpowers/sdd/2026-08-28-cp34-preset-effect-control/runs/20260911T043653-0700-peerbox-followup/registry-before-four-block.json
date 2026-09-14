@@ -1,0 +1,224 @@
+{
+  "schema": "io24-device-slot-registry-v2",
+  "slots": {
+    "0": {
+      "canonical_sha256": "f74cd9837af8fb093ae1260381bf98b21b4549d40cc58cbf531d209910efd222",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 1,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 32.952857971191406
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999992370605469
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "MAIN",
+        "voicefx": {
+          "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+          "feedback": 1.0,
+          "mix": 1.0,
+          "on": 0,
+          "time": 0.035086002200841904
+        }
+      },
+      "slot": 0,
+      "source": "restored-user:MAIN (Main.scene line/ch1)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T08:52:14.055445+00:00"
+    },
+    "1": {
+      "canonical_sha256": "175724d1fadc9dc90dd326a18b180ba0e4afc79c9312b5e2f7c80ea510ec025d",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 1,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 32.952857971191406
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999992370605469
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "MAIN + Reverb",
+        "voicefx": {
+          "__classid": "{66A10093-D461-4CAC-A80C-91F6A1BB37E5}",
+          "lows": 0.06,
+          "mix": 1.0,
+          "on": 1,
+          "width": 0.405
+        }
+      },
+      "slot": 1,
+      "source": "restored-user:MAIN + factory Reverb",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T09:08:23.627850+00:00"
+    },
+    "2": {
+      "canonical_sha256": "135a93f1e6b0b63cd8102cf1309eb2ffb6e627cd21490fecd4481ef884fb2384",
+      "device_identity": {
+        "bcd_device": "0128",
+        "product_id": "0422",
+        "serial": "AB7C22200355",
+        "vendor_id": "194f"
+      },
+      "physical_channel": 2,
+      "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+      "record": {
+        "comp": {
+          "__classid": "{870D04F7-212E-4F9C-ADBB-39A97216433F}",
+          "attack": 0.019999999552965164,
+          "automode": 1,
+          "gain": 9.800000190734863,
+          "keyfilter": 40.0,
+          "keylisten": 0,
+          "on": 1,
+          "ratio": 4.0080156326293945,
+          "release": 0.15000000596046448,
+          "softknee": 0,
+          "threshold": -33.31999969482422
+        },
+        "eq": {
+          "__classid": "{E1C5E024-C5CD-473C-B08A-6EC177812E01}",
+          "eqallon": 1,
+          "higain": 0.9599990844726562,
+          "himidfreq": 1,
+          "himidgain": 1.6000003814697266,
+          "lowfreq": 0,
+          "lowgain": 1.760000228881836,
+          "lowmidfreq": 0,
+          "lowmidgain": -3.8400001525878906
+        },
+        "filter": {
+          "hpf": 30.019147872924805
+        },
+        "gate": {
+          "attack": 0.0007686163298785686,
+          "expander": 1,
+          "keyfilter": 325.12066650390625,
+          "keylisten": 0,
+          "on": 1,
+          "range": -55.0,
+          "release": 1.5712599754333496,
+          "threshold": -48.720008850097656
+        },
+        "limit": {
+          "limiteron": 1,
+          "threshold": -0.7999999523162842
+        },
+        "opt": {
+          "swapcompeq": 1
+        },
+        "preset_name": "B A S E",
+        "voicefx": {
+          "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+          "feedback": 1.0,
+          "mix": 1.0,
+          "on": 0,
+          "time": 0.02259100042283535
+        }
+      },
+      "slot": 2,
+      "source": "restored-user:B A S E (B A S E.scene line/ch1)",
+      "status": "WRITE_SENT_UNVERIFIED",
+      "transport": {
+        "fragments_sent": 1,
+        "replies_received": 0
+      },
+      "written_at": "2026-09-11T09:08:23.811846+00:00"
+    }
+  }
+}

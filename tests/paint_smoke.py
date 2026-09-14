@@ -145,7 +145,7 @@ def main():
     io24_mbc.set_default_output = lambda node_name: False
     io24_mbc.set_default_input = lambda node_name: False
     io24_mbc._present_nodes = lambda: set()
-    G.pw_settings = lambda: {"clock.rate": "48000", "clock.quantum": "1024"}
+    G.pw_settings = lambda: {"clock.rate": "96000", "clock.quantum": "512"}
     G.pw_set = lambda key, value: (True, "")
     ctl = G.Ctl(FakeDev())
     app = G.App(ctl)

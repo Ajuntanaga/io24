@@ -1,0 +1,32 @@
+{
+  "battery_after": 98,
+  "battery_before": 98,
+  "clock": {
+    "buffer_frames": 2048,
+    "period_frames": 512,
+    "rate_hz": 96000
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "error": {
+    "message": "Revelator io24 (194f:0422) not found \u2014 plugged in?",
+    "type": "SystemExit"
+  },
+  "finished": "2026-09-13T22:35:43.330-07:00",
+  "schema": "io24-dsp-amount-live-capture-v1",
+  "started": "2026-09-13T22:35:43.207-07:00",
+  "status": "LIVE_FAILED",
+  "stimulus": {
+    "active_playback_channel": 1,
+    "bytes": 6912044,
+    "channels": 6,
+    "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-live-attempt-1/stimulus.wav",
+    "peak_dbfs": -12.09999999907106,
+    "rate_hz": 96000,
+    "sample_width_bytes": 4,
+    "sha256": "e0338750f5d2cd5769d863d57995ed7684ee00093c63813bfc070ffecad864e6"
+  },
+  "write_only_mixer_routes": "UNTOUCHED"
+}

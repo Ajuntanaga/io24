@@ -120,7 +120,7 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
                 decoded = io24_fx.voicefx_preset_call(state)
                 self.assertEqual(decoded, (model, EXPECTED_KWARGS[model]))
 
-    def test_explicit_apply_selects_model_then_supplies_only_its_state(self):
+    def test_explicit_apply_supplies_one_global_model_state(self):
         device = _RecordingDevice()
 
         done = io24_presets.apply_preset(
@@ -128,7 +128,6 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
             with_fx=True)
 
         self.assertEqual(device.calls, [
-            ("set_voicefx_channel", 2),
             ("set_fx", "transformer", EXPECTED_KWARGS["transformer"]),
         ])
         self.assertEqual(done, [
@@ -142,7 +141,6 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
             device, {"voicefx": STATES["delay"]}, with_fx=True)
 
         self.assertEqual(device.calls, [
-            ("set_voicefx_channel", 1),
             ("set_fx", "delay", EXPECTED_KWARGS["delay"]),
         ])
         self.assertEqual(done, [

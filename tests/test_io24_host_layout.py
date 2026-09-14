@@ -84,9 +84,18 @@ class PageWidthTests(unittest.TestCase):
 
     def test_the_pages_that_clamp_themselves_use_the_same_width(self):
         self.assertEqual(
-            self.source.count("clamp = Adw.Clamp(maximum_size=PAGE_WIDTH"), 2)
+            self.source.count("clamp = Adw.Clamp(maximum_size=PAGE_WIDTH"), 1)
+        # the routing matrix is wider than the rest and says so
+        self.assertIn("Adw.Clamp(maximum_size=ROUTING_WIDTH", self.source)
+        self.assertGreater(io24gtk.ROUTING_WIDTH, io24gtk.PAGE_WIDTH)
         self.assertNotIn("Adw.Clamp(maximum_size=580", self.source)
         self.assertNotIn("Adw.Clamp(maximum_size=760", self.source)
+
+    def test_routing_keeps_a_small_gutter_inside_the_window(self):
+        method = self.source[self.source.index("    def _routing_page(self):"):
+                             self.source.index("    def _solo_toggled(")]
+        self.assertIn("outer.set_margin_start(16)", method)
+        self.assertIn("outer.set_margin_end(16)", method)
 
 
 if __name__ == "__main__":

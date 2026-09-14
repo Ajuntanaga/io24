@@ -175,7 +175,7 @@ class DualPrivateReverbSlotTests(unittest.TestCase):
         fake = _WireFake()
 
         with self.assertRaisesRegex(
-                io24.HostActionError, "single-channel assignment"):
+                io24.HostActionError, "not atomic"):
             fake.save_paired_doubler_private_reverb(
                 1, base, 3, base, lows=0.1, width=0.2, mix=0.3)
 

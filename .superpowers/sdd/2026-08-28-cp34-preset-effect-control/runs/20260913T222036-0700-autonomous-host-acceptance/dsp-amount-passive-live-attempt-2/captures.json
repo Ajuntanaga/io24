@@ -1,0 +1,33 @@
+{
+  "captures": [
+    {
+      "amount": 0.0,
+      "path": "amount-000.wav"
+    },
+    {
+      "amount": 0.25,
+      "path": "amount-025.wav"
+    },
+    {
+      "amount": 0.5,
+      "path": "amount-050.wav"
+    },
+    {
+      "amount": 0.75,
+      "path": "amount-075.wav"
+    },
+    {
+      "amount": 1.0,
+      "path": "amount-100.wav"
+    }
+  ],
+  "channels": 6,
+  "monitor_channels": [
+    3,
+    4
+  ],
+  "rate_hz": 96000,
+  "reference_channel": 2,
+  "sample_width_bytes": 4,
+  "schema": "io24-dsp-amount-passive-captures-v1"
+}

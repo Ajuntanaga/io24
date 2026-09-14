@@ -8,23 +8,17 @@ mixer, EQ, compressor, gate, limiter, reverb and the FX models.
 This is a userspace driver that reaches nearly all of it, by speaking the
 device's own native control protocol over its vendor-specific USB interface.
 Preamp, mixer, EQ, dynamics, reverb, routing, output delay and sample rate all
-work. The device-slot format is now decoded too: UC writes a complete tagged
-scene-shaped record through `MemP/Stat`. The four version-2 records embedded in
-firmware are startup/default implementation data; their differing contents do
-not prohibit Voice FX in a Channel-2 save. UC assigns the one Voice FX engine to
-Channel 1 or Channel 2 with `processingChannel`. That ownership layer does not
-renumber the physical preset controls: Channel 1 and Channel 2 remain Channel 1
-and Channel 2 for enable and slot selection. Two prior slot-3 attempts got that
-mapping wrong and therefore changed Channel 1's selector instead of recalling
-Channel 2; their listening results are invalid as Channel-2 tests. Channel 1's
-selector has been restored, and neither Channel-1 preset body was overwritten.
-The corrected stock-host stage used physical Channel 2 throughout in one
-separately authorized maximum-wet trial. No audible change survived its power
-cycle, but later work found material Host routing/state defects, so that result
-is retained without treating it as a terminal firmware verdict. Those Host
-defects are now repaired and verified offline; a clean Host-controlled round
-trip remains separately authorization-gated. See [Current hardware and
-validation limits](#current-hardware-and-validation-limits).
+work. The device-slot format is decoded too: firmware 1.28 stores and recalls a
+native version-2 chunk record through `MemP/Stat`. UC 4.7.2 also emits a tagged
+scene archive from its 500 ms settled-state synchronizer, but its explicit
+Store action uses the separate `PrsM` library route, and an objective live test
+showed that the tagged body does not apply as an io24 slot. Firmware configures
+block 201 as one shared
+settings object over two structural input/output lanes. The GTK Host therefore
+configures it once for both inputs and never mutates the separate
+`processingChannel` permutation as an FX owner control. Audible on/off and
+simultaneous two-lane processing remain separately authorization-gated. See
+[Current hardware and validation limits](#current-hardware-and-validation-limits).
 
 The control implementation is not based on unpublished PreSonus source code.
 The protocol and exact Host algorithms were recovered from shipped Universal
@@ -47,11 +41,11 @@ separately rather than implied to be independently measured.
 |---|---|
 | Preamp gain, phantom power, mute, fixed 80 Hz preamp HPF, stereo link (mono → stereo) | gain law and levels measured; the app's link switch drives the device and follows it back |
 | Fat Channel digital HPF | Off/40/80/160 basic choices plus exact 24 Hz–1 kHz Advanced cutoff; independent of the fixed preamp HPF |
-| Headphone / main volume, monitor blend, channel processing/effects mix | exact nonzero mix is write-only; zero bypasses the Fat Channel and effects |
+| Headphone / main volume, monitor blend, channel processing/effects mix | live 0/25/50/75/100 meter test confirms one linear dry-to-full-chain blend; exact positive value remains write-only |
 | Input, bus and gain-reduction metering | |
 | Mixer: per-source level into main / Mix A / Mix B | gain law exact to **0.03 dB over a 106 dB range** on all three buses |
 | Aux sends: assign, bus master, mirror-main | master exact to **0.00 dB**, no crosstalk between buses |
-| GTK Mix A/B balance | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; offline-built, live source/visual acceptance pending |
+| GTK Mix A/B capture | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; both published successfully in the live 96 kHz / 512 smoke |
 | CLI pan / balance for a stereo pair | send-level balance using Universal Control's recovered law; centre −3.00 dB, measured within ±1 dB on hardware |
 | 4-band parametric EQ | frequency accuracy and band indexing both measured |
 | Gate, compressor (3 models), limiter | |
@@ -61,8 +55,8 @@ separately rather than implied to be independently measured.
 | Processing-channel select | which input feeds a channel's DSP chain |
 | Channel-name read-back (`names`) | the device's own `'CHNP'` table |
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
-| Device-slot `MemP/Stat` save | exact UC tagged complete-record writer plus confirmed GTK inactive-slot store workflow implemented; local receipts are bound to serial/VID/PID/firmware and remain `WRITE_SENT_UNVERIFIED`; clean physical acceptance remains pending |
-| Doubler private reverb | one shared Voice FX engine, traditionally assigned to either Channel 1 or Channel 2; repaired-Host standalone Channel-2 persistence/audibility remains pending |
+| Device-slot `MemP/Stat` save | native version-2 framing implemented hardware-free; the disproved tagged writer is refused before transport. Live native acceptance is blocked by unreadable current slot contents and still requires a bounded overwrite trial. |
+| FX / Doubler private reverb | one global settings object over two structural lanes; live direct Transformer processing is positive, while models 1–5 and simultaneous two-lane acceptance remain unresolved |
 | **Universal Control scene import** (`io24_scene.py`) | applies a real UC `.scene` file — 35 settings from one of the author's own scenes |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
 | Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
@@ -70,42 +64,36 @@ separately rather than implied to be independently measured.
 
 ## Current hardware and validation limits
 
-Firmware 1.28 contains four version-2 startup/default records and sixteen tagged
-factory presets. Those default shapes remain useful firmware evidence, but they
-were over-promoted into a slot-ownership rule. UC's exact active-slot writer
-starts the transmitted `Stat` record with the tagged mapping byte `0x7b`, and
-retained UC scenes include a `voicefx` member in all four slot objects.
+Firmware 1.28 contains four native version-2 startup/default records and sixteen
+tagged factory/library presets. Its `MemP/Stat` ingress and recall path preserve
+the stored body byte-for-byte, and the io24 structured-state consumer requires
+the leading native word `2`. UC's separate settled-state sender starts its
+tagged record with byte `0x7b`; that generic host-side path is not a usable io24
+firmware slot representation.
 
-The old Channel-2 Slap Echo trial never changed UC's `Assign Voice FX` control
-from Channel 1 to Channel 2. Two later Reverb/VoiceFX attempts did set that
-assignment and sent a slot-3 record, but then incorrectly treated processing
-chain 1 as the physical Channel-2 preset-control index. Readback shows that
-their bypass/select/enable calls actually operated Channel 1. Those attempts
-therefore establish neither Channel-2 recall nor Channel-2 audibility.
-
-UC's exact apply branch is now recovered. For each channel object it evaluates
-`processingChannel == 0`; the owner activates parameter 450 (`fxmodel`) and
-selects the current model, while the non-owner deactivates it and selects host
-sentinel `-1`. `voicefx.on` is a separate saved enable inside that selected
-model. The Linux host now mirrors the order: assign VoiceFX to the requested
-physical input, select the model, then apply `voicefx.on` and its fields. The
-corrected discriminator keeps all preset enable/slot calls on physical Channel
-2. No additional library-index reverse engineering is needed.
+UC's `processingChannel == 0` conditional arbitrates which channel object owns
+the shared model in its host tree. The firmware evidence is more direct: block
+201 is one settings object configured two-in/two-out, while
+`processingChannel` swaps physical inputs between two DSP chains and can also
+exchange exposed slot indicators. The Linux Host no longer uses that routing
+mutation for ordinary FX control. It selects one global model and applies
+`voicefx.on` and its fields once.
 
 | | |
 |---|---|
-| Physical acceptance of device save/recall | Unproved. Earlier listening followed a wrong-channel recall; the later corrected maximum-wet trial produced no noticed power-cycle change but used Host state later proved inconsistent. A clean repaired-Host, disconnected cold-boot round trip remains the acceptance gate. |
-| Direct standalone Voice FX activation | Resolved as a gate, not a parameter. Block 201's handler (fw `0x50af8`) returns having done nothing unless `+0x44` and `+0x39` are non-zero and `+0x40` is zero, and only the native `Stat` load sets all three, so direct model writes are accepted, stored and silently discarded — which is why a live maximum-wet Delay was inaudible. Recalling a device slot runs that load, and `recall_device_slot()` now exposes it; listening confirmation is pending. Detuner's neutral zero-semitone Host default was still wrong and was replaced with UC's Detuned Vocal values. |
-| Private reverb on both inputs at once | Structurally plausible, not proved: block 201/model 0 has one settings instance and its private core binds lanes 0 and 1. Stock UC traditionally selects one Voice FX input at a time, so simultaneous routing/gating needs the live experiment. |
+| Physical acceptance of device save/recall | Negative for the current Host writer: slot selection worked, but a +15 dB high-shelf body did not take effect. Native save framing and disconnected cold-boot persistence remain unresolved. |
+| Direct standalone FX activation | Transformer is positively detected through direct block-201 writes in the current armed state. Models 1–5, cold-start activation, and simultaneous lanes remain unresolved. |
+| Private reverb on both inputs at once | Structurally supported, not audibly proved: block 201/model 0 has one settings instance and its private core binds lanes 0 and 1. The Host configures that state globally; simultaneous routing/gating still needs the live experiment. |
 | Independent private-reverb settings per channel | Not possible without custom firmware: both lanes share one `on/lows/width/mix` setting set. |
 | More than 2 presets per channel standalone | Four slots, firmware-clamped. |
 | Reading firmware back | The DFU interface reports `Upload Unsupported`. |
 | Multiband dynamics | None of the vocabulary exists in the firmware. |
 
 For Doubler/Transformer specifically, do not involve shared reverb block 202.
-The factory preset named `Reverb` is a complete tagged template for Voice FX
-model 0 and supplies `on`, `lows`, `width` and `mix`. UC sends that tagged
-record directly through its active-slot writer; the private core uses the same
+The factory preset named `Reverb` is a complete tagged library template for
+Voice FX model 0 and supplies `on`, `lows`, `width` and `mix`. It can drive the
+live setters, but it cannot be installed directly as a firmware slot body. The
+private core uses the same
 algorithm implementation as block 202 but is a different state object and
 signal path.
 
@@ -238,7 +226,7 @@ for the gate, compressor and limiter, channel strips, monitoring, a four-band EQ
 with a 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
 the Presets page holds your presets and the factory presets in two drop-downs,
-loads one with a double-click, and can put one on the unit's Preset button.
+loads one with the row's **Load** button, and can put one on the unit's Preset button.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is
@@ -443,17 +431,19 @@ inside Voice FX model 0; it is neither block 202 nor either channel's block-202
 send. Firmware maps both physical input selectors into two processing objects,
 sets singleton block 201 up with two inputs and two outputs, and binds private
 core lanes 0 and 1. This makes simultaneous use a concrete live hypothesis; it
-does not by itself override stock UC's one-selected-Voice-FX-input behavior.
+is why the Linux Host now keeps one global FX state for both lanes. Audible
+simultaneous processing remains unproved.
 
 There is still only one model-0 settings instance, so the two inputs share
 `on/lows/width/mix`; different private-reverb values per channel cannot coexist.
 The differing four embedded firmware defaults do **not** establish a legal
 slot-content ceiling. UC's scene schema carries `voicefx` in all four slot
-objects and its exact active-slot writer emits the tagged mapping unchanged.
-Channel ownership comes from the selected slot pair and UC's explicit Voice FX
-assignment, not from omitting component 201 from two factory defaults.
+objects. The tagged mapping emitted by UC's settled-state synchronizer does not
+pass the firmware's native version gate. Recalling a Host-known historical
+receipt is followed by one explicit global FX-state send;
+the recall itself is not treated as activation.
 
-The final stock acceptance runner derives its target from the factory Reverb
+The historical stock acceptance runner derives its target from the factory Reverb
 record but raises the private Wet/Dry value from 29.5% to 100% so success is
 unmistakable. It requires and reasserts the Input-2 assignment, keeps preset
 operations on physical Channel 2, and materializes the saved model before
@@ -474,7 +464,7 @@ Channel-2 factory targeting. The listening result is therefore retained but no
 longer treated as a terminal device verdict; a clean Host-controlled round trip
 is still needed before isolating record commit, persistence, parsing,
 activation, or recall. The old paired builder remains only for offline custom-
-firmware comparison; stock UC assigns Voice FX to one channel at a time.
+firmware comparison; current GTK control does not use its owner assignment.
 
 The Fat Channel (EQ, gate, compressor, limiter) is separately per-channel — the
 firmware has two instances of each block. And `procchan` chooses which physical
@@ -494,8 +484,10 @@ mkdir -p ~/.config/pipewire/pipewire.conf.d
 printf 'context.properties = {\n    default.clock.allowed-rates = [ 44100 48000 88200 96000 ]\n}\n' > ~/.config/pipewire/pipewire.conf.d/10-io24-rates.conf && systemctl --user restart pipewire pipewire-pulse wireplumber
 ```
 
-After that the mixer app's Device page can switch rate and buffer size. Two
-things to know if you check the rate by hand: PipeWire's `clock.rate` is the
+After that the mixer app's Device page can switch rate and buffer size. On a
+first launch the Host selects 96 kHz and a 512-frame quantum; after that it
+remembers and restores the last successful choices. Two things to know if you
+check the rate by hand: PipeWire's `clock.rate` is the
 *default* and stays at 48000 whatever the graph is doing — the real rate is in
 `/proc/asound/card*/pcm0p/sub0/hw_params` — and a forced rate only takes effect
 once something is actually playing, because a suspended device has no graph to
@@ -579,8 +571,8 @@ If you have ever run Universal Control on Windows or macOS, it saved the whole
 device state as JSON in `Documents/PreSonus/Revelator IO/Scene/*.scene`. Those
 files can be applied here directly. The direct scene importer replays ordinary
 setters without overwriting device slots. The same scene-shaped slot object can
-also be encoded as UC's tagged `Stat` wire record, but these commands do not do
-that:
+also be encoded as UC's tagged settled-state fixture, but it is not a native
+firmware slot body and these commands do not send it:
 
 ```bash
 python3 io24_scene.py --dry-run "B A S E.scene"
@@ -620,8 +612,10 @@ latter is skipped rather than guessed at.
 Firmware contains **sixteen tagged factory/library presets**, in two banks of
 eight (Broadcast, Vocal, Acoustic, Electric, Slap Echo, Detuned Vocal, Robot,
 Bass Guitar, Stereo Acoustic/Piano/DJ …). Four version-2 startup/default records
-also exist. They describe firmware initialization; they do not replace UC's
-source-bound tagged `Stat` host representation or constrain legal saved fields.
+also exist. Those native records are the only representation source-bound
+through firmware `Stat` storage and recall into the structured-state loader.
+The tagged library schema does not constrain future native saved fields, but it
+cannot be substituted for the native record on the wire.
 
 PreSonus's own documentation (the io44 manual's "Presets and Scenes" section)
 describes the design: each channel reaches **2 presets from the hardware
@@ -629,24 +623,22 @@ buttons**, there are **6 more factory presets**, and **6 user slots per channel*
 — with the buttons acting as assignable pointers into that library. 2 + 6 = 8
 factory per channel matches the 16 records found in firmware exactly.
 
-Writing a complete tagged record into one of the four device slots is now
-implemented. `io24.py` validates completeness and connected-device identity
-before building `SetP | Appl(0) | MemP | Stat(slot)`. In the GTK Factory
-presets page, choose the target channel and one of its two slots, then use
-**Store in device slot…** on any complete record. The Host refuses the slot
-currently selected for that channel and asks before replacing the unreadable
-body. This action writes/registers the body only; selection, enable/recall, and
-direct-live apply are separate actions. The registry at
-`$XDG_STATE_HOME/io24/device-slots.json` (default
-`~/.local/state/io24/device-slots.json`) records serial, VID/PID, firmware,
+The old complete-tagged-record writer is now refused before transport because
+the live inactive-slot test showed that it changed selection without applying
+the saved body. The GTK **Put on the unit** action consequently reports that no
+native body is available instead of creating another misleading receipt.
+Existing entries in `$XDG_STATE_HOME/io24/device-slots.json` (default
+`~/.local/state/io24/device-slots.json`) record serial, VID/PID, firmware,
 canonical body hash, and transport counts as `WRITE_SENT_UNVERIFIED`, not as
-device readback or durable commit.
+device readback or durable commit; they are historical tagged-transport
+receipts, not known installed bodies.
 
-The remaining work is a bounded live acceptance: write the intended inactive
-slot, explicitly select and enable/recall it, verify the effect with the Host
-running, close the Host while leaving the unit powered and listen again, then
-run a separately authorized power-cycle check. Shared block-202 reverb uses a
-different global engine/send/return path and is tested separately.
+`io24.py` can frame and send a caller-supplied, fully validated firmware-native
+version-2 record with `save_device_slot()`. That path is hardware-free only.
+The device cannot return its current slot body, so a live native trial would
+overwrite unreadable state and can restore only a pinned firmware default. It
+therefore remains a separately bounded acceptance action. A power-cycle test
+cannot establish persistence before an effective save/recall exists.
 
 ## Making settings stick
 

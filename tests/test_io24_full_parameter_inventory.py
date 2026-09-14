@@ -108,7 +108,7 @@ class FullParameterInventoryTests(unittest.TestCase):
         self.assertEqual(io24gtk.Win._compressor_kwargs(host, 1)[1]["output_db"],
                          -12.0)
 
-    def test_manual_voicefx_write_orders_owner_before_complete_model_state(self):
+    def test_manual_fx_write_sends_one_global_complete_model_state(self):
         class Value:
             def __init__(self, value):
                 self.value = value
@@ -125,10 +125,8 @@ class FullParameterInventoryTests(unittest.TestCase):
         queued = []
         host = SimpleNamespace(
             _fx_mute=False,
-            _fx_last_sent_device=None,
-            _fx_last_sent_target=None,
             ctl=SimpleNamespace(dev=object(), submit=queued.append),
-            fx_arm=Value(True), fx_model=Value(5), fx_target=Value(1),
+            fx_arm=Value(True), fx_model=Value(5),
             fx_params={"delay": {
                 "time_s": Value(0.173), "feedback": Value(0.82),
                 "mix": Value(1.0)}},
@@ -153,7 +151,6 @@ class FullParameterInventoryTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add", return_value=1):
             queued[0](dev)
         self.assertEqual(dev.calls, [
-            ("owner", 2),
             ("state", "delay", {
                 "on": True, "time_s": 0.173, "feedback": 0.82, "mix": 1.0}),
         ])
@@ -212,7 +209,7 @@ class FullParameterInventoryTests(unittest.TestCase):
                 "release_s": 0.81, "ratio_index": 4}},
         }
         state = io24gtk.shadow_ui_state(shadow)
-        self.assertEqual(state["voicefx_target"], 2)
+        self.assertNotIn("voicefx_target", state)
         self.assertEqual(state["voicefx"]["model"], "vocoder")
         self.assertEqual(state["processing_mix"], {2: 0.95})
         self.assertEqual(state["reverb_return"], {"mixa": -3.0})
@@ -272,9 +269,9 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertEqual(self.saved, self.generated)
 
     def test_matrix_is_atomic_pending_and_restoration_gated(self):
-        self.assertEqual(self.generated["coverage"]["total_rows"], 748)
-        self.assertEqual(len(self.rows), 748)
-        self.assertEqual(len({row["id"] for row in self.rows}), 748)
+        self.assertEqual(self.generated["coverage"]["total_rows"], 709)
+        self.assertEqual(len(self.rows), 709)
+        self.assertEqual(len({row["id"] for row in self.rows}), 709)
         ids = {row["id"] for row in self.rows}
         self.assertIn("native.channel1.processing_mix", ids)
         self.assertIn("native.channel2.processing_mix", ids)
@@ -339,7 +336,7 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         rows = [row for row in self.rows if row["family"] == "voicefx"]
         rows += [row for row in self.rows
                  if row["id"].startswith("persistence.channel2.")]
-        self.assertEqual(len(rows), 67)
+        self.assertEqual(len(rows), 37)
         self.assertTrue(all("2026-08-11 fx_gate_probe" in row["prior_evidence"][0]
                             for row in rows))
         persistence = [row for row in rows
@@ -347,13 +344,15 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertTrue(all("same-path positive control" in row["note"]
                             for row in persistence))
 
-    def test_slot_write_retains_memp_receiver_ambiguity(self):
+    def test_slot_write_retains_native_acceptance_boundaries(self):
         row = next(row for row in self.rows
                    if row["id"] == "state.channel2_slot3_write")
         self.assertIn("save_known_device_slot", row["api"])
-        self.assertIn("memp_receiver_ambiguity_unresolved_live",
+        self.assertIn("native_current_slot_body_unreadable",
                       row["blockers"])
-        self.assertIn("cache-invalidation", row["note"])
+        self.assertIn("native_writer_unvalidated_live", row["blockers"])
+        self.assertIn("old tagged writer", row["note"])
+        self.assertIn("refused before transport", row["note"])
 
     def test_every_legacy_vendor_descriptor_has_its_own_row(self):
         catalog = json.loads((ROOT / "re" / "io24_params.json").read_text())
@@ -388,15 +387,14 @@ class AtomicParameterMatrixTests(unittest.TestCase):
                        if row["scope"]["source"] != "line/ch3"]
         self.assertEqual(len(operational), 36)
 
-    def test_voicefx_has_every_model_field_for_both_physical_owners(self):
+    def test_voicefx_has_every_model_field_once_for_the_global_engine(self):
         rows = [row for row in self.rows if row["family"] == "voicefx"]
-        self.assertEqual(len(rows), 60)
-        for owner in (1, 2):
-            for model, fields in io24_fx._VOICEFX_PRESET_FIELDS.items():
-                expected = {target for _source, target, _kind in fields}
-                actual = {row["parameter"] for row in rows
-                          if row["scope"] == {"owner": owner, "model": model}}
-                self.assertEqual(actual, expected, (owner, model))
+        self.assertEqual(len(rows), 30)
+        for model, fields in io24_fx._VOICEFX_PRESET_FIELDS.items():
+            expected = {target for _source, target, _kind in fields}
+            actual = {row["parameter"] for row in rows
+                      if row["scope"] == {"model": model}}
+            self.assertEqual(actual, expected, model)
 
     def test_alternate_eq_fields_are_present_and_cannot_silently_pass(self):
         expected = {

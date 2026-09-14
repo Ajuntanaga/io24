@@ -780,7 +780,21 @@ def _find_io24_node(direction):
                              text=True, timeout=5).stdout
     except Exception:
         return None
-    blocks = ("\nid " + out).split("\nid ")
+    # pw-cli indents real global-id lines with a tab. Split after stripping
+    # each line instead of assuming an unindented "\nid "; otherwise the
+    # whole listing becomes one block and a laptop ALSA node before the io24
+    # can be returned merely because the later io24 marker is also present.
+    blocks, current = [], []
+    for line in out.splitlines():
+        value = line.strip()
+        if value.startswith("id ") and "," in value:
+            if current:
+                blocks.append("\n".join(current))
+            current = [value]
+        else:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
     for block in blocks:
         folded = block.casefold()
         if token not in folded or not any(

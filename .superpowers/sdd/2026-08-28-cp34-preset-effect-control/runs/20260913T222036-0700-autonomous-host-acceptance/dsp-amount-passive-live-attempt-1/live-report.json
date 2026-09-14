@@ -1,0 +1,660 @@
+{
+  "analysis": {
+    "capture_contract": {
+      "channels": 6,
+      "monitor_channels": [
+        3,
+        4
+      ],
+      "no_playback": true,
+      "rate_hz": 96000,
+      "reference_channel": 2,
+      "sample_width_bytes": 4,
+      "source": "simultaneous_input2_device_self_noise"
+    },
+    "captures": [
+      {
+        "amount": 0.0,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-000.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "8219d973a50d6969be674a090cf01340a5ea79ff854d790bfb008fdf1294ed20"
+      },
+      {
+        "amount": 0.25,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-025.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "b5b8d387e5cbeec0a99901bf10c9218434a46fe05518b145c67a192c357a91b5"
+      },
+      {
+        "amount": 0.5,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-050.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "99a169b83c2b6508d3c3c1096f994fbc3b2aede51d05efb44abd5dbcc255749a"
+      },
+      {
+        "amount": 0.75,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-075.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "c0b7f743d900eaaa8f1257625138599c205b33908b620e74706c0599bc3725cc"
+      },
+      {
+        "amount": 1.0,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-100.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "8def69520b6389291be557f51e2ee65d4aa6d8ac66af3d4e53926309eb0f2e76"
+      }
+    ],
+    "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+    "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+    "minimum_median_coherence": 0.9999973029413515,
+    "monitor_results": [
+      {
+        "amount_measurements": [
+          {
+            "affine_residual_ratio": 0.0,
+            "amount": 0.0,
+            "distance_to_dry_ratio": 0.0,
+            "distance_to_wet_ratio": 1.0,
+            "endpoint_position": 0.0,
+            "level_model_residual_ratio": 0.9999953798659942,
+            "transfer_vector_norm_db": -6.010358653382117
+          },
+          {
+            "affine_residual_ratio": 0.8779090669013981,
+            "amount": 0.25,
+            "distance_to_dry_ratio": 0.979095992163333,
+            "distance_to_wet_ratio": 1.0448299401490158,
+            "endpoint_position": 0.4334796790192528,
+            "level_model_residual_ratio": 0.7500057380279597,
+            "transfer_vector_norm_db": -6.010268723491351
+          },
+          {
+            "affine_residual_ratio": 0.9491845351036221,
+            "amount": 0.5,
+            "distance_to_dry_ratio": 1.050926729003143,
+            "distance_to_wet_ratio": 1.0964656941685487,
+            "endpoint_position": 0.45110498562236406,
+            "level_model_residual_ratio": 0.49999682315287564,
+            "transfer_vector_norm_db": -6.010346249077357
+          },
+          {
+            "affine_residual_ratio": 0.8990720678403091,
+            "amount": 0.75,
+            "distance_to_dry_ratio": 0.9958123280339225,
+            "distance_to_wet_ratio": 1.065525265560752,
+            "endpoint_position": 0.42814905055801433,
+            "level_model_residual_ratio": 0.25000322847731477,
+            "transfer_vector_norm_db": -6.0102908550412115
+          },
+          {
+            "affine_residual_ratio": 1.2112884175497614e-16,
+            "amount": 1.0,
+            "distance_to_dry_ratio": 1.0,
+            "distance_to_wet_ratio": 0.0,
+            "endpoint_position": 0.9999999999999999,
+            "level_model_residual_ratio": 0.0,
+            "transfer_vector_norm_db": -6.010318523315327
+          }
+        ],
+        "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+        "endpoint_delta_ratio": 0.00015901160780864686,
+        "estimates": [
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999980361980154,
+            "monitor_rms_dbfs": -97.18472640871163,
+            "reference_rms_dbfs": -94.18471395762332,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976126135094,
+            "monitor_rms_dbfs": -97.14390933792716,
+            "reference_rms_dbfs": -94.14391915045762,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999973029413515,
+            "monitor_rms_dbfs": -97.08384435490436,
+            "reference_rms_dbfs": -94.08383802323479,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976306544567,
+            "monitor_rms_dbfs": -97.01424340083172,
+            "reference_rms_dbfs": -94.01424410869858,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999977060928475,
+            "monitor_rms_dbfs": -96.92613890418004,
+            "reference_rms_dbfs": -93.92611349515178,
+            "segments": 186,
+            "transfer_bins": 1703
+          }
+        ],
+        "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+        "monitor_channel": 3,
+        "reasons": [
+          "endpoint_transfer_delta_below_threshold"
+        ],
+        "status": "INCONCLUSIVE"
+      },
+      {
+        "amount_measurements": [
+          {
+            "affine_residual_ratio": 0.0,
+            "amount": 0.0,
+            "distance_to_dry_ratio": 0.0,
+            "distance_to_wet_ratio": 1.0,
+            "endpoint_position": 0.0,
+            "level_model_residual_ratio": 0.9999953798659942,
+            "transfer_vector_norm_db": -6.010358653382117
+          },
+          {
+            "affine_residual_ratio": 0.8779090669013981,
+            "amount": 0.25,
+            "distance_to_dry_ratio": 0.979095992163333,
+            "distance_to_wet_ratio": 1.0448299401490158,
+            "endpoint_position": 0.4334796790192528,
+            "level_model_residual_ratio": 0.7500057380279597,
+            "transfer_vector_norm_db": -6.010268723491351
+          },
+          {
+            "affine_residual_ratio": 0.9491845351036221,
+            "amount": 0.5,
+            "distance_to_dry_ratio": 1.050926729003143,
+            "distance_to_wet_ratio": 1.0964656941685487,
+            "endpoint_position": 0.45110498562236406,
+            "level_model_residual_ratio": 0.49999682315287564,
+            "transfer_vector_norm_db": -6.010346249077357
+          },
+          {
+            "affine_residual_ratio": 0.8990720678403091,
+            "amount": 0.75,
+            "distance_to_dry_ratio": 0.9958123280339225,
+            "distance_to_wet_ratio": 1.065525265560752,
+            "endpoint_position": 0.42814905055801433,
+            "level_model_residual_ratio": 0.25000322847731477,
+            "transfer_vector_norm_db": -6.0102908550412115
+          },
+          {
+            "affine_residual_ratio": 1.2112884175497614e-16,
+            "amount": 1.0,
+            "distance_to_dry_ratio": 1.0,
+            "distance_to_wet_ratio": 0.0,
+            "endpoint_position": 0.9999999999999999,
+            "level_model_residual_ratio": 0.0,
+            "transfer_vector_norm_db": -6.010318523315327
+          }
+        ],
+        "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+        "endpoint_delta_ratio": 0.00015901160780864686,
+        "estimates": [
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999980361980154,
+            "monitor_rms_dbfs": -97.18472640871163,
+            "reference_rms_dbfs": -94.18471395762332,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976126135094,
+            "monitor_rms_dbfs": -97.14390933792716,
+            "reference_rms_dbfs": -94.14391915045762,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999973029413515,
+            "monitor_rms_dbfs": -97.08384435490436,
+            "reference_rms_dbfs": -94.08383802323479,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976306544567,
+            "monitor_rms_dbfs": -97.01424340083172,
+            "reference_rms_dbfs": -94.01424410869858,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999977060928475,
+            "monitor_rms_dbfs": -96.92613890418004,
+            "reference_rms_dbfs": -93.92611349515178,
+            "segments": 186,
+            "transfer_bins": 1703
+          }
+        ],
+        "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+        "monitor_channel": 4,
+        "reasons": [
+          "endpoint_transfer_delta_below_threshold"
+        ],
+        "status": "INCONCLUSIVE"
+      }
+    ],
+    "reasons": [
+      "endpoint_transfer_delta_below_threshold"
+    ],
+    "schema": "io24-dsp-amount-passive-analysis-v1",
+    "status": "INCONCLUSIVE"
+  },
+  "battery_after": 95,
+  "battery_before": 95,
+  "clock": {
+    "buffer_frames": 2048,
+    "period_frames": 512,
+    "rate_hz": 96000
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "dsp_amount_prestate": {
+    "source": "exact_zero_device_readback",
+    "value": 0.0
+  },
+  "finished": "2026-09-13T23:43:56.280-07:00",
+  "input_gains": "UNTOUCHED",
+  "mixer_routes": "UNTOUCHED",
+  "playback": "NONE",
+  "schema": "io24-dsp-amount-passive-live-v1",
+  "sequence": {
+    "capture_order": [
+      0.0,
+      1.0,
+      0.25,
+      0.75,
+      0.5
+    ],
+    "captures": [
+      {
+        "amount": 0.0,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-000.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-000.wav"
+        ],
+        "sha256": "8219d973a50d6969be674a090cf01340a5ea79ff854d790bfb008fdf1294ed20"
+      },
+      {
+        "amount": 1.0,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-100.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-100.wav"
+        ],
+        "sha256": "8def69520b6389291be557f51e2ee65d4aa6d8ac66af3d4e53926309eb0f2e76"
+      },
+      {
+        "amount": 0.25,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-025.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-025.wav"
+        ],
+        "sha256": "b5b8d387e5cbeec0a99901bf10c9218434a46fe05518b145c67a192c357a91b5"
+      },
+      {
+        "amount": 0.75,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-075.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-075.wav"
+        ],
+        "sha256": "c0b7f743d900eaaa8f1257625138599c205b33908b620e74706c0599bc3725cc"
+      },
+      {
+        "amount": 0.5,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-050.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-050.wav"
+        ],
+        "sha256": "99a169b83c2b6508d3c3c1096f994fbc3b2aede51d05efb44abd5dbcc255749a"
+      }
+    ],
+    "finished": "2026-09-13T23:43:55.717-07:00",
+    "readable_after": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_before": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_guarded": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.009999999776482582
+    },
+    "restoration": {
+      "dsp_amount": "EXACT_ZERO_SENT",
+      "errors": [],
+      "input_gains": "UNTOUCHED",
+      "main_volume": "RESTORE_SENT",
+      "mixer_routes": "UNTOUCHED",
+      "readable_exact": true
+    },
+    "started": "2026-09-13T23:43:13.016-07:00",
+    "status": "CAPTURED_AND_RESTORED"
+  },
+  "started": "2026-09-13T23:43:12.998-07:00",
+  "status": "CAPTURED_INCONCLUSIVE_RESTORED",
+  "transport": [
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "736671f1b6720046812f7e29cfc01652f24bff7ec3be0b87fc7c2147fa303268",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-13T23:43:13.016-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "8eda06753f81c57042159504a7e34ebb0f6e502da6b9bdfe912aa9815484bc5d",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c48b805b2853084a0419d31d542e84beda9af9626926721a41d94d4936fc9cf9",
+      "timestamp": "2026-09-13T23:43:13.368-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 6
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "b6c88855e6516bb6eaeaa82e34604b29e401b699a252c53085a84f0e17aed990",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "529d79c63ffe6ef8f8717061f39321be7801599bfaced42387131727d91770c9",
+      "timestamp": "2026-09-13T23:43:21.773-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 8
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "a28556059195284813f8572193e4416fa9d5ef8180371240f001f49cf2f94a58",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "93a2b314ed6ff64574a6a1beb28567a33ed5611ef087c0740ec6bd94e567e11b",
+      "timestamp": "2026-09-13T23:43:30.171-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 10
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "42cdded565bb4db99f4675d28d3d1e2639d45e88db7a33a3de0f4e17bbda7771",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "49d5bc469c2f600e0945a96bc4fa6bf0e44f6f23e1c2ec70839c43731e5b1b91",
+      "timestamp": "2026-09-13T23:43:38.566-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 12
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "c2b0a456c207a8666e5d56c59890087ecde62fb09d1750fbbbee320789af7dae",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e3f6da6fdf5121002591f71fdc8d36fc6239ae3b441c8b18dc0a1ae9aabbe939",
+      "timestamp": "2026-09-13T23:43:46.967-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 14
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "6ebd46fd7b73986ed8367478e808e2f3a59cce4bcfc585f96e40695cfb2a0616",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "8314916a757b78759de3dac063e125f9c6f9b92d22efb3d0ac830b97f1ea9548",
+      "timestamp": "2026-09-13T23:43:55.364-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 16
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "fddd2d6771564c57299f787f639fba37e4eb0fb41bdd5e9a4aeac8a990348767",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "74ef426fa5de9428ae66998c34f23f14a3213d562a697c83bb4b7c2f54e3f8fd",
+      "timestamp": "2026-09-13T23:43:55.365-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 17
+    }
+  ]
+}

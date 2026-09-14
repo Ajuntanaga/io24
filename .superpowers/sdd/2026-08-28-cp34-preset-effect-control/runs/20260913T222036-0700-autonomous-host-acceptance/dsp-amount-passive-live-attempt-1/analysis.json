@@ -1,0 +1,329 @@
+{
+  "capture_contract": {
+    "channels": 6,
+    "monitor_channels": [
+      3,
+      4
+    ],
+    "no_playback": true,
+    "rate_hz": 96000,
+    "reference_channel": 2,
+    "sample_width_bytes": 4,
+    "source": "simultaneous_input2_device_self_noise"
+  },
+  "captures": [
+    {
+      "amount": 0.0,
+      "channels": 6,
+      "frames": 768000,
+      "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-000.wav",
+      "rate_hz": 96000,
+      "sample_width_bytes": 4,
+      "sha256": "8219d973a50d6969be674a090cf01340a5ea79ff854d790bfb008fdf1294ed20"
+    },
+    {
+      "amount": 0.25,
+      "channels": 6,
+      "frames": 768000,
+      "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-025.wav",
+      "rate_hz": 96000,
+      "sample_width_bytes": 4,
+      "sha256": "b5b8d387e5cbeec0a99901bf10c9218434a46fe05518b145c67a192c357a91b5"
+    },
+    {
+      "amount": 0.5,
+      "channels": 6,
+      "frames": 768000,
+      "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-050.wav",
+      "rate_hz": 96000,
+      "sample_width_bytes": 4,
+      "sha256": "99a169b83c2b6508d3c3c1096f994fbc3b2aede51d05efb44abd5dbcc255749a"
+    },
+    {
+      "amount": 0.75,
+      "channels": 6,
+      "frames": 768000,
+      "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-075.wav",
+      "rate_hz": 96000,
+      "sample_width_bytes": 4,
+      "sha256": "c0b7f743d900eaaa8f1257625138599c205b33908b620e74706c0599bc3725cc"
+    },
+    {
+      "amount": 1.0,
+      "channels": 6,
+      "frames": 768000,
+      "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-1/amount-100.wav",
+      "rate_hz": 96000,
+      "sample_width_bytes": 4,
+      "sha256": "8def69520b6389291be557f51e2ee65d4aa6d8ac66af3d4e53926309eb0f2e76"
+    }
+  ],
+  "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+  "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+  "minimum_median_coherence": 0.9999973029413515,
+  "monitor_results": [
+    {
+      "amount_measurements": [
+        {
+          "affine_residual_ratio": 0.0,
+          "amount": 0.0,
+          "distance_to_dry_ratio": 0.0,
+          "distance_to_wet_ratio": 1.0,
+          "endpoint_position": 0.0,
+          "level_model_residual_ratio": 0.9999953798659942,
+          "transfer_vector_norm_db": -6.010358653382117
+        },
+        {
+          "affine_residual_ratio": 0.8779090669013981,
+          "amount": 0.25,
+          "distance_to_dry_ratio": 0.979095992163333,
+          "distance_to_wet_ratio": 1.0448299401490158,
+          "endpoint_position": 0.4334796790192528,
+          "level_model_residual_ratio": 0.7500057380279597,
+          "transfer_vector_norm_db": -6.010268723491351
+        },
+        {
+          "affine_residual_ratio": 0.9491845351036221,
+          "amount": 0.5,
+          "distance_to_dry_ratio": 1.050926729003143,
+          "distance_to_wet_ratio": 1.0964656941685487,
+          "endpoint_position": 0.45110498562236406,
+          "level_model_residual_ratio": 0.49999682315287564,
+          "transfer_vector_norm_db": -6.010346249077357
+        },
+        {
+          "affine_residual_ratio": 0.8990720678403091,
+          "amount": 0.75,
+          "distance_to_dry_ratio": 0.9958123280339225,
+          "distance_to_wet_ratio": 1.065525265560752,
+          "endpoint_position": 0.42814905055801433,
+          "level_model_residual_ratio": 0.25000322847731477,
+          "transfer_vector_norm_db": -6.0102908550412115
+        },
+        {
+          "affine_residual_ratio": 1.2112884175497614e-16,
+          "amount": 1.0,
+          "distance_to_dry_ratio": 1.0,
+          "distance_to_wet_ratio": 0.0,
+          "endpoint_position": 0.9999999999999999,
+          "level_model_residual_ratio": 0.0,
+          "transfer_vector_norm_db": -6.010318523315327
+        }
+      ],
+      "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+      "endpoint_delta_ratio": 0.00015901160780864686,
+      "estimates": [
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999980361980154,
+          "monitor_rms_dbfs": -97.18472640871163,
+          "reference_rms_dbfs": -94.18471395762332,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999976126135094,
+          "monitor_rms_dbfs": -97.14390933792716,
+          "reference_rms_dbfs": -94.14391915045762,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999973029413515,
+          "monitor_rms_dbfs": -97.08384435490436,
+          "reference_rms_dbfs": -94.08383802323479,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999976306544567,
+          "monitor_rms_dbfs": -97.01424340083172,
+          "reference_rms_dbfs": -94.01424410869858,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999977060928475,
+          "monitor_rms_dbfs": -96.92613890418004,
+          "reference_rms_dbfs": -93.92611349515178,
+          "segments": 186,
+          "transfer_bins": 1703
+        }
+      ],
+      "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+      "monitor_channel": 3,
+      "reasons": [
+        "endpoint_transfer_delta_below_threshold"
+      ],
+      "status": "INCONCLUSIVE"
+    },
+    {
+      "amount_measurements": [
+        {
+          "affine_residual_ratio": 0.0,
+          "amount": 0.0,
+          "distance_to_dry_ratio": 0.0,
+          "distance_to_wet_ratio": 1.0,
+          "endpoint_position": 0.0,
+          "level_model_residual_ratio": 0.9999953798659942,
+          "transfer_vector_norm_db": -6.010358653382117
+        },
+        {
+          "affine_residual_ratio": 0.8779090669013981,
+          "amount": 0.25,
+          "distance_to_dry_ratio": 0.979095992163333,
+          "distance_to_wet_ratio": 1.0448299401490158,
+          "endpoint_position": 0.4334796790192528,
+          "level_model_residual_ratio": 0.7500057380279597,
+          "transfer_vector_norm_db": -6.010268723491351
+        },
+        {
+          "affine_residual_ratio": 0.9491845351036221,
+          "amount": 0.5,
+          "distance_to_dry_ratio": 1.050926729003143,
+          "distance_to_wet_ratio": 1.0964656941685487,
+          "endpoint_position": 0.45110498562236406,
+          "level_model_residual_ratio": 0.49999682315287564,
+          "transfer_vector_norm_db": -6.010346249077357
+        },
+        {
+          "affine_residual_ratio": 0.8990720678403091,
+          "amount": 0.75,
+          "distance_to_dry_ratio": 0.9958123280339225,
+          "distance_to_wet_ratio": 1.065525265560752,
+          "endpoint_position": 0.42814905055801433,
+          "level_model_residual_ratio": 0.25000322847731477,
+          "transfer_vector_norm_db": -6.0102908550412115
+        },
+        {
+          "affine_residual_ratio": 1.2112884175497614e-16,
+          "amount": 1.0,
+          "distance_to_dry_ratio": 1.0,
+          "distance_to_wet_ratio": 0.0,
+          "endpoint_position": 0.9999999999999999,
+          "level_model_residual_ratio": 0.0,
+          "transfer_vector_norm_db": -6.010318523315327
+        }
+      ],
+      "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+      "endpoint_delta_ratio": 0.00015901160780864686,
+      "estimates": [
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999980361980154,
+          "monitor_rms_dbfs": -97.18472640871163,
+          "reference_rms_dbfs": -94.18471395762332,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999976126135094,
+          "monitor_rms_dbfs": -97.14390933792716,
+          "reference_rms_dbfs": -94.14391915045762,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999973029413515,
+          "monitor_rms_dbfs": -97.08384435490436,
+          "reference_rms_dbfs": -94.08383802323479,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999976306544567,
+          "monitor_rms_dbfs": -97.01424340083172,
+          "reference_rms_dbfs": -94.01424410869858,
+          "segments": 186,
+          "transfer_bins": 1703
+        },
+        {
+          "band_hz": [
+            40.0,
+            20000.0
+          ],
+          "effectively_silent_monitor": false,
+          "fft_frames": 8192,
+          "hop_frames": 4096,
+          "median_coherence": 0.9999977060928475,
+          "monitor_rms_dbfs": -96.92613890418004,
+          "reference_rms_dbfs": -93.92611349515178,
+          "segments": 186,
+          "transfer_bins": 1703
+        }
+      ],
+      "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+      "monitor_channel": 4,
+      "reasons": [
+        "endpoint_transfer_delta_below_threshold"
+      ],
+      "status": "INCONCLUSIVE"
+    }
+  ],
+  "reasons": [
+    "endpoint_transfer_delta_below_threshold"
+  ],
+  "schema": "io24-dsp-amount-passive-analysis-v1",
+  "status": "INCONCLUSIVE"
+}

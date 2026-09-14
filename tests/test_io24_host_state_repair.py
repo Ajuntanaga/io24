@@ -397,8 +397,11 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn('"0% bypasses EQ, compression, limiting and effects; "',
                          rendered)
         self.assertNotIn('"Channel %d send"', rendered)
-        self.assertIn('title="Voice FX insert"', rendered)
-        self.assertIn('title="Voice FX"', rendered)
+        self.assertIn('title="FX"', rendered)
+        self.assertIn('title="FX active"', rendered)
+        self.assertNotIn('title="Target input"', rendered)
+        self.assertNotIn('title="Device activation"', rendered)
+        self.assertNotIn('title="Voice FX insert"', rendered)
         self.assertNotIn('standalone activation requires', rendered)
         self.assertNotIn(
             "Doubler private reverb has two structural input lanes", rendered)
@@ -446,7 +449,7 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertIn('HPF_BASIC_HZ = (24.0, 40.0, 80.0, 160.0)', source)
         self.assertIn('"Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"',
                       source)
-        self.assertIn('title="Fat Channel HPF"', source)
+        self.assertIn('title="HPF"', source)
         self.assertIn('"Exact cutoff"', source)
         self.assertNotIn(
             '(("48V", "phantom"), ("Mute", "mute"), ("Low cut", "hpf"))',

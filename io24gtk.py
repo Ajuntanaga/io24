@@ -73,12 +73,23 @@ LAST_SESSION_PATH = os.path.join(
     "io24", "last-session.json")
 # Setters the unit reports itself. A resume takes these from the unit, so a
 # change made on the hardware while the Host was closed stands.
-RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link")
+RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link",
+               "set_processing_channel")
 
 # Compressor models on the Fat Channel page. The first three are the unit's;
 # Multiband runs on the computer, right after the Fat Channel (io24_mbc).
 COMP_MODELS = ("standard", "tube", "fet", "multiband")
 MULTIBAND_MODEL = 3
+
+# Why a saved preset cannot be written to a block of the unit, or None when it
+# can. The 2026-09-14 live test wrote a known body to an inactive block and
+# measured no recall effect, and `Io24.save_known_device_slot` now refuses a
+# tagged body before transport: firmware 1.28 loads only native version-2
+# records. Until the Host can build one, the menu says so rather than offering
+# a write that always fails after the user confirms it.
+PUT_ON_UNIT_UNAVAILABLE = (
+    "The unit loads only native records, and this Host cannot build one from "
+    "a saved preset yet (2026-09-14 live negative)")
 
 
 # How wide a page's content may get. Adw.PreferencesPage clamps itself at
@@ -88,6 +99,10 @@ MULTIBAND_MODEL = 3
 # widens together.
 PAGE_WIDTH = 900
 PAGE_TIGHTEN = 640
+# The routing matrix is wider than any other page: one label plus three
+# bus cells, each a fader, its value, a mute and a solo. Clamping it to
+# PAGE_WIDTH squeezed the faders, so it gets its own ceiling.
+ROUTING_WIDTH = 1500
 
 
 def widen_page(root, maximum=PAGE_WIDTH, tighten=PAGE_TIGHTEN):
@@ -209,8 +224,7 @@ def shadow_ui_state(shadow):
         "hpf_toggle": {}, "hpf_freq": {}, "eq": {1: {}, 2: {}},
         "gate": {}, "compressor": {}, "limiter": {}, "order": {},
         "reverb": None, "processing_mix": {}, "reverb_return": {},
-        "voicefx": None,
-        "voicefx_target": None, "preset_mode": None,
+        "voicefx": None, "preset_mode": None,
         "preset_slot": {}, "output_delay": None,
         "output_delay_bus": None, "phones_source": None,
         "link": None, "balance": None,
@@ -260,10 +274,6 @@ def shadow_ui_state(shadow):
                 state["reverb_return"][bus] = kw.get("gain_db")
         elif name == "set_fx":
             state["voicefx"] = dict(kw)
-        elif name == "set_processing_channel" and ch == 1:
-            source = int(kw.get("source_input", 1))
-            if source in (1, 2):
-                state["voicefx_target"] = source
         elif name == "set_preset_mode":
             state["preset_mode"] = int(kw.get("mode", 1))
         elif name == "set_preset_slot" and ch in (1, 2):
@@ -315,6 +325,10 @@ def shadow_ui_state(shadow):
 # the device.
 # --------------------------------------------------------------------------
 CARD = "R24"
+DEFAULT_SAMPLE_RATE = 96000
+DEFAULT_QUANTUM = 512
+SUPPORTED_SAMPLE_RATES = (44100, 48000, 88200, 96000)
+SUPPORTED_QUANTA = (32, 64, 128, 256, 512, 1024, 2048)
 
 
 def alsa_rates(card=CARD):
@@ -331,7 +345,7 @@ def alsa_rates(card=CARD):
                                 if x.strip().isdigit()]
     except Exception:
         pass
-    return [44100, 48000, 88200, 96000]
+    return list(SUPPORTED_SAMPLE_RATES)
 
 
 def alsa_live(card=CARD):
@@ -392,6 +406,30 @@ def pw_set(key, value):
         return (False, "pw-metadata not installed")
     except Exception as e:
         return (False, str(e)[:120])
+
+
+def audio_clock_preference(session):
+    """Return the saved Host clock, or the first-launch defaults.
+
+    This is the user's requested base clock. Multiband may temporarily lower
+    the live quantum to 128, but that borrowed value is not a new selection.
+    """
+    selected = (session or {}).get("audio_clock")
+    if not isinstance(selected, dict) or selected.get("version") != 1:
+        selected = {}
+    try:
+        rate = int(selected.get("sample_rate", DEFAULT_SAMPLE_RATE))
+    except (TypeError, ValueError):
+        rate = DEFAULT_SAMPLE_RATE
+    try:
+        quantum = int(selected.get("quantum", DEFAULT_QUANTUM))
+    except (TypeError, ValueError):
+        quantum = DEFAULT_QUANTUM
+    if rate not in SUPPORTED_SAMPLE_RATES:
+        rate = DEFAULT_SAMPLE_RATE
+    if quantum not in SUPPORTED_QUANTA:
+        quantum = DEFAULT_QUANTUM
+    return {"version": 1, "sample_rate": rate, "quantum": quantum}
 
 
 class Ctl:
@@ -2067,7 +2105,7 @@ class Rack(ChannelBound, Canvas):
     """
 
     FIXED = {"HPF", "GATE", "LIM"}
-    TITLES = {"HPF": "Fat Channel HPF", "GATE": "Gate", "COMP": "Compressor",
+    TITLES = {"HPF": "HPF", "GATE": "Gate", "COMP": "Compressor",
               "EQ": "Equaliser", "LIM": "Limiter"}
 
     def __init__(self, win, channel):
@@ -2669,24 +2707,17 @@ class Win(Adw.ApplicationWindow):
         self.device_slot_registry = DeviceSlotRegistry(
             DEVICE_SLOT_REGISTRY_PATH)
         self._fx_push_id = None
-        # The assignment write is permutation-sensitive: changing the Voice FX
-        # owner exchanges the device's two exposed active-slot values. Remember
-        # what this Host successfully assigned so model/slider edits do not
-        # resend that unrelated route. A different device object always forces
-        # one fresh explicit assignment.
-        self._fx_last_sent_device = None
-        self._fx_last_sent_target = None
-        # Block 201 drops every model and parameter write unless a native Stat
-        # load has opened its gate, and recalling a device slot is the only
-        # decoded way to run that load. Remember per channel what this Host
-        # last recalled so the Effects page can say whether its controls
-        # currently reach the engine instead of reporting six silent successes.
-        self._fx_gate_recalled = {1: None, 2: None}
+        # Block 201 is one settings object over two structural audio lanes.
+        # Normal FX control never mutates processingChannel: that value swaps
+        # physical inputs between DSP chains and is not an FX owner switch.
         # Every coefficient this Host computes — biquads, gate/comp/limiter
         # time constants, reverb, the rate-dependent Voice FX filters — is a
         # function of the device clock. Nothing used to pass one, so all of it
         # was built for 48 kHz whatever the interface was actually running at.
-        self._fs = 48000.0
+        clock = audio_clock_preference(load_last_session())
+        self._selected_rate = clock["sample_rate"]
+        self._selected_quantum = clock["quantum"]
+        self._fs = float(self._selected_rate)
         self._fs_seen = False
         # The unit's own Preset button runs the same Stat load, so a slot the
         # device reports moving is a recall this Host did not perform. Seed it
@@ -2770,6 +2801,7 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
         GLib.timeout_add(2000, self._insert_watchdog)
+        GLib.idle_add(self._restore_audio_clock)
         GLib.timeout_add(5000, self._autosave_session)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
         self._page_changed(stack, None)                  # set the initial state
@@ -4004,9 +4036,9 @@ class Win(Adw.ApplicationWindow):
         # separate from the fixed 80 Hz preamp switch on the mixer strip.
         # Sharing a group with the limiter meant clicking either one landed you
         # in a page about the other.
-        hp = Adw.PreferencesGroup(title="Fat Channel HPF")
+        hp = Adw.PreferencesGroup(title="HPF")
         W["hpf_mode"] = Adw.ComboRow(
-            title="Fat Channel HPF",
+            title="HPF",
             subtitle="Digital filter; independent of the 80 Hz preamp switch",
             model=Gtk.StringList.new(
                 ["Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
@@ -4157,25 +4189,13 @@ class Win(Adw.ApplicationWindow):
             sg.add(r)
         page.add(sg)
 
-        # Insert-FX model parameters. Model 0 owns the private reverb used by
-        # UC's factory preset named Reverb. The device has one stock Voice FX
-        # engine, so target ownership and the model's own on field remain
-        # explicit rather than implying independent per-channel engines.
-        ig = Adw.PreferencesGroup(
-            title="Voice FX insert",)
+        # Block 201 is one settings object over two structural input lanes.
+        # Configure it once; processingChannel is separate routing state and
+        # must not be changed by an FX edit.
+        ig = Adw.PreferencesGroup(title="FX")
 
         self.fx_visual = FXVisual("transformer", self._fx_live_params)
         ig.add(self.fx_visual)
-
-        self.fx_target = Adw.ComboRow(
-            title="Target input",
-            subtitle="Changing the owner can exchange the device's two "
-                     "exposed active-slot indicators",
-            model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
-        self.fx_target.set_selected(0)
-        self.fx_target.connect("notify::selected",
-                               lambda *_a: self._fx_target_changed())
-        ig.add(self.fx_target)
 
         self.fx_model = Adw.ComboRow(title="Model",
                                      model=Gtk.StringList.new(MODEL_TITLES))
@@ -4222,70 +4242,13 @@ class Win(Adw.ApplicationWindow):
         ig.add(self.fx_param_stack)
 
         self.fx_arm = Adw.SwitchRow(
-            title="Voice FX")
+            title="FX active")
         self.fx_arm.set_active(True)
         self.fx_arm.connect("notify::active", lambda *_a: self._push_fx())
         ig.add(self.fx_arm)
 
-        # Every control above is accepted, stored and silently discarded by the
-        # device while block 201's gate is shut, so the page has to say which
-        # of the two it is doing. Reporting in place beats a toast per edit.
-        self.fx_gate_row = Adw.ActionRow(title="Device activation")
-        self.fx_gate_state = Gtk.Label(xalign=1.0)
-        self.fx_gate_state.add_css_class("dim-label")
-        self.fx_gate_row.add_suffix(self.fx_gate_state)
-        gate_go = Gtk.Button(label="Presets…", valign=Gtk.Align.CENTER)
-        gate_go.set_tooltip_text(
-            "Save and activate, or recall a stored Voice FX preset")
-        gate_go.connect(
-            "clicked", lambda *_a: self.stack.set_visible_child_name("pre"))
-        self.fx_gate_row.add_suffix(gate_go)
-        ig.add(self.fx_gate_row)
-        self._update_fx_gate_row()
-
         page.add(ig)
         return page
-
-    def _fx_target_changed(self):
-        """The gate is per owning channel, so the row follows the target."""
-        self._update_fx_gate_row()
-        self._push_fx()
-
-    def _update_fx_gate_row(self):
-        """Say whether this session has opened the device's Voice FX gate.
-
-        Handler fw 0x50af8 returns having done nothing unless +0x44 and +0x39
-        are non-zero and +0x40 is zero, and only the native Stat structured-
-        state load sets all three (PROTOCOL.md 13c and the 2026-08-31
-        controlling correction). Recalling a device slot whose stored record
-        carries voicefx.on is the decoded way to run that load.
-        """
-        row = getattr(self, "fx_gate_row", None)
-        if row is None:
-            return
-        channel = 2 if self.fx_target.get_selected() == 1 else 1
-        state = getattr(self, "_fx_gate_recalled", {}).get(channel)
-        if state is None:
-            self.fx_gate_state.set_text("Not this session")
-            row.set_subtitle(
-                "The device cannot report its own gate. If Voice FX is "
-                "silent, recall a Channel %d preset whose Voice FX is on"
-                % channel)
-        elif state["on"] is None:
-            self.fx_gate_state.set_text("Unknown")
-            row.set_subtitle(
-                "%s was recalled on Channel %d, but the Host never wrote that "
-                "body and slots cannot be read back" % (state["name"], channel))
-        elif state["on"]:
-            self.fx_gate_state.set_text("Opened")
-            row.set_subtitle(
-                "%s was recalled on Channel %d, so model and parameter edits "
-                "reach the engine" % (state["name"], channel))
-        else:
-            self.fx_gate_state.set_text("Closed")
-            row.set_subtitle(
-                "%s was recalled on Channel %d, but its stored Voice FX is "
-                "off; recall one whose Voice FX is on" % (state["name"], channel))
 
     FX_ORDER = ("transformer", "detuner", "vocoder", "ringmod", "filters", "delay")
 
@@ -4382,7 +4345,7 @@ class Win(Adw.ApplicationWindow):
         return False
 
     def _push_fx(self):
-        """Assign the stock singleton, then send its selected model and state.
+        """Send one selected model/state to the shared two-lane singleton.
 
         Block 201 has no readable state, so success here means only that the
         known UC-ordered writes completed.  Audibility is decided separately by
@@ -4395,7 +4358,6 @@ class Win(Adw.ApplicationWindow):
         on = self.fx_arm.get_active()
         model = self.FX_ORDER[max(0, min(len(self.FX_ORDER) - 1,
                                          self.fx_model.get_selected()))]
-        target = 2 if self.fx_target.get_selected() == 1 else 1
         params = {name: control.get_value()
                   for name, control in self.fx_params[model].items()}
         for name in ("detune", "carrier_type"):
@@ -4403,19 +4365,11 @@ class Win(Adw.ApplicationWindow):
                 params[name] = int(params[name])
         if "carrier2" in params:
             params["carrier2"] = bool(params["carrier2"])
-        def work(dev, ch=target, name=model, enabled=on, kw=dict(params)):
+        def work(dev, name=model, enabled=on, kw=dict(params)):
             try:
-                if self._fx_last_sent_device is not dev or \
-                        self._fx_last_sent_target != ch:
-                    dev.set_voicefx_channel(ch)
-                    # Assignment already reached the transport. Keep this fact
-                    # even if the following model write fails, so a retry does
-                    # not touch the slot-swapping route again.
-                    self._fx_last_sent_device = dev
-                    self._fx_last_sent_target = ch
                 dev.set_fx(name, on=enabled, **kw)
             except Exception as error:
-                GLib.idle_add(self.say, "Voice FX send failed: %s" % error)
+                GLib.idle_add(self.say, "FX send failed: %s" % error)
 
         self.ctl.submit(work)
 
@@ -4784,7 +4738,7 @@ class Win(Adw.ApplicationWindow):
             msc = fader(-40, 10, 0.1, vertical=False)
             reset_on_double_click(msc, 0.0, lambda v: "%.1f dB" % v)
             msc.set_value(0.0)
-            msc.set_size_request(150, -1)
+            msc.set_size_request(110, -1)   # a floor; hexpand does the rest
             msc.set_hexpand(True)
             if bus != "main":
                 msc.add_css_class("bus-" + bus)
@@ -4825,7 +4779,7 @@ class Win(Adw.ApplicationWindow):
                 sc = fader(-60, 10, 0.1, vertical=False)
                 reset_on_double_click(sc, 0.0, lambda v: "%.1f dB" % v)
                 sc.set_value(0.0)
-                sc.set_size_request(150, -1)
+                sc.set_size_request(110, -1)
                 sc.set_hexpand(True)
                 if bus != "main":
                     sc.add_css_class("bus-" + bus)
@@ -4867,8 +4821,9 @@ class Win(Adw.ApplicationWindow):
         g.add(grid)
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         outer.set_margin_top(10); outer.set_margin_bottom(24)
+        outer.set_margin_start(16); outer.set_margin_end(16)
         outer.append(g)
-        clamp = Adw.Clamp(maximum_size=PAGE_WIDTH,
+        clamp = Adw.Clamp(maximum_size=ROUTING_WIDTH,
                           tightening_threshold=PAGE_TIGHTEN)
         clamp.set_child(outer)
         sc = Gtk.ScrolledWindow()
@@ -4972,14 +4927,7 @@ class Win(Adw.ApplicationWindow):
         self.ctl.submit(work)
 
     def _observe_device_slot_recalls(self, pslot):
-        """Notice a recall this Host did not perform.
-
-        The unit's own Preset button runs the same native Stat load, so a slot
-        the device reports moving changes the Voice FX gate exactly as a Host
-        recall does. A first sighting is only the resting index -- it says
-        which slot is selected, not that a load has been run this session --
-        so only a change counts as evidence.
-        """
+        """Notice a front-panel slot change without inferring FX activation."""
         observed = getattr(self, "_observed_preset_slot", {})
         changed = []
         for ch in (1, 2):
@@ -4987,11 +4935,8 @@ class Win(Adw.ApplicationWindow):
             previous = observed.get(ch)
             observed[ch] = slot
             if previous is not None and previous != slot:
-                self._fx_gate_recalled[ch] = self._slot_voicefx_intent(slot)
                 changed.append(ch)
         self._observed_preset_slot = observed
-        if changed:
-            self._update_fx_gate_row()
         return changed
 
     def _host_slot_entry(self, slot):
@@ -5019,15 +4964,19 @@ class Win(Adw.ApplicationWindow):
         return {"name": "Block %d" % (slot - base + 1), "on": None}
 
     def _slot_recalled(self, ch, slot, report, name=None):
-        """Follow a completed selection in the UI and record the gate change."""
+        """Follow a completed physical preset selection in the UI."""
         intent = self._slot_voicefx_intent(slot)
-        self._fx_gate_recalled[ch] = intent
         pair = getattr(self, "preset_rows", {}).get(ch)
         if pair is not None:
             local = slot - self.PRESET_BASE[ch]
             pair[1].set_selected(local if 0 <= local < 2 else -1)
-        self._update_fx_gate_row()
-        self._adopt_recalled_slot(ch, slot)
+        adopted = self._adopt_recalled_slot(ch, slot)
+        entry = self._host_slot_entry(slot)
+        if adopted and entry is not None and entry["record"].get("voicefx"):
+            # A device-slot recall is physical Fat Channel selection, not a
+            # proven block-201 activation path. Apply the Host-known global FX
+            # intent explicitly and report any send failure independently.
+            self._push_fx()
         self._follow_recall_processing(ch, report)
         label = name or intent["name"]
         if report.get("enable_asserted"):
@@ -5181,6 +5130,8 @@ class Win(Adw.ApplicationWindow):
         self.rate_row = Adw.ComboRow(
             title="Rate", model=Gtk.StringList.new(["%d Hz" % r for r in rates]))
         self._rates = rates
+        if self._selected_rate in rates:
+            self.rate_row.set_selected(rates.index(self._selected_rate))
         self.rate_row.connect("notify::selected", self._rate_changed)
         g.add(self.rate_row)
         self.rate_note = Adw.ActionRow(title="Allowed by PipeWire")
@@ -5192,10 +5143,12 @@ class Win(Adw.ApplicationWindow):
 
         b = Adw.PreferencesGroup(
             title="Buffer size",)
-        self._quanta = [32, 64, 128, 256, 512, 1024, 2048]
+        self._quanta = list(SUPPORTED_QUANTA)
         self.quantum_row = Adw.ComboRow(
             title="Quantum",
             model=Gtk.StringList.new(["%d frames" % q for q in self._quanta]))
+        self.quantum_row.set_selected(
+            self._quanta.index(self._selected_quantum))
         self.quantum_row.connect("notify::selected", self._quantum_changed)
         b.add(self.quantum_row)
         self.latency_row = Adw.ActionRow(title="Resulting latency")
@@ -5355,6 +5308,10 @@ class Win(Adw.ApplicationWindow):
         if not ok:
             self.say("Rate change failed: %s" % msg)
             return
+        self._selected_rate = want
+        save = getattr(self, "_save_last_session", None)
+        if callable(save):
+            save()
 
     def _delay_bus_changed(self, row, _p):
         """Pick the bus, then re-apply the delay to it.
@@ -5379,10 +5336,63 @@ class Win(Adw.ApplicationWindow):
         q = self._quanta[row.get_selected()]
         ok, msg = pw_set("clock.force-quantum", q)
         if ok:
+            self._selected_quantum = q
             # the user's buffer now stands; Multiband will not put back its own
             self._insert_quantum_before = None
+            save = getattr(self, "_save_last_session", None)
+            if callable(save):
+                save()
         else:
             self.say("Buffer change failed: %s" % msg)
+
+    def _audio_clock_state(self):
+        """The user's base clock selection, independent of live overrides."""
+        return audio_clock_preference({
+            "audio_clock": {
+                "version": 1,
+                "sample_rate": getattr(
+                    self, "_selected_rate", DEFAULT_SAMPLE_RATE),
+                "quantum": getattr(
+                    self, "_selected_quantum", DEFAULT_QUANTUM),
+            },
+        })
+
+    def _restore_audio_clock(self):
+        """Apply the last selected base clock once when the Host opens."""
+        clock = self._audio_clock_state()
+        rate, quantum = clock["sample_rate"], clock["quantum"]
+        settings = pw_settings()
+        available = set(int(value) for value in re.findall(
+            r"\d+", settings.get("clock.allowed-rates", "")))
+
+        rate_ok = True
+        if available and rate not in available:
+            rate_ok = False
+            self.say("Saved rate %d Hz is not allowed by PipeWire" % rate)
+        else:
+            try:
+                forced_rate = int(settings.get("clock.force-rate", "0") or 0)
+            except (TypeError, ValueError):
+                forced_rate = 0
+            if forced_rate != rate:
+                rate_ok, message = pw_set("clock.force-rate", rate)
+                if not rate_ok:
+                    self.say("Saved rate could not be restored: %s" % message)
+        if rate_ok:
+            self._set_device_fs(rate)
+
+        try:
+            forced_quantum = int(
+                settings.get("clock.force-quantum", "0") or 0)
+        except (TypeError, ValueError):
+            forced_quantum = 0
+        if forced_quantum != quantum:
+            quantum_ok, message = pw_set("clock.force-quantum", quantum)
+            if not quantum_ok:
+                self.say("Saved buffer could not be restored: %s" % message)
+            else:
+                self._insert_quantum_before = None
+        return False
 
     def _set_device_fs(self, rate):
         """Adopt the clock the device is actually running at.
@@ -5454,11 +5464,14 @@ class Win(Adw.ApplicationWindow):
         except ValueError:
             pass
         forced = int(st.get("clock.force-rate", "0") or 0)
-        cur_rate = live_rate or forced or int(st.get("clock.rate", "48000") or 48000)
+        cur_rate = live_rate or forced or int(
+            st.get("clock.rate", str(DEFAULT_SAMPLE_RATE))
+            or DEFAULT_SAMPLE_RATE)
         if self._set_device_fs(cur_rate):
             self._resend_rate_dependent_state()
         cur_q = int(st.get("clock.force-quantum", "0") or 0) or \
-            int(st.get("clock.quantum", "1024") or 1024)
+            int(st.get("clock.quantum", str(DEFAULT_QUANTUM))
+                or DEFAULT_QUANTUM)
         self._dev_mute = True
         if cur_rate in self._rates:
             self.rate_row.set_selected(self._rates.index(cur_rate))
@@ -5498,7 +5511,7 @@ class Win(Adw.ApplicationWindow):
     def _presets_page(self):
         """User presets and factory presets, as two drop-downs.
 
-        One list per origin and one way to load: double-click a preset and its
+        One list per origin and one way to load: click Load and the preset's
         Fat Channel and Voice FX go to the channel chosen in Load into, or to
         both while the channels are linked. Presets the user saves live on this
         computer; putting one on the unit's Preset button is an action on the
@@ -5576,8 +5589,8 @@ class Win(Adw.ApplicationWindow):
             subtitle = "On the unit · Channel %d, block %d" % (channel, block)
             row = Adw.ActionRow(title=entry["record"]["preset_name"],
                                 subtitle=subtitle)
-            self._on_double_click(
-                row, lambda e=entry: self._load_device_entry(e))
+            load = lambda e=entry: self._load_device_entry(e)
+            row.add_suffix(self._preset_load_button(load))
             self._unit_preset_rows[entry["slot"]] = (row, subtitle)
             rows.append(row)
         try:
@@ -5590,9 +5603,9 @@ class Win(Adw.ApplicationWindow):
         for name, record in saved.items():
             row = Adw.ActionRow(title=name,
                                 subtitle=self._preset_summary(record))
-            self._on_double_click(
-                row, lambda n=name, r=record:
-                self._load_factory(None, n, True, record=r))
+            load = lambda n=name, r=record: self._load_factory(
+                None, n, True, record=r)
+            row.add_suffix(self._preset_load_button(load))
             row.add_suffix(self._preset_menu(
                 name, record, "user:%s" % name, deletable=True))
             rows.append(row)
@@ -5627,8 +5640,8 @@ class Win(Adw.ApplicationWindow):
                 subtitle=summary if supported
                 else "%s — %s" % (summary, reason))
             if supported:
-                self._on_double_click(
-                    row, lambda n=name: self._load_factory(None, n, True))
+                load = lambda n=name: self._load_factory(None, n, True)
+                row.add_suffix(self._preset_load_button(load))
                 row.add_suffix(self._preset_menu(
                     name, record, "factory:%s" % name))
             rows.append(row)
@@ -5643,17 +5656,12 @@ class Win(Adw.ApplicationWindow):
             return ""
 
     @staticmethod
-    def _on_double_click(row, callback):
-        """Load on a double-click, as Universal Control's preset list did."""
-        gesture = Gtk.GestureClick()
-
-        def pressed(_gesture, n_press, _x, _y):
-            if n_press == 2:
-                callback()
-
-        gesture.connect("pressed", pressed)
-        row.add_controller(gesture)
-        row.set_tooltip_text("Double-click to load")
+    def _preset_load_button(callback):
+        """The single-click Host preset recall action."""
+        button = Gtk.Button(label="Load", valign=Gtk.Align.CENTER)
+        button.add_css_class("flat")
+        button.connect("clicked", lambda _button: callback())
+        return button
 
     def _preset_menu(self, name, record, source, deletable=False):
         """One preset's actions: put it on the unit's button, or delete it."""
@@ -5670,16 +5678,22 @@ class Win(Adw.ApplicationWindow):
 
             button.connect("clicked", clicked)
             box.append(button)
+            return button
 
         for block in (1, 2):
-            item("Put on the unit's button, block %d" % block,
-                 lambda b=block: self._put_on_unit(name, record, b - 1, source))
+            button = item(
+                "Put on the unit's button, block %d" % block,
+                lambda b=block: self._put_on_unit(name, record, b - 1, source))
+            if PUT_ON_UNIT_UNAVAILABLE:
+                button.set_sensitive(False)
+                button.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE)
         if deletable:
             item("Delete", lambda: self._confirm_user_delete(name))
         menu = Gtk.MenuButton(icon_name="view-more-symbolic", popover=popover,
                               valign=Gtk.Align.CENTER)
         menu.add_css_class("flat")
-        menu.set_tooltip_text("Put on the unit, or delete")
+        menu.set_tooltip_text(
+            PUT_ON_UNIT_UNAVAILABLE or "Put on the unit, or delete")
         return menu
 
     def _filter_presets(self):
@@ -5710,9 +5724,9 @@ class Win(Adw.ApplicationWindow):
     def _load_device_entry(self, entry):
         """Load a preset that lives on the unit.
 
-        On its own channel the unit loads it from the block itself, the Stat
-        load that also opens the Voice FX gate. Anywhere else the Host applies
-        the same record, as it does a factory preset.
+        On its own channel the unit recalls the physical Fat Channel block and
+        the Host then sends the known global FX state once. Anywhere else the
+        Host applies the same record directly, as it does a factory preset.
         """
         channel = entry["physical_channel"]
         name = entry["record"].get("preset_name", "that preset")
@@ -5827,10 +5841,6 @@ class Win(Adw.ApplicationWindow):
                 % (replaced, where) if replaced else
                 "This replaces whatever %s on the unit holds, then loads it "
                 "there." % where)
-        if (plan["target"] == 2
-                and bool(record.get("voicefx", {}).get("on"))):
-            body += (" Channel 2 blocks do not load Voice FX, so the effect "
-                     "will not play from that block.")
         self._confirm("Put %s on the unit's button?" % name, body,
                       "Replace and load",
                       lambda: self._queue_factory_slot_store(plan))
@@ -5920,25 +5930,12 @@ class Win(Adw.ApplicationWindow):
         }
 
     def _record_voicefx(self, target, strict=True):
-        """The Voice FX a saved sound of ``target`` carries.
-
-        Voice FX is one engine that belongs to one input at a time. A unit
-        write refuses a channel that does not own it; a preset saved on this
-        computer stores it switched off instead, so saving either channel
-        always works.
-        """
-        fx_target = 2 if self.fx_target.get_selected() == 1 else 1
+        """The one shared FX state carried by either channel's saved sound."""
+        _ = (target, strict)          # retained for call-site compatibility
         fx_model = self.FX_ORDER[max(
             0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))]
         voicefx = self._fx_live_params()
         voicefx["on"] = self.fx_arm.get_active()
-        if fx_target != target:
-            if strict:
-                raise io24.HostActionError(
-                    "Voice FX targets Channel %d; choose Channel %d as the "
-                    "preset target before storing this sound"
-                    % (fx_target, fx_target))
-            voicefx["on"] = False
         return fx_model, voicefx
 
     def _current_slot_record(self, base_name, target, preset_name,
@@ -6116,7 +6113,7 @@ class Win(Adw.ApplicationWindow):
         return True
 
     def _adopt_record_voicefx(self, pr, channel):
-        """Show a record's stored Voice FX. Sends nothing to the device.
+        """Show a record's stored global FX state. Sends nothing to the device.
 
         A body the Host cannot model — an archive Voice FX class it has no
         builder for — leaves the controls untouched rather than inventing a
@@ -6130,10 +6127,10 @@ class Win(Adw.ApplicationWindow):
             return False
         if model not in self.FX_ORDER:
             return False
+        _ = channel                    # old records remain load-compatible
         prior = self._fx_mute
         self._fx_mute = True         # adoption must not echo back as a write
         try:
-            self.fx_target.set_selected(channel - 1)
             self.fx_model.set_selected(self.FX_ORDER.index(model))
             if getattr(self, "fx_param_stack", None) is not None:
                 self.fx_param_stack.set_visible_child_name(model)
@@ -6165,8 +6162,8 @@ class Win(Adw.ApplicationWindow):
 
         def work(dev):
             try:
-                # Block 201 is a singleton. When linked, assign/select/apply it
-                # once to the selected owner while applying Fat Channel to both.
+                # Block 201 is global. When linked, configure it once while
+                # applying the per-channel Fat Channel state to both inputs.
                 for ch in chans:
                     self.PR.apply_preset(
                         dev, pr, ch, with_fx=bool(with_fx and ch == target))
@@ -6801,6 +6798,9 @@ class Win(Adw.ApplicationWindow):
         try:
             state = {"version": 1,
                      "host_features": self._host_features_state()}
+            clock_state = getattr(self, "_audio_clock_state", None)
+            if callable(clock_state):
+                state["audio_clock"] = clock_state()
         except Exception:
             return False
         text = json.dumps(state, sort_keys=True, indent=1)
@@ -6844,13 +6844,12 @@ class Win(Adw.ApplicationWindow):
         through a power cycle and loses every write-only DSP setting. So on
         each connection the Host re-sends what it last sent, except what the
         unit reports itself, and shows it on the controls. Its own Host-only
-        features come back once per launch. The unit plays Voice FX only after
-        the channel has loaded a block, so when the last session had it on,
-        the owning channel's selected block is loaded first.
+        features come back once per launch. FX state is replayed globally; an
+        old processingChannel write is routing state and is never replayed by
+        automatic resume.
         """
         session = load_last_session(path) if first else None
         host_features = (session or {}).get("host_features") if first else None
-        selected = list(self.ctl.snap.get("preset_slot") or [])
 
         def work(dev):
             # The worker hands each job the Io24 driver itself
@@ -6859,26 +6858,12 @@ class Win(Adw.ApplicationWindow):
             backend = dev
             mirror = json.loads(json.dumps(
                 getattr(backend, "_shadow", None) or {}))
-            state = shadow_ui_state(mirror)
-            owner = state["voicefx_target"] or 1
-            recalled = False
-            if (state["voicefx"] or {}).get("on") and len(selected) == 2:
-                try:
-                    backend.recall_device_slot(owner, int(selected[owner - 1]))
-                    recalled = True
-                except Exception:
-                    pass
             try:
                 report = backend.reapply_shadow(skip=RESUME_SKIP)
             except Exception as error:
                 GLib.idle_add(self.say,
                               "Could not restore the last session: %s" % error)
                 return
-            # Loading a block on a bypassed channel switches it on at full
-            # amount; the saved amount, bypass included, is what resumes.
-            amount = state["processing_mix"].get(owner)
-            if recalled and amount is not None:
-                backend.set_fx_mix(owner, amount)
             message = ("Picked up where you left off"
                        if report.get("applied") or host_features else None)
             GLib.idle_add(self._after_load, mirror, host_features, [], message)
@@ -7084,10 +7069,6 @@ class Win(Adw.ApplicationWindow):
                             control.set_value(voicefx[name])
                     self.fx_arm.set_active(bool(voicefx.get("on", True)))
                     self.fx_visual.set_model(model)
-            target = state["voicefx_target"]
-            if target in (1, 2):
-                self.fx_target.set_selected(target - 1)
-
             mode = state["preset_mode"]
             if mode in (0, 1, 2):
                 self.preset_mode_row.set_selected(mode)

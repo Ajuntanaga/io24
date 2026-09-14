@@ -4,8 +4,7 @@
       "state.startup_apply"
     ],
     "apply_voicefx_snapshot": [
-      "voicefx.owner1.model_before_state",
-      "voicefx.owner2.model_before_state"
+      "voicefx.global.model_before_state"
     ],
     "bus_master": [
       "mixer.main.master",
@@ -43,66 +42,36 @@
       "fat.channel2.compressor.on"
     ],
     "configure_voice_fx_intent": [
-      "voicefx.owner1.delay.feedback",
-      "voicefx.owner1.delay.mix",
-      "voicefx.owner1.delay.on",
-      "voicefx.owner1.delay.time_s",
-      "voicefx.owner1.detuner.detune",
-      "voicefx.owner1.detuner.mix",
-      "voicefx.owner1.detuner.on",
-      "voicefx.owner1.filters.damping",
-      "voicefx.owner1.filters.distortion",
-      "voicefx.owner1.filters.mix",
-      "voicefx.owner1.filters.on",
-      "voicefx.owner1.filters.pitch",
-      "voicefx.owner1.filters.regeneration",
-      "voicefx.owner1.filters.volume",
-      "voicefx.owner1.ringmod.carrier2",
-      "voicefx.owner1.ringmod.carrier2_hz",
-      "voicefx.owner1.ringmod.carrier_hz",
-      "voicefx.owner1.ringmod.dist",
-      "voicefx.owner1.ringmod.mix",
-      "voicefx.owner1.ringmod.on",
-      "voicefx.owner1.ringmod.vol",
-      "voicefx.owner1.transformer.lows",
-      "voicefx.owner1.transformer.mix",
-      "voicefx.owner1.transformer.on",
-      "voicefx.owner1.transformer.width",
-      "voicefx.owner1.vocoder.carrier_freq",
-      "voicefx.owner1.vocoder.carrier_type",
-      "voicefx.owner1.vocoder.mix",
-      "voicefx.owner1.vocoder.on",
-      "voicefx.owner1.vocoder.vol",
-      "voicefx.owner2.delay.feedback",
-      "voicefx.owner2.delay.mix",
-      "voicefx.owner2.delay.on",
-      "voicefx.owner2.delay.time_s",
-      "voicefx.owner2.detuner.detune",
-      "voicefx.owner2.detuner.mix",
-      "voicefx.owner2.detuner.on",
-      "voicefx.owner2.filters.damping",
-      "voicefx.owner2.filters.distortion",
-      "voicefx.owner2.filters.mix",
-      "voicefx.owner2.filters.on",
-      "voicefx.owner2.filters.pitch",
-      "voicefx.owner2.filters.regeneration",
-      "voicefx.owner2.filters.volume",
-      "voicefx.owner2.ringmod.carrier2",
-      "voicefx.owner2.ringmod.carrier2_hz",
-      "voicefx.owner2.ringmod.carrier_hz",
-      "voicefx.owner2.ringmod.dist",
-      "voicefx.owner2.ringmod.mix",
-      "voicefx.owner2.ringmod.on",
-      "voicefx.owner2.ringmod.vol",
-      "voicefx.owner2.transformer.lows",
-      "voicefx.owner2.transformer.mix",
-      "voicefx.owner2.transformer.on",
-      "voicefx.owner2.transformer.width",
-      "voicefx.owner2.vocoder.carrier_freq",
-      "voicefx.owner2.vocoder.carrier_type",
-      "voicefx.owner2.vocoder.mix",
-      "voicefx.owner2.vocoder.on",
-      "voicefx.owner2.vocoder.vol"
+      "voicefx.global.delay.feedback",
+      "voicefx.global.delay.mix",
+      "voicefx.global.delay.on",
+      "voicefx.global.delay.time_s",
+      "voicefx.global.detuner.detune",
+      "voicefx.global.detuner.mix",
+      "voicefx.global.detuner.on",
+      "voicefx.global.filters.damping",
+      "voicefx.global.filters.distortion",
+      "voicefx.global.filters.mix",
+      "voicefx.global.filters.on",
+      "voicefx.global.filters.pitch",
+      "voicefx.global.filters.regeneration",
+      "voicefx.global.filters.volume",
+      "voicefx.global.ringmod.carrier2",
+      "voicefx.global.ringmod.carrier2_hz",
+      "voicefx.global.ringmod.carrier_hz",
+      "voicefx.global.ringmod.dist",
+      "voicefx.global.ringmod.mix",
+      "voicefx.global.ringmod.on",
+      "voicefx.global.ringmod.vol",
+      "voicefx.global.transformer.lows",
+      "voicefx.global.transformer.mix",
+      "voicefx.global.transformer.on",
+      "voicefx.global.transformer.width",
+      "voicefx.global.vocoder.carrier_freq",
+      "voicefx.global.vocoder.carrier_type",
+      "voicefx.global.vocoder.mix",
+      "voicefx.global.vocoder.on",
+      "voicefx.global.vocoder.vol"
     ],
     "eq_off": [
       "fat.channel1.eq_global_enabled",
@@ -204,7 +173,7 @@
       "native.channel2.processing_mix"
     ],
     "processing_channel": [
-      "native.voicefx_owner_alias"
+      "native.processing_channel_alias"
     ],
     "read_params": [
       "host.meter.compressor_reduction",
@@ -274,8 +243,7 @@
       "host.bus_shadow_queries"
     ],
     "send_fx": [
-      "voicefx.owner1.model_before_state",
-      "voicefx.owner2.model_before_state"
+      "voicefx.global.model_before_state"
     ],
     "set_biquad": [
       "host.raw_biquad_boundary"
@@ -428,68 +396,37 @@
       "fat.channel2.eq.band3.shape"
     ],
     "set_fx": [
-      "voicefx.owner1.delay.feedback",
-      "voicefx.owner1.delay.mix",
-      "voicefx.owner1.delay.on",
-      "voicefx.owner1.delay.time_s",
-      "voicefx.owner1.detuner.detune",
-      "voicefx.owner1.detuner.mix",
-      "voicefx.owner1.detuner.on",
-      "voicefx.owner1.filters.damping",
-      "voicefx.owner1.filters.distortion",
-      "voicefx.owner1.filters.mix",
-      "voicefx.owner1.filters.on",
-      "voicefx.owner1.filters.pitch",
-      "voicefx.owner1.filters.regeneration",
-      "voicefx.owner1.filters.volume",
-      "voicefx.owner1.model_selector",
-      "voicefx.owner1.ringmod.carrier2",
-      "voicefx.owner1.ringmod.carrier2_hz",
-      "voicefx.owner1.ringmod.carrier_hz",
-      "voicefx.owner1.ringmod.dist",
-      "voicefx.owner1.ringmod.mix",
-      "voicefx.owner1.ringmod.on",
-      "voicefx.owner1.ringmod.vol",
-      "voicefx.owner1.transformer.lows",
-      "voicefx.owner1.transformer.mix",
-      "voicefx.owner1.transformer.on",
-      "voicefx.owner1.transformer.width",
-      "voicefx.owner1.vocoder.carrier_freq",
-      "voicefx.owner1.vocoder.carrier_type",
-      "voicefx.owner1.vocoder.mix",
-      "voicefx.owner1.vocoder.on",
-      "voicefx.owner1.vocoder.vol",
-      "voicefx.owner2.delay.feedback",
-      "voicefx.owner2.delay.mix",
-      "voicefx.owner2.delay.on",
-      "voicefx.owner2.delay.time_s",
-      "voicefx.owner2.detuner.detune",
-      "voicefx.owner2.detuner.mix",
-      "voicefx.owner2.detuner.on",
-      "voicefx.owner2.filters.damping",
-      "voicefx.owner2.filters.distortion",
-      "voicefx.owner2.filters.mix",
-      "voicefx.owner2.filters.on",
-      "voicefx.owner2.filters.pitch",
-      "voicefx.owner2.filters.regeneration",
-      "voicefx.owner2.filters.volume",
-      "voicefx.owner2.model_selector",
-      "voicefx.owner2.ringmod.carrier2",
-      "voicefx.owner2.ringmod.carrier2_hz",
-      "voicefx.owner2.ringmod.carrier_hz",
-      "voicefx.owner2.ringmod.dist",
-      "voicefx.owner2.ringmod.mix",
-      "voicefx.owner2.ringmod.on",
-      "voicefx.owner2.ringmod.vol",
-      "voicefx.owner2.transformer.lows",
-      "voicefx.owner2.transformer.mix",
-      "voicefx.owner2.transformer.on",
-      "voicefx.owner2.transformer.width",
-      "voicefx.owner2.vocoder.carrier_freq",
-      "voicefx.owner2.vocoder.carrier_type",
-      "voicefx.owner2.vocoder.mix",
-      "voicefx.owner2.vocoder.on",
-      "voicefx.owner2.vocoder.vol"
+      "voicefx.global.delay.feedback",
+      "voicefx.global.delay.mix",
+      "voicefx.global.delay.on",
+      "voicefx.global.delay.time_s",
+      "voicefx.global.detuner.detune",
+      "voicefx.global.detuner.mix",
+      "voicefx.global.detuner.on",
+      "voicefx.global.filters.damping",
+      "voicefx.global.filters.distortion",
+      "voicefx.global.filters.mix",
+      "voicefx.global.filters.on",
+      "voicefx.global.filters.pitch",
+      "voicefx.global.filters.regeneration",
+      "voicefx.global.filters.volume",
+      "voicefx.global.model_selector",
+      "voicefx.global.ringmod.carrier2",
+      "voicefx.global.ringmod.carrier2_hz",
+      "voicefx.global.ringmod.carrier_hz",
+      "voicefx.global.ringmod.dist",
+      "voicefx.global.ringmod.mix",
+      "voicefx.global.ringmod.on",
+      "voicefx.global.ringmod.vol",
+      "voicefx.global.transformer.lows",
+      "voicefx.global.transformer.mix",
+      "voicefx.global.transformer.on",
+      "voicefx.global.transformer.width",
+      "voicefx.global.vocoder.carrier_freq",
+      "voicefx.global.vocoder.carrier_type",
+      "voicefx.global.vocoder.mix",
+      "voicefx.global.vocoder.on",
+      "voicefx.global.vocoder.vol"
     ],
     "set_fx_mix": [
       "native.channel1.processing_mix",
@@ -705,7 +642,7 @@
       "mixer.mixb.solo"
     ],
     "set_voicefx_channel": [
-      "native.voicefx_owner_alias"
+      "native.processing_channel_alias"
     ],
     "snapshot": [
       "state.snapshot"
@@ -781,31 +718,31 @@
       "mixer_master": 3,
       "multiband": 52,
       "native_control": 24,
-      "serializer": 16,
-      "serializer_order": 2,
+      "serializer": 10,
+      "serializer_order": 1,
       "serializer_targeting": 6,
       "shared_reverb": 5,
       "shared_reverb_host": 3,
-      "telemetry": 4,
+      "telemetry": 3,
       "vendor_descriptor": 117,
-      "voicefx": 60,
-      "voicefx_selector": 2
+      "voicefx": 30,
+      "voicefx_selector": 1
     },
     "by_phase": {
       "P0": 5,
-      "P1": 356,
-      "P3": 87,
+      "P1": 348,
+      "P3": 88,
       "P4": 142,
-      "P5": 71,
+      "P5": 39,
       "P6": 23,
       "P7": 64
     },
     "by_profile": {
       "catalog_reconcile": 117,
-      "component_reconcile": 215,
-      "dsp_audio_enum": 28,
-      "dsp_audio_scalar": 110,
-      "dsp_audio_toggle": 33,
+      "component_reconcile": 214,
+      "dsp_audio_enum": 25,
+      "dsp_audio_scalar": 89,
+      "dsp_audio_toggle": 26,
       "front_panel_write_only": 1,
       "host_mapping": 81,
       "host_process": 10,
@@ -816,7 +753,7 @@
       "readback_enum": 5,
       "readback_scalar": 5,
       "readback_toggle": 6,
-      "serializer": 27,
+      "serializer": 20,
       "telemetry": 17,
       "write_only_audio_scalar": 5,
       "write_only_audio_toggle": 2
@@ -825,9 +762,9 @@
     "fat_channel_parameter_rows": 142,
     "mixer_cell_rows": 42,
     "multiband_parameter_rows": 52,
-    "total_rows": 748,
+    "total_rows": 709,
     "vendor_descriptor_rows": 117,
-    "voicefx_parameter_rows": 60
+    "voicefx_parameter_rows": 30
   },
   "plan_timestamp": "2026-09-06",
   "profiles": {
@@ -21393,6 +21330,38 @@
       ]
     },
     {
+      "api": [
+        "set_voicefx_channel",
+        "processing_channel"
+      ],
+      "blockers": [],
+      "family": "native_control",
+      "id": "native.processing_channel_alias",
+      "parameter": "DSP-chain physical-input permutation alias",
+      "phase": "P3",
+      "profile": "readback_enum",
+      "requires": [
+        "exclusive_usb",
+        "battery_above_10"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {},
+      "source": [
+        "io24.py",
+        "firmware Pari/12 permutation"
+      ],
+      "stimuli": [
+        1,
+        2
+      ]
+    },
+    {
       "api": [],
       "blockers": [
         "purpose_unknown_no_live_write"
@@ -21418,38 +21387,6 @@
       "stimuli": []
     },
     {
-      "api": [
-        "set_voicefx_channel",
-        "processing_channel"
-      ],
-      "blockers": [],
-      "family": "native_control",
-      "id": "native.voicefx_owner_alias",
-      "parameter": "VoiceFX physical-channel ownership",
-      "phase": "P5",
-      "profile": "readback_enum",
-      "requires": [
-        "exclusive_usb",
-        "battery_above_10"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {},
-      "source": [
-        "io24.py",
-        "UC 4.7.2 processingChannel branch"
-      ],
-      "stimuli": [
-        1,
-        2
-      ]
-    },
-    {
       "api": [],
       "blockers": [],
       "family": "device_persistence",
@@ -21463,7 +21400,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.delay.on"
+        "voicefx.global.delay.on"
       ],
       "result": {
         "attempts": [],
@@ -21497,7 +21434,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.detuner.on"
+        "voicefx.global.detuner.on"
       ],
       "result": {
         "attempts": [],
@@ -21531,7 +21468,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.filters.on"
+        "voicefx.global.filters.on"
       ],
       "result": {
         "attempts": [],
@@ -21565,7 +21502,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.ringmod.on"
+        "voicefx.global.ringmod.on"
       ],
       "result": {
         "attempts": [],
@@ -21632,7 +21569,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.transformer.on"
+        "voicefx.global.transformer.on"
       ],
       "result": {
         "attempts": [],
@@ -21666,7 +21603,7 @@
       "profile": "persistence",
       "requires": [
         "state.channel2_slot3_write",
-        "voicefx.owner2.vocoder.on"
+        "voicefx.global.vocoder.on"
       ],
       "result": {
         "attempts": [],
@@ -21990,12 +21927,13 @@
         "save_native_model0_voicefx_slot"
       ],
       "blockers": [
-        "memp_receiver_ambiguity_unresolved_live"
+        "native_current_slot_body_unreadable",
+        "native_writer_unvalidated_live"
       ],
       "family": "device_preset",
       "id": "state.channel2_slot3_write",
-      "note": "The only live MemP-tagged SetP observation (2026-08-10) resolved to a cache-invalidation handler at firmware 0x3c064 with no payload. The distinct CP34 {0,0}/0x420bc/0x531e0 receiver remains statically derived and unconfirmed live.",
-      "parameter": "complete tagged record write to global slot 3",
+      "note": "Firmware ingress and recall preserve Stat bytes and the io24 consumer at 0x531e0 requires native version 2. The 2026-09-14 inactive-slot A/B/A test found no applied body from the old tagged writer, which is now refused before transport. The native writer is hardware-free only and cannot back up the current unreadable slot body.",
+      "parameter": "complete native version-2 record write to global slot 3",
       "phase": "P6",
       "profile": "persistence",
       "requires": [
@@ -22413,7 +22351,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.delay.feedback",
+      "id": "voicefx.global.delay.feedback",
       "parameter": "feedback",
       "phase": "P5",
       "prior_evidence": [
@@ -22421,7 +22359,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22433,8 +22371,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "delay",
-        "owner": 1
+        "model": "delay"
       },
       "source": [
         "io24_fx.py",
@@ -22453,7 +22390,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.delay.mix",
+      "id": "voicefx.global.delay.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -22461,7 +22398,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22473,8 +22410,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "delay",
-        "owner": 1
+        "model": "delay"
       },
       "source": [
         "io24_fx.py",
@@ -22493,7 +22429,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.delay.on",
+      "id": "voicefx.global.delay.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -22501,7 +22437,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22513,8 +22449,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "delay",
-        "owner": 1
+        "model": "delay"
       },
       "source": [
         "io24_fx.py",
@@ -22529,7 +22464,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.delay.serializer",
+      "id": "voicefx.global.delay.serializer",
       "parameter": "delay complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -22542,8 +22477,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "delay",
-        "owner": 1
+        "model": "delay"
       },
       "source": [
         "io24_fx.py",
@@ -22564,7 +22498,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.delay.time_s",
+      "id": "voicefx.global.delay.time_s",
       "parameter": "time_s",
       "phase": "P5",
       "prior_evidence": [
@@ -22572,7 +22506,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22584,8 +22518,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "delay",
-        "owner": 1
+        "model": "delay"
       },
       "source": [
         "io24_fx.py",
@@ -22604,7 +22537,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.detuner.detune",
+      "id": "voicefx.global.detuner.detune",
       "parameter": "detune",
       "phase": "P5",
       "prior_evidence": [
@@ -22612,7 +22545,7 @@
       ],
       "profile": "dsp_audio_enum",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22624,8 +22557,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "detuner",
-        "owner": 1
+        "model": "detuner"
       },
       "source": [
         "io24_fx.py",
@@ -22650,7 +22582,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.detuner.mix",
+      "id": "voicefx.global.detuner.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -22658,7 +22590,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22670,8 +22602,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "detuner",
-        "owner": 1
+        "model": "detuner"
       },
       "source": [
         "io24_fx.py",
@@ -22690,7 +22621,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.detuner.on",
+      "id": "voicefx.global.detuner.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -22698,7 +22629,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22710,8 +22641,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "detuner",
-        "owner": 1
+        "model": "detuner"
       },
       "source": [
         "io24_fx.py",
@@ -22726,7 +22656,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.detuner.serializer",
+      "id": "voicefx.global.detuner.serializer",
       "parameter": "detuner complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -22739,8 +22669,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "detuner",
-        "owner": 1
+        "model": "detuner"
       },
       "source": [
         "io24_fx.py",
@@ -22761,7 +22690,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.damping",
+      "id": "voicefx.global.filters.damping",
       "parameter": "damping",
       "phase": "P5",
       "prior_evidence": [
@@ -22769,7 +22698,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22781,8 +22710,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22801,7 +22729,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.distortion",
+      "id": "voicefx.global.filters.distortion",
       "parameter": "distortion",
       "phase": "P5",
       "prior_evidence": [
@@ -22809,7 +22737,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22821,8 +22749,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22841,7 +22768,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.mix",
+      "id": "voicefx.global.filters.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -22849,7 +22776,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22861,8 +22788,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22881,7 +22807,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.on",
+      "id": "voicefx.global.filters.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -22889,7 +22815,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22901,8 +22827,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22920,7 +22845,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.pitch",
+      "id": "voicefx.global.filters.pitch",
       "parameter": "pitch",
       "phase": "P5",
       "prior_evidence": [
@@ -22928,7 +22853,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22940,8 +22865,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22960,7 +22884,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.regeneration",
+      "id": "voicefx.global.filters.regeneration",
       "parameter": "regeneration",
       "phase": "P5",
       "prior_evidence": [
@@ -22968,7 +22892,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -22980,8 +22904,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -22997,7 +22920,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.filters.serializer",
+      "id": "voicefx.global.filters.serializer",
       "parameter": "filters complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -23010,8 +22933,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -23032,7 +22954,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.filters.volume",
+      "id": "voicefx.global.filters.volume",
       "parameter": "volume",
       "phase": "P5",
       "prior_evidence": [
@@ -23040,7 +22962,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23052,8 +22974,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "filters",
-        "owner": 1
+        "model": "filters"
       },
       "source": [
         "io24_fx.py",
@@ -23072,7 +22993,7 @@
       ],
       "blockers": [],
       "family": "serializer_order",
-      "id": "voicefx.owner1.model_before_state",
+      "id": "voicefx.global.model_before_state",
       "parameter": "model-before-state ordering",
       "phase": "P1",
       "profile": "serializer",
@@ -23085,7 +23006,10 @@
         "status": "PENDING"
       },
       "scope": {
-        "owner": 1
+        "lanes": [
+          1,
+          2
+        ]
       },
       "source": [
         "io24.py",
@@ -23106,12 +23030,12 @@
       ],
       "blockers": [],
       "family": "voicefx_selector",
-      "id": "voicefx.owner1.model_selector",
+      "id": "voicefx.global.model_selector",
       "parameter": "fxmodel",
       "phase": "P5",
       "profile": "dsp_audio_enum",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch"
       ],
       "result": {
@@ -23122,7 +23046,10 @@
         "status": "PENDING"
       },
       "scope": {
-        "owner": 1
+        "lanes": [
+          1,
+          2
+        ]
       },
       "source": [
         "io24_fx.py",
@@ -23144,7 +23071,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.carrier2",
+      "id": "voicefx.global.ringmod.carrier2",
       "parameter": "carrier2",
       "phase": "P5",
       "prior_evidence": [
@@ -23152,7 +23079,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23164,8 +23091,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23183,7 +23109,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.carrier2_hz",
+      "id": "voicefx.global.ringmod.carrier2_hz",
       "parameter": "carrier2_hz",
       "phase": "P5",
       "prior_evidence": [
@@ -23191,7 +23117,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23203,8 +23129,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23223,7 +23148,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.carrier_hz",
+      "id": "voicefx.global.ringmod.carrier_hz",
       "parameter": "carrier_hz",
       "phase": "P5",
       "prior_evidence": [
@@ -23231,7 +23156,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23243,8 +23168,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23263,7 +23187,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.dist",
+      "id": "voicefx.global.ringmod.dist",
       "parameter": "dist",
       "phase": "P5",
       "prior_evidence": [
@@ -23271,7 +23195,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23283,8 +23207,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23303,7 +23226,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.mix",
+      "id": "voicefx.global.ringmod.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -23311,7 +23234,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23323,8 +23246,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23343,7 +23265,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.on",
+      "id": "voicefx.global.ringmod.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -23351,7 +23273,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23363,8 +23285,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23379,7 +23300,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.ringmod.serializer",
+      "id": "voicefx.global.ringmod.serializer",
       "parameter": "ringmod complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -23392,8 +23313,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23414,7 +23334,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.ringmod.vol",
+      "id": "voicefx.global.ringmod.vol",
       "parameter": "vol",
       "phase": "P5",
       "prior_evidence": [
@@ -23422,7 +23342,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23434,8 +23354,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "ringmod",
-        "owner": 1
+        "model": "ringmod"
       },
       "source": [
         "io24_fx.py",
@@ -23454,7 +23373,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.transformer.lows",
+      "id": "voicefx.global.transformer.lows",
       "parameter": "lows",
       "phase": "P5",
       "prior_evidence": [
@@ -23462,7 +23381,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23474,8 +23393,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "transformer",
-        "owner": 1
+        "model": "transformer"
       },
       "source": [
         "io24_fx.py",
@@ -23494,7 +23412,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.transformer.mix",
+      "id": "voicefx.global.transformer.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -23502,7 +23420,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23514,8 +23432,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "transformer",
-        "owner": 1
+        "model": "transformer"
       },
       "source": [
         "io24_fx.py",
@@ -23534,7 +23451,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.transformer.on",
+      "id": "voicefx.global.transformer.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -23542,7 +23459,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23554,8 +23471,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "transformer",
-        "owner": 1
+        "model": "transformer"
       },
       "source": [
         "io24_fx.py",
@@ -23570,7 +23486,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.transformer.serializer",
+      "id": "voicefx.global.transformer.serializer",
       "parameter": "transformer complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -23583,8 +23499,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "transformer",
-        "owner": 1
+        "model": "transformer"
       },
       "source": [
         "io24_fx.py",
@@ -23605,7 +23520,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.transformer.width",
+      "id": "voicefx.global.transformer.width",
       "parameter": "width",
       "phase": "P5",
       "prior_evidence": [
@@ -23613,7 +23528,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23625,8 +23540,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "transformer",
-        "owner": 1
+        "model": "transformer"
       },
       "source": [
         "io24_fx.py",
@@ -23644,7 +23558,7 @@
         "no_device_readback_route_established"
       ],
       "family": "telemetry",
-      "id": "voicefx.owner1.vocoder.avoiced",
+      "id": "voicefx.global.vocoder.avoiced",
       "parameter": "avoiced read-only detector",
       "phase": "P1",
       "profile": "component_reconcile",
@@ -23657,8 +23571,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "UC 4.7.2 RobotVoiceA"
@@ -23672,7 +23585,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.vocoder.carrier_freq",
+      "id": "voicefx.global.vocoder.carrier_freq",
       "parameter": "carrier_freq",
       "phase": "P5",
       "prior_evidence": [
@@ -23680,7 +23593,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23692,8 +23605,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -23712,7 +23624,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.vocoder.carrier_type",
+      "id": "voicefx.global.vocoder.carrier_type",
       "parameter": "carrier_type",
       "phase": "P5",
       "prior_evidence": [
@@ -23720,7 +23632,7 @@
       ],
       "profile": "dsp_audio_enum",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23732,8 +23644,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -23752,7 +23663,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.vocoder.mix",
+      "id": "voicefx.global.vocoder.mix",
       "parameter": "mix",
       "phase": "P5",
       "prior_evidence": [
@@ -23760,7 +23671,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23772,8 +23683,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -23792,7 +23702,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.vocoder.on",
+      "id": "voicefx.global.vocoder.on",
       "parameter": "on",
       "phase": "P5",
       "prior_evidence": [
@@ -23800,7 +23710,7 @@
       ],
       "profile": "dsp_audio_toggle",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23812,8 +23722,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -23828,7 +23737,7 @@
       "api": [],
       "blockers": [],
       "family": "serializer",
-      "id": "voicefx.owner1.vocoder.serializer",
+      "id": "voicefx.global.vocoder.serializer",
       "parameter": "vocoder complete payload",
       "phase": "P1",
       "profile": "serializer",
@@ -23841,8 +23750,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -23863,7 +23771,7 @@
       ],
       "blockers": [],
       "family": "voicefx",
-      "id": "voicefx.owner1.vocoder.vol",
+      "id": "voicefx.global.vocoder.vol",
       "parameter": "vol",
       "phase": "P5",
       "prior_evidence": [
@@ -23871,7 +23779,7 @@
       ],
       "profile": "dsp_audio_scalar",
       "requires": [
-        "native.voicefx_owner_alias",
+        "native.processing_channel_alias",
         "deterministic_audio_rig@batch",
         "reverb.engine.on"
       ],
@@ -23883,1498 +23791,7 @@
         "status": "PENDING"
       },
       "scope": {
-        "model": "vocoder",
-        "owner": 1
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.delay.feedback",
-      "parameter": "feedback",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "delay",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.delay.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "delay",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.delay.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "delay",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.delay.serializer",
-      "parameter": "delay complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "delay",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.delay.time_s",
-      "parameter": "time_s",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "delay",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0001,
-        0.125,
-        0.25
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.detuner.detune",
-      "parameter": "detune",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_enum",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "detuner",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.detuner.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "detuner",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.detuner.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "detuner",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.detuner.serializer",
-      "parameter": "detuner complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "detuner",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.damping",
-      "parameter": "damping",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.distortion",
-      "parameter": "distortion",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.pitch",
-      "parameter": "pitch",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.regeneration",
-      "parameter": "regeneration",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.filters.serializer",
-      "parameter": "filters complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.filters.volume",
-      "parameter": "volume",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "filters",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "apply_voicefx_snapshot",
-        "send_fx"
-      ],
-      "blockers": [],
-      "family": "serializer_order",
-      "id": "voicefx.owner2.model_before_state",
-      "parameter": "model-before-state ordering",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "owner": 2
-      },
-      "source": [
-        "io24.py",
-        "UC 4.7.2 model factory"
-      ],
-      "stimuli": [
-        "transformer",
-        "detuner",
-        "vocoder",
-        "ringmod",
-        "filters",
-        "delay"
-      ]
-    },
-    {
-      "api": [
-        "set_fx"
-      ],
-      "blockers": [],
-      "family": "voicefx_selector",
-      "id": "voicefx.owner2.model_selector",
-      "parameter": "fxmodel",
-      "phase": "P5",
-      "profile": "dsp_audio_enum",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC parameter 450"
-      ],
-      "stimuli": [
-        "transformer",
-        "detuner",
-        "vocoder",
-        "ringmod",
-        "filters",
-        "delay"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.carrier2",
-      "parameter": "carrier2",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.carrier2_hz",
-      "parameter": "carrier2_hz",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.1,
-        50.0,
-        2000.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.carrier_hz",
-      "parameter": "carrier_hz",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.1,
-        30.0,
-        2000.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.dist",
-      "parameter": "dist",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.ringmod.serializer",
-      "parameter": "ringmod complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.ringmod.vol",
-      "parameter": "vol",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "ringmod",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.transformer.lows",
-      "parameter": "lows",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "transformer",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.transformer.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "transformer",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.transformer.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "transformer",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.transformer.serializer",
-      "parameter": "transformer complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "transformer",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.transformer.width",
-      "parameter": "width",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "transformer",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [
-        "no_device_readback_route_established"
-      ],
-      "family": "telemetry",
-      "id": "voicefx.owner2.vocoder.avoiced",
-      "parameter": "avoiced read-only detector",
-      "phase": "P1",
-      "profile": "component_reconcile",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "UC 4.7.2 RobotVoiceA"
-      ],
-      "stimuli": []
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.vocoder.carrier_freq",
-      "parameter": "carrier_freq",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        50.0,
-        100.0,
-        500.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.vocoder.carrier_type",
-      "parameter": "carrier_type",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_enum",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0,
-        1,
-        2
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.vocoder.mix",
-      "parameter": "mix",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        0.0,
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.vocoder.on",
-      "parameter": "on",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_toggle",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 voicefx.xml"
-      ],
-      "stimuli": [
-        false,
-        true
-      ]
-    },
-    {
-      "api": [],
-      "blockers": [],
-      "family": "serializer",
-      "id": "voicefx.owner2.vocoder.serializer",
-      "parameter": "vocoder complete payload",
-      "phase": "P1",
-      "profile": "serializer",
-      "requires": [],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
-      },
-      "source": [
-        "io24_fx.py",
-        "UC 4.7.2 host builder"
-      ],
-      "stimuli": [
-        "off",
-        "default",
-        "boundaries",
-        "48k",
-        "96k"
-      ]
-    },
-    {
-      "api": [
-        "set_fx",
-        "configure_voice_fx_intent"
-      ],
-      "blockers": [],
-      "family": "voicefx",
-      "id": "voicefx.owner2.vocoder.vol",
-      "parameter": "vol",
-      "phase": "P5",
-      "prior_evidence": [
-        "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) with block-202 reverb as same-path positive control (+6.0 dB); two runs agreed and preset recall did not open the gate"
-      ],
-      "profile": "dsp_audio_scalar",
-      "requires": [
-        "native.voicefx_owner_alias",
-        "deterministic_audio_rig@batch",
-        "reverb.engine.on"
-      ],
-      "result": {
-        "attempts": [],
-        "evidence": [],
-        "restoration_evidence": [],
-        "restored": false,
-        "status": "PENDING"
-      },
-      "scope": {
-        "model": "vocoder",
-        "owner": 2
+        "model": "vocoder"
       },
       "source": [
         "io24_fx.py",
@@ -25389,14 +23806,14 @@
   ],
   "schema": "io24-atomic-parameter-verification-matrix-v1",
   "source_sha256": {
-    "io24.py": "d2644a997cac0c9ce7411e8550beec18d85ff115e9557d1b7a7fcc2dbcb6cf2a",
+    "io24.py": "553f39b99a602c8420cdfe25e0692560679406a71ca9436f86d53ea83d9a0a7c",
     "io24_dsp.py": "3a2b810257b7957ec3246893ce3f0f7e2280c53734987a07d772ef92a26e2407",
     "io24_fx.py": "9c6a9cb75d46260e340ccf7575dc4a90d0b360d897b52105b26e600460635e4c",
-    "io24_mbc.py": "fd8ec3b6353cf031f3b40902d4202567208c074e415ba71c241b147e489c20b9",
-    "io24_presets.py": "12ddfa07dd44d3392a5a540c4728904a50a46f6ad6dc591f593ac99cdcbcf147",
+    "io24_mbc.py": "ffe446bcf1285b419ead18c47116c4c55c3218017a26180d6b3e917ba7713c66",
+    "io24_presets.py": "214d6208cb9d310b337a78855bab71732174a02c0cf5ff3be9e0e5205aad8b1a",
     "io24_scene.py": "8c5be86b1b44b80d84ff9e7346232bee05c20a408ca4cc4e52810adc173187e6",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "83f0f254dabe7e12b5062a7ad21136e0d08c8079f74251d51a65622f772c3e72",
+    "io24gtk.py": "23da0394108a4febfa4416ca3e492d753e370846e483f16837c2850f00349528",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

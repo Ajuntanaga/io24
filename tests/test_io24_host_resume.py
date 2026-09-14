@@ -82,9 +82,10 @@ class ReplaySkipTests(unittest.TestCase):
         self.assertEqual(sorted(dev.sent),
                          ["set_channel_link", "set_highpass", "set_mute"])
 
-    def test_the_skipped_settings_are_the_ones_the_unit_reports(self):
+    def test_resume_also_skips_legacy_fx_owner_routing(self):
         self.assertEqual(set(io24gtk.RESUME_SKIP),
-                         {"set_mute", "set_hp_mute", "set_channel_link"})
+                         {"set_mute", "set_hp_mute", "set_channel_link",
+                          "set_processing_channel"})
 
 
 class LastSessionFileTests(unittest.TestCase):
@@ -122,6 +123,77 @@ class LastSessionFileTests(unittest.TestCase):
 
     def test_the_snapshot_dialog_uses_the_same_gathering(self):
         self.assertIn("self._host_features_state()", _function("_pick"))
+
+
+class AudioClockPreferenceTests(unittest.TestCase):
+    def test_first_launch_defaults_to_96khz_and_512_frames(self):
+        self.assertEqual(io24gtk.audio_clock_preference(None), {
+            "version": 1,
+            "sample_rate": 96000,
+            "quantum": 512,
+        })
+
+    def test_a_saved_clock_becomes_the_next_launch_preference(self):
+        session = {
+            "version": 1,
+            "audio_clock": {
+                "version": 1,
+                "sample_rate": 88200,
+                "quantum": 256,
+            },
+        }
+        self.assertEqual(io24gtk.audio_clock_preference(session),
+                         session["audio_clock"])
+
+    def test_the_session_file_keeps_the_last_user_selection(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "last-session.json"
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _host_features_state=lambda: {}),
+            "_audio_clock_state", "_save_last_session")
+
+        self.assertTrue(host._save_last_session(path))
+        self.assertEqual(io24gtk.load_last_session(path)["audio_clock"], {
+            "version": 1,
+            "sample_rate": 96000,
+            "quantum": 512,
+        })
+
+    def test_a_temporary_multiband_quantum_does_not_replace_the_preference(self):
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _insert_quantum_before=512),
+            "_audio_clock_state")
+        self.assertEqual(host._audio_clock_state()["quantum"], 512)
+
+    def test_startup_applies_the_saved_rate_and_standard_quantum(self):
+        calls = []
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _insert_quantum_before=None,
+            _set_device_fs=lambda rate: calls.append(("device-fs", rate)),
+            say=lambda message: calls.append(("message", message))),
+            "_audio_clock_state", "_restore_audio_clock")
+        with mock.patch.object(io24gtk, "pw_settings", return_value={
+                "clock.allowed-rates": "[ 44100, 48000, 88200, 96000 ]",
+                "clock.force-rate": "0",
+                "clock.force-quantum": "0",
+        }), mock.patch.object(
+                io24gtk, "pw_set",
+                side_effect=lambda key, value:
+                (calls.append((key, value)) or (True, ""))):
+            self.assertFalse(host._restore_audio_clock())
+
+        self.assertEqual(calls, [
+            ("clock.force-rate", 96000),
+            ("device-fs", 96000),
+            ("clock.force-quantum", 512),
+        ])
 
 
 class ResumeTriggerTests(unittest.TestCase):
@@ -219,7 +291,7 @@ class ResumeSessionTests(unittest.TestCase):
         host._resume_session(first=False, path=self.path)
         self.assertIsNone(adopted[0][1])
 
-    def test_voice_fx_on_loads_the_owners_block_first_and_keeps_its_amount(self):
+    def test_fx_on_replays_state_without_recalling_or_routing_an_owner(self):
         shadow = {
             "set_fx": {"fn": "set_fx",
                        "kwargs": {"model": "detuner", "on": True}},
@@ -232,9 +304,7 @@ class ResumeSessionTests(unittest.TestCase):
         host, backend, _adopted = self._host(shadow, preset_slot=(0, 3))
         host._resume_session(first=False, path=self.path)
         self.assertEqual(backend.calls, [
-            ("recall", 2, 3),
             ("reapply", io24gtk.RESUME_SKIP),
-            ("set_fx_mix", 2, 0.4),
         ])
 
     def test_voice_fx_off_loads_no_block(self):

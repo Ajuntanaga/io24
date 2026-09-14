@@ -2,6 +2,94 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-14 controlling writer correction: native version 2, not tagged JSON
+
+The exact UC 4.7.2 caller context identifies its tagged `MemP/Stat` emission as
+a 500 ms settled-state synchronizer. The explicit Store action serializes the
+selected library item and sends `MemP/PrsM`; it is not the four-slot writer.
+Firmware 1.28 stores incoming `Stat` payload bytes unchanged and presents them
+unchanged to `0x531e0`, whose first read requires little-endian u32 `2`.
+
+The Host therefore no longer sends tagged JSON/scene archives as device slot
+bodies. `save_uc_device_slot()` and the JSON registry convenience path fail
+before transport. `save_device_slot()` accepts only a fully validated native
+version-2 record and uses the existing exact `MemP/Stat` fragmentation. This is
+an offline implementation result, not live acceptance: the current native slot
+body is unreadable, so any live trial needs a bounded overwrite decision and a
+pinned restoration body.
+
+## 2026-09-14 controlling live inactive-slot result: selection works, body does not
+
+An authorized no-playback A/B/A test at 96 kHz wrote and selected a flat
+record, a +15 dB/1 kHz high-shelf record, and the flat record again in inactive
+Input-1 slot 1. The complete original `B A S E` body was Host-known and
+restorable. Readable slot selection reached 1 every time, but simultaneous
+JaSt Input-1/Main meter ratios changed only +0.143 dB for the boosted record;
+flat-state drift was -0.085 dB. Classification:
+`NO_SAVED_BODY_RECALL_EFFECT_DETECTED`.
+
+This is a clean negative for the current tagged `SetP | Appl(0) | MemP |
+Stat(1) | record` writer/framing: the selector operates, but the record body
+sent by this Host did not become active. It does not refute the static firmware
+trace of the native storage path and does not prove that native device preset
+storage is absent. The original body was resent, with zero replies just as in
+its earlier `WRITE_SENT_UNVERIFIED` registry entry; the registry remained
+read-only. Readable state restored exactly, and routes, DSP Amount, and
+`processingChannel` were untouched. Controlling report:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/inactive-slot-recall-live-attempt-1/live-report.json`,
+SHA-256 `8db972783d0ce15d799c1fc8b1f6ff7422faee4f13c8fefdac8b962822363299`.
+
+## 2026-09-14 controlling live Voice FX result: Transformer is active
+
+A no-playback live test at 96 kHz used Input 1 preamp self-noise and
+simultaneous JaSt Input-1/Main/Mix-A/Mix-B meters. Main and headphone output
+controls were held at 0.01. The ordinary Channel 1 noise gate was temporarily
+bypassed so its -48.72 dB threshold could not suppress the source; this is
+distinct from block 201's internal processing gate.
+
+The gain control passed: raising Input 1 from 30 to 60 dB moved its meter by
+26.986 dB and all three bus meters by 26.248 dB. Transformer on then moved the
+normalized bus level by **-4.024 dB** relative to its off-before/off-after
+midpoint. Its off drift was 0.045 dB. This is direct functional evidence that
+block-201 model 0 processes audio in the device's current armed state; it
+supersedes any blanket claim that block 201 is inert.
+
+The same off/on/off sweep found no resolved level response for models 1 through
+5: De-Tuner -0.015 dB, Vocoder +0.009 dB, Ring Modulator -0.186 dB, Filters
+-0.032 dB, and Delay -0.008 dB. Those are not general inaudibility findings.
+The observation is a scalar broadband-energy meter, which is weak for
+energy-preserving pitch and delay processing, and the run did not independently
+prove each selector transition. Those models remain unproved.
+
+The result is scoped to direct model-select/parameter writes in the state found
+on 2026-09-14. It does not identify which prior action armed the firmware gate,
+prove cold-start activation, device-slot recall, or simultaneous processing of
+both structural lanes. Restoration was clean: readable flags/gains/outputs and
+the 0/1 processing permutation returned exactly; the complete Host-known
+Transformer-off and Channel 1 gate states were resent. Mixer routes, preset
+slots, DSP Amount, and `processingChannel` were untouched. Controlling report:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/voicefx-meter-live-attempt-3/live-report.json`,
+SHA-256 `0436e1da0a3fa9e3c83a7988f0d7b90507aaeae998403e8e7d36c0ac4578002e`.
+
+## 2026-09-13 controlling Host correction: global FX, no owner mutation
+
+The stock UC `processingChannel == 0` conditional arbitrates ownership in its
+host component tree. It is not a second block-201 instance and is not proof of
+a one-lane DSP. The firmware topology is authoritative: block 201 is one shared
+settings object configured with two input/output lanes, and model 0 binds its
+private core at lane indexes 0 and 1. The Linux Host therefore configures one
+global FX state for both structural lanes and no longer changes
+`processingChannel` during ordinary FX edits, preset loads, or reconnect.
+That parameter remains a separate, permutation-sensitive routing API.
+
+This does not promote topology to audible acceptance. The later framing trace
+at §13s supersedes the older claim that tagged device-slot recall opens the
+block-201 gate: the archive reaches `0x531e0` with `0x700b697b` where the native
+loader requires first word `2`. A physical preset recall is now reported only
+as Fat Channel selection. For a Host-known record, the Host sends its global FX
+intent once after recall; neither transport success nor recall proves FX
+activation or simultaneous audibility.
+
 ## 2026-09-08 controlling correction: wire 4 is one processing scalar
 
 `'Para'/4` and `'Pari'/4` are two encodings of the same per-channel firmware
@@ -180,9 +268,9 @@ the big preset-selector knob changes presentation according to that assignment.
 Stock operation still uses one shared Voice FX engine on one assigned channel
 at a time.
 
-The exact UC active-slot writer emits a complete scene-shaped tagged record
-through `SetP | Appl(0) | MemP | Stat(slot)`; its physical record starts with
-`0x7b` (`{`). Retained UC scenes independently have four `presets.slots`
+UC's exact settled-state synchronizer emits a complete scene-shaped tagged
+record through `SetP | Appl(0) | MemP | Stat(slot)`; its physical record starts
+with `0x7b` (`{`). Retained UC scenes independently have four `presets.slots`
 objects and every one contains a `voicefx` member, including slots 2/3 for
 Channel 2. Therefore the four version-2 records embedded in firmware are
 startup/default implementation data, not the host wire schema or a legal
@@ -200,11 +288,12 @@ four-byte-keyed chunks. Slots 0/1 happen to include component 201; slots 2/3 do
 not. Promoting that observed default shape into a rule that Channel-2 saves
 cannot contain Voice FX was the error.
 
-The prior Channel-2 Slap Echo trial used a correctly tagged slot record, but it
-left `processingChannel` at its baseline `Ch1` assignment. Its dry result does
-not test the normal UC workflow. The two subsequent attempts corrected that
-assignment but then used the wrong physical preset-control index. The next
-discriminator is now exact:
+The prior Channel-2 Slap Echo trial used a correctly encoded tagged
+library/settled-state record, not a firmware-native slot body. It also left
+`processingChannel` at its baseline `Ch1` assignment. Later attempts corrected
+that assignment and physical selector, but the tagged body still did not become
+an effective saved preset. The historical plan below is retained only as the
+superseded test record:
 
 ```text
 require and reassert line/ch1/processingChannel = 1  (Assign Voice FX = Ch2)
@@ -503,8 +592,10 @@ omitted bypass values default to `false`. Thus a pre-extension record takes the
 same effective lane-control path as stock firmware. `voicefx.on` remains the
 global model enable; it is not replaced by either lane bypass.
 
-The native store writes complete tagged `Stat` record bytes. The patched
-structured-state apply path must explicitly recognize these new fields and set
+The historical custom-firmware design assumed complete tagged `Stat` bytes;
+the controlling writer correction at the top of this document supersedes that
+assumption. Any future patched structured-state apply path must explicitly
+recognize these new fields and set
 the two runtime lane controls. Only under an explicit custom-firmware
 capability may the host serialize them; normal saves retain the legacy
 four-field `voicefx` object because stock acceptance of unknown keys is not
@@ -5597,6 +5688,23 @@ appearing; it sits under the 3 dB detection threshold and did not reproduce.
 gated by flags this project has no established way to set, and the Voice FX
 models remain decoded, byte-correct, storable and inaudible. What §13r bought
 is preset *presentation and recall*, not the FX gate.
+
+**2026-09-14 DSP Amount clarification.** A later authorized no-listening test
+made the step-3 blend law quantitative without relying on USB audio capture.
+With a controlled +15 dB/1 kHz high-shelf on Channel 2, simultaneous JaSt
+Input-2/Main meter ratios placed 0/25/50/75/100% DSP Amount at normalized
+positions 0.0000/0.2473/0.4917/0.7552/1.0000. Exact zero retained the dry
+signal; it did not mute or scale the output from zero. The functional result is
+a linear dry-to-full-chain blend, not a send or channel fader. Waveforms and
+meters cannot prove that firmware literally runs two parallel signal paths.
+
+This whole-chain blend is not equally meaningful for every module. Parallel
+compression is a conventional use; intermediate values undermine an HPF or
+corrective EQ, leak around a gate, and restore peaks around a limiter. Host UX
+should therefore present Bypass as the normal chain on/off, recommend 100%
+amount for corrective/dynamics protection, and reserve intermediate values for
+deliberate parallel processing. Effect-specific Voice FX/Reverb mix controls
+remain distinct.
 
 ---
 

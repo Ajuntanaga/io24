@@ -182,20 +182,20 @@ class NativeStatTests(unittest.TestCase):
         size = struct.unpack_from("<H", frame, 35)[0]
         self.assertEqual(frame[41:41 + size], raw)
 
-    def test_live_api_rejects_encoded_or_incomplete_archive_before_transport(self):
+    def test_live_api_rejects_tagged_archives_before_transport(self):
         fake = _WireFake()
         archive = encode_preset_record({"preset_name": "Slap Echo"})
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NativeStatFormatError):
             fake.save_device_slot(3, archive)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             fake.save_device_slot(3, {"preset_name": "Slap Echo"})
 
         self.assertEqual(fake.payloads, [])
 
-    def test_live_api_sends_complete_tagged_record(self):
+    def test_live_api_sends_complete_native_record(self):
         fake = _WireFake()
-        record = _tagged_record()
+        record = _native_record(include_voicefx=False)
 
         report = fake.save_device_slot(3, record)
 
@@ -207,14 +207,23 @@ class NativeStatTests(unittest.TestCase):
         self.assertEqual(len(fake.payloads), 1)
         frame = fake.payloads[0]
         size = struct.unpack_from("<H", frame, 35)[0]
-        self.assertEqual(frame[41:41 + size], encode_preset_record(record))
+        self.assertEqual(frame[41:41 + size], record)
+
+    def test_tagged_uc_slot_api_is_retired_before_transport(self):
+        fake = _WireFake()
+
+        with self.assertRaisesRegex(
+                io24.HostActionError, "tagged UC Stat archives"):
+            fake.save_uc_device_slot(3, _tagged_record())
+
+        self.assertEqual(fake.payloads, [])
 
     def test_native_model0_live_api_is_retired_before_transport(self):
         fake = _WireFake()
         base = _native_record(include_voicefx=True)
 
         with self.assertRaisesRegex(
-                io24.HostActionError, "startup/default chunks"):
+                io24.HostActionError, "unreadable current slot"):
             fake.save_native_model0_voicefx_slot(3, base)
 
         self.assertEqual(fake.payloads, [])

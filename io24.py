@@ -118,10 +118,8 @@ def _build_uc_slot_memp_frames(slot_index, record):
     """Wrap caller-supplied bytes as ``MemP/Stat`` indexes 0..3.
 
     The envelope is shared by multiple record representations, so this low-
-    level helper intentionally makes no claim about ``record``.  The exact UC
-    active-slot writer supplies the tagged archive built by
-    ``_build_uc_slot_json_frames``.  This function only returns bytes and never
-    opens USB.
+    level helper intentionally makes no claim about ``record``. This function
+    only returns bytes and never opens USB.
     """
     if isinstance(slot_index, bool) or not isinstance(slot_index, int) or \
             not 0 <= slot_index <= 3:
@@ -130,14 +128,18 @@ def _build_uc_slot_memp_frames(slot_index, record):
 
 
 def _build_uc_slot_json_frames(slot_index, slot_record):
-    """Build the exact UC tagged-archive ``MemP/Stat`` slot update.
+    """Build UC's tagged settled-state ``MemP/Stat`` fixture offline.
 
-    UC's active-slot writer starts the physical record at the tagged mapping's
-    opening ``{`` byte.  The version-2 chunk records embedded in firmware are
-    startup/default implementation data, not evidence that the host inserts a
-    different record representation on this route.  Require a complete slot
-    record before framing so an effect-only mapping cannot erase the rest of a
-    channel preset.  This helper performs no I/O.
+    UC 4.7.2's 500 ms settled-state synchronizer starts this physical record at
+    the tagged mapping's opening ``{`` byte. The explicit Store action instead
+    uses the separate ``PrsM`` library route. Firmware 1.28 preserves a stored
+    ``Stat`` body byte-for-byte on recall and its io24 state loader requires a
+    native little-endian version word ``2``. The 2026-09-14 inactive-slot test
+    consequently found no applied body from this tagged representation.
+
+    Keep the exact fixture for protocol comparison, but do not use it as the
+    io24 live slot writer. Require a complete record so even offline callers
+    cannot accidentally construct a misleading effect-only body.
     """
     from io24_preset_record import (complete_device_slot_record,
                                     encode_preset_record)
@@ -147,11 +149,11 @@ def _build_uc_slot_json_frames(slot_index, slot_record):
 
 
 def _build_native_slot_memp_frames(slot_index, native_record):
-    """Wrap a validated firmware startup/default chunk for offline study.
+    """Frame one validated firmware-native version-2 ``Stat`` record.
 
-    The exact UC host slot writer emits the tagged archive instead.  Keeping
-    this structural fixture is useful for firmware comparison, but it is not a
-    source-bound device-slot save representation.
+    Firmware 1.28's ``MemP/Stat`` ingress stores these bytes unchanged and its
+    recall consumer requires this representation. Building frames performs no
+    I/O and does not establish acceptance, persistence, or audibility.
     """
     from io24_native_stat import validate_native_stat_record
     record = validate_native_stat_record(native_record, slot_index=slot_index)
@@ -164,12 +166,11 @@ def build_paired_doubler_private_reverb_frames(
         preset_name=None, wet_ch1=1.0, wet_ch2=1.0,
         bypass_ch1=False, bypass_ch2=False,
         custom_firmware_lane_controls=False):
-    """Build the superseded two-slot Voice-FX fixture without device I/O.
+    """Build a two-slot Voice-FX fixture for offline comparison only.
 
-    The tagged archive is UC's correct slot representation.  What is
-    superseded is duplicating one traditionally single-assigned Voice FX state
-    into both channel slot families.  The current stock workflow assigns the
-    shared engine to one input and saves one slot for that channel.
+    The tagged archive is retained only as a UC settled-state fixture.
+    Duplicating a global settings object into two physical preset bodies is
+    neither atomic nor required by the Host's two-lane runtime control.
     """
     from io24_preset_record import paired_doubler_private_reverb_slots
     records = paired_doubler_private_reverb_slots(
@@ -572,9 +573,9 @@ FACTORY_SLAP_ECHO_SHA256 = (
 def load_channel2_factory_slap_echo(dev, slot_record, sleep_fn=time.sleep):
     """Refuse the superseded Slap-only diagnostic before device access.
 
-    Its tagged record is a valid UC slot representation, but the earlier trial
-    omitted UC's Voice FX channel assignment and cannot answer the current
-    question.  Use the bounded Channel-2 assignment/save/recall stage instead.
+    Its tagged record is a valid UC library/settled-state representation, not
+    a firmware-native io24 slot body. The earlier trial also omitted UC's Voice
+    FX channel assignment and cannot answer the current question.
     """
     from io24_preset_record import (complete_device_slot_record,
                                     encode_preset_record)
@@ -1765,16 +1766,18 @@ class Io24:
                           if self.send_db(s, bus) is not None}}
 
     # -------------------------------------------------------------- presets
-    # UC's exact active-slot writer stores a complete tagged scene-shaped record
-    # through MemP/Stat.  Version-2 chunks embedded in the firmware are its
-    # startup/default implementation data, not the host writer's wire schema.
+    # Firmware 1.28 stores MemP/Stat payload bytes unchanged and its recalled
+    # io24 state consumer requires a native version-2 record. UC 4.7.2's tagged
+    # Stat sender belongs to its settled-state synchronizer; its explicit Store
+    # action uses the separate PrsM library path. The 2026-09-14 inactive-slot
+    # test confirmed that sending a tagged scene body does not apply that body.
     # Physical commit, front-panel recall and power-cycle survival remain
-    # acceptance boundaries.
+    # acceptance boundaries for the native writer too.
     #
     # The older savepreset/loadpreset files below remain host-side snapshots.
     # Because the DSP blocks are write-only, those files can contain only what
     # the driver itself set. A safe slot update instead starts from an explicit
-    # complete tagged record so unrelated channel-strip state is preserved.
+    # complete native record so unrelated channel-strip state is preserved.
 
     # Keys of read_params() that describe settings rather than meters or
     # identity, i.e. the ones worth storing and restoring.
@@ -1793,25 +1796,24 @@ class Io24:
             "replies_received": sum(bool(reply) for reply in replies),
         }
 
-    def save_device_slot(self, slot_index, slot_record):
-        """Send one complete tagged record through UC's slot writer route.
+    def save_device_slot(self, slot_index, native_record):
+        """Send one complete firmware-native version-2 ``Stat`` record.
 
         The returned report distinguishes frames sent from replies received;
-        it does not claim nonvolatile commit or recall merely because transport
-        completed.
+        it does not claim parsing, nonvolatile commit, recall, or audibility
+        merely because transport completed. The caller must supply the complete
+        native body because the current body cannot be read back before an
+        overwrite.
         """
-        frames = _build_uc_slot_json_frames(slot_index, slot_record)
+        frames = _build_native_slot_memp_frames(slot_index, native_record)
         return self._send_device_slot_frames(slot_index, frames)
 
     def save_uc_device_slot(self, slot_index, slot_record):
-        """Send one complete scene-shaped record through UC's slot route.
-
-        This is the source-bound ``MemP/Stat`` representation emitted by the
-        UC active-slot writer.  A completed transport still does not prove
-        nonvolatile commit, front-panel recall, power-cycle survival, or an
-        audible effect; those remain physical acceptance checks.
-        """
-        return self.save_device_slot(slot_index, slot_record)
+        """Refuse the disproved tagged scene-body writer before transport."""
+        _ = (slot_index, slot_record)
+        raise HostActionError(
+            "tagged UC Stat archives do not apply as io24 firmware 1.28 slot "
+            "bodies; no device write was attempted")
 
     def _device_slot_identity(self):
         """Return the connected unit identity used to scope local slot evidence."""
@@ -1835,36 +1837,26 @@ class Io24:
 
     def save_known_device_slot(self, slot_index, slot_record, registry,
                                source, written_at=None):
-        """Send one complete body and record only Host-known provenance.
+        """Refuse the legacy tagged-body registry path before transport.
 
-        Preparing the registry validates its existing contents, destination,
-        source label, and complete record before USB is touched.  A successful
-        return means the write frames were sent and the local registry was
-        updated; it does not select, enable, recall, directly apply, or claim
-        device readback/nonvolatile commit.
+        Existing registry entries are historical transport receipts, not proof
+        that their tagged bodies were installed. Native records need a separate
+        byte-oriented registry before this convenience path can be restored.
         """
-        prepared = registry.prepare_write(
-            slot_index, slot_record, source, written_at=written_at,
-            device_identity=self._device_slot_identity())
-        report = self.save_uc_device_slot(slot_index, slot_record)
-        try:
-            entry = registry.commit_sent(prepared, report)
-        except Exception as error:
-            failure = HostActionError(
-                "device slot write was sent but local registry update failed: %s" %
-                error)
-            failure.device_slot_transport = report
-            raise failure from error
-        return {"transport": report, "registry": entry}
+        _ = (slot_index, slot_record, registry, source, written_at)
+        raise HostActionError(
+            "the Host has no native Stat body for this JSON preset; no device "
+            "write or registry update was attempted")
 
     def save_native_model0_voicefx_slot(
             self, slot_index, base_native_record, enabled=True, lows=0.06,
             width=0.405, mix=0.295):
-        """Refuse firmware-default chunks on UC's tagged host slot route."""
+        """Refuse an implicit unreadable-slot overwrite before transport."""
         _ = (slot_index, base_native_record, enabled, lows, width, mix)
         raise HostActionError(
-            "firmware startup/default chunks are not the UC host Stat wire "
-            "record; no device write was attempted")
+            "construct the complete native record explicitly and acknowledge "
+            "the unreadable current slot in a bounded runner; no device write "
+            "was attempted")
 
     def save_paired_doubler_private_reverb(
             self, channel1_slot, channel1_base, channel2_slot, channel2_base,
@@ -1872,15 +1864,10 @@ class Io24:
             preset_name=None, wet_ch1=1.0, wet_ch2=1.0,
             bypass_ch1=False, bypass_ch2=False,
             custom_firmware_lane_controls=False):
-        """Refuse the obsolete paired write before either slot is touched.
-
-        Tagged records are the exact UC host representation, but stock Voice FX
-        is assigned to one input at a time.  A two-slot duplicate is therefore
-        not the current product workflow and cannot be treated as atomic.
-        """
+        """Refuse a non-atomic duplicate write before either slot is touched."""
         raise HostActionError(
-            "paired Voice FX slot writes do not reproduce UC's single-channel "
-            "assignment workflow; no device write was attempted")
+            "paired FX slot writes are not atomic and are unnecessary for the "
+            "global engine; no device write was attempted")
 
     def snapshot(self, include_device_preset_state=False):
         """Return a Host snapshot without moving device slots on later load.
@@ -2121,10 +2108,10 @@ class Io24:
 
     # ------------------------------------------------------------- insert FX
     # Block 201 is a singleton (blockIndex ignored). Direct model writes do not
-    # establish the native structured-state gate. Voice FX is a channel insert;
-    # the FX send/return controls belong to shared reverb block 202 and are not
-    # an activation path for block 201. Native Stat application opens the gate.
-    # Transformer/Doubler then uses its own private reverb-core instance.
+    # establish its internal processing gate, and the latest framing trace
+    # proves tagged device-slot recall does not establish it either. Voice FX
+    # is distinct from shared reverb block 202. Transformer/Doubler uses its own
+    # private reverb-core instance over two structural audio lanes.
 
     FX_MODELS = {"transformer": 0, "detuner": 1, "vocoder": 2,
                  "ringmod": 3, "filters": 4, "delay": 5}
@@ -2189,13 +2176,13 @@ class Io24:
     def fx_on(self, channel=1, send=1.0, return_db=0.0, bus="main"):
         """Refuse an unproved standalone direct-gate write.
 
-        Saved-state application is the decoded gate path; a guessed direct gate
-        write is deliberately not exposed here.
+        No stock gate-opening path is currently established; a guessed direct
+        gate write is deliberately not exposed here.
         """
         _ = channel, send, return_db, bus
         raise RuntimeError(
             "standalone direct Voice FX activation is not established; "
-            "saved-state recall owns the decoded processing gate")
+            "the processing gate remains unresolved")
 
     def fx_off(self, channel=1, bus="main"):
         """Refuse an unproved standalone direct-gate write."""
@@ -2295,16 +2282,10 @@ class Io24:
     def recall_device_slot(self, channel, slot):
         """Select one stored slot and leave that channel processing it.
 
-        Saving a body with :meth:`save_device_slot` only stores it; nothing is
-        heard until the firmware loads it back.  Selecting the slot is what
-        runs the native ``Stat`` structured-state load, and that load is the
-        only decoded route that satisfies block 201's three gate conditions --
-        ``+0x44`` non-zero, ``+0x39`` non-zero and ``+0x40`` zero -- which the
-        handler at fw ``0x50af8`` checks before it dispatches anything at all.
-        See PROTOCOL.md 13c and the 2026-08-31 controlling correction.  A
-        direct ``SetP | 201 | 'VoFx'`` write is accepted, stored and silently
-        discarded while that gate is shut, which is why arming a model without
-        a recall has never been audible.
+        This recalls the physical Fat Channel preset only. The latest framing
+        trace shows the tagged UC record reaches block 201 with an archive word
+        where the native loader requires ``2``, so slot recall is not claimed
+        as an FX activation path.
 
         A bypassed channel never reaches the load, so the enable is asserted
         only when the device reports this channel bypassed.  A channel that is
@@ -2347,7 +2328,6 @@ class Io24:
             "was_processing": bool(before),
             "enable_asserted": not before,
             "selection": "SENT_UNVERIFIED",
-            "voicefx_gate": "STAT_LOAD_REQUESTED",
             "audibility": "UNPROVED",
         }
 
@@ -3012,7 +2992,8 @@ CONTROL_USAGE = """control commands:
 savepreset/loadpreset files are host-side. The old saveprivatereverb command is
 retained only as a fail-closed compatibility stub because it duplicated Voice
 FX into two slots instead of reproducing UC's one-channel assignment workflow.
-The exact active-slot writer uses a complete tagged record.
+Tagged scene records are not sent as io24 slot bodies. The byte-oriented native
+writer is available only to bounded tooling with a complete version-2 record.
 
 A host preset holds the live 'Appl' values the device can report plus the
 driver's mirror of the DSP writes it has made — kept in

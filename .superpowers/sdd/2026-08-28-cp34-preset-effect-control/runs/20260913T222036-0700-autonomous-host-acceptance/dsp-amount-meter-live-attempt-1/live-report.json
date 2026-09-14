@@ -1,0 +1,364 @@
+{
+  "analysis": {
+    "amount_measurements": [
+      {
+        "amount": 0.0,
+        "endpoint_position": 0.0,
+        "main_to_input2_ratio": 0.707968621662568
+      },
+      {
+        "amount": 0.25,
+        "endpoint_position": 0.24725259758857185,
+        "main_to_input2_ratio": 1.4887533935853892
+      },
+      {
+        "amount": 0.5,
+        "endpoint_position": 0.4917377630788679,
+        "main_to_input2_ratio": 2.260799050689042
+      },
+      {
+        "amount": 0.75,
+        "endpoint_position": 0.7551899904697634,
+        "main_to_input2_ratio": 3.092739702808068
+      },
+      {
+        "amount": 1.0,
+        "endpoint_position": 1.0,
+        "main_to_input2_ratio": 3.865811166241398
+      }
+    ],
+    "classification": "LINEAR_METER_ENDPOINT_INTERPOLATION",
+    "endpoint_delta_ratio": 0.8168641479840043,
+    "interpretation": "CONSISTENT_WITH_LINEAR_DRY_WET_NOT_ARCHITECTURE_PROOF",
+    "ordered_measurements": [
+      {
+        "amount": 0.0,
+        "mad_main_to_input2": 0.00017051490787811652,
+        "maximum_main_to_input2": 0.7085683718968799,
+        "median_input2": 6.082835898268968e-05,
+        "median_main": 4.306190567149315e-05,
+        "median_main_to_input2": 0.707968621662568,
+        "median_mixa": 4.306190930947196e-05,
+        "minimum_main_to_input2": 0.7072895578357848,
+        "samples": 240
+      },
+      {
+        "amount": 0.25,
+        "mad_main_to_input2": 0.034487156228398375,
+        "maximum_main_to_input2": 1.5506425907481474,
+        "median_input2": 6.385537562891841e-05,
+        "median_main": 9.568771201884374e-05,
+        "median_main_to_input2": 1.4887533935853892,
+        "median_mixa": 9.568771201884374e-05,
+        "minimum_main_to_input2": 1.33418505204903,
+        "samples": 240
+      },
+      {
+        "amount": 0.5,
+        "mad_main_to_input2": 0.05110160006162534,
+        "maximum_main_to_input2": 2.476003371058884,
+        "median_input2": 6.49318280920852e-05,
+        "median_main": 0.00014679737796541303,
+        "median_main_to_input2": 2.260799050689042,
+        "median_mixa": 0.00014679737796541303,
+        "minimum_main_to_input2": 1.9795420264346646,
+        "samples": 240
+      },
+      {
+        "amount": 0.75,
+        "mad_main_to_input2": 0.10492331600902727,
+        "maximum_main_to_input2": 3.4259467105626533,
+        "median_input2": 6.131677218945697e-05,
+        "median_main": 0.00019000042811967432,
+        "median_main_to_input2": 3.092739702808068,
+        "median_mixa": 0.00019000042811967432,
+        "minimum_main_to_input2": 2.757789729330535,
+        "samples": 240
+      },
+      {
+        "amount": 1.0,
+        "mad_main_to_input2": 0.1662605985458563,
+        "maximum_main_to_input2": 4.250849294482639,
+        "median_input2": 6.424658931791782e-05,
+        "median_main": 0.00024333155306521803,
+        "median_main_to_input2": 3.865811166241398,
+        "median_mixa": 0.00024333155306521803,
+        "minimum_main_to_input2": 3.408919273079297,
+        "samples": 240
+      }
+    ],
+    "reasons": [],
+    "status": "VALID"
+  },
+  "battery_after": 95,
+  "battery_before": 95,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "dsp_amount_prestate": {
+    "source": "exact_zero_device_readback",
+    "value": 0.0
+  },
+  "finished": "2026-09-13T23:55:14.833-07:00",
+  "input_gains": "UNTOUCHED",
+  "mixer_routes": "UNTOUCHED",
+  "playback": "NONE",
+  "probe": {
+    "band": 0,
+    "block": "eq",
+    "channel": 2,
+    "frequency_hz": 1000.0,
+    "gain_db": 15.0,
+    "observation": "JaSt Input 2 and Main L/R meters",
+    "q": 0.7,
+    "shape": "highshelf"
+  },
+  "schema": "io24-dsp-amount-meter-probe-v1",
+  "sequence": {
+    "capture_order": [
+      0.0,
+      1.0,
+      0.25,
+      0.75,
+      0.5
+    ],
+    "finished": "2026-09-13T23:55:14.767-07:00",
+    "measurements": [
+      {
+        "amount": 0.0,
+        "mad_main_to_input2": 0.00017051490787811652,
+        "maximum_main_to_input2": 0.7085683718968799,
+        "median_input2": 6.082835898268968e-05,
+        "median_main": 4.306190567149315e-05,
+        "median_main_to_input2": 0.707968621662568,
+        "median_mixa": 4.306190930947196e-05,
+        "minimum_main_to_input2": 0.7072895578357848,
+        "samples": 240
+      },
+      {
+        "amount": 1.0,
+        "mad_main_to_input2": 0.1662605985458563,
+        "maximum_main_to_input2": 4.250849294482639,
+        "median_input2": 6.424658931791782e-05,
+        "median_main": 0.00024333155306521803,
+        "median_main_to_input2": 3.865811166241398,
+        "median_mixa": 0.00024333155306521803,
+        "minimum_main_to_input2": 3.408919273079297,
+        "samples": 240
+      },
+      {
+        "amount": 0.25,
+        "mad_main_to_input2": 0.034487156228398375,
+        "maximum_main_to_input2": 1.5506425907481474,
+        "median_input2": 6.385537562891841e-05,
+        "median_main": 9.568771201884374e-05,
+        "median_main_to_input2": 1.4887533935853892,
+        "median_mixa": 9.568771201884374e-05,
+        "minimum_main_to_input2": 1.33418505204903,
+        "samples": 240
+      },
+      {
+        "amount": 0.75,
+        "mad_main_to_input2": 0.10492331600902727,
+        "maximum_main_to_input2": 3.4259467105626533,
+        "median_input2": 6.131677218945697e-05,
+        "median_main": 0.00019000042811967432,
+        "median_main_to_input2": 3.092739702808068,
+        "median_mixa": 0.00019000042811967432,
+        "minimum_main_to_input2": 2.757789729330535,
+        "samples": 240
+      },
+      {
+        "amount": 0.5,
+        "mad_main_to_input2": 0.05110160006162534,
+        "maximum_main_to_input2": 2.476003371058884,
+        "median_input2": 6.49318280920852e-05,
+        "median_main": 0.00014679737796541303,
+        "median_main_to_input2": 2.260799050689042,
+        "median_mixa": 0.00014679737796541303,
+        "minimum_main_to_input2": 1.9795420264346646,
+        "samples": 240
+      }
+    ],
+    "readable_after": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_before": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "restoration": {
+      "dsp_amount": "EXACT_ZERO_SENT",
+      "eq_band_0": "IDENTITY_COEFFICIENTS_SENT",
+      "errors": [],
+      "input_gains": "UNTOUCHED",
+      "main_volume": "RESTORE_SENT",
+      "mixer_routes": "UNTOUCHED",
+      "readable_exact": true
+    },
+    "started": "2026-09-13T23:55:11.133-07:00",
+    "status": "MEASURED_AND_RESTORED"
+  },
+  "started": "2026-09-13T23:55:11.116-07:00",
+  "status": "MEASURED_CLASSIFIED_RESTORED",
+  "transport": [
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "a360d53219cc39aabec184eaac62d49335fe468304c360286de02d4fc73e76cd",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-13T23:55:11.133-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1114727526,
+      "block": 1701912608,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 56,
+      "frame_sha256": "12a7ae81d205b01b8ef959c1b61f432dbf2c963156c67e50f0130c597005f7cb",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-13T23:55:11.135-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "95f0819c0c3d72705f4760a9b8293c4ce0c5d9aeea4a85cd3022c8d19ccea9e2",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "5437a5efdd249dba6f09c0e77fb9d80a90dcf5366b104ee2e98123fefd463dc7",
+      "timestamp": "2026-09-13T23:55:11.535-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 5
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "23e95e83d6444cf107a7795edf8a7c4cd720968f3aaf1ad605037ac9a917f6e9",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "9ee51f06d2e8d3f82962880ee5844ec59054123e294496963043887694724597",
+      "timestamp": "2026-09-13T23:55:12.103-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 247
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "dd5c7748faa99347d932b4917a5118003503811b944a98c7f8310224490e81f4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "b8a3a85937546c25d6973082868c681c07e7eb12e20a4b57a114c8ae5ee52edc",
+      "timestamp": "2026-09-13T23:55:12.669-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 234
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "7076e77939c9b45549e0a97b4dac180d41d24485d6bb3256d0b3535d1053cf4e",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "074fa0af80378b377467b3de12f32fc350970373d193f632da3161a674ea2576",
+      "timestamp": "2026-09-13T23:55:13.234-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 221
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "51637df30563836c7c47319c08766f6410908e6d5145197ccfc43b3aabe350ca",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "0380cb4ba687b3735decf7ea5cb9de0c1215fceb5e5a63d54a11990a2d556b48",
+      "timestamp": "2026-09-13T23:55:13.799-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 208
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "e75c9b89661030b248c8b1b991b6bdde435251d6da9958f78980c92cf9b3cbdc",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "deb2e840f3b61fd16924cdfb4b958e17919ce1b9bb53bb269c3714888262c4a4",
+      "timestamp": "2026-09-13T23:55:14.364-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 195
+    },
+    {
+      "blob_tag": 1114727526,
+      "block": 1701912608,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 56,
+      "frame_sha256": "84b1f2a0e9e863bafa6e0875c68cffe0f5d9eba6faaabfd8e6681645f9cf3e63",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "d9cf2892b2f678cefb2ffb7d408ee62f423f48631f9071bfb3c8563acdfea6eb",
+      "timestamp": "2026-09-13T23:55:14.365-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 196
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "fcc33b73a8461a67f73e8d1e9254fb577f71c77761214d98a51b2bc752521fad",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "8b93085c9a036f5068b6840a315233f25b1d15b32d5963bbdfde6241067a1bf3",
+      "timestamp": "2026-09-13T23:55:14.365-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 197
+    }
+  ]
+}

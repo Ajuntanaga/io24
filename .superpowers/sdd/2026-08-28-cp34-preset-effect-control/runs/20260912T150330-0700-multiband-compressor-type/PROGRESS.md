@@ -238,3 +238,105 @@ same. Both now treat 260 px as a floor and expand, so the meters and faders use
 the window's height (visibly taller at 1440x900), with a fixed 8 px pad keeping
 the Gain reduction rows off the card's edge. The Monitoring strip is unchanged:
 its content is buttons, which should not stretch.
+
+## 10. Final verification and where the work is
+
+- Full hardware-free suite, after every change: **658 passed, 1 skipped, 144
+  subtests, exit 0** in 268.60 s (`-W error::ResourceWarning`). The only
+  diagnostic is the pre-existing unclosed-WAV `ResourceWarning` at
+  `re/cp34_current_slot_survey.py:260`.
+- Parameter matrix regenerated twice byte-identically after each source change;
+  checked in at SHA-256
+  `eff86e6c144d7e2f8c0423f6…` (full value in the file).
+- Branch `io24-multiband-insert`, cut from `main` at `5a0018d`:
+  - `c2c63fa` Multiband as a compressor type, the flat crossover, the wet
+    reverb, and the refused-snapshot fix;
+  - `b4e59ed` the page-width pass, the Mixer's height, and the paint smoke
+    harness no longer reaching PipeWire.
+- `main` remains at `5a0018d` (the Auto-gain merge the user asked for).
+  `git merge --ff-only io24-multiband-insert` takes it from there.
+- Codex's uncommitted CP33 WinUSB work and the modified `RESUME.md` in the tree
+  were left untouched.
+
+## 11. 2026-09-13 Host continuation: visible recall and global FX
+
+The user's `Test` preset exposed that double-click recall was effectively
+hidden and unreliable. Every loadable device, user and factory preset row now
+has a visible **Load** button; double-click is retained as a capture-phase
+shortcut. The same approved UI pass gives Routing a 1500sp ceiling with 16 px
+side gutters, keeps its horizontal faders flexible, and shortens **Fat Channel
+HPF** to **HPF**.
+
+After the user rejected the Host's target-owner and **Device activation**
+machinery, a fresh audit compared the plan with the newest CP34 framing result.
+It found that the older claim "device-preset recall opens the FX gate" was
+superseded: the tagged `{` archive fails the native version-2 discriminator.
+The implementation was corrected accordingly:
+
+- one global FX Model and **FX active** switch over block 201's two lanes;
+- no target selector, readiness row or `processingChannel` mutation;
+- legacy owner shadow accepted but skipped during automatic reconnect;
+- either channel's saved preset carries the same global FX state;
+- a Host-known physical-block recall sends that recorded state once, but the
+  recall is never reported as activation.
+
+This supports the user's requested same-FX-on-both design without claiming two
+independent settings instances or unmeasured audibility. `PROTOCOL.md`,
+`GUIDE.md`, `README.md`, the matrix builder, and the affected preset/recall/
+resume tests were brought to the same model. New hardware-free behavior
+contracts are in `tests/test_io24_global_fx.py`.
+
+## 12. Resumed verification and visual result
+
+The prior session ended during its full-suite run. The resumed run exposed two
+stale assertions only: the old `Voice FX send failed` user-facing text and an
+unrelated integration test's hard-coded 748-row matrix count. Both now expect
+the approved **FX** text and the global-engine 709-row matrix.
+
+- Targeted stale assertions: 2 passed.
+- Focused final contracts after removing capture hooks: 8 passed.
+- Complete hardware-free suite: **663 passed, 1 skipped**, exit 0, 200.496 s.
+- Parameter matrix: 709 rows, prior two rebuilds byte-identical; SHA-256
+  `0d2df2e205e4b475655aebc846d711aa7086ddea8afe75d2c08b060b8456df04`.
+- `git diff --check`: clean.
+- `tests/paint_smoke.py`: no diff after the temporary capture hooks were
+  removed.
+
+The real FX page, driven by the project's stub device with PipeWire and ALSA
+stubbed out, was inspected at 1040x800 and 680x800. Its lower section is clean
+at both sizes: Model, **FX active**, the visual, and the parameter sliders are
+legible, with no owner/readiness residue. No visual correction was warranted.
+Captures: `/tmp/io24-global-fx-review-desktop-scroll/01-fx.png` and
+`/tmp/io24-global-fx-review-narrow-scroll2/01-fx.png`.
+
+No USB/device, audio, Host launch against hardware, Wine, firmware, install or
+network action occurred. Work remains uncommitted on
+`io24-multiband-insert`, above `b4e59ed`; the separate CP33 dirty-tree lane was
+not touched.
+
+## 13. Remembered audio clock and one-click preset recall
+
+The Host now treats 96 kHz and a 512-frame quantum as its first-launch audio
+clock. Successful Device-page choices are stored as the top-level
+`audio_clock` entry in `last-session.json` and restored when the next Host
+window opens. The Multiband insert can still borrow a 128-frame quantum while
+it runs, but that temporary live override cannot replace the user's saved
+choice.
+
+Preset recall now has one unambiguous interaction. Each supported device,
+user and factory row retains its visible **Load** button, whose existing
+single-click callback loads into the selected Host channel. All row-level
+double-click controllers and the **Double-click to load** tooltip were removed;
+README and GUIDE text now name the button.
+
+TDD evidence: the five clock contracts and the single-click interaction
+contract failed against the previous behavior, then passed after the change.
+The adjacent preset/resume/rate/Multiband suite passed **115 tests**. The final
+hardware-free discovery passed **668 tests, 1 skipped**, exit 0, in 170.925 s;
+its only diagnostic was the pre-existing unclosed-WAV `ResourceWarning` at
+`re/cp34_current_slot_survey.py:260`. The 709-row parameter matrix rebuilt
+twice byte-identically at SHA-256
+`e3d32177213993355dbef7cd1d1219b83906e567db986dc8da21c67f2c8bdb0e`.
+No USB/device, audio, Host launch against hardware, Wine, firmware, install or
+network action occurred. The work remains uncommitted above `b4e59ed`; the
+separate CP33 dirty-tree lane was not touched.

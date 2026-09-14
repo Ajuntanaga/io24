@@ -76,6 +76,17 @@ class Uc472RecordWriterSinkTests(unittest.TestCase):
                         "0x180042113 serializer call -> 0x180042118 success return"
                     ),
                 },
+                "settled_state_trigger": {
+                    "caller_range": "0x180041bac..0x180041c38",
+                    "pending_timestamp_member": "owner-0x40",
+                    "elapsed_compare": "now - pending_timestamp > 500",
+                    "elapsed_threshold_ms": 500,
+                    "same_selected_slot": "r15d == r14d",
+                    "intervening_event_required_clear": True,
+                    "dirty_flag": "owner+0x60 bit 1 (mask 0x2)",
+                    "pending_timestamp_cleared_before_send": True,
+                    "role": "ACTIVE_SLOT_SETTLED_STATE_SYNCHRONIZER",
+                },
                 "reconciliation": {
                     "firmware_recall": (
                         "stored_record[0:4] reaches 0x531e0 unchanged"

@@ -30,13 +30,14 @@ A preset names seven modules. Six map onto DSP this driver drives:
 
 The seventh, `voicefx`, is record-resident Voice FX state for block 201. The
 ordinary live setter replay omits it unless ``with_fx=True`` is explicitly
-requested. That opt-in assigns the singleton Voice FX layer to the requested
-physical input, resolves UC's saved class id, selects/instantiates the model,
-and then applies only that model's state. It still does not claim that the
-stock processing gate is open or that the result is audible.
-``Io24.save_device_slot()`` preserves the same object inside the complete tagged
-``MemP/Stat`` record. UC separately assigns the singleton Voice FX engine to
-Channel 1 or Channel 2 with ``processingChannel``.
+requested. That opt-in configures the one shared settings object: it resolves
+UC's saved class id, selects/instantiates the model, and then applies only that
+model's state. It does not change ``processingChannel`` routing and still does
+not claim that the stock processing gate is open or that the result is audible.
+Tagged scene records remain useful for Host-side replay, but the 2026-09-14
+inactive-slot test showed that they do not install as io24 firmware 1.28 slot
+bodies. ``Io24.save_device_slot()`` now accepts only a complete firmware-native
+version-2 record; this module does not synthesize one from a tagged preset.
 """
 import json
 import math
@@ -463,11 +464,9 @@ def describe(p):
 def apply_preset(dev, preset, channel=1, with_fx=False):
     """Send a factory preset to a channel. Returns a list of what was applied.
 
-    ``with_fx`` is an explicit opt-in to the source-bound UC component replay:
-    assign the singleton VoiceFX layer to physical ``channel``, select the
-    saved model, and then apply its fields. The assignment is separate from
-    the preset-control namespace: all Fat Channel and preset calls continue to
-    address the same physical ``channel``.
+    ``with_fx`` is an explicit opt-in to configure the one global block-201
+    settings object after applying the selected channel's Fat Channel state.
+    It never changes ``processingChannel`` routing.
     """
     if isinstance(preset, str):
         preset = load()[preset]
@@ -538,10 +537,6 @@ def apply_preset(dev, preset, channel=1, with_fx=False):
 
     if fx_call is not None:
         model, kwargs = fx_call
-        # UC evaluates processingChannel ownership before activating/selecting
-        # fxmodel. Mirror that layer explicitly; never reinterpret ``channel``
-        # as a processing-chain or preset-control index.
-        dev.set_voicefx_channel(channel)
         writes = dev.set_fx(model, **kwargs)
         state = "" if kwargs["on"] else " off"
         done.append("voicefx=%s%s (%d writes; activation unresolved)" %

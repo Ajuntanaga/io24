@@ -1,0 +1,712 @@
+{
+  "analysis": {
+    "capture_contract": {
+      "channels": 6,
+      "monitor_channels": [
+        3,
+        4
+      ],
+      "no_playback": true,
+      "rate_hz": 96000,
+      "reference_channel": 2,
+      "sample_width_bytes": 4,
+      "source": "simultaneous_input2_device_self_noise"
+    },
+    "captures": [
+      {
+        "amount": 0.0,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-000.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "abb3582a1a5a57cc7ed47cd6579141f3673403d3ef69fac970f09f7f1d0ac192"
+      },
+      {
+        "amount": 0.25,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-025.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "98ba7462e24d6be45d883820c70300e9c7f1f936f26e6ec2cf61b47df49d9d1d"
+      },
+      {
+        "amount": 0.5,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-050.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "3a63a0519b54ca73cec0b45d5caf27176fad0b475bc571e54e0a10552f12b3a9"
+      },
+      {
+        "amount": 0.75,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-075.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "0f2fcee58500affa92e985d87d3d02f3de9695178422e0b9f3be0cc8fc9390ae"
+      },
+      {
+        "amount": 1.0,
+        "channels": 6,
+        "frames": 768000,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-100.wav",
+        "rate_hz": 96000,
+        "sample_width_bytes": 4,
+        "sha256": "62aad851b6acc68c257d5d1448e39a45eb628d1805315593d77549037420548e"
+      }
+    ],
+    "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+    "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+    "minimum_median_coherence": 0.9999974033340419,
+    "monitor_results": [
+      {
+        "amount_measurements": [
+          {
+            "affine_residual_ratio": 0.0,
+            "amount": 0.0,
+            "distance_to_dry_ratio": 0.0,
+            "distance_to_wet_ratio": 1.0,
+            "endpoint_position": 0.0,
+            "level_model_residual_ratio": 1.0000144210300044,
+            "transfer_vector_norm_db": -6.010333730369842
+          },
+          {
+            "affine_residual_ratio": 0.19091412599115323,
+            "amount": 0.25,
+            "distance_to_dry_ratio": 0.19140417311846564,
+            "distance_to_wet_ratio": 1.00461937825987,
+            "endpoint_position": 0.013687731155957809,
+            "level_model_residual_ratio": 0.750014398800705,
+            "transfer_vector_norm_db": -6.010335112925231
+          },
+          {
+            "affine_residual_ratio": 0.20404689349436134,
+            "amount": 0.5,
+            "distance_to_dry_ratio": 0.20420980092742788,
+            "distance_to_wet_ratio": 1.0126159929732812,
+            "endpoint_position": 0.008155246784777683,
+            "level_model_residual_ratio": 0.5000181821216024,
+            "transfer_vector_norm_db": -6.010304687393701
+          },
+          {
+            "affine_residual_ratio": 0.23099839713526546,
+            "amount": 0.75,
+            "distance_to_dry_ratio": 0.2310116066209425,
+            "distance_to_wet_ratio": 1.0287405785347576,
+            "endpoint_position": -0.002470407765219485,
+            "level_model_residual_ratio": 0.250019981161353,
+            "transfer_vector_norm_db": -6.010296659569971
+          },
+          {
+            "affine_residual_ratio": 9.68063984535147e-17,
+            "amount": 1.0,
+            "distance_to_dry_ratio": 1.0,
+            "distance_to_wet_ratio": 0.0,
+            "endpoint_position": 0.9999999999999999,
+            "level_model_residual_ratio": 0.0,
+            "transfer_vector_norm_db": -6.01045898894175
+          }
+        ],
+        "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+        "endpoint_delta_ratio": 0.0009024012244334863,
+        "estimates": [
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999975918817339,
+            "monitor_rms_dbfs": -97.18673522499532,
+            "reference_rms_dbfs": -94.18671604005095,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974805599005,
+            "monitor_rms_dbfs": -97.27127691740466,
+            "reference_rms_dbfs": -94.2712766368242,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974033340419,
+            "monitor_rms_dbfs": -97.32511828166773,
+            "reference_rms_dbfs": -94.3251054492095,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976900726667,
+            "monitor_rms_dbfs": -97.3506404507637,
+            "reference_rms_dbfs": -94.3506532520743,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974946912717,
+            "monitor_rms_dbfs": -97.2758872093271,
+            "reference_rms_dbfs": -94.27588853931451,
+            "segments": 186,
+            "transfer_bins": 1703
+          }
+        ],
+        "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+        "monitor_channel": 3,
+        "reasons": [
+          "endpoint_transfer_delta_below_threshold"
+        ],
+        "status": "INCONCLUSIVE"
+      },
+      {
+        "amount_measurements": [
+          {
+            "affine_residual_ratio": 0.0,
+            "amount": 0.0,
+            "distance_to_dry_ratio": 0.0,
+            "distance_to_wet_ratio": 1.0,
+            "endpoint_position": 0.0,
+            "level_model_residual_ratio": 1.0000144210300044,
+            "transfer_vector_norm_db": -6.010333730369842
+          },
+          {
+            "affine_residual_ratio": 0.19091412599115323,
+            "amount": 0.25,
+            "distance_to_dry_ratio": 0.19140417311846564,
+            "distance_to_wet_ratio": 1.00461937825987,
+            "endpoint_position": 0.013687731155957809,
+            "level_model_residual_ratio": 0.750014398800705,
+            "transfer_vector_norm_db": -6.010335112925231
+          },
+          {
+            "affine_residual_ratio": 0.20404689349436134,
+            "amount": 0.5,
+            "distance_to_dry_ratio": 0.20420980092742788,
+            "distance_to_wet_ratio": 1.0126159929732812,
+            "endpoint_position": 0.008155246784777683,
+            "level_model_residual_ratio": 0.5000181821216024,
+            "transfer_vector_norm_db": -6.010304687393701
+          },
+          {
+            "affine_residual_ratio": 0.23099839713526546,
+            "amount": 0.75,
+            "distance_to_dry_ratio": 0.2310116066209425,
+            "distance_to_wet_ratio": 1.0287405785347576,
+            "endpoint_position": -0.002470407765219485,
+            "level_model_residual_ratio": 0.250019981161353,
+            "transfer_vector_norm_db": -6.010296659569971
+          },
+          {
+            "affine_residual_ratio": 9.68063984535147e-17,
+            "amount": 1.0,
+            "distance_to_dry_ratio": 1.0,
+            "distance_to_wet_ratio": 0.0,
+            "endpoint_position": 0.9999999999999999,
+            "level_model_residual_ratio": 0.0,
+            "transfer_vector_norm_db": -6.01045898894175
+          }
+        ],
+        "classification": "ENDPOINT_TRANSFERS_INDISTINGUISHABLE",
+        "endpoint_delta_ratio": 0.0009024012244334863,
+        "estimates": [
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999975918817339,
+            "monitor_rms_dbfs": -97.18673522499532,
+            "reference_rms_dbfs": -94.18671604005095,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974805599005,
+            "monitor_rms_dbfs": -97.27127691740466,
+            "reference_rms_dbfs": -94.2712766368242,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974033340419,
+            "monitor_rms_dbfs": -97.32511828166773,
+            "reference_rms_dbfs": -94.3251054492095,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999976900726667,
+            "monitor_rms_dbfs": -97.3506404507637,
+            "reference_rms_dbfs": -94.3506532520743,
+            "segments": 186,
+            "transfer_bins": 1703
+          },
+          {
+            "band_hz": [
+              40.0,
+              20000.0
+            ],
+            "effectively_silent_monitor": false,
+            "fft_frames": 8192,
+            "hop_frames": 4096,
+            "median_coherence": 0.9999974946912717,
+            "monitor_rms_dbfs": -97.2758872093271,
+            "reference_rms_dbfs": -94.27588853931451,
+            "segments": 186,
+            "transfer_bins": 1703
+          }
+        ],
+        "interpretation": "NO_DEVICE_ARCHITECTURE_CONCLUSION",
+        "monitor_channel": 4,
+        "reasons": [
+          "endpoint_transfer_delta_below_threshold"
+        ],
+        "status": "INCONCLUSIVE"
+      }
+    ],
+    "reasons": [
+      "endpoint_transfer_delta_below_threshold"
+    ],
+    "schema": "io24-dsp-amount-passive-analysis-v1",
+    "status": "INCONCLUSIVE"
+  },
+  "battery_after": 95,
+  "battery_before": 95,
+  "clock": {
+    "buffer_frames": 2048,
+    "period_frames": 512,
+    "rate_hz": 96000
+  },
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "dsp_amount_prestate": {
+    "source": "exact_zero_device_readback",
+    "value": 0.0
+  },
+  "finished": "2026-09-13T23:48:09.601-07:00",
+  "input_gains": "UNTOUCHED",
+  "known_highpass_probe": true,
+  "mixer_routes": "UNTOUCHED",
+  "playback": "NONE",
+  "schema": "io24-dsp-amount-passive-live-v1",
+  "sequence": {
+    "capture_order": [
+      0.0,
+      1.0,
+      0.25,
+      0.75,
+      0.5
+    ],
+    "captures": [
+      {
+        "amount": 0.0,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-000.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-000.wav"
+        ],
+        "sha256": "abb3582a1a5a57cc7ed47cd6579141f3673403d3ef69fac970f09f7f1d0ac192"
+      },
+      {
+        "amount": 1.0,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-100.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-100.wav"
+        ],
+        "sha256": "62aad851b6acc68c257d5d1448e39a45eb628d1805315593d77549037420548e"
+      },
+      {
+        "amount": 0.25,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-025.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-025.wav"
+        ],
+        "sha256": "98ba7462e24d6be45d883820c70300e9c7f1f936f26e6ec2cf61b47df49d9d1d"
+      },
+      {
+        "amount": 0.75,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-075.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-075.wav"
+        ],
+        "sha256": "0f2fcee58500affa92e985d87d3d02f3de9695178422e0b9f3be0cc8fc9390ae"
+      },
+      {
+        "amount": 0.5,
+        "bytes": 18432044,
+        "path": ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-050.wav",
+        "recorder_command": [
+          "arecord",
+          "-q",
+          "-D",
+          "hw:CARD=R24,DEV=0",
+          "-t",
+          "wav",
+          "-f",
+          "S32_LE",
+          "-r",
+          "96000",
+          "-c",
+          "6",
+          "--period-size",
+          "512",
+          "--buffer-size",
+          "2048",
+          "-d",
+          "8",
+          ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-passive-live-attempt-2/amount-050.wav"
+        ],
+        "sha256": "3a63a0519b54ca73cec0b45d5caf27176fad0b475bc571e54e0a10552f12b3a9"
+      }
+    ],
+    "controlled_processor": {
+      "activation_sent": true,
+      "block": "filt",
+      "channel": 2,
+      "prestate_basis": "neutral_live_transfer_plus_host_shadow_24_hz_identity",
+      "probe_highpass_hz": 1000.0,
+      "restoration": "IDENTITY_COEFFICIENTS_SENT",
+      "restoration_error": null
+    },
+    "finished": "2026-09-13T23:48:09.030-07:00",
+    "readable_after": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_before": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_guarded": {
+      "channel_linked": false,
+      "flags": 449,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": false,
+      "main_volume": 0.009999999776482582
+    },
+    "restoration": {
+      "dsp_amount": "EXACT_ZERO_SENT",
+      "errors": [],
+      "input_gains": "UNTOUCHED",
+      "main_volume": "RESTORE_SENT",
+      "mixer_routes": "UNTOUCHED",
+      "readable_exact": true
+    },
+    "started": "2026-09-13T23:47:26.334-07:00",
+    "status": "CAPTURED_AND_RESTORED"
+  },
+  "started": "2026-09-13T23:47:26.316-07:00",
+  "status": "CAPTURED_INCONCLUSIVE_RESTORED",
+  "transport": [
+    {
+      "blob_tag": 1114727526,
+      "block": 1718185076,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 56,
+      "frame_sha256": "08a108ac5faa045941b42047daf0ac706eb97d47e518e339ea1f1ef53440d0a7",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-13T23:47:26.334-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "2b6d7ec9ffc8911c0edd4be5202836d22f8e14ac7a04d61b136b91dabe4bd677",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "5437a5efdd249dba6f09c0e77fb9d80a90dcf5366b104ee2e98123fefd463dc7",
+      "timestamp": "2026-09-13T23:47:26.335-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 5
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "5bd8f2dbab2be9ff8066535595b496d08a54bad85142872e4afe0bd3b9fca8c5",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7fb7f0f64b9c4c3bc8c9d5f654bcc6c12f84c06c069bc8ff17add4d61bbb6f91",
+      "timestamp": "2026-09-13T23:47:26.686-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 7
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "dbd88cc40ad51a6e7abe8bebdd7b8d6b51e9214e3716763a6c2a433bc94d16d2",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f7c3abcab4414193e711f83775fa791fd0d11d33dfe9d5372255ef15b8429e2a",
+      "timestamp": "2026-09-13T23:47:35.087-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 9
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "57ea33540de8d166533d2fc40c3d6c563bfa4425548b673de8d571d20ea2682b",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f0bbcb0a876adbb26ca5a76fc33e05a5dfad5bcb10bc6dba45f44fd22ed6463e",
+      "timestamp": "2026-09-13T23:47:43.485-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 11
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "56e4ec77ec470ad5f1ec054b08bd75172db4a66341c24965a6a9fec702893bf9",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "60ec0611aad6243e7beaefe90da5fd8a1f3ec11d2f5b112a83d29030d5b887ab",
+      "timestamp": "2026-09-13T23:47:51.879-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 13
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "857344a13c637f7a8b4794946058e00dfb65e54e028fcce85bc143c83d9a1ade",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "6539daf25f7b9d648054b6e9f5c970a128b7ae25729db3103bfc55c41140ef5b",
+      "timestamp": "2026-09-13T23:48:00.279-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 15
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "a78e868695f2cd4bcbab015e0adb4faed20f0f5471b6db5d4d1ec87f6ef0806c",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "74ef426fa5de9428ae66998c34f23f14a3213d562a697c83bb4b7c2f54e3f8fd",
+      "timestamp": "2026-09-13T23:48:08.678-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 17
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "cfe5cbab9c114a62da5c449f0c2f11c04d93b54646d4c7908cc11bda055eb876",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "042a828a422cbb8c19da10042d989ec7bc6f27db2dc3d1bfc1532a2f333065ab",
+      "timestamp": "2026-09-13T23:48:08.679-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 18
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "e9516639ba13b2d1e2b91512dd097e3551d308919d38377b30da2f9d0ded2e13",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "558995181ba030fc713123e6c91b3547a44ec2ecb43a1c4f66f29460bf778a3c",
+      "timestamp": "2026-09-13T23:48:09.031-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 20
+    },
+    {
+      "blob_tag": 1114727526,
+      "block": 1718185076,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 56,
+      "frame_sha256": "88b7bbb32786b14400b02c71c3d300173a82085315e4628e4e786170732939b5",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "606d691fa49e872fc4d05b17e8cd1a5e696f5ba16bc90385b1b96d6344db95b4",
+      "timestamp": "2026-09-13T23:48:09.031-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 21
+    }
+  ]
+}

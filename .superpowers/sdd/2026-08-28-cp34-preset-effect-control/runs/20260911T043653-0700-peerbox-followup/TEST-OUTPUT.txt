@@ -1,0 +1,15 @@
+battery: 99
+state: {"ch1_slot": 0, "ch2_slot": 2, "ch1_bypassed": false, "ch2_bypassed": false, "link": false, "mute": [false, false], "phantom": [false, false], "gain": [30.0, 24.288], "hp_volume": 0.5, "main_volume": 0.75, "owner": 1} ch1 pair: [0, 1]
+recorded before.json
+RESULT: OK (read-only)
+battery: 99
+state: {"ch1_slot": 0, "ch2_slot": 2, "ch1_bypassed": false, "ch2_bypassed": false, "link": false, "mute": [false, false], "phantom": [false, false], "gain": [30.0, 24.288], "hp_volume": 0.5, "main_volume": 0.75, "owner": 1} ch1 pair: [0, 1]
+recall Channel 1 block 2: {"channel": 1, "slot": 1, "relative_slot": 1, "slot_selected": true, "was_processing": true, "enable_asserted": false, "selection": "SENT_UNVERIFIED", "voicefx_gate": "STAT_LOAD_REQUESTED", "audibility": "UNPROVED"}
+after: {"ch1_slot": 1, "ch2_slot": 2, "ch1_bypassed": false, "ch2_bypassed": false, "link": false, "mute": [false, false], "phantom": [false, false], "gain": [30.0, 24.288], "hp_volume": 0.5, "main_volume": 0.75, "owner": 1}
+RESULT: OK
+battery: 99
+state: {"ch1_slot": 1, "ch2_slot": 2, "ch1_bypassed": false, "ch2_bypassed": false, "link": false, "mute": [false, false], "phantom": [false, false], "gain": [30.0, 24.288], "hp_volume": 0.5, "main_volume": 0.75, "owner": 1} ch1 pair: [0, 1]
+recall Channel 1 block 1: {"channel": 1, "slot": 0, "relative_slot": 0, "slot_selected": true, "was_processing": true, "enable_asserted": false, "selection": "SENT_UNVERIFIED", "voicefx_gate": "STAT_LOAD_REQUESTED", "audibility": "UNPROVED"}
+after: {"ch1_slot": 0, "ch2_slot": 2, "ch1_bypassed": false, "ch2_bypassed": false, "link": false, "mute": [false, false], "phantom": [false, false], "gain": [30.0, 24.288], "hp_volume": 0.5, "main_volume": 0.75, "owner": 1}
+RESULT: OK
+restored == before.json: True

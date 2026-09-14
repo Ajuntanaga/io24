@@ -1,0 +1,22 @@
+{
+ "ch1_slot": 0,
+ "ch2_slot": 2,
+ "ch1_bypassed": false,
+ "ch2_bypassed": false,
+ "link": false,
+ "mute": [
+  false,
+  false
+ ],
+ "phantom": [
+  false,
+  false
+ ],
+ "gain": [
+  30.0,
+  24.288
+ ],
+ "hp_volume": 0.5,
+ "main_volume": 0.75,
+ "owner": 1
+}

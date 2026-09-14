@@ -665,10 +665,19 @@ class HostRefinementTests(unittest.TestCase):
                 self.assertNotIn("alsa_output", conf)
 
     def test_io24_audio_node_discovery_keeps_input_and_output_distinct(self):
-        listing = """id 42, type PipeWire:Interface:Node/3
+        # Real pw-cli prefixes each id line with a tab. A parser that splits
+        # only on "\nid " sees this as one giant block and returns the first
+        # ordinary ALSA input/output once any later io24 marker is present.
+        listing = """\tid 40, type PipeWire:Interface:Node/3
+            node.name = \"alsa_input.pci-0000_04_00.6.analog-stereo\"
+            node.description = \"Laptop Analog Stereo\"
+        \tid 41, type PipeWire:Interface:Node/3
+            node.name = \"alsa_output.pci-0000_04_00.6.analog-stereo\"
+            node.description = \"Laptop Analog Stereo\"
+        \tid 42, type PipeWire:Interface:Node/3
             node.name = \"alsa_input.usb-PreSonus_Revelator_io24-00.pro-input-0\"
             node.description = \"Revelator io24 Pro Input\"
-        id 43, type PipeWire:Interface:Node/3
+        \tid 43, type PipeWire:Interface:Node/3
             node.name = \"alsa_output.usb-PreSonus_Revelator_io24-00.pro-output-0\"
             node.description = \"Revelator io24 Pro Output\"
         """
@@ -1078,13 +1087,13 @@ class HostRefinementTests(unittest.TestCase):
             device.fail = True
             io24gtk.Win._push_fx(host)
             self.assertEqual(messages, [
-                "Voice FX send failed: broken transport",
+                "FX send failed: broken transport",
             ])
 
             host.ctl.dev = None
             io24gtk.Win._push_fx(host)
             self.assertEqual(messages, [
-                "Voice FX send failed: broken transport",
+                "FX send failed: broken transport",
             ])
 
     def test_factory_load_reports_worker_completion_not_early_queueing(self):

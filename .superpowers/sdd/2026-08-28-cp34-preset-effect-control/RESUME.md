@@ -1,4 +1,260 @@
-# CP34 device preset and Voice FX continuation
+# CP34 Host preset and FX continuation
+
+## 2026-09-14 controlling checkpoint: native MemP/Stat writer framed offline
+
+Resume from
+`runs/20260914T011819-0700-memp-stat-writer-reconciliation/PROGRESS.md`.
+The exact UC 4.7.2 call context resolves its tagged `Stat` emission as a 500 ms
+settled-state synchronizer; the explicit Store action uses the separate
+`MemP/PrsM` library path. Firmware 1.28 preserves `Stat` bytes through storage
+and recall, and the io24 state loader requires leading native u32 version `2`.
+The 2026-09-14 live inactive-slot negative agrees with that representation
+mismatch.
+
+`Io24.save_device_slot()` now accepts only a complete validated native
+version-2 record and frames it in the exact `MemP/Stat` envelope. Tagged JSON
+writers and their registry convenience path refuse before transport. Focused
+verification passes; no device operation occurred. The next live step is not
+automatic: current native slot contents cannot be read back, so a bounded trial
+must name an inactive slot, exact native candidate, pinned firmware-default
+restore, and acceptance measurement before USB authority is requested.
+
+## 2026-09-14 controlling checkpoint: objective acceptance substantially complete
+
+Resume from
+`runs/20260913T222036-0700-autonomous-host-acceptance/{RESULTS,PROGRESS}.md`.
+The requested reviewer pass is already complete. Do not repeat it without a
+concrete new failure.
+
+Live accepted evidence now establishes: DSP Amount is one linear whole-chain
+dry/processed blend; direct Transformer processing is real in the current
+armed state; Auto Gain's safety decision reaches and reads back from the
+preamp; both passive Mix A/B sources publish; and the Multiband process starts,
+accepts live control, stops, and cleans up at the requested 96 kHz / 512 base
+clock. The Multiband preflight also caught and fixed a real node-discovery bug
+that selected the laptop ALSA sink when `pw-cli` id lines were tab-indented.
+The focused Host smoke suite passes 168 tests plus 55 subtests.
+
+The live inactive-slot result is a clean negative: the selector reaches slot 1,
+but a +15 dB high-shelf saved body does not become active. The current tagged
+`MemP`/`Stat` writer/framing is therefore not accepted. Models 1–5 remain
+unresolved by the scalar Voice FX meter. Solo is hardware-free only, because
+the current shadow lacks exact prestates for every write-only mixer cell its
+first live toggle would rewrite. The live Multiband smoke likewise excluded
+the device-mixer reroute while proving the process/control lifecycle.
+
+Controlling Host smoke report:
+`runs/20260913T222036-0700-autonomous-host-acceptance/host-feature-smoke-live-attempt-1/live-report.json`,
+SHA-256 `7713875f492c3125078fc2bd1ae607c57e5d3977e5da2be24d1055f00d57e8fd`.
+Readable state restored exactly, the clock stayed 96000/512, every temporary
+node disappeared, mixer routes/slots/DSP Amount/`processingChannel` were
+untouched, and battery was 100 percent.
+
+This is a sensible Host feature-stop point. Do not broaden into new features or
+firmware. If CP34 continues, the only high-value functional lane is recovering
+the native device-slot writer/framing, followed by one effective recall and a
+separately authorized physical power-cycle test. Firmware flashing remains
+unsafe and unsupported.
+
+## 2026-09-13 controlling checkpoint: autonomous acceptance requested, device absent
+
+The user requested the final objective Host acceptance pass without requiring
+their listening or audio feedback, followed by a fresh subagent evaluation.
+The active record is
+`runs/20260913T222036-0700-autonomous-host-acceptance/`.
+
+Targets are DSP Amount at 0/25/50/75/100, captured global-FX audibility,
+known-preset inactive-block recall/persistence, and live smoke acceptance of
+Solo, Auto gain, Multiband and Mix A/B at 96 kHz / 512. DSP Amount is not yet
+proved to be dry/wet: only 0 = whole-chain bypass and 1 = full processing are
+established; Voice FX model `mix` is a different, proven dry/wet control.
+
+The first live preflight found battery 100%/Full but no `194f:0422` device, no
+io24 ALSA card and no reachable PipeWire session. A second check found
+PipeWire healthy but still no io24. The verified 96 kHz / 512-period runner was
+then invoked twice and stopped before USB/audio at device discovery; the
+controlling attempt reports `BLOCKED_DEVICE_ABSENT`, battery 98% before/after,
+and untouched mixer routes. The complete hardware-free suite passed 681 tests
+with one expected skip; the 14 focused acquisition/analyzer tests passed after
+the final status-label correction. See the active record's `RESULTS.md` and
+`dsp-amount-live-attempt-2/live-report.json`.
+
+The requested fresh subagent then found the initial future-live design unsafe
+or overclaimed. One bounded correction now requires exact-zero scalar prestate,
+stereo link off, a fresh calibrated anti-feedback foundation, and its measured
+Mix A channel; it also restores the single proven-off playback-return cell and
+labels linear behavior endpoint interpolation rather than architectural
+dry/wet. The post-review focused suite is 19 passing tests. Review and
+resolution are in the run's `SUBAGENT-REVIEW.md`.
+
+Final corrected verification: **687 tests passed, 1 skipped**, in 178.624
+seconds. The corrected runner itself has not reached hardware. Attempt 2
+predates review corrections but remains valid no-write absence evidence because
+it stopped at device discovery.
+
+Once the io24 enumerates, use objective captures and automatic analysis; do
+not ask the user to listen. The analyzer alone is not device evidence, so DSP
+Amount intermediate behavior and every other requested live acceptance item
+remain unmeasured.
+A USB reset is not a disconnected cold boot, so persistence stays untested
+unless independent power control exists. No Wine, firmware, DFU, reset,
+network, install, commit or push is in scope.
+
+The connected Host remains near its stopping point after one objective live
+acceptance pass. Custom firmware is not flash-ready: no emitted image, safe
+code placement, completed parser/lifecycle, reproduced vendor updater, flash
+readback or proven recovery path exists. The offline firmware tool refuses all
+flash requests by design.
+
+## 2026-09-13 controlling checkpoint: remembered clock, one-click recall and global FX
+
+Recovered the exact Host thread from 2026-09-12/13 and completed the
+verification that was still running when it ended. All work remains
+uncommitted on `io24-multiband-insert`, above `b4e59ed`.
+
+The Presets page now gives every loadable device, user and factory row a
+visible **Load** button. It is the only recall gesture: one click loads into
+the Host's selected channel, and the old row-level double-click gesture and
+tooltip are gone. Routing keeps the full-width matrix with a 1500sp ceiling
+and 16 px side gutters, and the Fat Channel module is simply labelled **HPF**.
+
+The Host's first-launch audio clock is now 96 kHz with a 512-frame quantum.
+Each successful Device-page rate or quantum selection is saved in the
+last-session file and restored on the next launch. Multiband's temporary
+128-frame quantum is deliberately not treated as a user selection.
+
+The audited FX correction is implemented. Block 201 is presented as one global
+settings object across its two structural audio lanes: one Model, one **FX
+active** switch, no channel owner, and no **Device activation** row. A normal
+FX edit sends one model/state and never mutates `processingChannel`. Old owner
+writes remain load-compatible but automatic reconnect skips them, so opening
+the Host cannot silently swap the physical DSP-chain routing or slot
+indicators. A Host-known device-block recall adopts the stored global FX intent
+and sends it explicitly once; the physical recall itself is not claimed to arm
+FX.
+
+This corrects the older owner/gate model without overstating the firmware
+evidence. Firmware establishes two lanes sharing one algorithm/settings
+instance, sufficient for the Host design. Tagged `{` slot archives still fail
+the native version-2 gate discriminator, so FX audibility on either or both
+lanes remains a later, separately authorized hardware acceptance test.
+
+Verification: the final adjacent Host suite **115 passed**; the complete
+hardware-free suite **668 passed, 1 skipped**, exit 0. The only diagnostic is
+the pre-existing unclosed-WAV `ResourceWarning` at
+`re/cp34_current_slot_survey.py:260`. The parameter matrix is 709 rows and was
+rebuilt twice byte-identically, SHA-256
+`e3d32177213993355dbef7cd1d1219b83906e567db986dc8da21c67f2c8bdb0e`.
+The real FX page rendered cleanly with the stub device at 1040x800 and 680x800;
+the lower-section captures are `/tmp/io24-global-fx-review-desktop-scroll/01-fx.png`
+and `/tmp/io24-global-fx-review-narrow-scroll2/01-fx.png`. Temporary capture
+hooks were removed; the paint harness's clock stub now matches 96 kHz / 512.
+No USB, device, audio, Wine, firmware or network access occurred.
+
+Record:
+`runs/20260912T150330-0700-multiband-compressor-type/PROGRESS.md` §§11-13.
+
+## 2026-09-12 controlling checkpoint: Multiband is a compressor type; flat crossover, wet reverb, wider pages
+
+On "resume" then "take care of the open items". `main` was fast-forwarded to
+`5a0018d` (the Auto-gain merge the user asked for) and everything since is on
+branch `io24-multiband-insert`: `c2c63fa` and `b4e59ed`. Record:
+`runs/20260912T150330-0700-multiband-compressor-type/PROGRESS.md`.
+
+**Multiband is the fourth compressor Model.** Choosing it switches the unit's
+compressor off; the Host takes that input from USB capture — after the whole
+Fat Channel, limiter included — runs the 4-band chain, publishes "io24 Input
+1+2 Multiband" as the default recording input, and returns it on USB playback
+1-2 (the user's choice: "it should immediately follow the FaT channel, so that
+goes to 1+2 first"), taking the input's own feed out of Main/Mix A/Mix B and
+putting it back exactly. The old live question is answered offline: the manual
+says the unit records "complete with the Fat Channel preset", and no parameter
+in firmware 0128's two tables or UC's scene `global` changes that. A failed or
+absent chain always restores the dry feed; the buffer is held at 128 while it
+runs; `host_features.multiband_insert` carries it across launches.
+
+**Two effect defects fixed.** The four bands were parallel legs and summed to a
+1.2 dB dip at the middle split; they are now all-pass compensated and flat
+below 0.01 dB. The shared reverb's Wet mix defaulted to 35 % — a dry share on a
+send return doubles the input — and now starts at 100 %, as every recovered UC
+scene keeps it. Neither has been heard yet.
+
+**Voice FX from a stored block is closed** (§6 of the record, and
+`.claude-peer/OUTBOX.md`): `0x531e0` requires a first native word of `2`, the
+firmware's own defaults have it, UC's and this Host's records are `{` archives,
+and recall is byte-preserving — so the gate at `0x53212` fails and component
+201 is never armed. Codex never answered the 05:15 question.
+
+**Also:** a Host snapshot carrying reverb character or Auto gain could not be
+saved (the driver refused its own Host's features); pages now use the window
+instead of a 600sp centre strip, and the Mixer's meters use its height, both
+judged from renders of the real window driven by the project's stub device —
+the user authorized one brief on-screen capture for the two pages that produce
+no render node offscreen.
+
+Full suite 658 passed, 1 skipped, 144 subtests, exit 0; matrix regenerated
+twice byte-identically. No USB, audio, firmware, Wine or network action.
+Listening is the open acceptance for the insert and both effect changes.
+
+## 2026-09-11 controlling checkpoint: Channel 2 warning merged, shadow cleared, block 2 reverb inaudible
+
+On the user's go ("Proceed with all three"): `main` fast-forwarded to
+`fa0d974` (Codex's Channel 2 Voice FX warning; 598 passed, 1 skipped, 125
+subtests); `~/.cache/io24/shadow.json` cleared to `{}` (the old file is
+retained in the run record, `45f3823b…4d45`); and the Input 2 Doubler listening
+test run with a hand-held patch cable. Result `INCONCLUSIVE`: with Channel 1
+on block 2 (MAIN + Doubler private reverb) the user heard pops dry on Input 2
+and, as the positive control, dry on Input 1 too. Block 2's reverb is
+therefore inaudible from a Host recall, and slot 1's audible acceptance
+fails. Stepping every block with the unit's Preset buttons gave the same:
+"No tail on either channel or any block." The user: "No, Ive never heard it
+from a stored block", and "No, the host produces fx, just not the unit
+itself". Effects are heard while the Host drives the unit live, none from the
+unit on its own. The Host has no software reverb or Voice FX (its only
+computer-side processing is the multiband), so Host-driven effects are the
+unit's DSP under live control; whether that has ever included block 201 Voice
+FX, rather than only shared reverb, is unconfirmed: "thus far reverb, but I
+havent checked since the other fx were apparently fixed". Channel 1 is back on
+block 1 with readable state identical to before.
+
+The user's stance after this: "I suppose there isn't much reason to continue
+pushing this anymore. The host is made and everything else works", and on
+effects, "I guess its just for when connected to a host, thats all". Effects
+(shared reverb, computer-side multiband) are Host-connected features; unit-only
+effects and custom firmware are not active goals unless the user reopens them.
+
+Then, on the user's go, the four unit blocks were set: Channel 1 block 1 MAIN,
+block 2 B A S E; Channel 2 block 1 MAIN, block 2 Piano Accomany (from
+`Piano Accomany.scene` `line/ch2`, `d58136ce…`). Both channels are left on
+block 1; readable state unchanged; registry slots 0–3 match. Open requests
+from the user: make the Host reverb and multiband sound "really good", the
+multiband as "just another type of compression that can be selected,
+replacing the normal compressor block", and a UI pass on "the sizing of the
+program, the sizing of everything, and the visible layout of everything".
+
+Auto gain is now remembered per input, at the user's request ("Yes please").
+`_host_features_state` saves `{"autogain": {"version": 1, "on": [...]}}` only
+while an input has it on; `_adopt_autogain`, called from `_after_load`,
+switches those inputs' Auto buttons back on at launch (through the button, so
+linking, the locked fader and the controller behave as a click) and reports an
+unusable saved value instead of applying it. GUIDE.md updated. Committed at
+the user's request ("commit autogain") on branch `io24-autogain-memory`:
+`0dcd0bc` (code, 7 new tests, matrix 748 rows regenerated twice, identical,
+`16b1ea67…e96f`) and `5a0018d` (the Mixer section of GUIDE.md still said Auto
+starts off). Full suite 605 passed, 1 skipped, 129 subtests, exit 0. `main`
+is still `fa0d974`; the user merges with `git merge --ff-only
+io24-autogain-memory`. No device action.
+
+The user first asked for the multiband "exactly where the normal compressor
+would be, so on the inputs", then, told the unit's chain cannot be split,
+decided: "if fat channel has to be left alone, then it can go after the
+limiter then". Design: the unit's Fat Channel is untouched; the Host takes a
+channel from USB capture through the 4-band chain, publishes it as a recording
+source, and returns it to the io24 in place of that channel's direct bus feed
+(a few ms of added delay; Host-only; a Host crash leaves the direct feed off).
+First step needs a live go: confirm USB capture of an input is after the Fat
+Channel, which "after the limiter" requires.
+Record: `runs/20260911T043653-0700-peerbox-followup/PROGRESS.md`.
 
 ## 2026-09-11 controlling checkpoint: Presets tab, A/B removed, resume on connect
 
@@ -3101,3 +3357,127 @@ The final same-UUID closure turn reviewed refreshed snapshot
 disclosed closure claims against the earlier source slices, and reported no
 substantive finding. Claude did not claim independent hash recomputation or a
 local test rerun.
+
+## 2026-09-13 device-present DSP Amount continuation
+
+Resume from
+`runs/20260913T222036-0700-autonomous-host-acceptance/{PROGRESS,RESULTS}.md`.
+The io24 is now enumerated at serial `AB7C22200355`; battery was 97 percent,
+and PipeWire force-rate/force-quantum were 96000/512. The user corrected that
+Main L is not connected to Input 2, so do not run the cable-loopback foundation
+or assume that physical path.
+
+A read-only native six-channel ALSA capture proved Input 2 reaches Mix A at
+the device noise floor, but no useful stimulus is present. The retained file
+is `runs/20260913T222036-0700-autonomous-host-acceptance/no-cable-passive-preflight/native-6ch-passive.wav`,
+SHA-256 `4745cb53424f3fa42ba48bea6a1339e379271a854e65ccd053b71d0211efce94`.
+It is not a DSP Amount classification.
+
+The running GTK Host PID 160463 owns vendor interface 5 and causes direct
+PyUSB state reads to fail `EBUSY`; AT-SPI exposes no child controls. The user
+was asked to close the Host. Nothing was killed or detached. After it closes,
+first read exact JaSt state and require DSP Amount zero, link off, phantom off,
+and processing permutation 0/1 before any write. The requested reviewer pass
+is already complete; do not commission another review absent a concrete new
+failure.
+
+### DSP Amount live closure, 2026-09-14
+
+The Host was closed and the authorized no-listening test completed on serial
+`AB7C22200355` at 96 kHz / 512. Controlling evidence:
+`runs/20260913T222036-0700-autonomous-host-acceptance/dsp-amount-meter-live-attempt-1/live-report.json`,
+SHA-256 `7a98ebff0c782037adf58c1bd06e0e7ca6ec9e8cd3b2eaf679d6eeadd4b24c71`.
+
+With a known +15 dB/1 kHz high-shelf, the internal Main/Input-2 meter ratios at
+0/25/50/75/100% were 0.70797, 1.48875, 2.26080, 3.09274, and 3.86581. Their
+normalized endpoint positions were 0.0000, 0.2473, 0.4917, 0.7552, and 1.0000.
+Treat DSP Amount as one linear dry-to-full-Fat-Channel blend, while retaining
+the evidence boundary that this does not prove literal internal parallel DSP.
+It is not a send/output fader and is not per-module.
+
+The USB PCM Mix A path was unaffected even by controlled HP/EQ coefficients,
+so do not use it for future Fat Channel audibility tests. JaSt Main meters are
+the working no-cable observation path. All live sequences restored exact zero,
+Main, and identity coefficients; gains/routes were untouched. Battery was 95%
+before/after. The final focused gate passed 29/29 tests in 8.654 seconds. A
+later broad discovery run exceeded ten minutes of CPU and was interrupted; do
+not claim it passed. The earlier 687-test broad pass remains the last complete
+broad result.
+
+UX decision: do not present intermediate DSP Amount as a generally useful
+"processing intensity" control. It is a whole-chain linear dry/wet blend and
+undermines HPF/EQ correction, gate closure, and limiter ceilings. Document
+Bypass plus 100% processing as the normal workflow; retain intermediate values
+only for intentional parallel processing. Do not conflate it with the separate
+Voice FX or Reverb mix controls.
+
+### Voice FX live result, 2026-09-14
+
+The objective no-cable block-201 test is implemented in
+`re/io24_voicefx_meter_probe.py`; its six focused tests pass. Controlling report:
+`runs/20260913T222036-0700-autonomous-host-acceptance/voicefx-meter-live-attempt-3/live-report.json`,
+SHA-256 `0436e1da0a3fa9e3c83a7988f0d7b90507aaeae998403e8e7d36c0ac4578002e`.
+
+With the ordinary Channel 1 gate bypassed and a validated 26.248 dB bus gain
+control, Transformer on changed the Main/Input-1 ratio by -4.024 dB with only
+0.045 dB off-state drift. Direct block-201 Transformer processing is real in
+the device's current armed state. Models 1 through 5 showed no resolved
+scalar-level change and remain unproved, not disproved; the meter is weak for
+energy-preserving pitch/delay and the run did not independently establish every
+selector transition.
+
+Restoration was clean. Readable flags 449, gains, Main, headphones,
+phantom/link state, and processing order 0/1 returned exactly. The Host-known
+Transformer-off and Channel 1 gate intents were resent. Routes, slots, DSP
+Amount, and `processingChannel` were untouched. Battery was 100 percent.
+
+Next requested acceptance item is saving a known preset into an inactive block
+and verifying recall/persistence. Begin read-only: inspect the device-slot
+registry and current readable slot selectors. Do not overwrite an unknown slot
+body; proceed only if the exact inactive body is Host-known and therefore
+restorable. The remaining smoke tests are Solo, Auto gain, Multiband, and Mix
+A/B at 96 kHz / 512.
+
+### Inactive device-slot save/recall result, 2026-09-14
+
+The exact A/B/A probe is implemented in
+`re/io24_slot_recall_meter_probe.py`; its five focused tests pass. Controlling
+evidence is
+`runs/20260913T222036-0700-autonomous-host-acceptance/inactive-slot-recall-live-attempt-1/{CONCLUSION.md,live-report.json}`;
+report SHA-256
+`8db972783d0ce15d799c1fc8b1f6ff7422faee4f13c8fefdac8b962822363299`.
+
+Inactive Input-1 slot 1 had a complete Host-known original `B A S E` body. The
+runner wrote/selected flat, +15 dB/1 kHz high shelf, and flat records. Slot 1
+selected successfully each time, but the boosted record changed normalized bus
+level only +0.143 dB; flat drift was -0.085 dB. Classification is
+`NO_SAVED_BODY_RECALL_EFFECT_DETECTED`: the current tagged `MemP`/`Stat`
+writer/framing does not make the saved body take effect on recall. Do not
+upgrade this to a claim that the device lacks native preset storage.
+
+The original slot-1 body was resent and Input 1 returned to slot 0. The write
+had zero replies, consistent with its existing `WRITE_SENT_UNVERIFIED` status;
+the registry was read-only. Readable state restored exactly. Routes, DSP
+Amount, and `processingChannel` were untouched; battery was 100 percent.
+
+The active next item is the bounded 96 kHz / 512-frame smoke pass for Solo,
+Auto gain, Multiband, and Mix A/B. Do not widen a smoke failure into firmware
+work or treat Host-emulated features as device-resident DSP.
+
+### Host feature smoke result, 2026-09-14
+
+Controlling evidence is
+`runs/20260913T222036-0700-autonomous-host-acceptance/host-feature-smoke-live-attempt-1/{CONCLUSION.md,live-report.json}`;
+report SHA-256
+`7713875f492c3125078fc2bd1ae607c57e5d3977e5da2be24d1055f00d57e8fd`.
+Auto Gain performed a real 30→24 dB clip correction with exact readback, Mix A
+and Mix B passive sources reached ready, and Multiband published all required
+nodes on the exact Revelator pair and accepted a live control update. Clock
+remained 96000/512, every temporary node disappeared, and readable state
+restored exactly.
+
+The preflight found and fixed tab-indented `pw-cli` parsing that could select
+the laptop sink; the real-format regression is green. The focused Host gate is
+168 tests plus 55 subtests. Solo remains hardware-free because its required
+write-only route prestate is incomplete; the Multiband smoke excluded mixer
+rerouting for the same restoration reason.

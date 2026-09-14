@@ -55,6 +55,24 @@ COPY_THUNK = 0x1800D14D8
 
 
 EXACT_INSTRUCTIONS = {
+    # The caller is the active-slot settled-state synchronizer. It requires a
+    # pending timestamp, more than 500 ms elapsed, the same selected slot, no
+    # intervening event flag, and dirty bit 1 before snapshot/send.
+    0x180041BAC: "488b47c0",
+    0x180041BB0: "4885c0",
+    0x180041BB3: "0f8884000000",
+    0x180041BB9: "488b542470",
+    0x180041BBE: "482bd0",
+    0x180041BC1: "4881faf4010000",
+    0x180041BC8: "7e73",
+    0x180041BCA: "453bfe",
+    0x180041BCD: "756e",
+    0x180041BCF: "84c9",
+    0x180041BD1: "756a",
+    0x180041BD3: "f6476002",
+    0x180041BD7: "48c747c0ffffffff",
+    0x180041BDF: "0f84fa010000",
+
     # One caller snapshots and sends the same r14d slot in sequence.
     0x180041C19: "418bd6",
     0x180041C21: "84c0",
@@ -323,6 +341,17 @@ def analyze(data):
             "snapshot_return": (
                 "0x180042113 serializer call -> 0x180042118 success return"
             ),
+        },
+        "settled_state_trigger": {
+            "caller_range": "0x180041bac..0x180041c38",
+            "pending_timestamp_member": "owner-0x40",
+            "elapsed_compare": "now - pending_timestamp > 500",
+            "elapsed_threshold_ms": 500,
+            "same_selected_slot": "r15d == r14d",
+            "intervening_event_required_clear": True,
+            "dirty_flag": "owner+0x60 bit 1 (mask 0x2)",
+            "pending_timestamp_cleared_before_send": True,
+            "role": "ACTIVE_SLOT_SETTLED_STATE_SYNCHRONIZER",
         },
         "reconciliation": {
             "firmware_recall": "stored_record[0:4] reaches 0x531e0 unchanged",

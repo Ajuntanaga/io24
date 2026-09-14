@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Hardware-free contracts for device-slot recall and the Voice FX gate.
+"""Hardware-free contracts for physical device-slot recall.
 
-Storing a slot body is not recalling it. Block 201's handler (fw 0x50af8)
-returns having done nothing unless +0x44 and +0x39 are non-zero and +0x40 is
-zero, and only the native Stat structured-state load sets all three -- see
-PROTOCOL.md 13c and the 2026-08-31 controlling correction. Selecting a stored
-slot is the decoded way to run that load, so the Host needs a recall path and
-has to say plainly whether one has happened.
+Storing a slot body is not recalling it. Recall selects the requested physical
+Fat Channel state; the current framing evidence does not establish block-201
+FX activation, so these contracts make no such claim.
 
 Nothing here opens USB.
 """
@@ -66,7 +63,7 @@ class DeviceSlotRecallTests(unittest.TestCase):
         self.assertTrue(report["enable_asserted"])
         self.assertFalse(report["was_processing"])
         self.assertEqual(report["relative_slot"], 0)
-        self.assertEqual(report["voicefx_gate"], "STAT_LOAD_REQUESTED")
+        self.assertNotIn("voicefx_gate", report)
         self.assertEqual(report["audibility"], "UNPROVED")
 
     def test_recall_leaves_an_already_processing_channel_mix_alone(self):
@@ -132,14 +129,10 @@ class _Blocks:
         self.selected = index
 
 
-def _window(gate=None, entries=(), target=0):
+def _window(entries=()):
     window = io24gtk.Win.__new__(io24gtk.Win)
-    window._fx_gate_recalled = dict(gate or {1: None, 2: None})
     window._observed_preset_slot = {}
     window._host_slot_entries = list(entries)
-    window.fx_target = _Value(target)
-    window.fx_gate_row = _Row()
-    window.fx_gate_state = _Label()
     window.preset_rows = {1: (_Row(), _Blocks()), 2: (_Row(), _Blocks())}
     window.messages = []
     window.say = window.messages.append
@@ -172,35 +165,7 @@ def _entry(slot, channel, name, fx_on):
     }
 
 
-class VoiceFxGateReportingTests(unittest.TestCase):
-    def test_gate_reports_not_opened_before_any_recall(self):
-        window = _window()
-        window._update_fx_gate_row()
-        self.assertEqual(window.fx_gate_state.text, "Not this session")
-        self.assertIn("cannot report its own gate", window.fx_gate_row.subtitle)
-
-    def test_gate_reports_opened_after_recalling_a_voicefx_on_record(self):
-        window = _window(entries=[_entry(0, 1, "MAIN", True)])
-        window._fx_gate_recalled[1] = window._slot_voicefx_intent(0)
-        window._update_fx_gate_row()
-        self.assertEqual(window.fx_gate_state.text, "Opened")
-        self.assertIn("MAIN", window.fx_gate_row.subtitle)
-
-    def test_gate_reports_closed_for_a_stored_record_whose_voicefx_is_off(self):
-        window = _window(entries=[_entry(1, 1, "B A S E", False)])
-        window._fx_gate_recalled[1] = window._slot_voicefx_intent(1)
-        window._update_fx_gate_row()
-        self.assertEqual(window.fx_gate_state.text, "Closed")
-        self.assertIn("B A S E", window.fx_gate_row.subtitle)
-
-    def test_gate_reports_unknown_for_a_body_the_host_never_wrote(self):
-        window = _window()
-        intent = window._slot_voicefx_intent(2)
-        self.assertIsNone(intent["on"])
-        window._fx_gate_recalled[1] = intent
-        window._update_fx_gate_row()
-        self.assertEqual(window.fx_gate_state.text, "Unknown")
-
+class PresetRecallPresentationTests(unittest.TestCase):
     def test_unknown_slots_are_named_within_their_own_channel_pair(self):
         # Global index 2 is Channel 2's FIRST block, not "Slot 3".
         window = _window()
@@ -227,14 +192,6 @@ class VoiceFxGateReportingTests(unittest.TestCase):
             window._slot_changed(2, 2)
         self.assertEqual(window.messages, ["Recalled Block 1 on Channel 2"])
 
-    def test_gate_row_follows_the_selected_target_channel(self):
-        window = _window(entries=[_entry(0, 1, "MAIN", True)], target=1)
-        window._fx_gate_recalled[1] = window._slot_voicefx_intent(0)
-        window._update_fx_gate_row()
-        # Channel 2 is the target and has had no recall of its own.
-        self.assertEqual(window.fx_gate_state.text, "Not this session")
-
-
 class HostRecallWiringTests(unittest.TestCase):
     def test_selecting_a_block_recalls_rather_than_only_selecting(self):
         calls = []
@@ -257,9 +214,19 @@ class HostRecallWiringTests(unittest.TestCase):
             window._slot_changed(1, 0)
 
         self.assertEqual(calls, [(1, 0)])
-        self.assertEqual(window._fx_gate_recalled[1]["name"], "MAIN")
-        self.assertEqual(window.fx_gate_state.text, "Opened")
         self.assertEqual(window.preset_rows[1][1].selected, 0)
+
+    def test_known_recalled_record_sends_its_global_fx_state_once(self):
+        window = _window(entries=[_entry(0, 1, "MAIN", True)])
+        sent = []
+        window._adopt_recalled_slot = lambda channel, slot: True
+        window._follow_recall_processing = lambda channel, report: None
+        window._push_fx = lambda: sent.append("fx")
+
+        window._slot_recalled(
+            1, 0, {"relative_slot": 0, "enable_asserted": False})
+
+        self.assertEqual(sent, ["fx"])
 
     def test_recalling_a_host_preset_uses_its_own_slot_and_channel(self):
         calls = []
@@ -287,7 +254,7 @@ class HostRecallWiringTests(unittest.TestCase):
         # A bypassed channel that had to be enabled must say so.
         self.assertTrue(any("bypassed" in message for message in window.messages))
 
-    def test_a_failed_recall_reports_and_leaves_the_gate_unchanged(self):
+    def test_a_failed_recall_reports_the_failure(self):
         class Device:
             def recall_device_slot(self, channel, slot):
                 raise io24.HostActionError("injected refusal")
@@ -304,29 +271,23 @@ class HostRecallWiringTests(unittest.TestCase):
                                side_effect=lambda fn, *args: fn(*args)):
             window._slot_changed(1, 0)
 
-        self.assertIsNone(window._fx_gate_recalled[1])
         self.assertTrue(any("injected refusal" in m for m in window.messages))
 
-    def test_a_front_panel_slot_change_opens_the_gate_without_the_host(self):
+    def test_front_panel_slot_changes_are_observed_without_fx_claims(self):
         window = _window(entries=[_entry(0, 1, "MAIN", True),
                                   _entry(1, 1, "B A S E", False)])
         # First sighting is the resting index, not a load.
         self.assertEqual(window._observe_device_slot_recalls([0, 2]), [])
-        self.assertIsNone(window._fx_gate_recalled[1])
         # Someone presses the unit's Preset button.
         self.assertEqual(window._observe_device_slot_recalls([1, 2]), [1])
-        self.assertEqual(window._fx_gate_recalled[1]["name"], "B A S E")
-        self.assertEqual(window.fx_gate_state.text, "Closed")
-        # And back to the Voice FX record.
+        # And back to the first record.
         self.assertEqual(window._observe_device_slot_recalls([0, 2]), [1])
-        self.assertEqual(window.fx_gate_state.text, "Opened")
 
     def test_repeated_identical_slot_reports_are_not_treated_as_recalls(self):
         window = _window(entries=[_entry(0, 1, "MAIN", True)])
         window._observe_device_slot_recalls([0, 2])
         for _ in range(5):
             self.assertEqual(window._observe_device_slot_recalls([0, 2]), [])
-        self.assertIsNone(window._fx_gate_recalled[1])
 
     def test_unit_presets_load_by_recall_on_their_own_channel(self):
         import inspect
@@ -407,15 +368,11 @@ class PresetSavingTests(unittest.TestCase):
         self.assertEqual(saved, [(1, "current:channel1;base:Broadcast")])
         self.assertEqual(recalled, [])
         self.assertTrue(any("Not loaded" in m for m in window.messages))
-        # A body that was never loaded must not claim the gate is open.
-        self.assertIsNone(window._fx_gate_recalled[1])
 
     def test_save_and_activate_writes_then_recalls(self):
         window, saved, recalled = self._run(activate=True)
         self.assertEqual(saved, [(1, "current:channel1;base:Broadcast")])
         self.assertEqual(recalled, [(1, 1)])
-        self.assertEqual(window._fx_gate_recalled[1]["name"], "MY VOCAL")
-        self.assertEqual(window.fx_gate_state.text, "Opened")
 
     def test_a_failed_recall_is_not_reported_as_a_failed_save(self):
         window, saved, recalled = self._run(activate=True, recall_fails=True)
@@ -424,7 +381,6 @@ class PresetSavingTests(unittest.TestCase):
         joined = " ".join(window.messages)
         self.assertIn("Saved MY VOCAL", joined)
         self.assertIn("the recall failed", joined)
-        self.assertIsNone(window._fx_gate_recalled[1])
 
     def test_a_saved_preset_is_listed_without_restarting_the_host(self):
         window = _window()

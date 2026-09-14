@@ -1,0 +1,18 @@
+battery: 99
+before: {'slot': (1, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+STOPPED: expected Channel 1 on slot 0 and Channel 2 on slot 2
+---- run 2
+battery: 99
+before: {'slot': (1, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+0. recall Channel 1 block 1: {'channel': 1, 'slot': 0, 'relative_slot': 0, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+A. write B A S E to slot 1: {'slot': 1, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+B. write Piano Accomany to slot 3: {'slot': 3, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+C. recall Channel 2 block 2: {'channel': 2, 'slot': 3, 'relative_slot': 1, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+D. write MAIN to slot 2: {'slot': 2, 'fragments_sent': 1, 'replies_received': 0} WRITE_SENT_UNVERIFIED
+E. recall Channel 2 block 1: {'channel': 2, 'slot': 2, 'relative_slot': 0, 'slot_selected': True, 'was_processing': True, 'enable_asserted': False, 'selection': 'SENT_UNVERIFIED', 'voicefx_gate': 'STAT_LOAD_REQUESTED', 'audibility': 'UNPROVED'}
+after: {'slot': (0, 2), 'bypassed': (False, False), 'link': False, 'gain': (30.0, 24.288), 'owner': 1}
+registry slot 0: MAIN | restored-user:MAIN (Main.scene line/ch1) | f74cd9837af8fb09 | WRITE_SENT_UNVERIFIED
+registry slot 1: B A S E | restored-user:B A S E (B A S E.scene line/ch1) | 135a93f1e6b0b63c | WRITE_SENT_UNVERIFIED
+registry slot 2: MAIN | restored-user:MAIN (Main.scene line/ch1) | f74cd9837af8fb09 | WRITE_SENT_UNVERIFIED
+registry slot 3: Piano Accomany | restored-user:Piano Accomany (Piano Accomany.scene line/ch2) | d58136ce09a602d5 | WRITE_SENT_UNVERIFIED
+RESULT: OK

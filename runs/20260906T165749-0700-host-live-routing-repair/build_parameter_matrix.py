@@ -338,10 +338,10 @@ def build() -> dict:
                 requires=("exclusive_usb", "battery_above_10"), note=note,
                 expected_side_effect=expected_side_effect)
 
-    add("native.voicefx_owner_alias", "P5", "native_control",
-        "VoiceFX physical-channel ownership", "readback_enum",
+    add("native.processing_channel_alias", "P3", "native_control",
+        "DSP-chain physical-input permutation alias", "readback_enum",
         stimuli=[1, 2], api=("set_voicefx_channel", "processing_channel"),
-        source=("io24.py", "UC 4.7.2 processingChannel branch"),
+        source=("io24.py", "firmware Pari/12 permutation"),
         requires=("exclusive_usb", "battery_above_10"))
     add("native.main_physical_mute", "P3", "telemetry",
         "mainPhysicalMute", "telemetry", stimuli=[False, True],
@@ -563,9 +563,9 @@ def build() -> dict:
         "serializer", stimuli=["off", "defaults", "boundaries", "48k", "96k"],
         source=("io24_meters.py", "UC 4.7.2 host builder"))
 
-    # P5: every VoiceFX model and transmitted user field, for each possible
-    # physical owner.  Model selection and derived initializer blobs are their
-    # own rows so payload acceptance cannot masquerade as audible processing.
+    # P5: one global block-201 settings object across both structural lanes.
+    # Model selection and derived initializer blobs are their own rows so
+    # payload acceptance cannot masquerade as audible processing.
     voicefx_fields = {
         "transformer": {"on": [False, True], "lows": [0.0, 0.5, 1.0],
                         "width": [0.0, 0.5, 1.0], "mix": [0.0, 0.5, 1.0]},
@@ -585,46 +585,45 @@ def build() -> dict:
         "delay": {"on": [False, True], "time_s": [0.0001, 0.125, 0.25],
                   "feedback": [0.0, 0.5, 1.0], "mix": [0.0, 0.5, 1.0]},
     }
-    for owner in (1, 2):
-        add("voicefx.owner%d.model_selector" % owner, "P5", "voicefx_selector",
-            "fxmodel", "dsp_audio_enum", scope={"owner": owner},
-            stimuli=list(voicefx_fields), api=("set_fx",),
-            source=("io24_fx.py", "UC parameter 450"),
-            requires=("native.voicefx_owner_alias", "deterministic_audio_rig@batch"))
-        add("voicefx.owner%d.model_before_state" % owner, "P1", "serializer_order",
-            "model-before-state ordering", "serializer", scope={"owner": owner},
-            stimuli=list(voicefx_fields), api=("apply_voicefx_snapshot", "send_fx"),
-            source=("io24.py", "UC 4.7.2 model factory"))
-        for model, fields in voicefx_fields.items():
-            for field, stimuli in fields.items():
-                if field in ("on", "carrier2"):
-                    profile = "dsp_audio_toggle"
-                elif field in ("carrier_type", "detune"):
-                    profile = "dsp_audio_enum"
-                else:
-                    profile = "dsp_audio_scalar"
-                add("voicefx.owner%d.%s.%s" % (owner, model, field), "P5",
-                    "voicefx", field, profile, scope={"owner": owner, "model": model},
-                    stimuli=stimuli, api=("set_fx", "configure_voice_fx_intent"),
-                    source=("io24_fx.py", "UC 4.7.2 voicefx.xml"),
-                    requires=("native.voicefx_owner_alias", "deterministic_audio_rig@batch",
-                              "reverb.engine.on"),
-                    prior_evidence=(
-                        "2026-08-11 fx_gate_probe: block 201 measured inaudible "
-                        "(-0.3 dB) with block-202 reverb as same-path positive "
-                        "control (+6.0 dB); two runs agreed and preset recall "
-                        "did not open the gate",
-                    ))
-            add("voicefx.owner%d.%s.serializer" % (owner, model), "P1",
-                "serializer", "%s complete payload" % model, "serializer",
-                scope={"owner": owner, "model": model},
-                stimuli=["off", "default", "boundaries", "48k", "96k"],
-                source=("io24_fx.py", "UC 4.7.2 host builder"))
-        add("voicefx.owner%d.vocoder.avoiced" % owner, "P1", "telemetry",
-            "avoiced read-only detector", "component_reconcile",
-            scope={"owner": owner, "model": "vocoder"},
-            source=("UC 4.7.2 RobotVoiceA",),
-            blockers=("no_device_readback_route_established",))
+    add("voicefx.global.model_selector", "P5", "voicefx_selector",
+        "fxmodel", "dsp_audio_enum", scope={"lanes": [1, 2]},
+        stimuli=list(voicefx_fields), api=("set_fx",),
+        source=("io24_fx.py", "UC parameter 450"),
+        requires=("native.processing_channel_alias",
+                  "deterministic_audio_rig@batch"))
+    add("voicefx.global.model_before_state", "P1", "serializer_order",
+        "model-before-state ordering", "serializer", scope={"lanes": [1, 2]},
+        stimuli=list(voicefx_fields), api=("apply_voicefx_snapshot", "send_fx"),
+        source=("io24.py", "UC 4.7.2 model factory"))
+    for model, fields in voicefx_fields.items():
+        for field, stimuli in fields.items():
+            if field in ("on", "carrier2"):
+                profile = "dsp_audio_toggle"
+            elif field in ("carrier_type", "detune"):
+                profile = "dsp_audio_enum"
+            else:
+                profile = "dsp_audio_scalar"
+            add("voicefx.global.%s.%s" % (model, field), "P5",
+                "voicefx", field, profile, scope={"model": model},
+                stimuli=stimuli, api=("set_fx", "configure_voice_fx_intent"),
+                source=("io24_fx.py", "UC 4.7.2 voicefx.xml"),
+                requires=("native.processing_channel_alias",
+                          "deterministic_audio_rig@batch", "reverb.engine.on"),
+                prior_evidence=(
+                    "2026-08-11 fx_gate_probe: block 201 measured inaudible "
+                    "(-0.3 dB) with block-202 reverb as same-path positive "
+                    "control (+6.0 dB); two runs agreed and preset recall "
+                    "did not open the gate",
+                ))
+        add("voicefx.global.%s.serializer" % model, "P1",
+            "serializer", "%s complete payload" % model, "serializer",
+            scope={"model": model},
+            stimuli=["off", "default", "boundaries", "48k", "96k"],
+            source=("io24_fx.py", "UC 4.7.2 host builder"))
+    add("voicefx.global.vocoder.avoiced", "P1", "telemetry",
+        "avoiced read-only detector", "component_reconcile",
+        scope={"model": "vocoder"}, source=("UC 4.7.2 RobotVoiceA",),
+        blockers=("no_device_readback_route_established",))
 
     # P6: state, preset, factory-loader, reconnect, and disconnected acceptance.
     state_rows = (
@@ -649,17 +648,20 @@ def build() -> dict:
         add("state." + ident, "P6", "host_state", parameter, profile,
             api=api, source=("io24.py", "io24gtk.py"), blockers=blockers)
     add("state.channel2_slot3_write", "P6", "device_preset",
-        "complete tagged record write to global slot 3", "persistence",
+        "complete native version-2 record write to global slot 3", "persistence",
         scope={"channel": 2, "global_slot": 3},
         api=("save_device_slot", "save_uc_device_slot", "save_known_device_slot",
              "save_native_model0_voicefx_slot"),
         source=("io24.py MemP/Stat",),
         requires=("all_target_state_rows_pass", "battery_above_10"),
-        blockers=("memp_receiver_ambiguity_unresolved_live",),
-        note=("The only live MemP-tagged SetP observation (2026-08-10) "
-              "resolved to a cache-invalidation handler at firmware 0x3c064 "
-              "with no payload. The distinct CP34 {0,0}/0x420bc/0x531e0 "
-              "receiver remains statically derived and unconfirmed live."))
+        blockers=("native_current_slot_body_unreadable",
+                  "native_writer_unvalidated_live"),
+        note=("Firmware ingress and recall preserve Stat bytes and the io24 "
+              "consumer at 0x531e0 requires native version 2. The 2026-09-14 "
+              "inactive-slot A/B/A test found no applied body from the old "
+              "tagged writer, which is now refused before transport. The "
+              "native writer is hardware-free only and cannot back up the "
+              "current unreadable slot body."))
     prior_voicefx_negative = (
         "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) "
         "with block-202 reverb as same-path positive control (+6.0 dB); two "
@@ -673,7 +675,7 @@ def build() -> dict:
             "%s standalone recall" % model, "persistence",
             scope={"channel": 2, "global_slot": 3, "model": model},
             source=("MemP/Stat", "front-panel recall"),
-            requires=("state.channel2_slot3_write", "voicefx.owner2.%s.on" % model),
+            requires=("state.channel2_slot3_write", "voicefx.global.%s.on" % model),
             note=persistence_note, prior_evidence=prior_voicefx_negative)
     add("persistence.channel2.shared_reverb", "P6", "device_persistence",
         "shared reverb standalone recall", "persistence",

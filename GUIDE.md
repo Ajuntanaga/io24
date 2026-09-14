@@ -195,93 +195,46 @@ real room, the time sound takes to reach a surface and come back.
 Block 201 is one Voice FX settings instance configured as a **two-input,
 two-output processor**. Firmware maps both physical inputs into its two
 processing lanes, and Doubler/Transformer binds its private reverb core to lane
-0 and lane 1. That establishes the capacity for the same private-reverb state
-on both lanes, not that stock routing enables both concurrently. Universal
-Control traditionally selects one physical input for Voice FX at a time. What
-the hardware cannot hold is two different Doubler settings: both lanes share
-`on`, `lows`, `width` and `mix`.
+0 and lane 1. The Host therefore presents one global **FX active** switch and
+one model/settings surface for both inputs. It does not change
+`processingChannel`, which swaps physical inputs between DSP chains and is
+unrelated routing state. What the hardware cannot hold is two different FX
+models or settings: both lanes share one state.
 
 The private core is not the shared Reverb section above. It does not use block
 202 or the FX return. The factory preset named
 **Reverb** is actually Doubler model 0 with the private-core settings stored in
 its `voicefx` JSON object.
 
-UC remembers the selected algorithm as `voicefx.__classid`. On load it resolves
-that class, selects the model, and only then applies the model fields. The
-Linux host exposes the exact
-route through `with_fx=True`, CLI `--voicefx`, and the GTK **Load + Voice FX**
-button. The opted-in load first assigns the singleton VoiceFX layer to the
-requested physical channel, then selects the model, then applies `voicefx.on`
-and its model fields. A direct model edit sends the owner once, then the selected
-model and state; the Device page's DSP amount and Bypass are the shared reverb
-path and are not part of Voice FX activation. Detuner starts at the factory
-Detuned Vocal values (minus 7 semitones, 80 percent wet) instead of the neutral
-zero-semitone position.
+UC remembers the selected algorithm as `voicefx.__classid`. On load the Host
+resolves that class, selects the model, and only then applies `voicefx.on` and
+the model fields. It sends this global state once, including when a Host-known
+device preset is recalled. Saving either channel carries the same global FX
+state. Detuner starts at the factory Detuned Vocal values (minus 7 semitones,
+80 percent wet) instead of the neutral zero-semitone position.
 
 #### The device's Voice FX gate
 
-Configuring a model is not switching it on. Block 201's own USB handler checks
-three flags on the FX object before it dispatches anything, and returns having
-done nothing when any of them fails — no error, no reply difference, no audio.
-Only the native `Stat` structured-state load sets all three, and **recalling a
-device slot is the decoded way to run that load**. So a model armed by direct
-writes alone is accepted, stored and silently discarded; that is why a fully wet
-Delay could be sent successfully and still be inaudible, while the shared reverb
-on block 202 — which has no such gate — worked in the same session.
+`FX active` expresses the requested state; a control reply by itself is not an
+audibility indicator.
+Block 201's USB handler checks three internal flags and silently ignores writes
+when they are not armed. The newest framing trace also shows that a tagged UC
+device-slot record reaches the native loader with its `{` archive word where
+the loader requires `2`. Consequently neither a successful control reply nor a
+device-preset recall proves that block 201 is active. The old **Device
+activation** readiness row was removed because it claimed knowledge the Host
+does not have.
 
-The **Device activation** row at the bottom of the Voice FX section says which
-of the two is happening:
-
-| Row says | Meaning |
-|---|---|
-| **Not this session** | No recall this session. The device cannot report its own gate, so this is the Host's knowledge, not a reading |
-| **Opened** | A record whose `voicefx.on` is set was recalled on this channel |
-| **Closed** | A record was recalled, but its stored Voice FX is off |
-| **Unknown** | A slot the Host never wrote was recalled; slot bodies have no readback |
-
-To open it, recall a preset whose Voice FX is on — from the **Host presets**
-list on the Presets page, from that channel's slot blocks, or from the unit's
-own Preset button. After that, model and parameter edits reach the engine.
-
-Changing the Voice FX target can exchange the two slot indicators exposed by
-the device. The Host therefore sends the owner assignment only for the first
-send on a connection or when the chosen target actually changes; moving a
-model slider does not keep touching the slot-sensitive assignment route.
-
-The four version-2 defaults embedded in firmware have asymmetric contents, but
-that is not a slot-ownership rule. UC's own scene schema gives all four slot
-objects a `voicefx` member, and its exact active-slot writer sends the complete
-tagged scene-shaped record. The earlier Channel-2 dry trial omitted the separate
-`Assign Voice FX` control, which is the meaningful missing condition.
-
-Two prior acceptance attempts set `Assign Voice FX = Ch2` and wrote the complete
-factory **Reverb** record to global slot 3, but their runners then used preset
-control channel 1. Assignment does not renumber those APIs, so readback proves
-they selected/enabled physical Channel 1 while Channel 2 stayed elsewhere. The
-closed-host listening is therefore not a valid Channel-2 recall result. Channel
-1's selector has since been restored without writing either of its preset
-bodies.
-
-The final stock discriminator now keeps the layers separate: VoiceFX ownership
-is assigned to Input 2, while bypass, slot selection, and enable all address
-physical Channel 2. It also performs model-before-state and raises the factory
-Reverb Wet/Dry value from 29.5% to 100% for an unmistakable test. Its default
-command remains hardware-free:
-
-```bash
-python3 re/cp34_channel2_voicefx_materialization_stage.py
-```
-
-The separately authorized corrected live run sent this maximum-wet sequence
-and left physical Channel 2 enabled on global slot 3. After unplugging and
-reconnecting the interface, the user noticed no audible change. Later routing
-checks exposed a stale/malformed Linux Host shadow, a missing Main FX-return
-level, wrong Channel-2 factory targeting, and one-leg balance attenuation.
-Consequently that listening result is retained as evidence but is no longer a
-terminal stock-firmware verdict. A clean Host-controlled Channel-2 round trip
-is required before distinguishing record commit, persistence, parsing, model
-activation, the processing gate, or recall. Do not repeat live mode without new
-exact authorization.
+The current device state now has a positive audio-path result for Transformer.
+With a gate-free Input 1 self-noise stimulus, switching Transformer from off to
+on moved the normalized Main/Mix bus level by 4.02 dB; both off baselines were
+within 0.05 dB. Direct block-201 Transformer control is therefore functional
+when its internal gate is already armed. The same level-only test did not
+resolve De-Tuner, Vocoder, Ring Modulator, Filters, or Delay; pitch and delay
+can preserve broadband energy, so absence of a level change is not an
+inaudibility finding. Cold-start activation, both-lane audibility, and those
+five models remain separate acceptance items. The shared reverb above is a
+different engine and is already measured working.
 
 #### Deferred post-publication custom firmware
 
@@ -394,7 +347,9 @@ route in another host application.
 ## Device
 
 **Sample rate** — the device supports 44.1, 48, 88.2 and 96 kHz; PipeWire
-decides which is used. Two things to know if you check by hand: PipeWire's
+decides which is used. The Host starts at 96 kHz and a 512-frame buffer on its
+first launch, then remembers and restores the last successful selections. Two
+things to know if you check by hand: PipeWire's
 `clock.rate` is the *default* and stays at 48000 whatever the graph is doing —
 the real rate is in `/proc/asound/card*/pcm0p/sub0/hw_params` — and a forced rate
 only takes effect once something is playing, because a suspended device has no
@@ -430,6 +385,25 @@ processing back on at 100%, and the controls follow. UC's own
 onto this one value is the Host's reading of UC's schema, whose amount minimum
 sits just above zero.
 
+Use intermediate DSP Amount values only when a parallel whole-chain sound is
+actually wanted. A live no-listening meter test with a controlled EQ showed a
+linear dry-to-processed blend at 0/25/50/75/100%; it is not a channel level or
+send. That makes the control useful for effects such as parallel compression,
+but a poor control for corrective processing:
+
+- With EQ or a high-pass filter, the dry path restores frequencies the filter
+  was meant to remove and can change the intended phase response.
+- With a gate, the dry path leaks the signal around the gate.
+- With a limiter, dry peaks bypass the ceiling, so the output is no longer
+  reliably limited.
+
+For those modules, leave DSP Amount at **100%** while processing is enabled and
+use the module's own parameters or bypass. Treat **Bypass** as the normal
+whole-chain on/off control. Voice FX **Wet/Dry** and reverb **Wet mix** remain
+separate effect-specific controls; DSP Amount does not replace them. The live
+result establishes the functional blend law, not whether the firmware
+literally implements two parallel signal paths.
+
 **Channel names** are read from the device's own table.
 
 ---
@@ -442,16 +416,19 @@ search filters both by name and description.
 
 ### Loading
 
-Double-click a preset to load it, Fat Channel and Voice FX together, into the
-channel chosen in **Load into**. While the channels are linked it loads into
-both, and the chosen channel owns Voice FX.
+Click the preset's **Load** button to load it into the channel chosen in
+**Load into**. Its Fat Channel goes to that channel; while the channels are
+linked, the Fat Channel goes to both. FX has one global state, so the same
+action also adopts and sends the preset's recorded FX intent.
 
 A preset that lives on the unit loads from the unit itself when it belongs to
-that channel: the device runs its own `Stat` load for that block, which is also
-what opens the Voice FX gate. Loaded into the other channel, the Host applies
-the same record instead. Because a bypassed channel never reaches the device's
-load, the Host turns processing on when, and only when, the device reports the
-channel bypassed; a channel that is already processing keeps its exact amount.
+that channel: the device runs its own `Stat` load for that block, then the Host
+sends the FX state recorded for that known block once. The physical recall is
+not treated as proof that FX was armed. Loaded into the other channel, the Host
+applies the same record instead. Because a bypassed channel never reaches the
+device's load, the Host turns processing on when, and only when, the device
+reports the channel bypassed; a channel that is already processing keeps its
+exact amount.
 
 A loaded preset is shown on the controls, so the pages stop describing the
 previous sound. A recalled Passive/Vintage EQ has no Standard-band form, so the
@@ -459,11 +436,10 @@ Fat Channel shows it read-only rather than as four derived bands.
 
 ### User Presets
 
-First come the presets this Host has put on the unit, tagged **On the unit ·
-Channel N, block M**, with **· playing** on the block each channel currently
-has selected. Those entries are the Host's own record of what it wrote: the
-io24 reports which block is selected but cannot return a block's contents, so
-a block the Host never wrote is not listed.
+First come historical transport receipts from the older tagged writer. They
+are not proof that those bodies were installed: the io24 reports which block is
+selected but cannot return a block's contents, and the objective inactive-slot
+test found that the tagged body did not take effect.
 
 Then come the presets you saved on this computer.
 
@@ -472,23 +448,22 @@ Then come the presets you saved on this computer.
 Type a name and press **Save**: the **Load into** channel's current sound,
 Voice FX included, joins your presets on this computer, in
 `~/.config/io24/user-presets.json` (the factory file's format). Saving over an
-existing name asks first. Voice FX belongs to one input at a time, so saving
-the channel that does not own it stores its Voice FX switched off.
+existing name asks first. FX is one global settings object, so either channel's
+preset carries the same current FX state.
 
-Each preset's **⋯** menu has **Put on the unit's button, block 1** and
-**block 2**. That writes the complete preset into that block of the **Load
-into** channel and then loads it, after one confirmation that names what it
-replaces. The block the channel is playing is refused; choose the other one.
-Channel 2 blocks do not load Voice FX, so their confirmation warns that an
-included effect will not play from that block.
+Each preset's **⋯** menu still shows **Put on the unit's button, block 1** and
+**block 2**, but the Host now refuses that action before transport: a tagged
+JSON preset cannot be converted losslessly into the firmware-native slot body
+yet. Loading the preset into the Host and direct-live replay still work.
 Your own presets also have **Delete**, which removes them from this computer
 only.
 
-A unit write is a complete-record `MemP/Stat` operation: global slots 0/1 are
-channel 1's two blocks and 2/3 are channel 2's. Each write leaves a
-device-identity-bound receipt in `~/.local/state/io24/device-slots.json` (or
-`$XDG_STATE_HOME`) marked `WRITE_SENT_UNVERIFIED`, because the device cannot
-return the stored body for comparison.
+A native unit write is a complete-record `MemP/Stat` operation: global slots
+0/1 are channel 1's two blocks and 2/3 are channel 2's. The byte-level writer
+now validates the leading version-2 container the firmware recall parser
+requires. It is not exposed by the preset menu because current device slot
+contents cannot be read back or backed up. A future bounded trial can restore a
+pinned firmware default, not an unknown custom body.
 
 ### Factory presets
 
@@ -575,5 +550,6 @@ off, comes back on for the inputs that had it.
 `io24.py startup save` and `systemd/io24-startup.service` remain for applying
 settings without the Host window — see
 [README.md](README.md#making-settings-stick). For a sound that plays with no
-computer at all, put a preset on the unit's button.
-
+computer at all, the unit's own preset storage is the intended path, but this
+Host's current device-slot writer has not passed recall acceptance. Keep the
+computer preset until that framing is corrected.

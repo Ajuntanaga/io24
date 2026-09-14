@@ -1,0 +1,5 @@
+26c9573fcfe81bd8e4be2695ff99c0c42f6699ed71671d4131e5455ee99a814d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T091406-0700-fast-access-slot-assignment/ANALYSIS.json
+160a133c85f9ff75e9834dc8ce6d2ed705d238e73486425f4a8e3a6e3e4154bd  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T091406-0700-fast-access-slot-assignment/SCOPE.md
+7d516d4b578b3a63fb79b22908751e8f1d24200eb4fa6aa05f17b8845d1f5325  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T091406-0700-fast-access-slot-assignment/PROGRESS.md
+4439f06915443f5c14e056dda9da95f7a36d776b07a4243d7c5ab948b0d01183  re/cp34_uc472_fast_access_slot_assignment.py
+d549129a500a52b9c46e1a0d84d92865e1ffc38411e3451b7e6ea2ee0060d786  tests/test_cp34_uc472_fast_access_slot_assignment.py

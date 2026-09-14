@@ -1,0 +1,74 @@
+{
+  "assignment_control_present": false,
+  "conclusion": "UC exposes selection only. activePresetSlotIndex is the sole mutable slot parameter and chooses which of the four slots is active; presetSlotTitle1..4 are readonly, and no skin control writes a preset into a numbered slot. The fast-access assignment edge is absent from the product, not missing from the analysis.",
+  "mutable_slot_parameters": [
+    "activePresetSlotIndex"
+  ],
+  "panel_sha256": "52e48cb1453b815abc4b55fd0232131e11115d1aceb2eb0ed899750db6c08dd8",
+  "preset_parameters": {
+    "activePresetSlotIndex": [
+      "mutable"
+    ],
+    "assign_aux1": [
+      "linkable",
+      "storable"
+    ],
+    "assign_aux2": [
+      "linkable",
+      "storable"
+    ],
+    "enableChannelAssign": [],
+    "matchesPresetFile": [
+      "readonly"
+    ],
+    "preset": [
+      "mutable"
+    ],
+    "presetButtonMode": [
+      "mutable",
+      "storable"
+    ],
+    "presetHotKey": [],
+    "presetHotKeyTitle": [
+      "readonly"
+    ],
+    "presetSlotTitle1": [
+      "readonly"
+    ],
+    "presetSlotTitle2": [
+      "readonly"
+    ],
+    "presetSlotTitle3": [
+      "readonly"
+    ],
+    "presetSlotTitle4": [
+      "readonly"
+    ],
+    "preset_name": [
+      "storable"
+    ]
+  },
+  "schema": "cp34-uc472-fast-access-slot-assignment-v1",
+  "slot_content_parameters": {
+    "presetSlotTitle1": [
+      "readonly"
+    ],
+    "presetSlotTitle2": [
+      "readonly"
+    ],
+    "presetSlotTitle3": [
+      "readonly"
+    ],
+    "presetSlotTitle4": [
+      "readonly"
+    ]
+  },
+  "slot_store_assign_controls": {
+    "presetSlot": "RadioButton",
+    "sendToDisk": "Button",
+    "sendToMixer": "Button",
+    "storeNamedRemotePreset": "Button"
+  },
+  "uceasy_sha256": "a710cf06425a48ff1bb0e9ae72ad74d15613b939e675d134b27f4441074d5dfa",
+  "writable_slot_content_parameters": []
+}

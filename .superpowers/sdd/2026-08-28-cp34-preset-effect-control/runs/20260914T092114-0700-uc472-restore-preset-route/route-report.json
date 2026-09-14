@@ -1,0 +1,115 @@
+{
+  "boundary": "STATIC_DIRECT_CALL_EVIDENCE_ONLY_THE_APPLIER_SUBTREE_RETAINS_INDIRECT_CALL_SITES_AND_NO_LIVE_OR_DEVICE_OBSERVATION_WAS_MADE",
+  "channel_apply": {
+    "applier": "0x18002e690",
+    "brackets_work_in_channel_virtual": "+0x8",
+    "channel_array_header": "0xe8",
+    "channel_array_pointer": "0x158",
+    "channel_count_field": "0x160",
+    "channel_stride": "0x120",
+    "component_filter": [
+      "voicefx",
+      "comp",
+      "opt",
+      "voicefxopt"
+    ],
+    "component_filter_appends": 3,
+    "component_filter_builder": "0x18002e810",
+    "guard": "0x18003c8a0",
+    "index_parser": "0x18003c580"
+  },
+  "parameter_frame_builder": {
+    "encoder_vtable": "0x1804393e0",
+    "function": "0x1800541d0",
+    "getp_immediate": "0x47657450",
+    "memp_fragmenter": "0x180050f10",
+    "memp_slot": "0x10",
+    "parameter_slot": "0xd8",
+    "protocol_version_gate": "[this+0x68] == 2",
+    "setp_immediate": "0x53657450",
+    "setp_sites": [
+      "0x18005423c"
+    ]
+  },
+  "reachability": {
+    "applier_direct_call_functions": 80,
+    "applier_indirect_call_sites": 97,
+    "applier_reaches_record_builder": false,
+    "method": "direct call/jmp edges over .text, call targets as function starts",
+    "record_builders": {
+      "0x18002fdb0": [
+        "Stat"
+      ],
+      "0x1800335ae": [
+        "PrsM",
+        "Stat"
+      ],
+      "0x18003710c": [
+        "PrsM"
+      ],
+      "0x180037250": [
+        "PrsM"
+      ],
+      "0x1800386d5": [
+        "PrsM"
+      ],
+      "0x180039fa0": [
+        "PrsM"
+      ],
+      "0x18003a78d": [
+        "PrsM"
+      ],
+      "0x18004222c": [
+        "Stat"
+      ],
+      "0x180050e70": [
+        "MemP"
+      ],
+      "0x1800510a3": [
+        "MemP"
+      ],
+      "0x1800514b2": [
+        "MemP"
+      ],
+      "0x18005173c": [
+        "MemP"
+      ]
+    },
+    "store_reaches_record_builder": [
+      "0x180037250"
+    ]
+  },
+  "receiver": {
+    "function": "0x18003aef0",
+    "messages": [
+      "GetPresetFileDescriptions",
+      "RestorePreset",
+      "StorePreset"
+    ],
+    "parameter_keys": [
+      "presetFile",
+      "presetTarget",
+      "presetType"
+    ],
+    "string_compare": "0x1800d3562"
+  },
+  "restore_preset": {
+    "channel_branch_builds_a_device_record": false,
+    "preset_targets": [
+      "channel",
+      "scene"
+    ],
+    "scene_branch": "0x18003be50"
+  },
+  "source": {
+    "image_base": "0x180000000",
+    "sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+    "size": 4979672
+  },
+  "status": "UC472_CHANNEL_PRESET_RECALL_IS_A_HOST_SIDE_MODEL_APPLY_NOT_A_DEVICE_RECORD_RECALL",
+  "store_preset": {
+    "library_sender": "0x180037250",
+    "serializer": "0x18002e270",
+    "writes_a_device_record": true
+  }
+}

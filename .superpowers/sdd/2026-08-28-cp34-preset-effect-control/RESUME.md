@@ -1,5 +1,98 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-14 controlling checkpoint: UC never recalls a channel preset through a record
+
+Resume from
+`runs/20260914T092114-0700-uc472-restore-preset-route/PROGRESS.md`.
+
+With the `MemP/Stat` route closed negative and its positive control in hand, the
+remaining question was what the vendor does instead. The exact UC 4.7.2
+`dspusbdevice.dll` answers it. Receiver `0x18003aef0` understands exactly three
+incoming messages — `RestorePreset`, `StorePreset`, `GetPresetFileDescriptions`
+— separated from parameter keys by the compare subject (`mov rcx, r14` for a
+message, `[r?+0x48]` for a key). **There is no assign, commit, apply, or
+activate message.** `RenamedPreset` and `PresetFileDescriptions` are outgoing
+notification names, not compares.
+
+`RestorePreset` branches on `presetTarget` against `channel` and `scene` and
+nothing else. The `channel` branch parses the index, bounds it against the
+model's channel count at `[device+0x160]`, indexes the host-side channel array
+at `[device+0x158] + 0xe8` with stride `0x120`, and calls applier `0x18002e690`,
+which brackets its work in the channel's own `+0x8` virtual and delegates
+component selection to `0x18002e810` (`voicefx`, `comp`, `opt`, `voicefxopt`).
+
+Over the module's direct call graph, twelve functions materialise a `MemP`,
+`Stat`, or `PrsM` immediate; the applier's whole 80-function subtree reaches
+none of them, while the `StorePreset` library sender `0x180037250` reaches one
+immediately as a positive control. The module has exactly one parameter-frame
+builder, `0x1800541d0`, with the single `SetP` immediate at `0x18005423c`,
+sitting at `+0xd8` of the same encoder vtable whose `+0x10` is the `MemP`
+fragmenter.
+
+So UC's channel preset recall is a host-side model apply that replays ordinary
+parameters — the same shape as the Linux Host's direct-setter apply, which is
+therefore the UC-equivalent operation rather than a workaround. This also
+reframes the nulls: they were measuring a route the vendor never uses for
+recall, so they say nothing about whether the device can recall. And because
+UC's own recall is host-side, UC does not demonstrate device-resident standalone
+recall over these three messages either; whatever drives the fast-access buttons
+is firmware-side.
+
+Caveat carried in the classification: direct-call evidence, with 97 indirect
+call sites still inside the applier subtree, including the document's apply
+virtual. Strong, not a proof. The `scene` branch at `0x18003be50` was bounded,
+not traced.
+
+Static only — no device, USB, audio, Host, Wine, network, or firmware action,
+and no vendor code loaded or executed. `NEXT.md`'s prohibition on a speculative
+`PrsM` write was respected. The offline suite is 820 passed, 1 skipped, 265
+subtests; the 709-row matrix regenerates byte-identically at
+`9f79e1b91385013f338c903c4759aae72e23fc1452ac38b30f76170ee6d600c7`.
+
+The next edge moves: `sendToMixer` remains unresolved on the panel side, but the
+higher-value question is now the applier's indirect apply virtual — confirming
+it stays host-side would close this result.
+
+
+## 2026-09-14 controlling checkpoint: the fast-access assignment edge does not exist
+
+The stated next edge is closed, and closed negatively. `sendToMixer` and the
+button-assignment sequence were traced from the retained UC 4.7.2 payload.
+
+Four of the five pinned modules survive in
+`runs/20260906T010449-0700-uc472-save-assign-ui-route/extracted/` and verify
+exactly; only `dspusbdevice.dll` went with the wiped `/tmp`, and it is not
+needed, because `sendToMixer` and the slot UI live in the panel and the
+component model.
+
+UC's shipped skin contains exactly four controls naming a slot, store, assign,
+mixer or disk: `presetSlot` (RadioButton 1..4, selection), `sendToMixer`,
+`sendToDisk`, and `storeNamedRemotePreset`. The component model declares
+`activePresetSlotIndex` (int 0..3) as the only **mutable** slot parameter, and
+declares the four slot contents `presetSlotTitle1..4` as **readonly**.
+
+So UC cannot write a preset into a numbered fast-access slot. No control does
+it and no parameter permits it. `explicit_assign_frame_located: false` was
+never an analysis gap: the operation is absent from the product. `sendToMixer`
+targets the twelve-entry device library (`MemP/PrsM` 16..27), already known to
+be a distinct namespace from the four button slots.
+
+This retires the plan to capture a UC session for the assign frame -- UC never
+sends one -- and retires `PrsM` as a route to button assignment. Populating
+those four slots is not a host operation; the unit's own front panel remains
+the plausible mechanism and is untested.
+
+It also means the Linux Host already implements the whole host-side model:
+`set_preset_slot` / `recall_device_slot` are `activePresetSlotIndex`, and the
+preset-blocks selector is `presetButtonMode`.
+
+Offline only; no device, audio, Wine, network, install or firmware operation,
+and no vendor code executed.
+
+Resume from
+`runs/20260914T091406-0700-fast-access-slot-assignment/PROGRESS.md`.
+
+
 ## 2026-09-14 controlling checkpoint: the active-slot null is confirmed decisive
 
 The `NO_NATIVE_ACTIVE_SLOT_GATE_EFFECT_DETECTED` result was published without a

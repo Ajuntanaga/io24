@@ -2,6 +2,100 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-14 controlling host result: UC recalls a channel preset host-side
+
+The companion to the absent assignment edge below. Universal Control does not
+recall a channel preset by making the device replay a stored record; it applies
+the preset to its own model of the channel and lets the ordinary parameter path
+push the result. That is why driving `MemP/Stat` plus selector recall on
+hardware moved nothing, through three separate live runs and a positive control.
+
+Receiver `0x18003aef0` in the pinned UC 4.7.2 `dspusbdevice.dll` (`de685e89...`)
+understands exactly three incoming messages. Message names are compared against
+the request object (`mov rcx, r14`); parameter keys against a member at `+0x48`:
+
+| kind | literals |
+|---|---|
+| messages | `RestorePreset`, `StorePreset`, `GetPresetFileDescriptions` |
+| keys | `presetTarget`, `presetFile`, `presetType` |
+
+There is no assign, commit, apply or activate message. `RenamedPreset` and
+`PresetFileDescriptions` occur in the same body but are outgoing notification
+names, not compares — do not count them as a vocabulary.
+
+`RestorePreset` branches on `presetTarget` against `channel` and `scene`, and
+nothing else. The `channel` branch parses the index out of `presetFile`, bounds
+it against the model's channel count at `[device+0x160]`, indexes the host-side
+channel array at `[device+0x158] + 0xe8` with stride `0x120`, guards it at
+`0x18003c8a0`, and calls applier `0x18002e690`. The applier brackets its work in
+the channel object's own `+0x8` virtual and delegates component selection to
+`0x18002e810`, which builds the filter `voicefx` / `comp` / `opt` / `voicefxopt`
+through `0x18002ddf0`.
+
+Over the module's direct call graph, twelve functions materialise a `MemP`,
+`Stat` or `PrsM` tag immediate. The applier's entire 80-function subtree reaches
+none of them; `StorePreset`'s library sender `0x180037250` reaches one
+immediately, as the positive control in the same run. The caveat travels with
+the claim: this is direct-call evidence, with 97 indirect call sites still in
+that subtree including the document's own apply virtual.
+
+The module holds exactly one parameter-frame builder, `0x1800541d0`, containing
+the module's only `SetP` immediate at `0x18005423c` and gating on
+`[this+0x68] == 2` to prepend `GetP`/`SetP`. It sits at `+0xd8` of the same
+protocol-encoder vtable (`0x1804393e0`) whose `+0x10` is the `MemP` fragmenter,
+so records and parameters are two slots of one encoder class rather than two
+transports.
+
+Consequences. The Linux Host's direct-setter preset apply is the UC-equivalent
+operation, not a workaround for a missing one. The `MemP/Stat` nulls remain true
+but were measuring a route the vendor never uses for recall, so they say nothing
+about whether the device can recall — the edge was wrong, not the measurement.
+And UC does not demonstrate device-resident standalone recall over these three
+messages either, which together with the absent assignment edge below means
+"save to the device and recall it standalone" is not a UC capability this Host
+is failing to match. Whatever drives the unit's four buttons is firmware-side.
+
+The `scene` branch at `0x18003be50` was bounded, not traced.
+
+Analyzer `re/cp34_uc472_restore_preset_route.py`; evidence in
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T092114-0700-uc472-restore-preset-route/`.
+
+## 2026-09-14 controlling host result: the fast-access assignment edge is absent
+
+The long-open question of which wire operation assigns a preset to one of the
+four fast-access button slots is closed: there is none, because Universal
+Control has no such operation to send.
+
+Enumerated exhaustively from the retained, hash-pinned UC 4.7.2 payload, the
+shipped skin contains exactly four controls naming a slot, store, assign, mixer
+or disk:
+
+| control | kind | effect |
+|---|---|---|
+| `presetSlot` | RadioButton 1..4 | selects the active slot |
+| `sendToMixer` | Button | local list -> device preset library |
+| `sendToDisk` | Button | device preset library -> local list |
+| `storeNamedRemotePreset` | Button | store into the device library |
+
+UC's component model declares `activePresetSlotIndex` (int 0..3) as the only
+**mutable** slot parameter, and the four slot contents `presetSlotTitle1..4` as
+**readonly**. `presetHotKeyTitle` is readonly too; `presetButtonMode` (int 0..2)
+is storable/mutable.
+
+So the host can select a slot and can read what is in one, but cannot write a
+slot's contents. `sendToMixer` targets the twelve-entry device library
+(`MemP/PrsM` 16..27), which §13 already separated from the four button slots.
+Earlier notes recording `explicit_assign_frame_located: false` should be read as
+a property of the product rather than an unfinished search: a capture of a UC
+session cannot reveal an assign frame, because none is ever sent, and `PrsM` is
+not a route to button assignment.
+
+This says nothing about what the unit's own front panel can do, which remains
+the plausible mechanism for populating those slots and is untested.
+
+Analyzer `re/cp34_uc472_fast_access_slot_assignment.py`; evidence in
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T091406-0700-fast-access-slot-assignment/`.
+
 ## 2026-09-14 controlling storage result: no separate commit follows `MemP/Stat`
 
 The physical-storage trace now resolves the concrete device interface beneath

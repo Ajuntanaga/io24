@@ -1,0 +1,7 @@
+4fe0b95049454cf6e9fc01cbebb469f4171fee097502b3cfd31c4851d296c064  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T092114-0700-uc472-restore-preset-route/route-report.json
+658d6712d08b0483b91e108407e7ec6ba64095e19743e0de76f78accc0400f39  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T092114-0700-uc472-restore-preset-route/SCOPE.md
+db3c2351cf10b090ae545e57ce64f21ea7e253d8cf5ecfb08a9c3a5e02ff058d  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T092114-0700-uc472-restore-preset-route/PROGRESS.md
+102675eec38ce1c25959576088c414d117bec8b934b185a30f4626eaa6c4789a  re/cp34_uc472_restore_preset_route.py
+34aafac3d794a51c8912da8997cccaf1a14b0eeba4c92843ae2a32709b512a55  tests/test_cp34_uc472_restore_preset_route.py
+09f8ca9a553345c99c7aa949e8a9850b1e7ab37081c7e62f4c4866eb0e292ccc  .superpowers/sdd/2026-08-28-cp34-preset-effect-control/RESUME.md
+9f79e1b91385013f338c903c4759aae72e23fc1452ac38b30f76170ee6d600c7  runs/20260906T165749-0700-host-live-routing-repair/PARAMETER-VERIFICATION-MATRIX.json

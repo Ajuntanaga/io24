@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recover the exact UC 4.7.2 Standard high-shelf coefficient route.
+"""Recover the UC 4.7.2 Standard high-shelf route and transcribe its maths.
 
 The analyzer is deliberately version-local, bounded, and static.  It accepts
 only the retained ``dspusbdevice.dll`` and retained factory extraction, checks

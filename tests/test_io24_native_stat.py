@@ -20,6 +20,7 @@ from io24_native_stat import (
     encode_native_model0_state,
     encode_native_stat_record,
     native_stat_summary,
+    replace_native_channel_component,
     validate_native_stat_record,
 )
 from io24_preset_record import encode_preset_record
@@ -137,6 +138,35 @@ class NativeStatTests(unittest.TestCase):
         channel2_result = build_native_model0_stat_record(channel2_base, 3)
         self.assertIsNotNone(native_stat_summary(
             channel2_result, slot_index=3)["voicefx"])
+
+    def test_channel_component_replacement_preserves_every_other_leaf(self):
+        base = _native_record(include_voicefx=True)
+        replacement = bytes(range(256)) + bytes(range(176))
+
+        result = replace_native_channel_component(
+            base, 2, b"eq  ", replacement)
+
+        before_top = {chunk.key: chunk.payload
+                      for chunk in decode_native_stat_record(base).chunks}
+        after_top = {chunk.key: chunk.payload
+                     for chunk in decode_native_stat_record(result).chunks}
+        self.assertEqual(after_top[b"\x00\x00\x00\xc9"],
+                         before_top[b"\x00\x00\x00\xc9"])
+        before_channel = {chunk.key: chunk.payload for chunk in
+                          decode_chunk_group(before_top[b"opt "])}
+        after_channel = {chunk.key: chunk.payload for chunk in
+                         decode_chunk_group(after_top[b"opt "])}
+        self.assertEqual(after_channel[b"eq  "], replacement)
+        for key in set(before_channel) - {b"eq  "}:
+            with self.subTest(key=key):
+                self.assertEqual(after_channel[key], before_channel[key])
+        self.assertEqual(validate_native_stat_record(result, slot_index=2), result)
+
+    def test_channel_component_replacement_refuses_a_partial_leaf(self):
+        base = _native_record(include_voicefx=False)
+
+        with self.assertRaisesRegex(NativeStatFormatError, "eq.*expected"):
+            replace_native_channel_component(base, 0, b"eq  ", bytes(431))
 
     def test_chunk_group_round_trips_binary_and_numeric_keys(self):
         raw = encode_chunk_group([

@@ -30,6 +30,12 @@ static struct io24_counts counts;
 typedef NTSTATUS (*io24_unix_entry_t)(void *);
 static const io24_unix_entry_t *real_unix_calls;
 static char order[128];
+static void *expected_cancel_transfer;
+static struct usb_device *cancel_during_submit_device;
+static IRP *cancel_during_submit_irp;
+static IRP *complete_during_cancel_irp;
+static BOOL complete_during_submit;
+static unsigned int cancel_during_submit_phase;
 unsigned int io24_fake_libusb_cancel_count(void);
 
 unixlib_handle_t __wine_unixlib_handle=1;
@@ -38,11 +44,32 @@ static NTSTATUS WINAPI fake_dispatch(unixlib_handle_t h,unsigned int code,void*a
     NTSTATUS status;unsigned int before,after;(void)h;
     if(code==unix_usb_cancel_transfer)
     {
-        before=io24_fake_libusb_cancel_count();status=real_unix_calls?real_unix_calls[code](args):STATUS_SUCCESS;after=io24_fake_libusb_cancel_count();
-        strcat(order,"cancel,");IO24_CHECK(after==before+1);counts.cancels+=after-before;return status;
+        struct usb_cancel_transfer_params *params=args;
+        (void)before; (void)after; status=STATUS_SUCCESS;
+        strcat(order,"cancel,");IO24_CHECK(params->transfer==expected_cancel_transfer);
+        counts.cancels++;
+        if(complete_during_cancel_irp)
+        {
+            IRP *irp=complete_during_cancel_irp;
+            complete_during_cancel_irp=NULL;
+            complete_irp(irp,params->transfer);
+        }
+        return status;
     }
-    if(code==unix_usb_submit_urb){struct usb_submit_urb_params*p=args;counts.submits++;p->irp->Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x7000;return STATUS_PENDING;}
-    if(code==unix_usb_destroy_device)counts.releases++;
+    if(code==unix_usb_submit_urb)
+    {
+        struct usb_submit_urb_params*p=args;
+        counts.submits++;
+        if(cancel_during_submit_phase==1&&cancel_during_submit_device&&cancel_during_submit_irp)
+            usb_submit_urb(cancel_during_submit_device,cancel_during_submit_irp);
+        p->transfer=(void*)(uintptr_t)0x7000;
+        if(cancel_during_submit_phase==2&&cancel_during_submit_device&&cancel_during_submit_irp)
+            usb_submit_urb(cancel_during_submit_device,cancel_during_submit_irp);
+        if(complete_during_submit)complete_irp(p->irp,p->transfer);
+        return STATUS_PENDING;
+    }
+    if(code==unix_usb_release_transfer){counts.releases++;strcat(order,"release,");return STATUS_SUCCESS;}
+    if(code==unix_usb_destroy_device)return STATUS_SUCCESS;
     return real_unix_calls?real_unix_calls[code](args):STATUS_SUCCESS;
 }
 NTSTATUS (WINAPI *__wine_unix_call_dispatcher)(unixlib_handle_t,unsigned int,void*)=fake_dispatch;
@@ -68,10 +95,165 @@ NTSTATUS wineusb_query_usbdi_interface(const GUID*g,USHORT s,USHORT v,INTERFACE*
 struct pending_fixture { IRP irp; IO_STACK_LOCATION stack; URB urb; unsigned char guarded[34]; };
 static void prepare_device(struct usb_device*d,DEVICE_OBJECT*o)
 {memset(d,0,sizeof(*d));memset(o,0,sizeof(*o));o->DeviceExtension=d;d->device_obj=o;d->unix_device=(void*)(uintptr_t)0x12340000;InitializeListHead(&d->irp_list);list_init(&d->entry);list_add_tail(&device_list,&d->entry);}
+static void prepare_bulk(struct pending_fixture *f,HANDLE pipe)
+{
+    memset(f,0,sizeof(*f));
+    memset(f->guarded,GUARD_BYTE,sizeof(f->guarded));
+    f->irp.Tail.Overlay.CurrentStackLocation=&f->stack;
+    f->stack.Parameters.DeviceIoControl.IoControlCode=IOCTL_INTERNAL_USB_SUBMIT_URB;
+    f->stack.Parameters.Others.Argument1=&f->urb;
+    f->urb.UrbBulkOrInterruptTransfer.Hdr.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    f->urb.UrbBulkOrInterruptTransfer.PipeHandle=pipe;
+    f->urb.UrbBulkOrInterruptTransfer.TransferBufferLength=32;
+    f->urb.UrbBulkOrInterruptTransfer.TransferBuffer=f->guarded+1;
+}
+static void prepare_abort(struct pending_fixture *f,HANDLE pipe)
+{
+    memset(f,0,sizeof(*f));
+    f->irp.Tail.Overlay.CurrentStackLocation=&f->stack;
+    f->stack.Parameters.Others.Argument1=&f->urb;
+    f->urb.UrbPipeRequest.Hdr.Function=URB_FUNCTION_ABORT_PIPE;
+    f->urb.UrbPipeRequest.PipeHandle=pipe;
+}
+static void group_kernel_lifetime(void)
+{
+    struct usb_device d;DEVICE_OBJECT o;
+    struct pending_fixture natural,early,cancelled,publishing,racing,abort;
+    unsigned int allocations,frees,releases,completions,cancels;
+    HANDLE pipe=(HANDLE)(uintptr_t)0x281;
+
+    prepare_device(&d,&o);
+    allocations=counts.allocations;frees=counts.frees;releases=counts.releases;
+    completions=counts.completions;
+    prepare_bulk(&natural,pipe);
+    IO24_CHECK(driver_internal_ioctl(&o,&natural.irp)==STATUS_PENDING);
+    IO24_CHECK(!IsListEmpty(&d.irp_list)&&natural.irp.Tail.Overlay.DriverContext[0]);
+    complete_irp(&natural.irp,(void*)(uintptr_t)0x7000);
+    IO24_CHECK(IsListEmpty(&d.irp_list)&&!natural.irp.Tail.Overlay.DriverContext[0]);
+    IO24_CHECK(counts.allocations==allocations+1&&counts.frees==frees+1&&
+            counts.releases==releases+1&&counts.completions==completions+1);
+
+    allocations=counts.allocations;frees=counts.frees;releases=counts.releases;
+    completions=counts.completions;prepare_bulk(&early,pipe);complete_during_submit=TRUE;
+    IO24_CHECK(driver_internal_ioctl(&o,&early.irp)==STATUS_PENDING);
+    complete_during_submit=FALSE;
+    IO24_CHECK(IsListEmpty(&d.irp_list)&&!early.irp.Tail.Overlay.DriverContext[0]);
+    IO24_CHECK(counts.allocations==allocations+1&&counts.frees==frees+1&&
+            counts.releases==releases+1&&counts.completions==completions+1);
+
+    allocations=counts.allocations;frees=counts.frees;releases=counts.releases;
+    completions=counts.completions;cancels=counts.cancels;
+    prepare_bulk(&cancelled,pipe);prepare_abort(&abort,pipe);
+    cancel_during_submit_device=&d;cancel_during_submit_irp=&abort.irp;
+    cancel_during_submit_phase=1;
+    expected_cancel_transfer=(void*)(uintptr_t)0x7000;
+    IO24_CHECK(driver_internal_ioctl(&o,&cancelled.irp)==STATUS_PENDING);
+    cancel_during_submit_device=NULL;cancel_during_submit_irp=NULL;
+    cancel_during_submit_phase=0;
+    IO24_CHECK(counts.cancels==cancels+1);
+    IO24_CHECK(usb_submit_urb(&d,&abort.irp)==STATUS_SUCCESS);
+    IO24_CHECK(counts.cancels==cancels+1);
+    complete_during_cancel_irp=&cancelled.irp;
+    /* The already-issued cancel owns a reference until this synthetic
+     * callback is consumed; a duplicate abort must not issue another one. */
+    complete_irp(&cancelled.irp,(void*)(uintptr_t)0x7000);
+    complete_during_cancel_irp=NULL;
+    IO24_CHECK(IsListEmpty(&d.irp_list)&&!cancelled.irp.Tail.Overlay.DriverContext[0]);
+    IO24_CHECK(counts.allocations==allocations+1&&counts.frees==frees+1&&
+            counts.releases==releases+1&&counts.completions==completions+1);
+
+    allocations=counts.allocations;frees=counts.frees;releases=counts.releases;
+    completions=counts.completions;cancels=counts.cancels;
+    prepare_bulk(&publishing,pipe);prepare_abort(&abort,pipe);
+    cancel_during_submit_device=&d;cancel_during_submit_irp=&abort.irp;
+    cancel_during_submit_phase=2;
+    expected_cancel_transfer=(void*)(uintptr_t)0x7000;
+    IO24_CHECK(driver_internal_ioctl(&o,&publishing.irp)==STATUS_PENDING);
+    cancel_during_submit_device=NULL;cancel_during_submit_irp=NULL;
+    cancel_during_submit_phase=0;
+    IO24_CHECK(counts.cancels==cancels+1);
+    complete_irp(&publishing.irp,(void*)(uintptr_t)0x7000);
+    IO24_CHECK(IsListEmpty(&d.irp_list)&&!publishing.irp.Tail.Overlay.DriverContext[0]);
+    IO24_CHECK(counts.allocations==allocations+1&&counts.frees==frees+1&&
+            counts.releases==releases+1&&counts.completions==completions+1);
+
+    allocations=counts.allocations;frees=counts.frees;releases=counts.releases;
+    completions=counts.completions;cancels=counts.cancels;
+    prepare_bulk(&racing,pipe);prepare_abort(&abort,pipe);
+    IO24_CHECK(driver_internal_ioctl(&o,&racing.irp)==STATUS_PENDING);
+    expected_cancel_transfer=(void*)(uintptr_t)0x7000;
+    complete_during_cancel_irp=&racing.irp;
+    IO24_CHECK(usb_submit_urb(&d,&abort.irp)==STATUS_SUCCESS);
+    IO24_CHECK(!complete_during_cancel_irp&&counts.cancels==cancels+1);
+    IO24_CHECK(IsListEmpty(&d.irp_list)&&!racing.irp.Tail.Overlay.DriverContext[0]);
+    IO24_CHECK(counts.allocations==allocations+1&&counts.frees==frees+1&&
+            counts.releases==releases+1&&counts.completions==completions+1);
+    list_remove(&d.entry);
+}
 static void group_lower(void)
 {
-    struct usb_device d;DEVICE_OBJECT o;struct pending_fixture a,second,abort;unsigned int lower_before;prepare_device(&d,&o);memset(&a,0,sizeof(a));memset(&second,0,sizeof(second));memset(&abort,0,sizeof(abort));
-    a.irp.Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x5081;second.irp.Tail.Overlay.DriverContext[0]=(void*)(uintptr_t)0x5001;InsertTailList(&d.irp_list,&a.irp.Tail.Overlay.ListEntry);InsertTailList(&d.irp_list,&second.irp.Tail.Overlay.ListEntry);abort.irp.Tail.Overlay.CurrentStackLocation=&abort.stack;abort.stack.Parameters.Others.Argument1=&abort.urb;abort.urb.UrbPipeRequest.Hdr.Function=URB_FUNCTION_ABORT_PIPE;abort.urb.UrbPipeRequest.PipeHandle=(HANDLE)(uintptr_t)0x281;counts.cancels=0;order[0]=0;lower_before=io24_fake_libusb_cancel_count();IO24_CHECK(usb_submit_urb(&d,&abort.irp)==STATUS_SUCCESS);IO24_CHECK(io24_fake_libusb_cancel_count()==lower_before+1);IO24_CHECK(counts.cancels==1);IO24_CHECK(!strcmp(order,"cancel,"));list_remove(&d.entry);
+    struct usb_device d; DEVICE_OBJECT o;
+    struct pending_fixture matching, other_pipe, control, abort;
+    struct wineusb_transfer matching_transfer, other_transfer, control_transfer;
+    unsigned int lower_before;
+
+    prepare_device(&d, &o);
+    memset(&matching, 0, sizeof(matching));
+    memset(&other_pipe, 0, sizeof(other_pipe));
+    memset(&control, 0, sizeof(control));
+    memset(&abort, 0, sizeof(abort));
+    memset(&matching_transfer, 0, sizeof(matching_transfer));
+    memset(&other_transfer, 0, sizeof(other_transfer));
+    memset(&control_transfer, 0, sizeof(control_transfer));
+    matching.irp.Tail.Overlay.CurrentStackLocation = &matching.stack;
+    matching.stack.Parameters.Others.Argument1 = &matching.urb;
+    matching.urb.UrbBulkOrInterruptTransfer.Hdr.Function =
+            URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    matching.urb.UrbBulkOrInterruptTransfer.PipeHandle =
+            (HANDLE)(uintptr_t)0x281;
+    matching_transfer.unix_transfer = (void *)(uintptr_t)0x5081;
+    matching_transfer.pipe_handle = (HANDLE)(uintptr_t)0x281;
+    matching_transfer.urb_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    matching_transfer.references = 1;
+    matching_transfer.state = WINEUSB_TRANSFER_PENDING;
+    matching.irp.Tail.Overlay.DriverContext[0] = &matching_transfer;
+    other_pipe.irp.Tail.Overlay.CurrentStackLocation = &other_pipe.stack;
+    other_pipe.stack.Parameters.Others.Argument1 = &other_pipe.urb;
+    other_pipe.urb.UrbBulkOrInterruptTransfer.Hdr.Function =
+            URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    other_pipe.urb.UrbBulkOrInterruptTransfer.PipeHandle =
+            (HANDLE)(uintptr_t)0x201;
+    other_transfer.unix_transfer = (void *)(uintptr_t)0x5001;
+    other_transfer.pipe_handle = (HANDLE)(uintptr_t)0x201;
+    other_transfer.urb_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    other_transfer.references = 1;
+    other_transfer.state = WINEUSB_TRANSFER_PENDING;
+    other_pipe.irp.Tail.Overlay.DriverContext[0] = &other_transfer;
+    control.irp.Tail.Overlay.CurrentStackLocation = &control.stack;
+    control.stack.Parameters.Others.Argument1 = &control.urb;
+    control.urb.UrbControlTransfer.Hdr.Function = URB_FUNCTION_CONTROL_TRANSFER;
+    control_transfer.unix_transfer = (void *)(uintptr_t)0x4000;
+    control_transfer.urb_function = URB_FUNCTION_CONTROL_TRANSFER;
+    control_transfer.references = 1;
+    control_transfer.state = WINEUSB_TRANSFER_PENDING;
+    control.irp.Tail.Overlay.DriverContext[0] = &control_transfer;
+    InsertTailList(&d.irp_list, &matching.irp.Tail.Overlay.ListEntry);
+    InsertTailList(&d.irp_list, &other_pipe.irp.Tail.Overlay.ListEntry);
+    InsertTailList(&d.irp_list, &control.irp.Tail.Overlay.ListEntry);
+    abort.irp.Tail.Overlay.CurrentStackLocation = &abort.stack;
+    abort.stack.Parameters.Others.Argument1 = &abort.urb;
+    abort.urb.UrbPipeRequest.Hdr.Function = URB_FUNCTION_ABORT_PIPE;
+    abort.urb.UrbPipeRequest.PipeHandle = (HANDLE)(uintptr_t)0x281;
+    counts.cancels = 0; order[0] = 0;
+    lower_before = counts.cancels;
+    expected_cancel_transfer = matching_transfer.unix_transfer;
+    IO24_CHECK(usb_submit_urb(&d, &abort.irp) == STATUS_SUCCESS);
+    IO24_CHECK(abort.urb.UrbPipeRequest.Hdr.Status == USBD_STATUS_SUCCESS);
+    IO24_CHECK(counts.cancels == lower_before + 1);
+    IO24_CHECK(counts.cancels == 1);
+    IO24_CHECK(!strcmp(order, "cancel,"));
+    list_remove(&d.entry);
+    group_kernel_lifetime();
 }
 static void group_upper(void)
 {

@@ -2,6 +2,44 @@
 
 Timestamp: 2026-09-06T14:54:07-07:00
 
+## 2026-09-14 controlling physical-storage completion result
+
+The authorized active-slot discriminator subsequently completed and returned
+`NO_NATIVE_ACTIVE_SLOT_GATE_EFFECT_DETECTED`. All three native gate bodies were
+written while global slot 3 was active and each received a 2 -> 3 recall edge.
+Effect delta was -0.068913 dB, off-to-off drift +0.112856 dB, and maximum MAD
+0.349676 dB. The pinned Piano body was rewritten while active; readable state
+restored exactly, battery stayed 99%, and the device remained `194f:0422` /
+firmware `0x0128`. Body restoration is still write-sent rather than readable.
+Report SHA-256:
+`be5e19f27c703368a52ca3a0e460872fb3ae80b9baba1dff07040de22cc6d46d`.
+This rejects inactive-slot timing and closes further `Stat` body variants.
+
+`re/cp34_firmware_physical_storage_commit.py` extends the pinned firmware
+ingress proof through device construction, the manager at `device+0x1108`, and
+the concrete physical interface at `device+0x1384`. Device initializer
+`0x20d3c` passes `device+8` to `0x3d4bc`; that binding is stored at singleton
+field `+0x38` and reloaded by adapter `0x316dc/0x316b0` before device-vtable
+query slot `+0x10`. Query `0x20808` then projects to the concrete interface.
+Vtable `0x6012bc80` binds write slot `+0x4` to `0x4aa90`. The flag-one path
+reads and compares existing bytes, runs changed data through program
+transaction `0x526dc`, and completes ready poll `0x52a70` before success. No
+additional commit/flush call follows on this route. Independent review caught
+the formerly missing adapter-to-query join; the corrected analyzer pins it
+with exact code-slice hashes, instructions, singleton literal, and direct
+branch targets. Focused analyzer TDD passes 2/2.
+The final combined ingress, recall, physical-backend, Standard-EQ probe, native
+gate probe, and active-slot probe suite passes 18/18. Direct analyzer execution
+on the pinned firmware, bytecode compilation, and `git diff --check` pass.
+
+The live discriminator's sequence and restoration contracts pass 3/3. Its
+earlier request was rejected before process launch because slot bodies cannot
+be read back; that pre-authorization event remains recorded separately and
+performed no mutation.
+
+Evidence:
+`runs/20260914T075215-0700-physical-storage-active-slot/`.
+
 ## 2026-09-06 controlling physical-channel correction and restoration
 
 UC's VoiceFX ownership and the device's physical preset controls are separate

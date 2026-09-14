@@ -65,14 +65,16 @@ is live Host state — it rides a Host snapshot, not a device slot body.
 
 **Passive and Vintage EQ.** A device preset stored with the Passive Program or
 Vintage 1970s EQ can be recalled, but the Host can neither draw nor edit those
-models: the Vintage switch frequencies were never recovered, and Passive has
-never appeared in a real preset. After such a recall the rest of the chain is
-shown as usual, and the Equaliser lists the stored EQ read-only, each switch as
-a position with the Neve 1073 frequency beside it marked unverified. The
+models in the running app. The factory **Big Vocal** record supplies authentic
+Passive settings, and both models' switch frequencies and exact coefficient
+designers were recovered offline from UC 4.7.2, but those executors still
+depend on the separately retained vendor DLL.
+After such a recall the rest of the chain is shown as usual, and the Equaliser
+lists the stored EQ read-only with decoded switch frequencies. The
 Standard band controls are paused on that channel, and saving the channel to a
-slot keeps the stored EQ exactly. **Edit with Standard EQ instead** lifts the
-pause; nothing is sent until you move a band, and from then on the Standard
-bands are written over it.
+Host snapshot keeps the stored EQ exactly. **Edit with Standard EQ instead**
+lifts the pause; nothing is sent until you move a band, and from then on the
+Standard bands are written over it.
 
 **High-pass filters**: the Mixer strip's **HPF** is the unit's
 fixed preamp switch. The Fat Channel's digital HPF is separate: choose Off,
@@ -468,12 +470,14 @@ yet. Loading the preset into the Host and direct-live replay still work.
 Your own presets also have **Delete**, which removes them from this computer
 only.
 
-A native unit write is a complete-record `MemP/Stat` operation: global slots
-0/1 are channel 1's two blocks and 2/3 are channel 2's. The byte-level writer
-now validates the leading version-2 container the firmware recall parser
-requires. It is not exposed by the preset menu because current device slot
-contents cannot be read back or backed up. A future bounded trial can restore a
-pinned firmware default, not an unknown custom body.
+A native unit write was expected to be a complete-record `MemP/Stat` operation:
+global slots 0/1 are channel 1's two blocks and 2/3 are channel 2's. The
+byte-level primitive validates the leading version-2 container the firmware
+recall parser requires, but two bounded device tests showed that its stored
+Standard-EQ and independent gate bodies do not become active DSP state even
+when slot selection reads back. It remains unexposed by the preset menu. The
+missing piece is a distinct commit/apply edge, not another record-body variant;
+slot contents also cannot be read back.
 
 ### Factory presets
 
@@ -561,5 +565,6 @@ off, comes back on for the inputs that had it.
 settings without the Host window — see
 [README.md](README.md#making-settings-stick). For a sound that plays with no
 computer at all, the unit's own preset storage is the intended path, but this
-Host's current device-slot writer has not passed recall acceptance. Keep the
-computer preset until that framing is corrected.
+Host's current store-plus-selector route has failed recall acceptance with two
+independent native bodies. Keep the computer preset until the missing device
+commit/apply operation is recovered.

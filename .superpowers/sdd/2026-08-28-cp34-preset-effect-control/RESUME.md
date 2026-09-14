@@ -1,5 +1,219 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-14 controlling checkpoint: the active-slot null is confirmed decisive
+
+The `NO_NATIVE_ACTIVE_SLOT_GATE_EFFECT_DETECTED` result was published without a
+positive control, so on its own it could not separate a native write that never
+took effect from a meter that cannot observe Channel-2 DSP. Both `mixer_routes`
+and `processing_channel` were `UNTOUCHED` and the Main/Input-2 ratio sat near
+unity in every window, which is also the signature of a blind rig. 12Y is the
+precedent for publishing a null without that check and voiding it later.
+
+The control has now been run. Device, channel, meter, window size and gate
+values were held constant and only the write route changed, to the already
+hardware-verified direct `SetP`/`gate` setter. It moved the same ratio by
+**-28.0871 dB** against a 2.6915 dB detection threshold, with baseline drift
+-0.1193 dB; Input 2 held steady while Main collapsed and recovered. That is
+roughly 400 times the native probe's -0.0689 dB delta.
+
+The blind-meter explanation is excluded. The native active-slot null is a
+genuine negative about the `MemP/Stat` write route, and the instruction to stop
+varying record bodies is evidence-backed. As a by-product this establishes that
+Channel 2's processing is in the Main path on the current routing, which the
+native run had not confirmed.
+
+Two bookkeeping corrections: the native run's PROGRESS.md matrix SHA
+`dc92887d...` is superseded by the checked-in 709-row matrix `9f79e1b9...`,
+which regenerates byte-identically; and commit `837da49`'s message describes a
+slot layout that the later registry rewrite superseded, so the registry is
+authoritative.
+
+Live boundary: direct setters only; no native record, `PrsM`, slot, routing or
+firmware operation. Identity verified before any write. Battery stayed at 98
+percent. Input-2 gain and main volume restored exactly; the gate was left in
+its byte-exact firmware power-on state.
+
+The next edge is unchanged: UC 4.7.2 `sendToMixer` plus the button-assignment
+sequence. Do not write a speculative `PrsM` entry.
+
+Resume from
+`runs/20260914T083208-0700-direct-gate-positive-control/PROGRESS.md`.
+
+
+## 2026-09-14 controlling checkpoint: active-slot native writer also negative
+
+Resume from
+`runs/20260914T075215-0700-physical-storage-active-slot/PROGRESS.md`.
+The firmware trace now crosses the previous physical-backend boundary. The
+device initializer at `0x20d3c` passes `device+8` to `0x3d4bc`, which stores it
+at singleton field `+0x38`; adapter `0x316dc/0x316b0` reloads that exact field
+before calling device-vtable slot `+0x10`. That slot is query `0x20808`, whose
+projection reaches the concrete vtable at `0x6012bc80`. Its write slot
+`0x4aa90` receives flag `1`, which selects compare-before-program. Changed
+bytes pass through `0x52cd8`, program transaction `0x526dc`, and ready poll
+`0x52a70` before a successful return. There is no distinct post-write
+flush/commit operation on this route. Independent review found the previously
+disconnected adapter/interface halves; exact instruction, slice, literal, and
+branch anchors now close that join, and focused TDD is 2/2 green.
+The final ingress/recall/physical-backend and three native-probe regression is
+18/18 green; direct analyzer execution, bytecode compilation, and diff checks
+also pass.
+
+The user then explicitly accepted the unreadable-body restoration risk and the
+active-slot discriminator completed. Every native gate off/on/off body was
+written while global slot 3 was active and received a forced 2 -> 3 recall.
+The result is `NO_NATIVE_ACTIVE_SLOT_GATE_EFFECT_DETECTED`: effect delta
+-0.068913 dB, off-to-off drift +0.112856 dB, maximum MAD 0.349676 dB. The
+pinned Piano body was rewritten while active; all readable controls restored
+exactly, battery stayed 99%, and postflight device identity remained
+`194f:0422` / firmware `0x0128`. Stored-body restoration remains sent but
+unreadable. Report SHA-256 is
+`be5e19f27c703368a52ca3a0e460872fb3ae80b9baba1dff07040de22cc6d46d`.
+
+This rejects inactive-slot timing as the explanation for the prior native
+nulls. Stop `Stat` body variants. Existing static evidence says `PrsM` indexes
+16..27 are the separate twelve-record Device Presets library, reuse the same
+storage writer, and do not supply the still-missing fast-access Assign edge.
+Do not overwrite an unreadable `PrsM` entry merely to repeat the same boundary.
+The next useful writer evidence is a native-boundary capture or continued
+source trace of one UC `sendToMixer` plus button-assignment sequence. Do not
+expose `save_device_slot()` as functional preset save.
+
+## 2026-09-14 controlling checkpoint: Passive EQ offline seam complete
+
+Resume the offline coefficient work from
+`runs/20260914T031459-0700-native-slot-builder/PROGRESS.md`. The retained UC
+factory **Big Vocal** record is an authentic Passive Program fixture, and
+`re/uc472_passive_eq.py` now executes the pinned UC 4.7.2 combined-high
+seven-float designer and combined-low five-float designer for all four native
+sample rates. Its record wrapper replaces only EQ coefficient bytes in a
+validated native body. The Host's read-only Passive display now decodes all
+three switch tables.
+
+This closes the last offline EQ coefficient-model gap. It does not make the
+running Host self-contained: both Passive and Vintage still require the
+separately retained DLL, and direct live alternate-model editing stays
+fail-closed. It also does not change the controlling device conclusion below:
+the current `MemP/Stat` plus selector writer route stays closed until a distinct
+commit/apply edge is captured or source-bound. No device operation occurred in
+this Passive continuation. The synchronized 709-row parameter matrix SHA-256
+is `9f79e1b91385013f338c903c4759aae72e23fc1452ac38b30f76170ee6d600c7`.
+
+## 2026-09-14 controlling checkpoint: current MemP/Stat writer route closed negative
+
+Resume from
+`runs/20260914T070547-0700-native-gate-slot-live-attempt-1/PROGRESS.md`.
+The independent native gate discriminator also returned
+`NO_NATIVE_SLOT_RECALL_EFFECT_DETECTED`. It used firmware's Channel-2 native
+slot-2 body as the candidate base and changed only both exact `gate` states:
+off / on at -40 dB threshold and -84 dB range / off. The gate-on window moved
+only -0.181 dB; off-baseline drift was -0.086 dB and maximum MAD was 0.374 dB.
+
+Together with the native Standard-EQ null below, this rules out the EQ composer
+and wrong native slot family as explanations. Exact-length transport and
+selector readback are not enough: the known `MemP/Stat`-plus-selector sequence
+does not produce active DSP state on this device. Stop further body variations
+until a distinct commit/apply edge is captured or source-bound.
+
+Readable state restored exactly again, the pinned native Piano strip restore
+was sent to slot 3, battery was 100% before/after, and postflight identity was
+still `194f:0422`. The report SHA-256 is
+`be97285a71f562bae959bc56cef1f5c4041b5c09aa9ed4561401ae825c4b2734`.
+Passive EQ remains an offline codec gap only; it cannot repair this live writer
+route.
+
+## 2026-09-14 controlling checkpoint: native writer accepted transport, not DSP state
+
+Resume from
+`runs/20260914T065602-0700-native-standard-slot-live-attempt-1/PROGRESS.md`.
+With explicit connected-device authority, the native version-2 writer was
+tested on inactive physical Channel-2 slot 3 using an objective no-cable
+flat/+15 dB shelf/flat meter sequence. Slot selection read back each time and
+all exact-length `MemP/Stat(3)` frames were sent, but the boost changed the
+stable Main/Input-2 ratio by only -0.180 dB. The classification is
+`NO_NATIVE_SLOT_RECALL_EFFECT_DETECTED`, not native-writer acceptance.
+
+Readable state restored exactly to Channel 2 slot 2, gain 24.287769 dB, main
+0.7599996, headphones 0.5100005, flags 385, and processing permutation 0/1.
+The pinned native Piano channel-strip body was sent back to slot 3; because
+slot bodies have no readback, that restoration remains sent-not-readable.
+Battery was 99% before/after. Routes, DSP Amount, and `processingChannel` were
+untouched; no playback, firmware, DFU, reset, Wine, network, or unknown command
+was used. The report SHA-256 is
+`e3ee09ba3a968b16f869455e21908d9cbe3111e124417386026365c00f6b5d32`.
+
+This closes the representation question more tightly: changing tagged JSON to
+native version 2 was necessary according to static parsing, but is not
+sufficient through the known store/select sequence. The next single-variable
+test should use an exact native limiter on/off leaf, avoiding Standard-EQ
+composition; if that also nulls, stop treating `MemP/Stat` plus selector recall
+as a viable Host writer until a missing device commit/apply edge is captured.
+
+## 2026-09-14 controlling checkpoint: Standard native EQ writer complete
+
+Resume from
+`runs/20260914T031459-0700-native-slot-builder/{PROGRESS,DECODE-NOTES}.md`.
+All three Standard EQ designer routes are source-bound to UC 4.7.2: peaking
+selector 6, low-shelf selector 8, and high-shelf selector 9. The production
+helpers share UC's binary32-input/binary64-internal/binary32-output behavior.
+
+`io24_native_strip.design_standard_eq()` emits the complete native EQ
+coefficient body for 44.1, 48, 88.2, and 96 kHz, and
+`io24_native_stat.build_native_standard_eq_stat_record()` overlays it on a
+validated native base while preserving every non-EQ component byte-for-byte.
+This closes the complete Standard-EQ portion of the offline writer. Its
+coefficient vectors are transcription regressions, not independently captured
+UC output; bit identity still needs a UC `Bqdf`/`Stat` capture or explicit
+math-library equivalence. Passive EQ is
+still unmapped; Vintage remains executable only with the retained pinned DLL.
+Independent review caught and closed a permissive-toggle defect: Standard
+scene toggles now require boolean/0/1, and all semantic values must be finite
+and in range even when disabled. Enabled outer peaking/high shelf are covered.
+Final affected verification passes 151 tests and 130 subtests; the synchronized
+709-row matrix hash is
+`39522b66f95905b4b7ef8b8186a43c2e0bd4e0e5fb257b9b87ad054e6a38786b`.
+No live/device operation occurred.
+
+## 2026-09-14 controlling checkpoint: Standard peaking and native HPF seam
+
+Resume from
+`runs/20260914T031459-0700-native-slot-builder/{PROGRESS,DECODE-NOTES}.md`.
+The exact UC high-pass route is selector 3 in the binary64 designer; the
+firmware slot-0 four-clock values are mixed historical results rather than a
+canonical UC recompute. The available UCRT small-angle `tan` implementation
+agrees with Python/glibc at these inputs, closing that suspected source of the
+ULP differences. Native `filt` coefficients can now be read and atomically
+replaced across all four clocks without touching structural bytes.
+
+Standard middle-band peaking is also source-bound to selector 6 at
+`0x18000fe4c`. `io24.biquad_peaking()`, direct `set_eq_band()` writes, and the
+GTK response graph now share the exact binary32-input/binary64-internal route.
+Focused verification at this intermediate checkpoint passed 58 tests and 82
+subtests. Its then-remaining selector-8 low shelf is closed by the controlling
+checkpoint above. No device operation occurred.
+
+## 2026-09-14 controlling checkpoint: Vintage native EQ and dynamics seams
+
+Resume from
+`runs/20260914T031459-0700-native-slot-builder/{PROGRESS,DECODE-NOTES,VINTAGE-EQ-TABLE}.md`.
+Claude's last UC 4.7.2 breakthrough is implemented: the native `eq  ` leaf
+contains 22 coefficients at each of four clocks, including a real seven-float
+third-order section, and has no hidden semantic-parameter region. The pinned
+vendor DLL executor now designs a complete Vintage EQ for all four clocks and
+replaces only those coefficient bytes in a validated native record.
+
+Native gate and compressor bodies are also exact live-payload pairs. Firmware
+slot 0 matches the retained Piano scene's Channel 2 gate and FET compressor
+state byte-for-byte at 44.1 kHz, with all four compressor rate biquads matching.
+The Host displays decoded Vintage switch frequencies but keeps direct editing
+paused because the exact executor still depends on the separately retained
+DLL. The generic HPF remains one ULP off at three clocks and Standard EQ is not
+yet exact across all selector paths, so arbitrary semantic scene construction
+is the next offline item. Focused verification passes 115 tests and 103
+subtests; the full hardware-free suite passes 754 tests, 1 expected skip, and
+224 subtests; the 709-row matrix rebuilt twice identically. No device operation
+occurred.
+
 ## 2026-09-14 controlling checkpoint: native MemP/Stat writer framed offline
 
 Resume from

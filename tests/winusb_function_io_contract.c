@@ -311,6 +311,9 @@ __attribute__((noinline)) static void poison_alternate_stack(void)
 #define IO24_IOCTL_GET_POLICY IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x804,0,0)
 #define IO24_IOCTL_SET_POLICY IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x805,0,0)
 #define IO24_IOCTL_READ_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x808,2,0)
+#define IO24_IOCTL_WRITE_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x809,1,0)
+#define IO24_IOCTL_ABORT_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x80a,0,0)
+#define IO24_IOCTL_RESET_PIPE IO24_CTL_CODE(FILE_DEVICE_UNKNOWN,0x80b,0,0)
 
 static const unsigned char mi05_configuration[] =
 {
@@ -388,6 +391,7 @@ static USBD_STATUS control_urb_status;
 static BOOL control_returns_pending, control_writes_urb_status;
 static ULONG control_actual_length, control_expected_length, control_expected_flags;
 static USHORT control_expected_function;
+static USBD_PIPE_HANDLE control_expected_pipe;
 static UCHAR control_expected_setup[8];
 static PMDL control_expected_mdl;
 static FILE_OBJECT *control_expected_file;
@@ -662,6 +666,7 @@ static void reset_initialize_lower(void)
     control_actual_length = control_expected_length = 0;
     control_expected_flags = 0;
     control_expected_function = URB_FUNCTION_CONTROL_TRANSFER;
+    control_expected_pipe = NULL;
     memset(control_expected_setup, 0, sizeof(control_expected_setup));
     control_expected_mdl = NULL;
     control_expected_file = NULL;
@@ -943,6 +948,45 @@ NTSTATUS WINAPI IoCallDriver(PDEVICE_OBJECT device, PIRP irp)
         if (NT_SUCCESS(status) && control_urb_status == USBD_STATUS_SUCCESS)
             request->TransferBufferLength = control_actual_length;
     }
+    else if (urb->UrbHeader.Function == URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER)
+    {
+        struct _URB_BULK_OR_INTERRUPT_TRANSFER *request =
+                &urb->UrbBulkOrInterruptTransfer;
+
+        control_calls++;
+        IO24_CHECK(original_task9_irp && irp == control_expected_irp);
+        IO24_CHECK(request->Hdr.Function == control_expected_function);
+        IO24_CHECK(request->Hdr.Length == sizeof(*request));
+        IO24_CHECK(request->PipeHandle == control_expected_pipe);
+        IO24_CHECK(request->TransferFlags == control_expected_flags);
+        IO24_CHECK(request->TransferBufferLength == control_expected_length);
+        IO24_CHECK(request->TransferBuffer == NULL);
+        IO24_CHECK(request->TransferBufferMDL == control_expected_mdl);
+        if (!(request->TransferFlags & USBD_TRANSFER_DIRECTION_IN) &&
+                control_expected_length)
+        {
+            const UCHAR *payload = request->TransferBufferMDL->MappedSystemVa;
+            for (ULONG i = 0; i < control_expected_length; ++i)
+                IO24_CHECK(payload && payload[i] == (UCHAR)(0x30 + i));
+        }
+        status = control_nt_status;
+        if (control_writes_urb_status) request->Hdr.Status = control_urb_status;
+        if (NT_SUCCESS(status) && control_urb_status == USBD_STATUS_SUCCESS)
+            request->TransferBufferLength = control_actual_length;
+    }
+    else if (urb->UrbHeader.Function == URB_FUNCTION_ABORT_PIPE ||
+            urb->UrbHeader.Function == URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL)
+    {
+        struct _URB_PIPE_REQUEST *request = &urb->UrbPipeRequest;
+
+        control_calls++;
+        IO24_CHECK(original_task9_irp && irp == control_expected_irp);
+        IO24_CHECK(request->Hdr.Function == control_expected_function);
+        IO24_CHECK(request->Hdr.Length == sizeof(*request));
+        IO24_CHECK(request->PipeHandle == control_expected_pipe);
+        status = control_nt_status;
+        if (control_writes_urb_status) request->Hdr.Status = control_urb_status;
+    }
     else if (urb->UrbHeader.Function == URB_FUNCTION_SELECT_INTERFACE)
     {
         struct _URB_SELECT_INTERFACE *request = &urb->UrbSelectInterface;
@@ -1130,6 +1174,14 @@ struct guarded_descriptor
     unsigned char data[WINE_WINUSB_MAX_CONTROL_TRANSFER + 16];
 };
 
+struct guarded_pipe
+{
+    unsigned char before[16];
+    struct wine_winusb_pipe_request request;
+    unsigned char after[16];
+    unsigned char data[WINE_WINUSB_MAX_CONTROL_TRANSFER + 16];
+};
+
 /* This is intentionally a real METHOD_* direct-I/O shape: private request in
  * SystemBuffer, payload only through the original IRP MDL. */
 static struct dispatch_effect dispatch_control(PDRIVER_OBJECT driver, PDEVICE_OBJECT fdo,
@@ -1191,6 +1243,75 @@ static struct dispatch_effect dispatch_control(PDRIVER_OBJECT driver, PDEVICE_OB
     mode_ioctls++;
     for (unsigned int i = 0; i < sizeof(guarded->before); ++i)
         IO24_CHECK(guarded->before[i] == GUARD_BYTE && guarded->after[i] == GUARD_BYTE);
+    return effect;
+}
+
+static struct dispatch_effect dispatch_pipe(PDRIVER_OBJECT driver, PDEVICE_OBJECT fdo,
+        ULONG code, struct guarded_pipe *guarded, ULONG input_length,
+        ULONG output_length, ULONG mdl_length, BOOL attach_mdl, FILE_OBJECT *file)
+{
+    IRP irp;
+    IO_STACK_LOCATION stack[2];
+    MDL mdl;
+    struct dispatch_effect effect;
+
+    trace[0] = 0;
+    io24_last_completed_irp = NULL;
+    io24_completed_irp_count = 0;
+    memset(&irp, 0, sizeof(irp));
+    memset(stack, 0, sizeof(stack));
+    memset(&mdl, 0, sizeof(mdl));
+    stack[1].MajorFunction = IRP_MJ_DEVICE_CONTROL;
+    stack[1].FileObject = file;
+    stack[1].Parameters.DeviceIoControl.IoControlCode = code;
+    stack[1].Parameters.DeviceIoControl.InputBufferLength = input_length;
+    stack[1].Parameters.DeviceIoControl.OutputBufferLength = output_length;
+    irp.AssociatedIrp.SystemBuffer = &guarded->request;
+    irp.Tail.Overlay.CurrentStackLocation = &stack[1];
+    irp.Tail.Overlay.DriverContext[1] = control_preserved_slots[0];
+    irp.Tail.Overlay.DriverContext[2] = control_preserved_slots[1];
+    irp.Tail.Overlay.DriverContext[3] = control_preserved_slots[2];
+    if (attach_mdl)
+    {
+        mdl.MdlFlags = MDL_MAPPED_TO_SYSTEM_VA;
+        mdl.MappedSystemVa = guarded->data;
+        mdl.ByteCount = mdl_length;
+        irp.MdlAddress = &mdl;
+    }
+    effect.lower_before = lower_calls;
+    effect.complete_before = completes;
+    counts.submits++;
+    active_session_file = file;
+    control_expected_file = file;
+    control_expected_mdl = attach_mdl ? &mdl : NULL;
+    control_expected_irp = &irp;
+    effect.dispatch_status = driver->MajorFunction[IRP_MJ_DEVICE_CONTROL](fdo, &irp);
+    if (control_pending_irp == &irp || control_pending_next_irp == &irp)
+    {
+        IO24_CHECK(effect.dispatch_status == STATUS_PENDING);
+        IO24_CHECK(complete_pending_task9_irp());
+        IO24_CHECK(!complete_pending_task9_irp());
+    }
+    IO24_CHECK(io24_completed_irp_count == 1);
+    IO24_CHECK(io24_last_completed_irp == &irp);
+    active_session_file = NULL;
+    control_expected_file = NULL;
+    control_expected_irp = NULL;
+    control_expected_mdl = NULL;
+    effect.lower_after = lower_calls;
+    effect.complete_after = completes;
+    effect.status = irp.IoStatus.Status;
+    effect.information = irp.IoStatus.Information;
+    last_ioctl = code;
+    last_status = effect.status;
+    mode_ioctls++;
+    for (unsigned int i = 0; i < sizeof(guarded->before); ++i)
+        IO24_CHECK(guarded->before[i] == GUARD_BYTE &&
+                guarded->after[i] == GUARD_BYTE);
+    IO24_CHECK(irp.Tail.Overlay.DriverContext[0] == NULL &&
+            irp.Tail.Overlay.DriverContext[1] == control_preserved_slots[0] &&
+            irp.Tail.Overlay.DriverContext[2] == control_preserved_slots[1] &&
+            irp.Tail.Overlay.DriverContext[3] == control_preserved_slots[2]);
     return effect;
 }
 
@@ -2924,7 +3045,201 @@ static void group_policy(void)
 #undef ALTERNATE_CALL
 }
 static void group_transfer(void)
-{DRIVER_OBJECT d;DRIVER_EXTENSION e;DEVICE_OBJECT p;FILE_OBJECT file;struct guarded_request g;struct dispatch_effect effect;BOOL opened,initialized;setup(&d,&e,&p,&g,&file);opened=create_file(&d,&g,&file);initialized=initialize_session(&d,&g,&file);if(!opened||!initialized){dispatch_safe_rejection(&d,&g,&file,IO24_IOCTL_READ_PIPE);teardown(&d,&g,&file);return;}g.request.value=1;effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_SET_ALTERNATE,&g,&file);IO24_CHECK(effect.status==STATUS_SUCCESS&&effect.lower_after==effect.lower_before+1);effect=dispatch_request(&d,last_fdo,IRP_MJ_DEVICE_CONTROL,IO24_IOCTL_READ_PIPE,&g,&file);IO24_CHECK(effect.status==STATUS_PENDING);IO24_CHECK(effect.lower_after==effect.lower_before+1);IO24_CHECK(effect.complete_after==effect.complete_before);teardown(&d,&g,&file);}
+{
+    DRIVER_OBJECT d; DRIVER_EXTENSION e; DEVICE_OBJECT p; FILE_OBJECT file;
+    struct guarded_request g; struct guarded_pipe guarded;
+    struct winusb_file *context; struct winusb_pipe_state *in_pipe, *out_pipe;
+    struct dispatch_effect effect;
+
+#define PIPE_SEED(id, length) do { \
+    memset(&guarded, GUARD_BYTE, sizeof(guarded)); \
+    memset(&guarded.request, 0, sizeof(guarded.request)); \
+    guarded.request.request.size = sizeof(guarded.request); \
+    guarded.request.request.version = WINE_WINUSB_ABI_VERSION; \
+    guarded.request.request.session = context->session; \
+    guarded.request.pipe_id = (id); \
+    guarded.request.transfer_length = (length); \
+    for (ULONG pipe_i = 0; pipe_i < sizeof(guarded.data); ++pipe_i) \
+        guarded.data[pipe_i] = (UCHAR)(0x30 + pipe_i); \
+} while (0)
+#define PIPE_ACCEPT(code, length, mdl_length, attach, status_value) do { \
+    unsigned int calls_before = control_calls; \
+    control_pool_begin(0); control_retirement_begin(); \
+    effect = dispatch_pipe(&d, last_fdo, (code), &guarded, sizeof(guarded.request), \
+            (length), (mdl_length), (attach), &file); \
+    control_retirement_end(); control_pool_end(); \
+    IO24_CHECK(effect.status == (status_value)); \
+    IO24_CHECK(effect.lower_after == effect.lower_before + 1); \
+    IO24_CHECK(effect.complete_after == effect.complete_before + 1); \
+    IO24_CHECK(control_calls == calls_before + 1); \
+    IO24_CHECK(control_pool_attempts == 2 && control_pool_count == 2 && \
+            control_pool_allocations[0].frees == 1 && \
+            control_pool_allocations[1].frees == 1); \
+    IO24_CHECK(in_pipe->outstanding == 0 && out_pipe->outstanding == 0 && \
+            context->interfaces[0].outstanding == 0); \
+} while (0)
+#define PIPE_REJECT(code, input_length, output_length, mdl_length, attach, expected) do { \
+    effect = dispatch_pipe(&d, last_fdo, (code), &guarded, (input_length), \
+            (output_length), (mdl_length), (attach), &file); \
+    IO24_CHECK(effect.status == (expected)); \
+    IO24_CHECK(effect.lower_after == effect.lower_before); \
+    IO24_CHECK(effect.complete_after == effect.complete_before + 1); \
+    IO24_CHECK(effect.information == 0); \
+} while (0)
+
+    setup(&d, &e, &p, &g, &file);
+    if (!create_file(&d, &g, &file) || !initialize_session(&d, &g, &file))
+    {
+        teardown(&d, &g, &file);
+        return;
+    }
+    IO24_CHECK(NT_SUCCESS(select_control_alternate_status(&d, last_fdo,
+            &file, 0, 1)));
+    context = file.FsContext;
+    IO24_CHECK(context && context->interfaces[0].endpoint_count == 2);
+    in_pipe = &context->interfaces[0].pipes[0];
+    out_pipe = &context->interfaces[0].pipes[1];
+    IO24_CHECK(in_pipe->endpoint == 0x81 && out_pipe->endpoint == 0x01 &&
+            in_pipe->handle && out_pipe->handle);
+
+    PIPE_SEED(0x81, 32);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    control_expected_length = 32; control_actual_length = 17;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 32, 32, TRUE, STATUS_SUCCESS);
+    IO24_CHECK(effect.information == 17);
+
+    PIPE_SEED(0x01, 32);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = out_pipe->handle;
+    control_expected_flags = 0;
+    control_expected_length = control_actual_length = 32;
+    PIPE_ACCEPT(IO24_IOCTL_WRITE_PIPE, 32, 32, TRUE, STATUS_SUCCESS);
+    IO24_CHECK(effect.information == 32);
+
+    PIPE_SEED(0x81, 0);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    control_expected_length = control_actual_length = 0;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 0, 0, FALSE, STATUS_SUCCESS);
+    IO24_CHECK(effect.information == 0);
+
+    PIPE_SEED(0x01, 0);
+    control_expected_function = URB_FUNCTION_ABORT_PIPE;
+    control_expected_pipe = out_pipe->handle;
+    PIPE_ACCEPT(IO24_IOCTL_ABORT_PIPE, 0, 0, FALSE, STATUS_SUCCESS);
+    PIPE_SEED(0x81, 0);
+    control_expected_function = URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
+    control_expected_pipe = in_pipe->handle;
+    PIPE_ACCEPT(IO24_IOCTL_RESET_PIPE, 0, 0, FALSE, STATUS_SUCCESS);
+
+    PIPE_SEED(0x01, 8);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 8, 8, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x81, 8);
+    PIPE_REJECT(IO24_IOCTL_WRITE_PIPE, sizeof(guarded.request), 8, 8, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x82, 8);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 8, 8, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x81, 8);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request) - 1, 8, 8, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 7, 8, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 8, 7, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 8, 8, FALSE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x81, WINE_WINUSB_MAXIMUM_TRANSFER_SIZE + 1);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request),
+            WINE_WINUSB_MAXIMUM_TRANSFER_SIZE + 1,
+            WINE_WINUSB_MAXIMUM_TRANSFER_SIZE + 1, TRUE, STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x81, 1);
+    PIPE_REJECT(IO24_IOCTL_RESET_PIPE, sizeof(guarded.request), 0, 0, FALSE,
+            STATUS_INVALID_PARAMETER);
+
+    in_pipe->policy.maximum_transfer_size = 16;
+    PIPE_SEED(0x81, 17);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 17, 17, TRUE,
+            STATUS_INVALID_PARAMETER);
+    in_pipe->policy.maximum_transfer_size = WINE_WINUSB_MAXIMUM_TRANSFER_SIZE;
+    in_pipe->policy.raw_io = TRUE;
+    PIPE_SEED(0x81, 513);
+    PIPE_REJECT(IO24_IOCTL_READ_PIPE, sizeof(guarded.request), 513, 513, TRUE,
+            STATUS_INVALID_PARAMETER);
+    PIPE_SEED(0x81, 512);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    control_expected_length = control_actual_length = 512;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 512, 512, TRUE, STATUS_SUCCESS);
+    in_pipe->policy.raw_io = FALSE;
+
+    in_pipe->policy.allow_partial_reads = FALSE;
+    PIPE_SEED(0x81, 0);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN;
+    control_expected_length = control_actual_length = 0;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 0, 0, FALSE, STATUS_SUCCESS);
+    in_pipe->policy.allow_partial_reads = TRUE;
+
+    PIPE_SEED(0x81, 0);
+    in_pipe->outstanding = 1;
+    PIPE_REJECT(IO24_IOCTL_RESET_PIPE, sizeof(guarded.request), 0, 0, FALSE,
+            STATUS_DEVICE_BUSY);
+    in_pipe->outstanding = 0;
+
+    PIPE_SEED(0x81, 32);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    control_expected_length = control_actual_length = 32;
+    control_pool_begin(1);
+    effect = dispatch_pipe(&d, last_fdo, IO24_IOCTL_READ_PIPE, &guarded,
+            sizeof(guarded.request), 32, 32, TRUE, &file);
+    control_pool_end();
+    IO24_CHECK(effect.status == STATUS_INSUFFICIENT_RESOURCES &&
+            effect.lower_after == effect.lower_before &&
+            effect.complete_after == effect.complete_before + 1 &&
+            control_pool_attempts == 1 && control_pool_count == 0);
+    control_pool_begin(2);
+    effect = dispatch_pipe(&d, last_fdo, IO24_IOCTL_READ_PIPE, &guarded,
+            sizeof(guarded.request), 32, 32, TRUE, &file);
+    control_pool_end();
+    IO24_CHECK(effect.status == STATUS_INSUFFICIENT_RESOURCES &&
+            effect.lower_after == effect.lower_before &&
+            effect.complete_after == effect.complete_before + 1 &&
+            control_pool_attempts == 2 && control_pool_count == 1 &&
+            control_pool_allocations[0].frees == 1);
+
+    control_nt_status = STATUS_UNSUCCESSFUL;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 32, 32, TRUE, STATUS_UNSUCCESSFUL);
+    IO24_CHECK(effect.information == 0);
+    control_nt_status = STATUS_SUCCESS;
+
+    control_urb_status = USBD_STATUS_CANCELED;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 32, 32, TRUE, STATUS_CANCELLED);
+    IO24_CHECK(effect.information == 0);
+
+    PIPE_SEED(0x81, 32);
+    control_expected_function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    control_expected_pipe = in_pipe->handle;
+    control_expected_flags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    control_expected_length = control_actual_length = 32;
+    control_urb_status = USBD_STATUS_TIMEOUT;
+    PIPE_ACCEPT(IO24_IOCTL_READ_PIPE, 32, 32, TRUE, STATUS_IO_TIMEOUT);
+    IO24_CHECK(effect.information == 0);
+    control_urb_status = USBD_STATUS_SUCCESS;
+
+    teardown(&d, &g, &file);
+#undef PIPE_SEED
+#undef PIPE_ACCEPT
+#undef PIPE_REJECT
+}
 static void group_control_descriptor(void)
 {
     DRIVER_OBJECT d; DRIVER_EXTENSION e; DEVICE_OBJECT p; FILE_OBJECT file;
@@ -3671,5 +3986,5 @@ static void group_control_descriptor(void)
 #undef CONTROL_SEED
     teardown(&d, &g, &file);
 }
-static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))group_initialize();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))group_transfer();if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();}
+static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--lifecycle"))group_lifecycle();if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))group_initialize();if(!strcmp(m,"--red")||!strcmp(m,"--session"))group_session();if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))group_alternate();if(!strcmp(m,"--red")||!strcmp(m,"--policy"))group_policy();if(!strcmp(m,"--red")||!strcmp(m,"--transfer")||!strcmp(m,"--sync-pipes"))group_transfer();if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();}
 int main(int argc,char**argv){unsigned int retained;if(argc!=2)return 2;retained=io24_retained_cp32_main();if(retained){fprintf(stderr,"HARNESS: retained fake-WDM baseline failed\n");return 2;}run(argv[1]);printf("CP33 function executed mode=%s dispatches=%u mode-ioctls=%u last-ioctl=%#lx last-status=%#lx failures=%u\n",argv[1],counts.submits,mode_ioctls,(unsigned long)last_ioctl,(unsigned long)last_status,counts.failures);return counts.failures?1:0;}

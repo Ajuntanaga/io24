@@ -327,6 +327,62 @@ def build_native_model0_stat_record(base_record, slot_index, enabled=True,
     return validate_native_stat_record(result, slot_index=slot_index)
 
 
+def replace_native_channel_component(base_record, slot_index, key, payload):
+    """Replace one complete channel-strip leaf in a native record.
+
+    This is the byte-preserving seam for offline component builders. The base
+    supplies every leaf the caller is not replacing, including any Voice FX;
+    partial leaves and unknown component keys are refused before encoding.
+    """
+    key = _as_bytes("native channel component key", key)
+    payload = _as_bytes("native channel component payload", payload)
+    if key not in CHANNEL_COMPONENT_SIZES:
+        raise NativeStatFormatError(
+            "unsupported native channel component %s" % key.hex())
+    expected_size = CHANNEL_COMPONENT_SIZES[key]
+    if len(payload) != expected_size:
+        raise NativeStatFormatError(
+            "native %s chunk has %d bytes, expected %d" %
+            (key.decode("ascii"), len(payload), expected_size))
+
+    base_record = validate_native_stat_record(
+        base_record, slot_index=slot_index)
+    record = decode_native_stat_record(base_record)
+    top = []
+    for chunk in record.chunks:
+        if chunk.key != CHANNEL_STRIP_KEY:
+            top.append(chunk)
+            continue
+        channel = tuple(
+            NativeChunk(leaf.key, payload if leaf.key == key else leaf.payload)
+            for leaf in decode_chunk_group(chunk.payload)
+        )
+        top.append(NativeChunk(CHANNEL_STRIP_KEY, encode_chunk_group(channel)))
+    result = encode_native_stat_record(
+        NativeStatRecord(record.version, tuple(top)))
+    return validate_native_stat_record(result, slot_index=slot_index)
+
+
+def build_native_standard_eq_stat_record(base_record, slot_index, eq):
+    """Overlay a complete semantic Standard EQ on a native slot record.
+
+    Every non-EQ leaf is retained from ``base_record``.  The EQ builder emits
+    coefficients for all four supported sample rates and preserves every
+    structural byte around those coefficients.
+    """
+    base_record = validate_native_stat_record(
+        base_record, slot_index=slot_index)
+    record = decode_native_stat_record(base_record)
+    top = _unique_by_key("native Stat top level", record.chunks)
+    channel = _unique_by_key(
+        "native channel strip", decode_chunk_group(top[CHANNEL_STRIP_KEY]))
+
+    import io24_native_strip
+    payload = io24_native_strip.build_standard_eq_component(channel[b"eq  "], eq)
+    return replace_native_channel_component(
+        base_record, slot_index, b"eq  ", payload)
+
+
 def native_stat_summary(data, slot_index=None):
     """Return a compact JSON-serializable structural summary."""
     data = validate_native_stat_record(data, slot_index=slot_index)

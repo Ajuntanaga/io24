@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hardware-free contracts for the exact UC 4.7.2 Standard high shelf."""
+"""Hardware-free contracts for the UC 4.7.2 Standard high-shelf route."""
 
 import importlib.util
 import json
@@ -134,7 +134,7 @@ class Uc472StandardHighShelfAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["algorithm"]["output_rounding"],
                          "five independent cvtpd2ps binary64-to-binary32 conversions")
 
-    def test_factory_golden_is_exact_and_saved_artifact_matches(self):
+    def test_factory_transcription_vector_and_saved_artifact_match(self):
         module = _load_analyzer(self)
         report = module.analyze(DSP.read_bytes(), FACTORY.read_bytes())
         golden = report["golden_vector"]
@@ -171,7 +171,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
     def _packed(*args, **kwargs):
         return struct.pack("<5f", *io24.biquad_highshelf(*args, **kwargs))
 
-    def test_production_helper_matches_retained_factory_golden_as_f32(self):
+    def test_production_helper_matches_retained_transcription_vector_as_f32(self):
         coefficients = io24.biquad_highshelf(
             3926.376953, 6.030929, 48000.0, 0.6)
 
@@ -185,7 +185,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
                  "1c88573f")],
         )
 
-    def test_public_set_eq_band_passes_exact_golden_to_bqdf_path(self):
+    def test_public_set_eq_band_passes_transcription_vector_to_bqdf_path(self):
         class Sink:
             EQ_BANDS = io24.Io24.EQ_BANDS
             set_eq_band = io24.Io24.set_eq_band
@@ -300,7 +300,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
             for row in passive_frequency
         ))
 
-    def test_inventory_and_plan_mark_only_standard_highshelf_closed(self):
+    def test_inventory_and_plan_mark_all_standard_eq_paths_closed(self):
         inventory = json.loads(INVENTORY.read_text())
         self.assertNotIn(
             "standard_eq_exact_highshelf_builder",
@@ -312,11 +312,27 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
                 "coefficient_format": ["b0", "-a1", "b1", "-a2", "b2"],
                 "designer_selector": 9,
                 "precision": "binary32 inputs, binary64 operations, binary32 outputs",
-                "source": "exact retained UC 4.7.2 dspusbdevice.dll",
+                "source": "source-bound retained UC 4.7.2 dspusbdevice.dll route",
+                "proof_limit": "Python math substitution is not an independent UC output capture",
             },
         )
+        for name, selector in (("standard_peaking", 6),
+                               ("standard_lowshelf", 8)):
+            with self.subTest(name=name):
+                capability = inventory["supported_host_capabilities"][name]
+                self.assertEqual(capability["designer_selector"], selector)
+                self.assertEqual(
+                    capability["precision"],
+                    "binary32 inputs, binary64 operations, binary32 outputs")
+                self.assertIn("not an independent UC output capture",
+                              capability["proof_limit"])
+        self.assertEqual(
+            inventory["supported_host_capabilities"]
+                     ["standard_native_eq_writer"]["status"],
+            "offline structurally complete")
         plan = PLAN.read_text()
-        self.assertIn("Standard high-shelf builder is source-bound and bit-exact", plan)
+        self.assertIn("Standard peaking, low-shelf, and high-shelf routes", plan)
+        self.assertIn("all four Standard EQ clock", plan)
         self.assertIn("Passive/Vintage factory EQ is", plan)
         self.assertIn("fail-closed", plan)
 

@@ -593,7 +593,7 @@ def load_channel2_factory_slap_echo(dev, slot_record, sleep_fn=time.sleep):
 
 
 def biquad_highshelf(freq, gain_db, fs=48000.0, Q=0.7):
-    """Exact UC 4.7.2 Standard high shelf as [b0, -a1, b1, -a2, b2].
+    """Source-bound UC 4.7.2 Standard high-shelf transcription.
 
     ``eqtype`` UI value 2 maps through the Standard component table to designer
     selector 9.  The Standard band caller supplies three binary32 values; its
@@ -671,6 +671,136 @@ def biquad_highshelf(freq, gain_db, fs=48000.0, Q=0.7):
     neg_a2 = -(neg_a2_base * normalization)
     b2 = b2_base * A_normalized
     b0 = b0_base * A_normalized
+    return [f32(value) for value in (b0, neg_a1, b1, neg_a2, b2)]
+
+
+def biquad_peaking(freq, gain_db, fs=48000.0, Q=0.7):
+    """Source-bound UC 4.7.2 Standard peaking-EQ transcription.
+
+    Standard middle bands retain designer selector 6. The band caller passes
+    binary32 frequency, gain, and Q; the designer widens those values, performs
+    the selector-6 branch at ``0x18000fe4c`` entirely in binary64, and narrows
+    only the five output fields.
+    """
+    names_and_values = (
+        ("frequency", freq), ("gain", gain_db),
+        ("sample rate", fs), ("Q", Q),
+    )
+    numeric = {}
+    for name, value in names_and_values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("peaking %s must be numeric" % name) from error
+        if not math.isfinite(value):
+            raise ValueError("peaking %s must be finite" % name)
+        numeric[name] = value
+    freq = numeric["frequency"]
+    gain_db = numeric["gain"]
+    fs = numeric["sample rate"]
+    Q = numeric["Q"]
+    if not 20.0 <= freq <= 18000.0:
+        raise ValueError("peaking frequency must be 20..18000 Hz")
+    if not -15.0 <= gain_db <= 15.0:
+        raise ValueError("peaking gain must be -15..15 dB")
+    if not 0.1 <= Q <= 10.0:
+        raise ValueError("peaking Q must be 0.1..10")
+    if fs <= 0.0:
+        raise ValueError("peaking sample rate must be positive")
+    if freq >= fs * 0.5:
+        raise ValueError("peaking frequency must be below Nyquist")
+
+    def f32(value):
+        return struct.unpack("<f", struct.pack("<f", value))[0]
+
+    freq = f32(freq)
+    gain_db = f32(gain_db)
+    Q = f32(Q)
+
+    gain_power = math.pow(10.0, gain_db * 0.05)
+    k = math.tan(freq * (math.pi / fs))
+    k2 = k * k
+    alpha_numerator = math.sqrt(gain_power) * k
+    alpha_numerator = alpha_numerator / Q
+    alpha_denominator = alpha_numerator / gain_power
+    denominator = (alpha_denominator + k2) + 1.0
+
+    neg_a2 = ((alpha_denominator - 1.0) - k2) / denominator
+    neg_a1 = ((1.0 - k2) + (1.0 - k2)) / denominator
+    b0 = ((k2 + alpha_numerator) + 1.0) / denominator
+    b1 = (((k2 - 1.0) + k2) - 1.0) / denominator
+    b2 = ((k2 - alpha_numerator) + 1.0) / denominator
+    return [f32(value) for value in (b0, neg_a1, b1, neg_a2, b2)]
+
+
+def biquad_lowshelf(freq, gain_db, fs=48000.0, Q=0.7):
+    """Source-bound UC 4.7.2 Standard low-shelf transcription.
+
+    An enabled first Standard band selects designer 8. Like the other Standard
+    paths, its three semantic values arrive as binary32 and are widened before
+    the binary64 branch at ``0x18001028a``.
+    """
+    names_and_values = (
+        ("frequency", freq), ("gain", gain_db),
+        ("sample rate", fs), ("Q", Q),
+    )
+    numeric = {}
+    for name, value in names_and_values:
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("low-shelf %s must be numeric" % name) from error
+        if not math.isfinite(value):
+            raise ValueError("low-shelf %s must be finite" % name)
+        numeric[name] = value
+    freq = numeric["frequency"]
+    gain_db = numeric["gain"]
+    fs = numeric["sample rate"]
+    Q = numeric["Q"]
+    if not 20.0 <= freq <= 18000.0:
+        raise ValueError("low-shelf frequency must be 20..18000 Hz")
+    if not -15.0 <= gain_db <= 15.0:
+        raise ValueError("low-shelf gain must be -15..15 dB")
+    if not 0.1 <= Q <= 10.0:
+        raise ValueError("low-shelf Q must be 0.1..10")
+    if fs <= 0.0:
+        raise ValueError("low-shelf sample rate must be positive")
+    if freq >= fs * 0.5:
+        raise ValueError("low-shelf frequency must be below Nyquist")
+
+    def f32(value):
+        return struct.unpack("<f", struct.pack("<f", value))[0]
+
+    freq = f32(freq)
+    gain_db = f32(gain_db)
+    Q = f32(Q)
+
+    w = (freq + freq) * (math.pi / fs)
+    sine = math.sin(w)
+    cosine = math.cos(w)
+    amplitude = math.pow(10.0, gain_db * 0.025)
+    amplitude_minus_one = amplitude - 1.0
+    sqrt_amplitude = math.sqrt(amplitude)
+    inverse_Q = 1.0 / Q
+    beta_base = sqrt_amplitude * inverse_Q
+    amplitude_plus_one = amplitude + 1.0
+    minus_cosine = amplitude_minus_one * cosine
+    plus_cosine = amplitude_plus_one * cosine
+    denominator_base = amplitude_plus_one + minus_cosine
+    numerator_base = amplitude_plus_one - minus_cosine
+    beta = beta_base * sine
+    normalization = 1.0 / (denominator_base + beta)
+
+    twice_amplitude_minus_one = amplitude_minus_one + amplitude_minus_one
+    twice_plus_cosine = plus_cosine + plus_cosine
+    neg_a1 = (twice_plus_cosine + twice_amplitude_minus_one) * normalization
+    amplitude_normalized = amplitude * normalization
+    b1_base = ((amplitude_minus_one - plus_cosine)
+               + (amplitude_minus_one - plus_cosine))
+    b1 = b1_base * amplitude_normalized
+    neg_a2 = -((denominator_base - beta) * normalization)
+    b2 = (numerator_base - beta) * amplitude_normalized
+    b0 = (numerator_base + beta) * amplitude_normalized
     return [f32(value) for value in (b0, neg_a1, b1, neg_a2, b2)]
 
 
@@ -2405,14 +2535,14 @@ class Io24:
         # freq=18000). This is the only clamp that depends on another argument.
         fs = float(fs)
         freq_hz = min(freq_hz, 0.45 * fs)
-        D, X = _dsp_mod(), _fx_mod()
+        X = _fx_mod()
         shape = shape.lower()
         if shape == "off":
             coeffs = [1.0, 0.0, 0.0, 0.0, 0.0]
         elif shape == "peaking":
-            coeffs = D.biquad_peaking(freq_hz, q, gain_db, fs)
+            coeffs = biquad_peaking(freq_hz, gain_db, fs, q)
         elif shape == "lowshelf":
-            coeffs = X.biquad_lowshelf(freq_hz, gain_db, fs, q)
+            coeffs = biquad_lowshelf(freq_hz, gain_db, fs, q)
         elif shape == "highshelf":
             coeffs = biquad_highshelf(freq_hz, gain_db, fs, q)
         elif shape == "hp":

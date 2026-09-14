@@ -22,6 +22,13 @@ VINTAGE = {
     "lowmidfreq": 0, "himidgain": 1.6, "himidfreq": 1, "higain": 0.96,
 }
 
+PASSIVE = {
+    "__classid": "{C0730CBB-5135-4558-9222-C40BDBA036ED}",
+    "eqallon": 1, "bboost": 3.899999, "batten": 0.0, "bfreq": 3,
+    "mboost": 1.8, "bbwidth": 4.55, "mfreq": 6, "hatten": 0.0,
+    "hsfreq": 2,
+}
+
 FLAT = [{"shape": "off", "freq": f, "gain": 0.0, "q": 0.7}
         for f in (120.0, 600.0, 2500.0, 8000.0)]
 
@@ -49,13 +56,24 @@ class AlternateEqViewTests(unittest.TestCase):
         self.assertEqual(view["model"], "vintage")
         self.assertTrue(view["on"])
         self.assertEqual(view["rows"], [
-            ("Low shelf", "position 1 of 4 (~35 Hz, unverified)", "+1.8 dB"),
-            ("Low mid", "position 1 of 3 (~360 Hz, unverified)", "-3.8 dB"),
-            ("High mid", "position 2 of 3 (~4800 Hz, unverified)", "+1.6 dB"),
+            ("Low shelf", "position 1 of 4 (35 Hz)", "+1.8 dB"),
+            ("Low mid", "position 1 of 3 (360 Hz)", "-3.8 dB"),
+            ("High mid", "position 2 of 3 (4800 Hz)", "+1.6 dB"),
             ("High shelf", "fixed frequency", "+1.0 dB"),
         ])
         self.assertEqual(view["eq"], VINTAGE)
         self.assertIsNot(view["eq"], VINTAGE)
+
+    def test_a_passive_body_uses_the_recovered_switch_labels(self):
+        view = io24_presets.alternate_eq_view({"eq": dict(PASSIVE)})
+        self.assertEqual(view["model"], "passive")
+        self.assertEqual(view["rows"], [
+            ("Low boost", "position 4 of 4 (100 Hz)", "3.9 / 10"),
+            ("Low attenuation", "position 4 of 4 (100 Hz)", "0.0 / 10"),
+            ("High boost", "position 7 of 7 (16000 Hz)",
+             "1.8 / 10; bandwidth 4.5 / 10"),
+            ("High attenuation", "position 3 of 3 (20000 Hz)", "0.0 / 10"),
+        ])
 
     def test_standard_and_absent_eq_have_no_alternate_view(self):
         base = io24_presets.load()["Broadcast"]
@@ -169,8 +187,11 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         self.assertFalse(any(b.sensitive for b in W["bands"]))
         self.assertTrue(W["alt_eq_note"].visible)
         self.assertIn("Vintage EQ from the recalled preset", W["alt_eq_note"].text)
-        self.assertIn("Low shelf: position 1 of 4 (~35 Hz, unverified), +1.8 dB",
+        self.assertIn("Low shelf: position 1 of 4 (35 Hz), +1.8 dB",
                       W["alt_eq_note"].text)
+        self.assertIn("switch frequencies are decoded",
+                      W["alt_eq_note"].text)
+        self.assertNotIn("not decoded", W["alt_eq_note"].text)
         self.assertTrue(W["alt_eq_release"].visible)
 
         window._release_alternate_eq(1)

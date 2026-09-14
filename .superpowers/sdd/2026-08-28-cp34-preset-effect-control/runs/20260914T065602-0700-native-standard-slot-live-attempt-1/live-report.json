@@ -1,0 +1,540 @@
+{
+  "battery_after": 99,
+  "battery_before": 99,
+  "device": {
+    "bcd_device": "0128",
+    "product_id": "0422",
+    "serial": "AB7C22200355",
+    "vendor_id": "194f"
+  },
+  "dsp_amount": "UNTOUCHED",
+  "finished": "2026-09-14T06:56:29.104-07:00",
+  "mixer_routes": "UNTOUCHED",
+  "observation": "SIMULTANEOUS_JAST_INPUT2_AND_MAIN_METERS",
+  "playback": "NONE",
+  "processing_channel": "UNTOUCHED",
+  "registry_precondition": {
+    "canonical_sha256": "d58136ce09a602d5b291233ba2f2f742023a4bb56459edd771eea20e335bbd8f",
+    "preset_name": "Piano Accomany",
+    "provenance": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+    "slot": 3,
+    "status": "WRITE_SENT_UNVERIFIED"
+  },
+  "restore_basis": {
+    "body": "PINNED_FIRMWARE_NATIVE_PIANO_CHANNEL_STRIP",
+    "current_slot_body_readback": "UNAVAILABLE",
+    "restore_sha256": "4976d6e597c6caafb25c85b9011b59cb9faa23e671d56a191c4bb460a62673f8",
+    "semantic_match_to_registry": true
+  },
+  "sample_rate_hz": 96000,
+  "schema": "io24-native-standard-slot-meter-probe-v1",
+  "sequence": {
+    "analysis": {
+      "boost_delta_db": -0.17973744182660623,
+      "classification": "NO_NATIVE_SLOT_RECALL_EFFECT_DETECTED",
+      "flat_drift_db": 0.020634987440858676,
+      "maximum_window_mad_db": 0.304363674206342,
+      "native_slot_recall_effect_detected": false,
+      "stable": true
+    },
+    "finished": "2026-09-14T06:56:29.038-07:00",
+    "readable_after": {
+      "channel_linked": false,
+      "flags": 385,
+      "headphone_volume": 0.510000467300415,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input1_slot": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": true,
+      "input2_slot": 2,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_before": {
+      "channel_linked": false,
+      "flags": 385,
+      "headphone_volume": 0.510000467300415,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input1_slot": 0,
+      "input2_gain_db": 24.287769317626953,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": true,
+      "input2_slot": 2,
+      "main_volume": 0.7599995732307434
+    },
+    "readable_guarded": {
+      "channel_linked": false,
+      "flags": 385,
+      "headphone_volume": 0.009999999776482582,
+      "input1_gain_db": 30.0,
+      "input1_phantom": false,
+      "input1_processing_channel": 0,
+      "input1_slot": 0,
+      "input2_gain_db": 60.0,
+      "input2_phantom": false,
+      "input2_processing_channel": 1,
+      "input2_processing_enabled": true,
+      "input2_slot": 2,
+      "main_volume": 0.009999999776482582
+    },
+    "record_sha256": {
+      "boosted": "9d1e3289ff1cd4235b7ae4ec19e0bbb149f40f244a5722f4d506dbd20a35e69d",
+      "flat": "b46b501193155d4953307e7a4090787657f76257a004b5dcfb76e3d211c74574",
+      "restore": "4976d6e597c6caafb25c85b9011b59cb9faa23e671d56a191c4bb460a62673f8"
+    },
+    "restoration": {
+      "dsp_amount": "UNTOUCHED",
+      "errors": [],
+      "mixer_routes": "UNTOUCHED",
+      "mutation_started": true,
+      "processing_channel": "UNTOUCHED",
+      "readable_exact": true,
+      "restored_controls": [
+        {
+          "control": "input2_slot_before_restore_write",
+          "report": null
+        },
+        {
+          "control": "native_piano_slot3_body",
+          "report": {
+            "fragments_sent": 1,
+            "replies_received": 0,
+            "slot": 3
+          }
+        },
+        {
+          "control": "input2_slot_final",
+          "report": null
+        },
+        {
+          "control": "input2_gain",
+          "report": null
+        },
+        {
+          "control": "main_volume",
+          "report": null
+        },
+        {
+          "control": "headphone_volume",
+          "report": null
+        }
+      ],
+      "slot3_body": "NATIVE_PIANO_RESTORE_SENT",
+      "slot_body_readback": "UNAVAILABLE"
+    },
+    "started": "2026-09-14T06:56:15.803-07:00",
+    "status": "MEASURED_AND_RESTORED",
+    "target_channel": 2,
+    "target_slot": 3,
+    "windows": [
+      {
+        "label": "flat_before",
+        "meter": {
+          "label": "flat_before",
+          "mad_main_to_input2_db": 0.29770927939753644,
+          "maximum_main_to_input2_db": 1.7601483719425253,
+          "median_input2": 0.0008534972730558366,
+          "median_main": 0.0009682809468358755,
+          "median_main_to_input2_db": 0.9288157007804569,
+          "minimum_main_to_input2_db": 0.15465149127941755,
+          "samples": 40
+        },
+        "readable": {
+          "channel_linked": false,
+          "flags": 385,
+          "headphone_volume": 0.009999999776482582,
+          "input1_gain_db": 30.0,
+          "input1_phantom": false,
+          "input1_processing_channel": 0,
+          "input1_slot": 0,
+          "input2_gain_db": 60.0,
+          "input2_phantom": false,
+          "input2_processing_channel": 1,
+          "input2_processing_enabled": true,
+          "input2_slot": 3,
+          "main_volume": 0.009999999776482582
+        },
+        "recall": {
+          "audibility": "UNPROVED",
+          "channel": 2,
+          "enable_asserted": false,
+          "relative_slot": 1,
+          "selection": "SENT_UNVERIFIED",
+          "slot": 3,
+          "slot_selected": true,
+          "was_processing": true
+        }
+      },
+      {
+        "label": "boosted",
+        "meter": {
+          "label": "boosted",
+          "mad_main_to_input2_db": 0.23011958586946302,
+          "maximum_main_to_input2_db": 1.7358841962862201,
+          "median_input2": 0.0008053945493884385,
+          "median_main": 0.0008965987362898886,
+          "median_main_to_input2_db": 0.7593957526742801,
+          "minimum_main_to_input2_db": -0.19198932803063773,
+          "samples": 40
+        },
+        "readable": {
+          "channel_linked": false,
+          "flags": 385,
+          "headphone_volume": 0.009999999776482582,
+          "input1_gain_db": 30.0,
+          "input1_phantom": false,
+          "input1_processing_channel": 0,
+          "input1_slot": 0,
+          "input2_gain_db": 60.0,
+          "input2_phantom": false,
+          "input2_processing_channel": 1,
+          "input2_processing_enabled": true,
+          "input2_slot": 3,
+          "main_volume": 0.009999999776482582
+        },
+        "recall": {
+          "audibility": "UNPROVED",
+          "channel": 2,
+          "enable_asserted": false,
+          "relative_slot": 1,
+          "selection": "SENT_UNVERIFIED",
+          "slot": 3,
+          "slot_selected": true,
+          "was_processing": true
+        }
+      },
+      {
+        "label": "flat_after",
+        "meter": {
+          "label": "flat_after",
+          "mad_main_to_input2_db": 0.304363674206342,
+          "maximum_main_to_input2_db": 1.8296802582905118,
+          "median_input2": 0.0008575564424972981,
+          "median_main": 0.0009449195058550686,
+          "median_main_to_input2_db": 0.9494506882213156,
+          "minimum_main_to_input2_db": 0.2354792474647864,
+          "samples": 40
+        },
+        "readable": {
+          "channel_linked": false,
+          "flags": 385,
+          "headphone_volume": 0.009999999776482582,
+          "input1_gain_db": 30.0,
+          "input1_phantom": false,
+          "input1_processing_channel": 0,
+          "input1_slot": 0,
+          "input2_gain_db": 60.0,
+          "input2_phantom": false,
+          "input2_processing_channel": 1,
+          "input2_processing_enabled": true,
+          "input2_slot": 3,
+          "main_volume": 0.009999999776482582
+        },
+        "recall": {
+          "audibility": "UNPROVED",
+          "channel": 2,
+          "enable_asserted": false,
+          "relative_slot": 1,
+          "selection": "SENT_UNVERIFIED",
+          "slot": 3,
+          "slot_selected": true,
+          "was_processing": true
+        }
+      }
+    ],
+    "writes": [
+      {
+        "label": "flat_before",
+        "record_sha256": "b46b501193155d4953307e7a4090787657f76257a004b5dcfb76e3d211c74574",
+        "transport": {
+          "fragments_sent": 1,
+          "replies_received": 0,
+          "slot": 3
+        }
+      },
+      {
+        "label": "boosted",
+        "record_sha256": "9d1e3289ff1cd4235b7ae4ec19e0bbb149f40f244a5722f4d506dbd20a35e69d",
+        "transport": {
+          "fragments_sent": 1,
+          "replies_received": 0,
+          "slot": 3
+        }
+      },
+      {
+        "label": "flat_after",
+        "record_sha256": "b46b501193155d4953307e7a4090787657f76257a004b5dcfb76e3d211c74574",
+        "transport": {
+          "fragments_sent": 1,
+          "replies_received": 0,
+          "slot": 3
+        }
+      }
+    ]
+  },
+  "started": "2026-09-14T06:56:15.704-07:00",
+  "status": "MEASURED_AND_RESTORED",
+  "stimulus": "INPUT2_PREAMP_SELF_NOISE",
+  "target_channel": 2,
+  "target_slot": 3,
+  "transport": [
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "f62b7ba2b23b844ace782b6afce1b410fd065240d1d1e96c3670681e1336d391",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "4b31b48cc0a2a91b68e53c1a5243aa6111be2e0c619a5e6ac65f7d8cdeadc056",
+      "timestamp": "2026-09-14T06:56:15.803-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 2
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "c8ead8a95e1d8c021a6b64cc35ab26d78c47aca5e7dc3c33f5f7656cfc9dfe56",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-14T06:56:15.803-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "d2a9f825afae2086527647a58ba02f612de3049ee01914a576cbd44f3339d7f6",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-14T06:56:15.804-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "6d6791f3f4f2940ea553fc4033587196290ae46b51039d25b178bc1a5b683817",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c48b805b2853084a0419d31d542e84beda9af9626926721a41d94d4936fc9cf9",
+      "timestamp": "2026-09-14T06:56:16.305-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 6
+    },
+    {
+      "blob_tag": 1298492752,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 2048,
+      "frame_sha256": "e564f69e76348cfe3915778a9d564874c292ed941b34a311a59811ebbb3f983f",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7fb7f0f64b9c4c3bc8c9d5f654bcc6c12f84c06c069bc8ff17add4d61bbb6f91",
+      "timestamp": "2026-09-14T06:56:16.807-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 7
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "7c1cd0643968b4ac81dca662b957479fe95745af7a5c6c07109d9a9f3a25f0ee",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f7c3abcab4414193e711f83775fa791fd0d11d33dfe9d5372255ef15b8429e2a",
+      "timestamp": "2026-09-14T06:56:17.571-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 9
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "686c9f34d6983e486a85d67d4193c79e2332e5f6130be2e975312e53b9d074cb",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "066e6d2072a5a6524988ddcdf1d6152c35af6a8ce42fc570f3021194c94de430",
+      "timestamp": "2026-09-14T06:56:20.400-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 51
+    },
+    {
+      "blob_tag": 1298492752,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 2048,
+      "frame_sha256": "3c86375fc153c859c9ecd94de53630fe347d34e823cc75b11a7d4b4eeab5e232",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "48f746821d88040383a14565ca2c431f25c08a32763350e8be8692cfa14a8327",
+      "timestamp": "2026-09-14T06:56:20.901-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 52
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "ab90bd7d1c49dfb2827bdd4ffeb27f292c7f815103e1f6482a9b36791cc2c572",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "66ed92590871ca966fecdb9e543415b00df69452b0a741110b58030b4c40cc83",
+      "timestamp": "2026-09-14T06:56:21.556-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 54
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "8978b0e1a0ffbb350c6b4590e18b665286f839f681dede66ae96de8da5d03a3d",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "557d39c9d49ffbc7ff8dc0d10cded46800ed23fced60081597e4f3e0a9be4f39",
+      "timestamp": "2026-09-14T06:56:24.382-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 96
+    },
+    {
+      "blob_tag": 1298492752,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 2048,
+      "frame_sha256": "4c256d42b7577b6602cd293e1ad5abc55045dd1a6a41130e4df6398990a8dff2",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7326c1eb3588bad026ad6ed953549140e1c69a198cb8bca9038beb4a20ba8866",
+      "timestamp": "2026-09-14T06:56:24.883-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 97
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "9d4361d85dc7b270b6dcecb9791af3227627e3b6b9b8e17906a5de7b27a6da41",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "1688214762f13af8de7b1998e7afb0aa7deddff8c13204080451787a25c0c34d",
+      "timestamp": "2026-09-14T06:56:25.538-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 99
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "8dc83335b747edf3f08658d7ab4f1c847900684186a538f1a24fd20faea39175",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7c61c277715c0e291c92c2422307d258bd923de5bcad509beda5ed3aa0339e58",
+      "timestamp": "2026-09-14T06:56:28.363-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 141
+    },
+    {
+      "blob_tag": 1298492752,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 2048,
+      "frame_sha256": "2937019987cae762a4a1e15d8c5ac9fff2d0d0b97d3224d605b0795ecabf1948",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "b5a2b5e4bcd25fdbb782af732e26f0ed67fca265017604baa92ef9bead2760ee",
+      "timestamp": "2026-09-14T06:56:28.364-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 142
+    },
+    {
+      "blob_tag": 1348563561,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "a413907c02e676da8dd538476b447038e9e909ce86f6c7b823683a6bea644007",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "3e9a45b414ee0a9d32f99f3838c62e7bb0723588813e85315b1489d99456233e",
+      "timestamp": "2026-09-14T06:56:28.536-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 143
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "0a9b175833f321fe858808898c793177b5fc6b7c9671956b25cee5d872b43b7c",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "82b68bee641c6fb38089ac4118cb3b7bc29ec29234429e105d4de263ceee7b7b",
+      "timestamp": "2026-09-14T06:56:28.537-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 144
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "73e909cce518759ecdea22270964c2fcc665b6fafe7ef443b51a911cda72ab4e",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c577c0ce5d95a7424648b3bad49190109723c0522482b0210a248453223196e0",
+      "timestamp": "2026-09-14T06:56:28.537-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 145
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 1097887852,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "554b2fb51edad4f172d77f810b4b3c5ad1cf35f52727d1a5de10eabfc9c9bdc4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "12b203d9c77a0b88f31166ea2b97c47de397aa04960aa3c708670bf6e9f2ffff",
+      "timestamp": "2026-09-14T06:56:28.537-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 146
+    }
+  ]
+}

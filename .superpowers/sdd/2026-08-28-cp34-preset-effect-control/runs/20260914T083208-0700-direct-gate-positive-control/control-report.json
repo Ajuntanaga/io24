@@ -1,0 +1,154 @@
+{
+  "analysis": {
+    "classification": "DIRECT_GATE_EFFECT_DETECTED",
+    "detection_threshold_db": 2.6914898510189005,
+    "effect_delta_db": -28.08713637057534,
+    "effect_detected": true,
+    "gate_off_drift_db": -0.11928611647549836,
+    "maximum_window_mad_db": 0.4485816418364834,
+    "meaning": "the Main/Input-2 meter observes a Channel-2 gate change, so the native active-slot null is a genuine negative about that write route",
+    "stable": true
+  },
+  "battery_after": 98,
+  "battery_before": 98,
+  "comparison_target": "native MemP/Stat active-slot gate probe",
+  "device": {
+    "bcd_device": "0128",
+    "product_id": "0422",
+    "serial": "AB7C22200355",
+    "vendor_id": "194f"
+  },
+  "finished": "2026-09-14T08:32:16.674098-07:00",
+  "gate": {
+    "attack_s": 0.005,
+    "fs": 96000.0,
+    "keyfilter_hz": 20.0,
+    "range_db": -84.0,
+    "release_s": 0.05,
+    "threshold_db": -40.0
+  },
+  "mixer_routes": "UNTOUCHED",
+  "observation": "SIMULTANEOUS_JAST_INPUT2_AND_MAIN_METERS",
+  "playback": "NONE",
+  "processing_channel": "UNTOUCHED",
+  "readable_after": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "readable_before": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "input2_slot": 2,
+    "main_volume": 0.7599995732307434
+  },
+  "restored_controls": [
+    "gate_powered_on_state",
+    "input2_gain_db",
+    "main_volume"
+  ],
+  "schema": "io24-direct-gate-positive-control-v1",
+  "started": "2026-09-14T08:32:08.571363-07:00",
+  "status": "COMPLETED",
+  "stimulus": "INPUT2_PREAMP_SELF_NOISE",
+  "target_channel": 2,
+  "windows": [
+    {
+      "gate_written_on": false,
+      "label": "direct_gate_off_before",
+      "meter": {
+        "label": "direct_gate_off_before",
+        "mad_main_to_input2_db": 0.3493957099313434,
+        "maximum_main_to_input2_db": 5.764359669276006,
+        "median_input2": 0.0008380487852264196,
+        "median_main": 0.0014645090559497476,
+        "median_main_to_input2_db": 4.893957464419978,
+        "minimum_main_to_input2_db": 3.933247668683111,
+        "samples": 40
+      },
+      "readable": {
+        "channel_linked": false,
+        "flags": 385,
+        "headphone_volume": 0.510000467300415,
+        "input1_gain_db": 30.0,
+        "input1_processing_channel": 0,
+        "input1_slot": 0,
+        "input2_gain_db": 60.0,
+        "input2_processing_channel": 1,
+        "input2_processing_enabled": true,
+        "input2_slot": 2,
+        "main_volume": 0.009999999776482582
+      }
+    },
+    {
+      "gate_written_on": true,
+      "label": "direct_gate_on",
+      "meter": {
+        "label": "direct_gate_on",
+        "mad_main_to_input2_db": 0.4485816418364834,
+        "maximum_main_to_input2_db": -22.17836964379524,
+        "median_input2": 0.0008553914085496217,
+        "median_main": 5.8333665947429836e-05,
+        "median_main_to_input2_db": -23.25282196439311,
+        "minimum_main_to_input2_db": -24.390328841398635,
+        "samples": 40
+      },
+      "readable": {
+        "channel_linked": false,
+        "flags": 385,
+        "headphone_volume": 0.510000467300415,
+        "input1_gain_db": 30.0,
+        "input1_processing_channel": 0,
+        "input1_slot": 0,
+        "input2_gain_db": 60.0,
+        "input2_processing_channel": 1,
+        "input2_processing_enabled": true,
+        "input2_slot": 2,
+        "main_volume": 0.009999999776482582
+      }
+    },
+    {
+      "gate_written_on": false,
+      "label": "direct_gate_off_after",
+      "meter": {
+        "label": "direct_gate_off_after",
+        "mad_main_to_input2_db": 0.30012383383134766,
+        "maximum_main_to_input2_db": 6.518202283420004,
+        "median_input2": 0.0008713402785360813,
+        "median_main": 0.0015074160182848573,
+        "median_main_to_input2_db": 4.77467134794448,
+        "minimum_main_to_input2_db": 3.857554479791517,
+        "samples": 40
+      },
+      "readable": {
+        "channel_linked": false,
+        "flags": 385,
+        "headphone_volume": 0.510000467300415,
+        "input1_gain_db": 30.0,
+        "input1_processing_channel": 0,
+        "input1_slot": 0,
+        "input2_gain_db": 60.0,
+        "input2_processing_channel": 1,
+        "input2_processing_enabled": true,
+        "input2_slot": 2,
+        "main_volume": 0.009999999776482582
+      }
+    }
+  ],
+  "write_route": "DIRECT_SETP_GATE_BLOB"
+}

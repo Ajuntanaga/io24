@@ -10,8 +10,8 @@
 struct io24_counts { unsigned int allocations, frees, submits, cancels, releases, completions, failures; };
 static struct io24_counts counts;
 #define IO24_CHECK(expr) do { if (!(expr)) { fprintf(stderr, "FAIL %s:%u: %s\n", __func__, __LINE__, #expr); ++counts.failures; } } while (0)
-struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,control_buffer_alloc,control_buffer_free,control_free_buffer_flag,close; };
-struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; unsigned int timeout; size_t payload_length; uint8_t payload[4096]; };
+struct io24_fake_counts { unsigned claim,release,detach,auto_detach,set_configuration,set_alternate,control,bulk,interrupt,cancel,clear_halt,transfer_free,control_buffer_alloc,control_buffer_free,control_free_buffer_flag,close,api_calls,get_device,get_active_config_descriptor,free_config_descriptor; };
+struct io24_fake_record { int interface_number,alternate,configuration; unsigned char endpoint,type; int length; uint8_t request_type,request; uint16_t value,index; unsigned int timeout; size_t payload_length; uint8_t payload[4096]; unsigned get_device_ordinal,get_active_config_descriptor_ordinal,free_config_descriptor_ordinal; uintptr_t get_device_handle,get_device_result,get_active_config_descriptor_device,get_active_config_descriptor_result,free_config_descriptor_input; };
 const struct io24_fake_counts *io24_fake_libusb_counts(void);
 const struct io24_fake_record *io24_fake_libusb_record(void);
 void io24_fake_libusb_set_claim_result(int);
@@ -32,6 +32,8 @@ unsigned int io24_fake_libusb_buffer_alloc_count(void);
 unsigned int io24_fake_libusb_buffer_free_count(void);
 unsigned int io24_fake_libusb_free_buffer_flag_count(void);
 int io24_fake_libusb_reported_actual_length(void);
+int io24_pipe_table_audit_pointer_live(const void *);
+int io24_pipe_table_audit_capture_live(const void *, uint64_t *);
 
 #define IO24_URB_FUNCTION_CLAIM_TRANSACTION 0x002f
 #define IO24_CLAIM_TRANSACTION_COMMIT 1
@@ -136,6 +138,15 @@ static NTSTATUS submit_request(struct io24_function_device *device, void *reques
     params.device=(struct unix_device*)device;
     params.irp=&irp;
     return unix_calls[unix_usb_submit_urb](&params);
+}
+
+static void release_transfer(void *transfer)
+{
+    struct usb_release_transfer_params release = {.transfer = transfer};
+
+    IO24_CHECK(transfer != NULL);
+    if (transfer)
+        IO24_CHECK(unix_calls[unix_usb_release_transfer](&release) == STATUS_SUCCESS);
 }
 
 /* R87: retained paths obtain opaque tokens from the actual lower SELECT
@@ -930,10 +941,16 @@ static void expect_control_event(struct io24_control_fixture *f,
     IO24_CHECK(io24_fake_libusb_complete(status,data,data_length,reported_actual)==0);
     IO24_CHECK(io24_fake_libusb_reported_actual_length()==reported_actual);
     IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING &&
-            event.type==USB_EVENT_TRANSFER_COMPLETE && event.u.completed_irp==&f->irp);
+            event.type==USB_EVENT_TRANSFER_COMPLETE &&
+            event.u.completed_transfer.irp==&f->irp &&
+            event.u.completed_transfer.transfer==f->params.transfer);
     IO24_CHECK(f->urb.UrbHeader.Status==expected_status);
     IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0]==NULL);
     IO24_CHECK(!io24_fake_libusb_has_pending());
+    IO24_CHECK(io24_fake_libusb_free_count()==before_free);
+    IO24_CHECK(io24_fake_libusb_buffer_free_count()==before_buffer_free);
+    release_transfer(event.u.completed_transfer.transfer);
+    f->params.transfer = NULL;
     IO24_CHECK(io24_fake_libusb_free_count()==before_free+1);
     IO24_CHECK(io24_fake_libusb_buffer_free_count()==before_buffer_free+1 &&
             io24_fake_libusb_free_buffer_flag_count()==before_buffer_free+1);
@@ -957,11 +974,262 @@ static void discard_control_pending(void)
             !io24_fake_libusb_has_pending());
 }
 
+static void add_range_scope_interfaces(struct io24_control_fixture *f)
+{
+    IO24_CHECK(f->device.function && f->device.function_interface_count == 1);
+    IO24_CHECK(f->device.function_interfaces[0] == (1u << 5));
+    f->device.function_interfaces[0] |= (1u << 0) | (1u << 1);
+    f->device.function_interface_count += 2;
+}
+
+static void make_nonfunction_device(struct io24_control_fixture *f)
+{
+    IO24_CHECK(f->device.function && f->device.function_interface_count == 1);
+    IO24_CHECK(f->device.function_root == 5);
+    IO24_CHECK(f->device.function_interfaces[0] == (1u << 5));
+    f->device.function = FALSE;
+    f->device.function_interface_count = 0;
+    f->device.function_root = 0;
+    memset(f->device.function_interfaces, 0,
+            sizeof(f->device.function_interfaces));
+}
+
+struct io24_backend_snapshot
+{
+    struct io24_fake_counts counts;
+    struct io24_fake_record record;
+    unsigned int alloc_count;
+    unsigned int alloc_attempts;
+    unsigned int submit_attempts;
+    int reported_actual_length;
+    BOOL pending;
+};
+
+struct io24_control_reject_snapshot
+{
+    struct io24_control_fixture expected;
+    struct io24_pipe_table *pipe_table;
+    struct io24_pipe_table pipe_table_value;
+    uint64_t pipe_table_identity;
+    BOOL has_pipe_table;
+    BOOL captured_pipe_table;
+    libusb_device_handle *device_handle;
+};
+
+static struct io24_control_reject_snapshot capture_control_reject(
+        struct io24_control_fixture *f)
+{
+    struct io24_control_reject_snapshot snapshot;
+
+    snapshot.expected = *f;
+    snapshot.pipe_table = f->device.pipe_table;
+    snapshot.has_pipe_table = snapshot.pipe_table != NULL;
+    snapshot.captured_pipe_table = FALSE;
+    snapshot.pipe_table_identity = 0;
+    if (snapshot.has_pipe_table &&
+            io24_pipe_table_audit_capture_live(snapshot.pipe_table,
+            &snapshot.pipe_table_identity) == 1)
+    {
+        snapshot.pipe_table_value = *snapshot.pipe_table;
+        snapshot.captured_pipe_table = TRUE;
+    }
+    snapshot.device_handle = f->device.handle;
+    snapshot.expected.urb.UrbHeader.Status = USBD_STATUS_INVALID_PARAMETER;
+    f->urb.UrbHeader.Status = USBD_STATUS_NOT_ACCESSED;
+    return snapshot;
+}
+
+static BOOL control_reject_fixture_matches(struct io24_control_fixture *f,
+        const struct io24_control_reject_snapshot *snapshot)
+{
+    return !memcmp(f, &snapshot->expected, sizeof(*f));
+}
+
+static BOOL control_reject_pipe_table_matches(struct io24_control_fixture *f,
+        const struct io24_control_reject_snapshot *snapshot)
+{
+    uint64_t identity;
+
+    if (f->device.pipe_table != snapshot->pipe_table) return FALSE;
+    if (!snapshot->has_pipe_table) return TRUE;
+    if (!snapshot->captured_pipe_table) return FALSE;
+    if (io24_pipe_table_audit_capture_live(snapshot->pipe_table, &identity) != 1)
+        return FALSE;
+    if (identity != snapshot->pipe_table_identity) return FALSE;
+    return !memcmp(snapshot->pipe_table, &snapshot->pipe_table_value,
+            sizeof(snapshot->pipe_table_value));
+}
+
+static void expect_control_reject_snapshot(struct io24_control_fixture *f,
+        const struct io24_control_reject_snapshot *snapshot)
+{
+    IO24_CHECK(control_reject_fixture_matches(f, snapshot));
+    IO24_CHECK(control_reject_pipe_table_matches(f, snapshot));
+}
+
+static struct io24_backend_snapshot capture_control_backend(void)
+{
+    struct io24_backend_snapshot snapshot;
+
+    snapshot.counts = *io24_fake_libusb_counts();
+    snapshot.record = *io24_fake_libusb_record();
+    snapshot.alloc_count = io24_fake_libusb_alloc_count();
+    snapshot.alloc_attempts = io24_fake_libusb_alloc_attempts();
+    snapshot.submit_attempts = io24_fake_libusb_submit_attempts();
+    snapshot.reported_actual_length = io24_fake_libusb_reported_actual_length();
+    snapshot.pending = !!io24_fake_libusb_has_pending();
+    return snapshot;
+}
+
+static BOOL control_backend_matches(
+        const struct io24_backend_snapshot *expected)
+{
+    return !memcmp(io24_fake_libusb_counts(), &expected->counts,
+            sizeof(expected->counts)) && !memcmp(io24_fake_libusb_record(),
+            &expected->record, sizeof(expected->record)) &&
+            io24_fake_libusb_alloc_count() == expected->alloc_count &&
+            io24_fake_libusb_alloc_attempts() == expected->alloc_attempts &&
+            io24_fake_libusb_submit_attempts() == expected->submit_attempts &&
+            io24_fake_libusb_reported_actual_length() ==
+            expected->reported_actual_length &&
+            !!io24_fake_libusb_has_pending() == expected->pending;
+}
+
+static BOOL control_backend_unchanged(
+        const struct io24_backend_snapshot *before)
+{
+    return control_backend_matches(before);
+}
+
+static void expect_control_backend_unchanged(
+        const struct io24_backend_snapshot *before)
+{
+    IO24_CHECK(control_backend_unchanged(before));
+}
+
 static void expect_control_reject(struct io24_control_fixture *f)
 {
+    struct io24_backend_snapshot backend = capture_control_backend();
+    struct io24_control_reject_snapshot fixture = capture_control_reject(f);
+
+    if (fixture.has_pipe_table && !fixture.captured_pipe_table)
+    {
+        IO24_CHECK(FALSE);
+        return;
+    }
     IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params)==STATUS_INVALID_PARAMETER);
     IO24_CHECK(io24_fake_libusb_counts()->control==0 && !io24_fake_libusb_has_pending());
+    expect_control_backend_unchanged(&backend);
+    expect_control_reject_snapshot(f, &fixture);
     IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0]==NULL); check_forbidden();
+}
+
+/* Endpoint-recipient rejection performs the retained active-endpoint
+ * descriptor lookup.  It is not a pre-backend generic rejection. */
+static void expect_control_endpoint_reject(struct io24_control_fixture *f)
+{
+    struct io24_backend_snapshot expected = capture_control_backend();
+    struct io24_control_reject_snapshot fixture = capture_control_reject(f);
+    const struct io24_fake_record *actual;
+
+    if (fixture.has_pipe_table && !fixture.captured_pipe_table)
+    {
+        IO24_CHECK(FALSE);
+        return;
+    }
+    /* Retained endpoint validation reads exactly this active-config sequence. */
+    expected.counts.api_calls += 3;
+    ++expected.counts.get_device;
+    ++expected.counts.get_active_config_descriptor;
+    ++expected.counts.free_config_descriptor;
+    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params)==STATUS_INVALID_PARAMETER);
+    IO24_CHECK(io24_fake_libusb_counts()->control==0 && !io24_fake_libusb_has_pending());
+    actual = io24_fake_libusb_record();
+    IO24_CHECK(actual->get_device_ordinal == expected.counts.api_calls - 2);
+    IO24_CHECK(actual->get_active_config_descriptor_ordinal == expected.counts.api_calls - 1);
+    IO24_CHECK(actual->free_config_descriptor_ordinal == expected.counts.api_calls);
+    IO24_CHECK(actual->get_device_handle == (uintptr_t)fixture.device_handle);
+    IO24_CHECK(actual->get_device_result != 0 && actual->get_device_result ==
+            actual->get_active_config_descriptor_device);
+    IO24_CHECK(actual->get_active_config_descriptor_result != 0 &&
+            actual->get_active_config_descriptor_result ==
+            actual->free_config_descriptor_input);
+    expected.record.get_device_ordinal = actual->get_device_ordinal;
+    expected.record.get_active_config_descriptor_ordinal =
+            actual->get_active_config_descriptor_ordinal;
+    expected.record.free_config_descriptor_ordinal =
+            actual->free_config_descriptor_ordinal;
+    expected.record.get_device_handle = actual->get_device_handle;
+    expected.record.get_device_result = actual->get_device_result;
+    expected.record.get_active_config_descriptor_device =
+            actual->get_active_config_descriptor_device;
+    expected.record.get_active_config_descriptor_result =
+            actual->get_active_config_descriptor_result;
+    expected.record.free_config_descriptor_input =
+            actual->free_config_descriptor_input;
+    IO24_CHECK(control_backend_matches(&expected));
+    expect_control_reject_snapshot(f, &fixture);
+    IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0]==NULL); check_forbidden();
+}
+
+static void expect_exact_range_success(struct io24_control_fixture *f,
+        const unsigned char *captured, size_t captured_length)
+{
+    struct io24_backend_snapshot backend = capture_control_backend();
+    size_t i;
+
+    f->urb.UrbHeader.Status = USBD_STATUS_NOT_ACCESSED;
+    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_SUCCESS);
+    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_SUCCESS &&
+            f->urb.UrbControlTransfer.TransferBufferLength == (ULONG)captured_length);
+    IO24_CHECK(!memcmp(f->storage + 1, captured, captured_length));
+    IO24_CHECK(f->storage[0] == GUARD_BYTE);
+    for (i = captured_length + 1; i < sizeof(f->storage); ++i)
+        IO24_CHECK(f->storage[i] == GUARD_BYTE);
+    expect_control_backend_unchanged(&backend);
+    IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0] == NULL);
+    check_forbidden();
+}
+
+static void expect_control_scope_reject(struct io24_control_fixture *f)
+{
+    struct io24_backend_snapshot backend = capture_control_backend();
+    unsigned char before[sizeof(f->storage)];
+    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
+    struct io24_control_reject_snapshot fixture;
+
+    memcpy(before, f->storage, sizeof(before));
+    fixture = capture_control_reject(f);
+    if (fixture.has_pipe_table && !fixture.captured_pipe_table)
+    {
+        IO24_CHECK(FALSE);
+        return;
+    }
+    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_INVALID_PARAMETER);
+    IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_INVALID_PARAMETER);
+    IO24_CHECK(f->urb.UrbControlTransfer.TransferBufferLength == length);
+    IO24_CHECK(!memcmp(f->storage, before, sizeof(f->storage)));
+    expect_control_backend_unchanged(&backend);
+    expect_control_reject_snapshot(f, &fixture);
+    IO24_CHECK(f->irp.Tail.Overlay.DriverContext[0] == NULL);
+    check_forbidden();
+}
+
+static void expect_control_generic_no_range(struct io24_control_fixture *f,
+        BOOL out)
+{
+    const unsigned char *setup = f->urb.UrbControlTransfer.SetupPacket;
+    ULONG length = f->urb.UrbControlTransfer.TransferBufferLength;
+    unsigned char before[sizeof(f->storage)];
+    unsigned int i;
+
+    if (out) for (i = 0; i < length; ++i)
+        f->storage[1 + i] = (unsigned char)(0x30 + i);
+    memcpy(before, f->storage, sizeof(before));
+    expect_control_pending(f, setup[0], setup[1], setup[2] | (setup[3] << 8),
+            setup[4] | (setup[5] << 8), length, out);
+    IO24_CHECK(!memcmp(f->storage, before, sizeof(f->storage)));
+    discard_control_pending();
 }
 
 /* The generic RANGE tuple is a response optimization, not an admission
@@ -970,6 +1238,14 @@ static void expect_control_reject(struct io24_control_fixture *f)
 static void expect_exact_range_admission_reject(struct io24_control_fixture *f,
         ULONG declared_length, const unsigned char before[sizeof(f->storage)])
 {
+    struct io24_backend_snapshot backend = capture_control_backend();
+    struct io24_control_reject_snapshot fixture = capture_control_reject(f);
+
+    if (fixture.has_pipe_table && !fixture.captured_pipe_table)
+    {
+        IO24_CHECK(FALSE);
+        return;
+    }
     IO24_CHECK(unix_calls[unix_usb_submit_urb](&f->params) == STATUS_INVALID_PARAMETER);
     IO24_CHECK(f->urb.UrbHeader.Status == USBD_STATUS_INVALID_PARAMETER);
     IO24_CHECK(f->urb.UrbControlTransfer.TransferBufferLength == declared_length);
@@ -979,6 +1255,8 @@ static void expect_exact_range_admission_reject(struct io24_control_fixture *f,
             io24_fake_libusb_submit_attempts() == 0 &&
             !io24_fake_libusb_has_pending() &&
             f->irp.Tail.Overlay.DriverContext[0] == NULL);
+    expect_control_backend_unchanged(&backend);
+    expect_control_reject_snapshot(f, &fixture);
     check_forbidden();
 }
 
@@ -988,6 +1266,8 @@ static void expect_exact_range_admission_reject(struct io24_control_fixture *f,
 static void expect_exact_range_null_buffer_reject(void)
 {
     struct io24_control_fixture f;
+    struct io24_backend_snapshot backend;
+    struct io24_control_reject_snapshot fixture;
     unsigned char before[sizeof(f.storage)];
     pid_t child;
     int status;
@@ -995,7 +1275,9 @@ static void expect_exact_range_null_buffer_reject(void)
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS | LIBUSB_RECIPIENT_INTERFACE |
             LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
     memcpy(before, f.storage, sizeof(before));
+    backend = capture_control_backend();
     f.params.transfer_buffer = NULL;
+    fixture = capture_control_reject(&f);
     child = fork();
     IO24_CHECK(child >= 0);
     if (!child)
@@ -1009,6 +1291,9 @@ static void expect_exact_range_null_buffer_reject(void)
                 io24_fake_libusb_alloc_count() == 0 &&
                 io24_fake_libusb_submit_attempts() == 0 &&
                 !io24_fake_libusb_has_pending() &&
+                control_backend_unchanged(&backend) &&
+                control_reject_fixture_matches(&f, &fixture) &&
+                control_reject_pipe_table_matches(&f, &fixture) &&
                 f.irp.Tail.Overlay.DriverContext[0] == NULL ? 0 : 1);
     }
     if (child > 0)
@@ -1057,14 +1342,13 @@ static void group_control_descriptor(void)
     /* Exact generic RANGE is the same shared synthetic answer as the legacy
      * class-interface request: no allocation, submission, or pending IRP. */
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
-    IO24_CHECK(unix_calls[unix_usb_submit_urb](&f.params)==STATUS_SUCCESS);
-    IO24_CHECK(f.urb.UrbHeader.Status==USBD_STATUS_SUCCESS && f.urb.UrbControlTransfer.TransferBufferLength==sizeof(captured_range));
-    IO24_CHECK(!memcmp(f.storage+1,captured_range,sizeof(captured_range)));
-    for(i=sizeof(captured_range)+1;i<sizeof(f.storage);++i) IO24_CHECK(f.storage[i]==GUARD_BYTE);
-    IO24_CHECK(io24_fake_libusb_alloc_count()==0 && io24_fake_libusb_free_count()==0 &&
-            io24_fake_libusb_submit_attempts()==0 && !io24_fake_libusb_has_pending() &&
-            f.irp.Tail.Overlay.DriverContext[0]==NULL);
-    check_forbidden();
+    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_exact_range_success(&f, captured_range, sizeof(captured_range));
     /* The RANGE fast path is reached only after generic URB admission.  The
      * fixed tuple may never turn malformed headers or mismatched/undersized
      * caller declarations into a synthetic response. */
@@ -1093,31 +1377,67 @@ static void group_control_descriptor(void)
         expect_exact_range_admission_reject(&f, sizeof(captured_range)-1, before);
     }
     expect_exact_range_null_buffer_reject();
-    /* Every one-field RANGE miss must take ordinary generic routing and must
-     * not write the captured answer before its natural completion.  Run the
-     * interface-recipient predicate mutants without function scoping so the
-     * RANGE predicate, rather than an unrelated low-wIndex scope rejection,
-     * remains the only changed admission fact. */
+    /* Exercise the exact positive and every one-field RANGE miss under the
+     * same three device-scope classes: non-function, function/out-of-scope,
+     * and function/in-scope with the consistent {0,1,5} interface set.
+     * Out-of-scope interface misses reject without backend activity; all
+     * other misses route generically without synthesizing captured bytes. */
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,TRUE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, TRUE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE, 2, 0x0100, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, TRUE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_DEVICE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],3,0x0100,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 3, 0x0100, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0101,0x0500,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0101, 0x0500, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0501,256,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0501, 256);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
-    f.device.function=FALSE;
-    expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],2,0x0100,0x0500,255,FALSE); IO24_CHECK(memcmp(f.storage+1,captured_range,sizeof(captured_range))); io24_fake_libusb_discard_pending();
+    expect_control_scope_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
+    make_nonfunction_device(&f);
+    expect_control_generic_no_range(&f, FALSE);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE|LIBUSB_ENDPOINT_IN, 2, 0x0100, 0x0500, 255);
+    add_range_scope_interfaces(&f);
+    expect_control_generic_no_range(&f, FALSE);
     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 3, 0xabcd, 0x81, 16);
     expect_control_pending(&f, f.urb.UrbControlTransfer.SetupPacket[0], 3, 0xabcd, 0x81, 16, FALSE); io24_fake_libusb_discard_pending();
     reset_control(&f, LIBUSB_REQUEST_TYPE_VENDOR|LIBUSB_RECIPIENT_ENDPOINT, 3, 0xabcd, 0x01, 16);
@@ -1189,7 +1509,7 @@ static void group_control_descriptor(void)
     expect_control_pending(&f,f.urb.UrbControlTransfer.SetupPacket[0],10,0x2211,5,32,FALSE);
     if(io24_fake_libusb_has_pending())
     {
-        struct usb_cancel_transfer_params cancel={.transfer=f.irp.Tail.Overlay.DriverContext[0]};
+        struct usb_cancel_transfer_params cancel={.transfer=f.params.transfer};
         IO24_CHECK(cancel.transfer!=NULL && unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS);
         IO24_CHECK(io24_fake_libusb_counts()->cancel==1);
         expect_control_event(&f,LIBUSB_TRANSFER_CANCELLED,NULL,0,0,USBD_STATUS_CANCELED);
@@ -1254,7 +1574,7 @@ static void group_control_descriptor(void)
             IO24_CHECK(io24_fake_libusb_mutate_pending_control_payload((unsigned char)(0x71 + out_failure)) == 0);
             if (status == LIBUSB_TRANSFER_CANCELLED)
             {
-                struct usb_cancel_transfer_params cancel={.transfer=f.irp.Tail.Overlay.DriverContext[0]};
+                struct usb_cancel_transfer_params cancel={.transfer=f.params.transfer};
                 IO24_CHECK(cancel.transfer && unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS &&
                         io24_fake_libusb_counts()->cancel==1);
             }
@@ -1276,20 +1596,135 @@ static void group_control_descriptor(void)
     reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|0x04, 1,0,0,0); expect_control_reject(&f);
     reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_INTERFACE, 1,0,7,0); expect_control_reject(&f);
     reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT, 1,0,0x82,0); expect_control_reject(&f);
-    reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 1,0,0x01,0); expect_control_reject(&f);
-    reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT, 1,0,0x81,0); expect_control_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 1,0,0x01,0); expect_control_endpoint_reject(&f);
+    reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT, 1,0,0x81,0); expect_control_endpoint_reject(&f);
     reset_control(&f, LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_ENDPOINT|LIBUSB_ENDPOINT_IN, 1,0,0x81,0);
-    f.device.function_interfaces[5/8]&=~(1u<<(5%8)); expect_control_reject(&f);
+    f.device.function_interfaces[5/8]&=~(1u<<(5%8)); expect_control_endpoint_reject(&f);
 }
 static void group_sync_pipes(void)
 {
-    struct fixture f;struct _URB_PIPE_REQUEST*r;HANDLE pipe;const struct io24_fake_counts*c;pipe=fixture_select_pipe(&f,0x81,UsbdPipeTypeBulk);f.urb.UrbHeader.Function=URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;r=&f.urb.UrbPipeRequest;r->PipeHandle=pipe;io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);IO24_CHECK(submit_fixture(&f)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->clear_halt==1&&io24_fake_libusb_record()->endpoint==0x81);check_forbidden();
+    struct fixture f; struct _URB_PIPE_REQUEST *r; HANDLE pipe;
+    struct _URB_BULK_OR_INTERRUPT_TRANSFER *bulk;
+    const struct io24_fake_counts *c;
+
+    pipe = fixture_select_pipe(&f, 0x81, UsbdPipeTypeBulk);
+    f.urb.UrbHeader.Function = URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL;
+    r = &f.urb.UrbPipeRequest; r->PipeHandle = pipe;
+    io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);
+    IO24_CHECK(submit_fixture(&f) == STATUS_UNSUCCESSFUL);
+    IO24_CHECK(r->Hdr.Status == USBD_STATUS_REQUEST_FAILED);
+    c = io24_fake_libusb_counts();
+    IO24_CHECK(c->clear_halt == 1 &&
+            io24_fake_libusb_record()->endpoint == 0x81);
+    check_forbidden();
+
+    pipe = fixture_select_pipe(&f, 0x81, UsbdPipeTypeBulk);
+    f.urb.UrbHeader.Function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    bulk = &f.urb.UrbBulkOrInterruptTransfer;
+    bulk->PipeHandle = pipe;
+    bulk->TransferFlags = USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK;
+    bulk->TransferBufferLength = 32;
+    bulk->TransferBuffer = f.buffer;
+    io24_fake_libusb_set_submit_result(LIBUSB_ERROR_BUSY);
+    IO24_CHECK(submit_fixture(&f) == STATUS_UNSUCCESSFUL);
+    IO24_CHECK(bulk->Hdr.Status == USBD_STATUS_REQUEST_FAILED &&
+            f.irp.Tail.Overlay.DriverContext[0] == NULL &&
+            io24_fake_libusb_alloc_count() == 1 &&
+            io24_fake_libusb_free_count() == 1 &&
+            !io24_fake_libusb_has_pending());
+    check_forbidden();
 }
 static void group_transfer_lifetime(void)
 {
-    struct fixture f,natural;struct _URB_BULK_OR_INTERRUPT_TRANSFER*r;HANDLE pipe;struct usb_cancel_transfer_params cancel;struct usb_event event;struct usb_main_loop_params loop={.event=&event};const struct io24_fake_counts*c;unsigned char payload[32];
-    pipe=fixture_select_pipe(&f,0x81,UsbdPipeTypeBulk);f.urb.UrbHeader.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;r=&f.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=pipe;r->TransferBufferLength=32;r->TransferBuffer=f.buffer;IO24_CHECK(submit_fixture(&f)==STATUS_PENDING);cancel.transfer=f.irp.Tail.Overlay.DriverContext[0];IO24_CHECK(cancel.transfer!=NULL);IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel)==STATUS_SUCCESS);c=io24_fake_libusb_counts();IO24_CHECK(c->cancel==1);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_CANCELLED,NULL,0,0)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.type==USB_EVENT_TRANSFER_COMPLETE&&event.u.completed_irp==&f.irp);counts.completions++;IO24_CHECK(f.irp.Tail.Overlay.DriverContext[0]==NULL);check_forbidden();
-    memset(payload,0x6d,sizeof(payload));pipe=fixture_select_pipe(&natural,0x81,UsbdPipeTypeBulk);natural.urb.UrbHeader.Function=URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;r=&natural.urb.UrbBulkOrInterruptTransfer;r->PipeHandle=pipe;r->TransferBufferLength=32;r->TransferBuffer=natural.buffer;IO24_CHECK(submit_fixture(&natural)==STATUS_PENDING);IO24_CHECK(io24_fake_libusb_pending_type()==LIBUSB_TRANSFER_TYPE_BULK&&io24_fake_libusb_pending_length()==32);IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_COMPLETED,payload,sizeof(payload),32)==0);IO24_CHECK(unix_calls[unix_usb_main_loop](&loop)==STATUS_PENDING&&event.u.completed_irp==&natural.irp);IO24_CHECK(!memcmp(natural.buffer,payload,sizeof(payload)));IO24_CHECK(natural.urb.UrbBulkOrInterruptTransfer.TransferBufferLength==32);counts.completions++;check_forbidden();
+    struct fixture f, natural; struct _URB_BULK_OR_INTERRUPT_TRANSFER *r;
+    HANDLE pipe; struct usb_cancel_transfer_params cancel;
+    struct usb_event event; struct usb_main_loop_params loop = {.event = &event};
+    const struct io24_fake_counts *c; unsigned char payload[32];
+
+    pipe = fixture_select_pipe(&f, 0x81, UsbdPipeTypeBulk);
+    f.urb.UrbHeader.Function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    r = &f.urb.UrbBulkOrInterruptTransfer; r->PipeHandle = pipe;
+    r->TransferBufferLength = 32; r->TransferBuffer = f.buffer;
+    IO24_CHECK(submit_fixture(&f) == STATUS_PENDING);
+    cancel.transfer = f.params.transfer;
+    IO24_CHECK(cancel.transfer != NULL);
+    IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel) == STATUS_SUCCESS);
+    IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel) == STATUS_SUCCESS);
+    c = io24_fake_libusb_counts(); IO24_CHECK(c->cancel == 1);
+    IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_CANCELLED,
+            NULL, 0, 0) == 0);
+    c = io24_fake_libusb_counts();
+    {
+        unsigned int cancel_count = c->cancel;
+        IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel) == STATUS_SUCCESS);
+        IO24_CHECK(io24_fake_libusb_counts()->cancel == cancel_count);
+    }
+    IO24_CHECK(unix_calls[unix_usb_main_loop](&loop) == STATUS_PENDING &&
+            event.type == USB_EVENT_TRANSFER_COMPLETE &&
+            event.u.completed_transfer.irp == &f.irp &&
+            event.u.completed_transfer.transfer == f.params.transfer);
+    IO24_CHECK(io24_fake_libusb_free_count() == 0);
+    release_transfer(event.u.completed_transfer.transfer);
+    f.params.transfer = NULL;
+    IO24_CHECK(io24_fake_libusb_free_count() == 1);
+    counts.completions++; IO24_CHECK(f.irp.Tail.Overlay.DriverContext[0] == NULL);
+    check_forbidden();
+
+    memset(payload, 0x6d, sizeof(payload));
+    pipe = fixture_select_pipe(&natural, 0x81, UsbdPipeTypeBulk);
+    natural.urb.UrbHeader.Function = URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER;
+    r = &natural.urb.UrbBulkOrInterruptTransfer; r->PipeHandle = pipe;
+    r->TransferBufferLength = 32; r->TransferBuffer = natural.buffer;
+    IO24_CHECK(submit_fixture(&natural) == STATUS_PENDING);
+    IO24_CHECK(io24_fake_libusb_pending_type() == LIBUSB_TRANSFER_TYPE_BULK &&
+            io24_fake_libusb_pending_length() == 32);
+    IO24_CHECK(io24_fake_libusb_complete(LIBUSB_TRANSFER_COMPLETED,
+            payload, sizeof(payload), 32) == 0);
+    cancel.transfer = natural.params.transfer;
+    c = io24_fake_libusb_counts();
+    {
+        unsigned int cancel_count = c->cancel;
+        IO24_CHECK(unix_calls[unix_usb_cancel_transfer](&cancel) == STATUS_SUCCESS);
+        IO24_CHECK(io24_fake_libusb_counts()->cancel == cancel_count);
+    }
+    IO24_CHECK(unix_calls[unix_usb_main_loop](&loop) == STATUS_PENDING &&
+            event.u.completed_transfer.irp == &natural.irp &&
+            event.u.completed_transfer.transfer == natural.params.transfer);
+    IO24_CHECK(!memcmp(natural.buffer, payload, sizeof(payload)));
+    IO24_CHECK(natural.urb.UrbBulkOrInterruptTransfer.TransferBufferLength == 32);
+    IO24_CHECK(io24_fake_libusb_free_count() == 0);
+    release_transfer(event.u.completed_transfer.transfer);
+    natural.params.transfer = NULL;
+    IO24_CHECK(io24_fake_libusb_free_count() == 1);
+    counts.completions++; check_forbidden();
 }
 static void run(const char*m){if(!strcmp(m,"--red")||!strcmp(m,"--claims"))group_claims();if(!strcmp(m,"--red")||!strcmp(m,"--alternate")){group_alternate();group_atomicity();group_target_only();group_isolated_record_checks();}if(!strcmp(m,"--red")||!strcmp(m,"--control-descriptor"))group_control_descriptor();if(!strcmp(m,"--red")||!strcmp(m,"--sync-pipes"))group_sync_pipes();if(!strcmp(m,"--red")||!strcmp(m,"--transfer-lifetime"))group_transfer_lifetime();}
-int main(int argc,char**argv){void*module;char*retained_argv[3];if(argc!=3)return 2;retained_argv[0]=argv[0];retained_argv[1]=argv[1];retained_argv[2]=NULL;if(io24_retained_pipe_main(2,retained_argv)){fprintf(stderr,"HARNESS: retained pipe execution baseline failed\n");return 2;}module=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!module){fprintf(stderr,"HARNESS: dlopen actual unixlib: %s\n",dlerror());return 2;}unix_calls=dlsym(module,"__wine_unix_call_funcs");if(!unix_calls){fprintf(stderr,"HARNESS: dlsym actual unix calls: %s\n",dlerror());return 2;}run(argv[2]);dlclose(module);printf("CP33 lower executed mode=%s completions=%u failures=%u\n",argv[2],counts.completions,counts.failures);return counts.failures?1:0;}
+int main(int argc,char**argv)
+{
+    void *module;
+    char *retained_argv[3];
+    int retained_result;
+    unsigned int retained_failures = 0;
+
+    if(argc!=3)return 2;
+    retained_argv[0]=argv[0];retained_argv[1]=argv[1];retained_argv[2]=NULL;
+    retained_result=io24_retained_pipe_main(2,retained_argv);
+    if(retained_result)
+    {
+        if(retained_result!=1||!failures)
+        {
+            fprintf(stderr,"HARNESS: retained pipe execution baseline failed\n");
+            return 2;
+        }
+        retained_failures=failures;
+    }
+    module=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);
+    if(!module){fprintf(stderr,"HARNESS: dlopen actual unixlib: %s\n",dlerror());return 2;}
+    unix_calls=dlsym(module,"__wine_unix_call_funcs");
+    if(!unix_calls){fprintf(stderr,"HARNESS: dlsym actual unix calls: %s\n",dlerror());return 2;}
+    counts.failures+=retained_failures;
+    run(argv[2]);
+    dlclose(module);
+    printf("CP33 lower executed mode=%s completions=%u failures=%u\n",argv[2],counts.completions,counts.failures);
+    return counts.failures?1:0;
+}

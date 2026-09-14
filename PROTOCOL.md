@@ -2,6 +2,112 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-14 controlling storage result: no separate commit follows `MemP/Stat`
+
+The physical-storage trace now resolves the concrete device interface beneath
+backend wrapper `0x316b0`. Device construction places the storage manager at
+`device+0x1108`; its projection reaches the interface at `device+0x1384`,
+whose vtable `0x6012bc80` maps write/read to `0x4aa90`/`0x4aaf4`.
+
+The receiver data flow is source-bound rather than inferred: initializer
+`0x20d3c` passes `device+8` to `0x3d4bc`, which stores it at singleton field
+`+0x38`. Adapter adjustor `0x316dc` reaches `0x316b0`; that function reloads
+the same field and invokes device-vtable slot `+0x10`, anchored to query
+`0x20808`. The query projects through the manager to the concrete physical
+interface above. Independent review found this missing join in the first
+analyzer revision; the corrected version pins the code slices, instructions,
+singleton literal, and direct branch targets.
+
+The wrapper's flag `1` is not a deferred-dirty flag. It selects
+compare-before-program at `0x52cd8`: changed bytes enter transaction `0x52c0c`,
+wait through `0x526dc`, and run the ready poll at `0x52a70` before success is
+returned. Unchanged bytes return as a successful no-op. No separate flush or
+commit edge follows a successful write on this route. The bounded analyzer is
+`re/cp34_firmware_physical_storage_commit.py`.
+
+The outer `SetP` transport still returns no readable storage status and slot
+bodies remain unreadable. An authorized native gate off/on/off discriminator
+nonetheless matched UC's selected-slot write condition: global slot 3 was
+active before every body write and each write received a forced 2 -> 3 recall.
+It detected no gate effect (-0.068913 dB versus +0.112856 dB off drift,
+0.349676 dB maximum MAD). Readable state restored exactly and the pinned Piano
+body was rewritten while active, though that body remains unreadable. Thus
+neither inactive-slot timing nor a missing commit command explains the three
+native nulls. Stop `Stat` body variants and investigate UC's distinct explicit
+Store/assignment (`PrsM`) route.
+
+## 2026-09-14 controlling offline result: Passive EQ coefficient seam complete
+
+UC's retained factory **Big Vocal** record supplies a real Passive Program
+state with class `{C0730CBB-5135-4558-9222-C40BDBA036ED}`. The pinned UC 4.7.2
+recompute calls `0x18001a610` for its seven-float combined high section and
+`0x18001adb0` for its five-float combined low section. It emits `Lfdf` index 0,
+`Bqdf` index 1, and identities at indexes 2/3; firmware native slot 2 has that
+same one-main-plus-wide structural shape.
+
+`re/uc472_passive_eq.py` now interprets both vendor routines at 44.1, 48, 88.2,
+and 96 kHz and can replace only the EQ coefficients in a validated native
+record. The Host's read-only Passive view now decodes the actual 20/30/60/100
+Hz, 3/4/5/8/10/12/16 kHz, and 5/10/20 kHz switch positions. This closes the
+last coefficient-model gap offline. Like Vintage, it is not wired into the
+running Host because the exact executor depends on the separately retained
+vendor DLL. No device operation was used for this continuation.
+
+## 2026-09-14 controlling device result: native MemP/Stat transport does not apply
+
+Two authorized, reversible Channel-2 slot-3 A/B/A tests now close the current
+device-slot writer route negative. The first used a complete native version-2
+Piano strip and changed only its Standard EQ between flat and a +15 dB/1 kHz
+shelf. The second used firmware's Channel-2-shaped native slot-2 body and
+changed only both exact stored gate states between off and on at -40 dB.
+
+Both tests completed exact-length `MemP/Stat(3)` transport and every selector
+transition read back, but neither body became measurable DSP state. EQ moved
+-0.180 dB with 0.021 dB flat drift; gate moved -0.181 dB with -0.086 dB off
+drift. The same meter path previously detected about 6.66 dB from a direct
+live shelf. This independently excludes the tagged/native prefix issue,
+Standard-EQ arithmetic, and wrong slot-family choice as sufficient
+explanations.
+
+The known store-plus-selector sequence is therefore not an accepted Host
+device-slot writer. `save_device_slot()` remains a low-level exact-transport
+primitive and must not be exposed as a working save action. Reopen this route
+only with a separately captured/source-bound commit or apply operation; do not
+keep varying record bodies. Both runs restored readable state exactly and sent
+the pinned native Piano strip back to slot 3, but stored-body restoration is
+necessarily sent-not-readable. Evidence:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/{20260914T065602-0700-native-standard-slot-live-attempt-1,20260914T070547-0700-native-gate-slot-live-attempt-1}/`.
+
+## 2026-09-14 controlling native-component result: Standard and Vintage EQ writer seams
+
+The four firmware-native version-2 defaults fully account for each channel-strip
+component. The native `eq  ` leaf stores 22 coefficient floats at each of
+44.1, 48, 88.2, and 96 kHz: three five-float sections and one seven-float
+third-order section. There is no hidden semantic-parameter region. UC 4.7.2's
+Vintage switch tables and all four proprietary designers are now recovered;
+the pinned-DLL executor can replace only those 88 coefficient bytes per clock
+inside a complete validated native record while preserving every other leaf.
+
+Native `gate` contains two exact 60-byte payloads from live `gate` blobs, and
+native `comp` contains four rate-specific side-chain biquads followed by two
+exact 52-byte payloads from live `cpxt` blobs. Firmware slot 0 matches the
+retained `Piano Accomany.scene` Channel 2 gate and FET compressor byte-for-byte
+when rebuilt at 44.1 kHz; all four compressor side-chain biquads also match.
+The limiter matches the existing exact formulas. UC's HPF is source-bound to
+the selector-3 binary64 designer, and the native `filt` leaf now supports an
+atomic four-clock coefficient replacement. The embedded 40 Hz firmware values
+are mixed historical recomputes rather than a canonical UC oracle. Standard
+peaking selector 6, low-shelf selector 8, and high-shelf selector 9 have
+source-bound instruction transcriptions.
+The Standard semantic builder emits all four native clock sections and its
+record-level wrapper changes only the EQ leaf in a validated native base.
+Passive and Vintage EQ are exact offline coefficient seams that still rely on
+the retained pinned DLL.
+The Standard coefficient vectors are transcription regressions, not captured
+UC output; bit identity still requires a UC `Bqdf`/`Stat` capture or explicit
+math-library equivalence. No device operation occurred. Evidence:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T031459-0700-native-slot-builder/`.
+
 ## 2026-09-14 controlling writer correction: native version 2, not tagged JSON
 
 The exact UC 4.7.2 caller context identifies its tagged `MemP/Stat` emission as
@@ -13,10 +119,10 @@ unchanged to `0x531e0`, whose first read requires little-endian u32 `2`.
 The Host therefore no longer sends tagged JSON/scene archives as device slot
 bodies. `save_uc_device_slot()` and the JSON registry convenience path fail
 before transport. `save_device_slot()` accepts only a fully validated native
-version-2 record and uses the existing exact `MemP/Stat` fragmentation. This is
-an offline implementation result, not live acceptance: the current native slot
-body is unreadable, so any live trial needs a bounded overwrite decision and a
-pinned restoration body.
+version-2 record and uses the existing exact `MemP/Stat` fragmentation. The two
+native live trials above show that this exact transport plus selector recall is
+still not sufficient to apply DSP state; current native slot bodies also remain
+unreadable.
 
 ## 2026-09-14 controlling live inactive-slot result: selection works, body does not
 
@@ -2128,10 +2234,10 @@ Bands: `low` / `lowmid` / `himid` / `high` (or 0–3). Shapes: `peaking`,
 `lowshelf`, `highshelf`, `hp`, `lp`, `off`. Ranges follow the host descriptors —
 gain ±15 dB, Q 0.1–10, freq 20–18000 Hz.
 
-The peaking, low-shelf, high-pass and low-pass designers are transcribed from the
-host binary. **The high shelf is not** — the host's high-shelf designer type was
-never located, so that one is textbook RBJ: correct-sounding, but it may differ
-from Universal Control in the last bits.
+Standard peaking, low shelf, and high shelf are transcribed in binary64
+instruction order from UC 4.7.2 designer selectors 6, 8, and 9, including
+binary32 input/output boundaries. The API's optional high-pass/low-pass band
+shapes still use older helpers and are not Standard component paths.
 
 #### Q overshoot
 
@@ -3362,12 +3468,13 @@ outer bands — which is how `io24_scene.py` already maps them.
 | `himidfreq` | 0..2 | **3** |
 | `lowgain`, `lowmidgain`, `himidgain`, `higain` | −16..+16 dB | continuous |
 
-**The index-to-Hz values were not recovered.** They are not in the firmware or in
-`dspusbdevice.dll` as a float or double table — searched as ascending runs in the
-audio range in both, at both precisions. They are most likely in Universal
-Control's UI application rather than the transport DLL. Until they are, the
-Vintage EQ stays unapplied rather than guessed, and a channel saved with it keeps
-its EQ skipped by the importer.
+**2026-09-14 correction:** the exact lists are inline display strings referenced
+by the UC 4.7.2 transport DLL's parameter descriptors, not float/double runs.
+They are LF `35, 60, 110, 220 Hz`, low-mid `360, 700, 1600 Hz`, and hi-mid
+`3200, 4800, 7200 Hz`. All four coefficient designers were also located and
+made executable offline against the pinned DLL. Direct live import remains
+skipped because the running Host does not depend on that retained binary; it no
+longer labels the switch frequencies as guessed or unverified.
 
 ### SUPERSEDED: manual-based one-channel inference
 
@@ -3547,8 +3654,8 @@ They are distinguishable in a `.scene` by class GUID and by field set:
 | model | GUID | fields | real-world model | status here |
 |---|---|---|---|---|
 | Standard | `{A0A8A068-…}` | `eqgain1..4`, `eqq1..4`, `eqfreq1..4` (Hz), `eqbandon1..4`, `eqbandop1/4` | — | **applied as-is**; this GUID is also what the firmware's factory presets carry |
-| Vintage 1970s | `{E1C5E024-…}` | `lowgain/lowfreq`, `lowmidgain/lowmidfreq`, `himidgain/himidfreq`, `higain` | **Neve 1073** — 4-position LF shelf, 6-position mid split 3+3, gain-only HF, ±16 dB | frequencies are switch indices; table not recovered, `--vintage-eq` applies 1073 values as a labelled guess |
-| Passive Program | not seen | Low Boost, Low Attenuation, Low Frequency Select, High Bandwidth, High Boost, High Attenuation, High Frequency, Attenuation Select | **Pultec EQP-1A** — the boost/attenuate-at-once topology is unmistakable | **never appears in any recovered scene**; unmapped |
+| Vintage 1970s | `{E1C5E024-…}` | `lowgain/lowfreq`, `lowmidgain/lowmidfreq`, `himidgain/himidfreq`, `higain` | **Neve 1073** — LF 35/60/110/220 Hz, low-mid 360/700/1600 Hz, hi-mid 3200/4800/7200 Hz, fixed HF, ±16 dB | tables and all four designers recovered offline from pinned UC 4.7.2; direct-live Host editing remains paused because the executable path depends on the retained DLL |
+| Passive Program | `{C0730CBB-…}` | Low Boost, Low Attenuation, Low Frequency Select, High Bandwidth, High Boost, High Attenuation, High Frequency, Attenuation Select | **Pultec EQP-1A** — the boost/attenuate-at-once topology is unmistakable | factory **Big Vocal** fixture recovered; both exact designers executable offline from pinned UC 4.7.2; running Host remains fail-closed without that retained DLL |
 
 `eqbandop1` / `eqbandop4` are confirmed as the Low Shelf and High Shelf toggles by
 the manual's Standard EQ control list, which is how `io24_scene.py` treats them.

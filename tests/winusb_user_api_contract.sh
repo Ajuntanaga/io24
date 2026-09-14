@@ -2,7 +2,7 @@
 set -uo pipefail
 if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_user_api_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
 readonly source_root=$1 mode=${2:---red}
-case "$mode" in --red|--surface-only|--initialize|--handles|--alternate|--descriptors|--policy|--transfer|--cancel|--vendor|--control-descriptor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+case "$mode" in --red|--surface-only|--initialize|--handles|--alternate|--descriptors|--policy|--transfer|--cancel|--vendor|--control-descriptor|--sync-pipes) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
 required_tools=(awk cc dirname find grep mktemp rmdir)
 for tool in "${required_tools[@]}"; do
     command -v "$tool" >/dev/null 2>&1 || { echo "HARNESS: required tool unavailable: $tool" >&2; exit 2; }

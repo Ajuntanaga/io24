@@ -224,17 +224,32 @@ def _standard_eq_bands(eq):
              tuple("eqgain%d" % band for band in range(1, 5)) +
              tuple("eqq%d" % band for band in range(1, 5)) +
              ("eqbandop1", "eqbandop4"), "Standard EQ")
+    eq_all_on = _toggle(eq, "eqallon", "Standard EQ")
+    band_on = {
+        band: _toggle(eq, "eqbandon%d" % band, "Standard EQ")
+        for band in range(1, 5)
+    }
+    shelf_on = {
+        band: _toggle(eq, "eqbandop%d" % band, "Standard EQ")
+        for band in (1, 4)
+    }
     bands = []
     for band in range(1, 5):
+        freq = _finite_in_range(
+            eq, "eqfreq%d" % band, 20.0, 18000.0, "Standard EQ")
+        gain = _finite_in_range(
+            eq, "eqgain%d" % band, -15.0, 15.0, "Standard EQ")
+        q = _finite_in_range(
+            eq, "eqq%d" % band, 0.1, 10.0, "Standard EQ")
         shape = "off"
-        if bool(eq["eqallon"]) and bool(eq["eqbandon%d" % band]):
+        if eq_all_on and band_on[band]:
             shape = _SHELF[band] if band in _SHELF and \
-                bool(eq["eqbandop%d" % band]) else "peaking"
+                shelf_on[band] else "peaking"
         bands.append({
             "shape": shape,
-            "freq": float(eq["eqfreq%d" % band]),
-            "gain": float(eq["eqgain%d" % band]),
-            "q": float(eq["eqq%d" % band]),
+            "freq": freq,
+            "gain": gain,
+            "q": q,
         })
     return bands
 
@@ -263,9 +278,8 @@ def alternate_eq_view(preset):
     Those models have no exact live builder and no Standard-band form, so the
     Host can neither draw nor edit them. Their stored fields are still plain
     numbers it can show as they are. The Vintage frequency switches are
-    positions; the Hz beside each is the Neve 1073 table io24_scene uses as a
-    labelled guess, because the device's own table was never recovered
-    (PROTOCOL.md 12N/12Q).
+    positions; their exact Hz labels were recovered from UC 4.7.2's own
+    parameter lists in the 2026-09-14 native-slot-builder run.
     """
     eq = preset.get("eq") or {}
     if not eq:
@@ -276,16 +290,17 @@ def alternate_eq_view(preset):
         return None
     if model not in ("passive", "vintage"):
         return None
-    if model == "vintage":
-        import io24_scene
+    import io24_scene
 
-        def switch(field, table):
-            pos = int(round(float(eq.get(field, 0))))
-            if not 0 <= pos < len(table):
-                return "position %d (outside the %d-way switch)" % (
-                    pos + 1, len(table))
-            return "position %d of %d (~%g Hz, unverified)" % (
-                pos + 1, len(table), table[pos])
+    def switch(field, table):
+        pos = int(round(float(eq.get(field, 0))))
+        if not 0 <= pos < len(table):
+            return "position %d (outside the %d-way switch)" % (
+                pos + 1, len(table))
+        return "position %d of %d (%g Hz)" % (
+            pos + 1, len(table), table[pos])
+
+    if model == "vintage":
 
         def gain(field):
             return "%+.1f dB" % float(eq.get(field, 0.0))
@@ -300,9 +315,21 @@ def alternate_eq_view(preset):
             ("High shelf", "fixed frequency", gain("higain")),
         ]
     else:
-        rows = [(field, "", "%g" % value) for field, value in sorted(eq.items())
-                if not field.startswith("__") and field != "eqallon"
-                and isinstance(value, (int, float))]
+        def amount(field):
+            return "%.1f / 10" % float(eq.get(field, 0.0))
+
+        low = switch("bfreq", io24_scene.PASSIVE_LOW_HZ)
+        rows = [
+            ("Low boost", low, amount("bboost")),
+            ("Low attenuation", low, amount("batten")),
+            ("High boost",
+             switch("mfreq", io24_scene.PASSIVE_HIGH_BOOST_HZ),
+             "%s; bandwidth %s" %
+             (amount("mboost"), amount("bbwidth"))),
+            ("High attenuation",
+             switch("hsfreq", io24_scene.PASSIVE_HIGH_ATTEN_HZ),
+             amount("hatten")),
+        ]
     return {"model": model, "on": bool(eq.get("eqallon", 1)),
             "rows": rows, "eq": dict(eq)}
 

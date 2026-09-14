@@ -13,10 +13,10 @@ accounted for instead of silently omitted.
 
 The executable plan is
 `PARAMETER-VERIFICATION-MATRIX.json`, generated and validated by
-`build_parameter_matrix.py`. It currently contains **750 atomic rows**:
+`build_parameter_matrix.py`. It currently contains **709 atomic rows**:
 
 - 142 Fat Channel parameter/targeting rows;
-- 60 VoiceFX user-parameter rows, once for each possible physical owner;
+- 30 VoiceFX user-parameter rows, once for each possible physical owner;
 - 42 generic backend mixer-cell rows (level and assignment), including the
   three `line/ch3` bus cells whose applicability to the two-input io24 must be
   resolved rather than assumed;
@@ -163,7 +163,7 @@ decaying tail clearly above the bypass floor.
 
 ### P1 — static completeness and GTK binding audit
 
-1. Regenerate the 750-row atomic matrix and fail if any current public setter,
+1. Regenerate the 709-row atomic matrix and fail if any current public setter,
    GTK control binding, FX builder field, mixer source/bus pair, vendor
    descriptor, or exact component-model route is unclassified.
 2. Verify units, clamps, serializer bytes, model-before-state ordering, channel
@@ -173,9 +173,12 @@ decaying tail clearly above the bypass floor.
    UCNET paths but remains write-only; Host Hot Key is implemented as a
    source-bound Host snapshot override; and Passive/Vintage factory EQ is
    fail-closed for direct-live replay because no exact alternate-model builder
-   exists. The Standard high-shelf builder is source-bound and bit-exact to the
-   retained UC 4.7.2 selector-9 double designer. The Passive low-frequency list
-   contains the literal vendor string `20kHz`, which must not be silently
+   exists. Standard peaking, low-shelf, and high-shelf routes are source-bound
+   to the retained UC 4.7.2 selector-6, selector-8, and selector-9 double
+   designers. Their Python-math regression vectors are not independent UC
+   output captures. The offline native writer emits all four Standard EQ clock
+   sections while preserving non-EQ component bytes. The Passive low-frequency
+   list contains the literal vendor string `20kHz`, which must not be silently
    reinterpreted.
 4. Fix any missing/broken Host binding before its live row can run. An
    unsupported applicable control is a failure, not `NOT_APPLICABLE`.

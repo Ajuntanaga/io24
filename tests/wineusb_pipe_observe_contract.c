@@ -135,7 +135,7 @@ static HANDLE select_pipe(struct fixture *fixture, unsigned char endpoint,
     return select->Interface.Pipes[0].PipeHandle;
 }
 
-static void test_clear_halt_return_is_unchanged(void)
+static void test_clear_halt_failure_is_truthful(void)
 {
     struct fixture fixture;
     struct _URB_PIPE_REQUEST *request;
@@ -150,7 +150,9 @@ static void test_clear_halt_return_is_unchanged(void)
     io24_fake_libusb_set_clear_halt_result(LIBUSB_ERROR_NOT_FOUND);
     status = submit_fixture(&fixture);
 
-    CHECK(status == STATUS_SUCCESS, "clear-halt returned %#lx", (long)status);
+    CHECK(status == STATUS_UNSUCCESSFUL, "clear-halt returned %#lx", (long)status);
+    CHECK(request->Hdr.Status == USBD_STATUS_REQUEST_FAILED,
+            "clear-halt USBD status is %#lx", (long)request->Hdr.Status);
     CHECK(io24_fake_libusb_clear_halt_count() == 1, "clear-halt count is %u",
             io24_fake_libusb_clear_halt_count());
     CHECK(io24_fake_libusb_clear_halt_endpoint() == 0x81, "endpoint is %#x",
@@ -288,7 +290,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    test_clear_halt_return_is_unchanged();
+    test_clear_halt_failure_is_truthful();
     test_transfer_route(UsbdPipeTypeBulk, 0x81, LIBUSB_TRANSFER_TYPE_BULK);
     test_transfer_route(UsbdPipeTypeInterrupt, 0x83, LIBUSB_TRANSFER_TYPE_INTERRUPT);
     test_invalid_pipe_is_unchanged();

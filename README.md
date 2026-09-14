@@ -55,7 +55,7 @@ separately rather than implied to be independently measured.
 | Processing-channel select | which input feeds a channel's DSP chain |
 | Channel-name read-back (`names`) | the device's own `'CHNP'` table |
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
-| Device-slot `MemP/Stat` save | native version-2 framing implemented hardware-free; the disproved tagged writer is refused before transport. Live native acceptance is blocked by unreadable current slot contents and still requires a bounded overwrite trial. |
+| Device-slot `MemP/Stat` save | exact transport primitive only, not a working save: tagged and native Standard-EQ/native-gate A/B/A bodies all failed to become active DSP state despite selector readback, including native gate writes made while the target slot was active. Source-bound firmware data flow joins the `Stat` adapter to the physical compare/program/wait path, with no separate commit command, but `SetP` exposes no live storage result. The preset menu remains disabled; next investigation is UC's distinct `PrsM` Store route. |
 | FX / Doubler private reverb | one global settings object over two structural lanes; live direct Transformer processing is positive, while models 1–5 and simultaneous two-lane acceptance remain unresolved |
 | **Universal Control scene import** (`io24_scene.py`) | applies a real UC `.scene` file — 35 settings from one of the author's own scenes |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
@@ -81,7 +81,7 @@ mutation for ordinary FX control. It selects one global model and applies
 
 | | |
 |---|---|
-| Physical acceptance of device save/recall | Negative for the current Host writer: slot selection worked, but a +15 dB high-shelf body did not take effect. Native save framing and disconnected cold-boot persistence remain unresolved. |
+| Physical acceptance of device save/recall | Negative for the current Host writer: slot selection worked, but neither a native +15 dB shelf nor an independent native gate off/on body took effect. Stop body variants until a missing commit/apply edge is recovered; cold-boot persistence remains unresolved. |
 | Direct standalone FX activation | Transformer is positively detected through direct block-201 writes in the current armed state. Models 1–5, cold-start activation, and simultaneous lanes remain unresolved. |
 | Private reverb on both inputs at once | Structurally supported, not audibly proved: block 201/model 0 has one settings instance and its private core binds lanes 0 and 1. The Host configures that state globally; simultaneous routing/gating still needs the live experiment. |
 | Independent private-reverb settings per channel | Not possible without custom firmware: both lanes share one `on/lows/width/mix` setting set. |
@@ -592,12 +592,15 @@ saved slot recall rather than a standalone parameter write; UC's
 `pan`/`stereopan`/`FXA`/`solo`, which the driver does not implement yet.
 
 A channel saved with UC's **Passive** or **Vintage 1970s** EQ is preserved but
-skipped by the direct-setter importer. UC 4.7.2 supplies the Vintage display
-positions, but neither alternate model's exact coefficient builder has been
-recovered. The former `--vintage-eq` Standard-biquad approximation is disabled;
-passing the flag cannot produce a direct-live EQ call. These models remain
-eligible only as complete device-slot records until an exact source-bound
-builder exists.
+skipped by the direct-setter importer. Both models' switch positions and exact
+coefficient designers are recovered offline from UC 4.7.2; Passive is grounded
+by the retained factory **Big Vocal** preset rather than guessed controls. The
+executable analyses currently depend on the separately retained vendor DLL and
+are not self-contained runtime Host dependencies.
+The former `--vintage-eq` Standard-biquad approximation is disabled, so passing
+the flag cannot produce a direct-live EQ call. A validated native record can
+receive an exact Passive or Vintage EQ replacement offline without changing
+its other components.
 
 Two things the importer gets right that are easy to get wrong. The two channels
 can be running **different compressor models** — UC tags each block with a class
@@ -715,11 +718,16 @@ at +33 dB. Every setting in range is numerically stable, but stable is not the
 same as quiet. Q ≤ 0.7 on shelves and filters gives exactly the gain you asked
 for. And the four bands cascade, so four at +15 dB is +60 dB, not +15.
 
-**One remaining inference.** Standard high-shelf coefficients are now
-source-bound to UC 4.7.2's selector-9 double-precision designer, including its
-binary32 input narrowing, operation order and output-field order. Passive and
-Vintage EQ stay fail-closed because their exact builders are still unavailable.
-The compressor's knee semantics remain inferred rather than proved.
+**Remaining limits.** Standard peaking, low-shelf, and high-shelf coefficient
+routes are source-bound to UC 4.7.2's selector-6, selector-8, and selector-9
+double-precision designers, including binary32 input narrowing, operation
+order, and output-field order. Their current regression vectors use Python's
+math library and are not independent UC output captures. A complete Standard
+EQ can be encoded at all four device clocks into a validated native record.
+Passive and Vintage designers are executable offline against the pinned UC DLL,
+but the running Host remains fail-closed because that binary is not a runtime
+dependency. The compressor's knee semantics remain inferred rather than
+proved.
 
 **The device can drop into its bootloader under sustained load** — see Safety
 below. It has always recovered from a power cycle.

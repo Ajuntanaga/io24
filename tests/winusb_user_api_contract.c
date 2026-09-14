@@ -587,6 +587,8 @@ static uint32_t target_mask(const char *mode)
     if(!strcmp(mode,"--descriptors"))return SYMBOL_INITIALIZE|SYMBOL_DESCRIPTOR|SYMBOL_QUERY;
     if(!strcmp(mode,"--control-descriptor"))return SYMBOL_INITIALIZE|SYMBOL_CONTROL|SYMBOL_DESCRIPTOR;
     if(!strcmp(mode,"--policy"))return SYMBOL_INITIALIZE|SYMBOL_GET_POLICY|SYMBOL_SET_POLICY|SYMBOL_ALTERNATE;
+    if(!strcmp(mode,"--sync-pipes"))return SYMBOL_INITIALIZE|SYMBOL_FREE|SYMBOL_ALTERNATE|
+        SYMBOL_READ|SYMBOL_WRITE|SYMBOL_ABORT|SYMBOL_RESET;
     if(!strcmp(mode,"--transfer"))return SYMBOL_INITIALIZE|SYMBOL_CONTROL|SYMBOL_READ|SYMBOL_WRITE|SYMBOL_OVERLAPPED;
     if(!strcmp(mode,"--cancel"))return SYMBOL_INITIALIZE|SYMBOL_ABORT|SYMBOL_RESET;
     return SYMBOL_ALL;
@@ -1673,6 +1675,128 @@ static void test_task9_control_descriptor(const struct functions*f)
 static void test_cancel(const struct functions*f)
 {WINUSB_INTERFACE_HANDLE h;unsigned int submits;fake_reset();if(!initialize_handle(f,&h))return;submits=counts.submits;IO24_CHECK(f->abort_pipe&&f->abort_pipe(h,0x81));IO24_CHECK(f->reset_pipe&&f->reset_pipe(h,0x81));IO24_CHECK(counts.submits==submits+2);if(f->free_handle)f->free_handle(h);}
 
+static void test_sync_pipes(const struct functions *f)
+{
+    WINUSB_INTERFACE_HANDLE handle;
+    struct guarded_buffer buffer;
+    const struct fake_event *event;
+    ULONG transferred;
+    unsigned int start, submits;
+    BOOL ok;
+
+    if (!f->initialize || !f->free_handle || !f->set_alt || !f->read_pipe ||
+            !f->write_pipe || !f->abort_pipe || !f->reset_pipe) return;
+    fake_reset();
+    if (!initialize_handle(f, &handle)) return;
+    IO24_CHECK(f->set_alt(handle, 1));
+
+    guard_buffer_reset(&buffer, GUARD_BYTE);
+    transferred = IO24_LENGTH_SENTINEL;
+    start = fake.event_count;
+    ok = f->read_pipe(handle, 0x81, buffer.bytes, sizeof(buffer.bytes),
+            &transferred, NULL);
+    event = find_ioctl_after(start, IO24_IOCTL_READ_PIPE);
+    IO24_CHECK(ok && transferred == IO24_READ_SYNC_LENGTH);
+    IO24_CHECK(!memcmp(buffer.bytes, io24_read_response,
+            IO24_READ_SYNC_LENGTH));
+    IO24_CHECK(bytes_equal(buffer.bytes + IO24_READ_SYNC_LENGTH,
+            sizeof(buffer.bytes) - IO24_READ_SYNC_LENGTH, GUARD_BYTE));
+    check_buffer_guards(&buffer);
+    IO24_CHECK(event && event->handle == IO24_FILE_HANDLE &&
+            event->overlapped && event->overlapped != fake.caller_overlapped &&
+            event->out_length == sizeof(buffer.bytes));
+    if (event)
+    {
+        check_header(event, sizeof(struct io24_wire_pipe),
+                UINT64_C(0x1122334455667788), 0);
+        IO24_CHECK(event->request.pipe.pipe_id == 0x81 &&
+                event->request.pipe.transfer_length == sizeof(buffer.bytes));
+    }
+
+    guard_buffer_reset(&buffer, 0x6c);
+    transferred = IO24_LENGTH_SENTINEL;
+    start = fake.event_count;
+    ok = f->write_pipe(handle, 0x01, buffer.bytes, sizeof(buffer.bytes),
+            &transferred, NULL);
+    event = find_ioctl_after(start, IO24_IOCTL_WRITE_PIPE);
+    IO24_CHECK(ok && transferred == IO24_WRITE_SYNC_LENGTH);
+    IO24_CHECK(bytes_equal(buffer.bytes, sizeof(buffer.bytes), 0x6c));
+    check_buffer_guards(&buffer);
+    IO24_CHECK(event && event->overlapped &&
+            event->out_length == sizeof(buffer.bytes));
+    if (event)
+    {
+        check_header(event, sizeof(struct io24_wire_pipe),
+                UINT64_C(0x1122334455667788), 0);
+        IO24_CHECK(event->request.pipe.pipe_id == 0x01 &&
+                event->request.pipe.transfer_length == sizeof(buffer.bytes));
+    }
+
+    start = fake.event_count;
+    IO24_CHECK(f->abort_pipe(handle, 0x81));
+    event = find_ioctl_after(start, IO24_IOCTL_ABORT_PIPE);
+    IO24_CHECK(event && !event->out_length);
+    if (event)
+    {
+        check_header(event, sizeof(struct io24_wire_pipe),
+                UINT64_C(0x1122334455667788), 0);
+        IO24_CHECK(event->request.pipe.pipe_id == 0x81 &&
+                !event->request.pipe.transfer_length);
+    }
+    start = fake.event_count;
+    IO24_CHECK(f->reset_pipe(handle, 0x81));
+    event = find_ioctl_after(start, IO24_IOCTL_RESET_PIPE);
+    IO24_CHECK(event && !event->out_length);
+
+    submits = counts.submits;
+    transferred = IO24_LENGTH_SENTINEL;
+    IO24_CHECK(!f->read_pipe(handle, 0x01, buffer.bytes,
+            sizeof(buffer.bytes), &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER &&
+            transferred == 0 && counts.submits == submits);
+    transferred = IO24_LENGTH_SENTINEL;
+    IO24_CHECK(!f->write_pipe(handle, 0x81, buffer.bytes,
+            sizeof(buffer.bytes), &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER &&
+            transferred == 0 && counts.submits == submits);
+    IO24_CHECK(!f->abort_pipe(handle, 0x83) &&
+            fake.last_error == ERROR_INVALID_PARAMETER &&
+            counts.submits == submits);
+    IO24_CHECK(!f->reset_pipe(handle, 0x83) &&
+            fake.last_error == ERROR_INVALID_PARAMETER &&
+            counts.submits == submits);
+    IO24_CHECK(!f->read_pipe(handle, 0x81, NULL, 1, &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+    IO24_CHECK(!f->write_pipe(handle, 0x01, NULL, 1, &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+    IO24_CHECK(!f->read_pipe(handle, 0x81, buffer.bytes, 1, NULL, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+    IO24_CHECK(!f->write_pipe(handle, 0x01, buffer.bytes, 1, NULL, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+    IO24_CHECK(!f->read_pipe(handle, 0x81, buffer.bytes,
+            WINE_WINUSB_MAXIMUM_TRANSFER_SIZE + 1, &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+    IO24_CHECK(!f->write_pipe(handle, 0x01, buffer.bytes,
+            WINE_WINUSB_MAXIMUM_TRANSFER_SIZE + 1, &transferred, NULL) &&
+            fake.last_error == ERROR_INVALID_PARAMETER && counts.submits == submits);
+
+    transferred = IO24_LENGTH_SENTINEL;
+    IO24_CHECK(f->read_pipe(handle, 0x81, NULL, 0, &transferred, NULL) &&
+            transferred == 0);
+    transferred = IO24_LENGTH_SENTINEL;
+    IO24_CHECK(f->write_pipe(handle, 0x01, NULL, 0, &transferred, NULL) &&
+            transferred == 0);
+
+    fake.ioctl_result = FALSE;
+    fake.ioctl_error = ERROR_ACCESS_DENIED;
+    transferred = IO24_LENGTH_SENTINEL;
+    IO24_CHECK(!f->read_pipe(handle, 0x81, buffer.bytes,
+            sizeof(buffer.bytes), &transferred, NULL) && transferred == 0 &&
+            fake.last_error == ERROR_ACCESS_DENIED);
+    fake.ioctl_result = TRUE;
+    IO24_CHECK(f->free_handle(handle));
+}
+
 static void validate_vendor_fake_trace(OVERLAPPED *caller)
 {
     static const DWORD expected[]={IO24_IOCTL_INITIALIZE,IO24_IOCTL_DESCRIPTOR,IO24_IOCTL_GET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_POLICY,IO24_IOCTL_SET_ALTERNATE,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_CONTROL_OUT,IO24_IOCTL_READ_PIPE,IO24_IOCTL_READ_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_WRITE_PIPE,IO24_IOCTL_ABORT_PIPE,IO24_IOCTL_RESET_PIPE,IO24_IOCTL_RELEASE};
@@ -1718,5 +1842,5 @@ static void test_vendor_sequence(const struct functions*f)
     n=IO24_LENGTH_SENTINEL;ok=f->overlapped&&f->overlapped(root,&ov,&n,TRUE);IO24_CHECK(ok);IO24_CHECK(n==IO24_OVERLAPPED_RESULT_LENGTH);ok=f->abort_pipe&&f->abort_pipe(root,0x81);IO24_CHECK(ok);ok=f->reset_pipe&&f->reset_pipe(root,0x81);IO24_CHECK(ok);ok=f->associated&&f->associated(root,0,&associated);IO24_CHECK(ok&&associated&&associated!=root);if(!associated){if(f->free_handle)f->free_handle(root);return;}
     ok=f->free_handle&&f->free_handle(associated);IO24_CHECK(ok);ok=f->free_handle&&f->free_handle(root);IO24_CHECK(ok);check_buffer_guards(&g);validate_vendor_fake_trace(&ov);
 }
-static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--control-descriptor")){test_task9_control_descriptor(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))test_alternate(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
+static void run_group(const char*m,const struct functions*f){if(!strcmp(m,"--vendor")){test_vendor_sequence(f);return;}if(!strcmp(m,"--control-descriptor")){test_task9_control_descriptor(f);return;}if(!strcmp(m,"--sync-pipes")){test_sync_pipes(f);return;}if(!strcmp(m,"--red")||!strcmp(m,"--initialize"))test_initialize(f);if(!strcmp(m,"--red")||!strcmp(m,"--handles"))test_handles(f);if(!strcmp(m,"--red")||!strcmp(m,"--alternate"))test_alternate(f);if(!strcmp(m,"--red")||!strcmp(m,"--descriptors"))test_descriptors(f);if(!strcmp(m,"--red")||!strcmp(m,"--policy"))test_policy(f);if(!strcmp(m,"--red")||!strcmp(m,"--transfer"))test_transfer(f);if(!strcmp(m,"--red")||!strcmp(m,"--cancel"))test_cancel(f);if(!strcmp(m,"--red"))test_vendor_sequence(f);}
 int main(int argc,char**argv){void*m;struct functions f;uint32_t target,missing;if(argc!=3)return 2;m=dlopen(!strcmp(argv[1],"self")?NULL:argv[1],RTLD_NOW|RTLD_LOCAL);if(!m){fprintf(stderr,"HARNESS: dlopen production module: %s\n",dlerror());return 2;}fake_reset();load_functions(m,&f);target=target_mask(argv[2]);missing=target&~f.present_mask;check_target_symbols(&f,target);run_group(argv[2],&f);dlclose(m);printf("CP33 public executed mode=%s target-mask=%#x present-mask=%#x missing-mask=%#x fake-events=%u submits=%u releases=%u completions=%u failures=%u\n",argv[2],target,f.present_mask,missing,fake.event_count,counts.submits,fake.release_ioctls,counts.completions,counts.failures);return counts.failures?1:0;}

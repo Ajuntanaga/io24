@@ -23,7 +23,44 @@
       ],
       "designer_selector": 9,
       "precision": "binary32 inputs, binary64 operations, binary32 outputs",
-      "source": "exact retained UC 4.7.2 dspusbdevice.dll"
+      "source": "source-bound retained UC 4.7.2 dspusbdevice.dll route",
+      "proof_limit": "Python math substitution is not an independent UC output capture"
+    },
+    "standard_lowshelf": {
+      "coefficient_format": [
+        "b0",
+        "-a1",
+        "b1",
+        "-a2",
+        "b2"
+      ],
+      "designer_selector": 8,
+      "precision": "binary32 inputs, binary64 operations, binary32 outputs",
+      "source": "source-bound retained UC 4.7.2 dspusbdevice.dll route",
+      "proof_limit": "Python math substitution is not an independent UC output capture"
+    },
+    "standard_peaking": {
+      "coefficient_format": [
+        "b0",
+        "-a1",
+        "b1",
+        "-a2",
+        "b2"
+      ],
+      "designer_selector": 6,
+      "precision": "binary32 inputs, binary64 operations, binary32 outputs",
+      "source": "source-bound retained UC 4.7.2 dspusbdevice.dll route",
+      "proof_limit": "Python math substitution is not an independent UC output capture"
+    },
+    "standard_native_eq_writer": {
+      "sample_rates_hz": [
+        44100,
+        48000,
+        88200,
+        96000
+      ],
+      "preservation": "all non-EQ native component bytes",
+      "status": "offline structurally complete"
     }
   },
   "dimensions": {

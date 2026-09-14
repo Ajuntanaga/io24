@@ -5077,9 +5077,11 @@ class Win(Adw.ApplicationWindow):
         for name, where, gain in view["rows"]:
             lines.append("  %s: %s" % (name, ", ".join(
                 part for part in (where, gain) if part)))
-        lines.append("Its switch frequencies are not decoded, so the curve "
-                     "cannot be drawn and the band controls are paused. Saving "
-                     "this channel keeps the EQ exactly as stored.")
+        lines.append("Its switch frequencies are decoded, but this running "
+                     "Host does not carry the exact alternate-EQ designers, so "
+                     "the curve cannot be drawn and the band controls are "
+                     "paused. Saving this channel keeps the EQ exactly as "
+                     "stored.")
         return "\n".join(lines)
 
     def _release_alternate_eq(self, ch):
@@ -6755,9 +6757,9 @@ class Win(Adw.ApplicationWindow):
         al = sw / (2 * b["q"])
         s = b["shape"]
         if s == "peaking":
-            a0 = 1 + al / A
-            return ((1 + al * A) / a0, -2 * cw / a0, (1 - al * A) / a0,
-                    -2 * cw / a0, (1 - al / A) / a0)
+            wire = io24.biquad_peaking(
+                b["freq"], b["gain"], fs, b["q"])
+            return (wire[0], wire[2], wire[4], -wire[1], -wire[3])
         if s == "highshelf":
             # Reorder the exact wire fields [b0,-a1,b1,-a2,b2] into the
             # conventional transfer-function tuple used by this graph.
@@ -6765,13 +6767,9 @@ class Win(Adw.ApplicationWindow):
                 b["freq"], b["gain"], fs, b["q"])
             return (wire[0], wire[2], wire[4], -wire[1], -wire[3])
         if s == "lowshelf":
-            be = math.sqrt(A) / b["q"] * sw
-            a0 = (A + 1) + (A - 1) * cw + be
-            return (A * ((A + 1) - (A - 1) * cw + be) / a0,
-                    2 * A * ((A - 1) - (A + 1) * cw) / a0,
-                    A * ((A + 1) - (A - 1) * cw - be) / a0,
-                    -2 * ((A - 1) + (A + 1) * cw) / a0,
-                    ((A + 1) + (A - 1) * cw - be) / a0)
+            wire = io24.biquad_lowshelf(
+                b["freq"], b["gain"], fs, b["q"])
+            return (wire[0], wire[2], wire[4], -wire[1], -wire[3])
         a0 = 1 + al
         if s == "hp":
             return ((1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0,

@@ -42,9 +42,11 @@ A channel's EQ comes in one of two forms and they are treated differently:
     lowmidfreq`, `himidgain/himidfreq`, `higain`, where the `*freq` values are
     small integers selecting switch positions, not Hz. UC 4.7.2's own
     `fatchannelxt.xml` gives their exact display frequencies. The direct device
-    coefficient builder for the Vintage model is still not recovered, so this
-    form is always SKIPPED. The former `--vintage-eq` Standard-biquad
-    approximation is disabled and cannot produce a direct-live call.
+    switch table and UC 4.7.2 coefficient designers are recovered in the
+    2026-09-14 native-slot-builder evidence. The executable transcription
+    still depends on the user's retained UC DLL and is not a self-contained
+    runtime Host dependency, so this direct-live path remains SKIPPED. The
+    former `--vintage-eq` Standard-biquad approximation stays disabled.
 
 **voicefx** is skipped only by this script's direct-live apply path. Its JSON is
 preserved in a complete slot object and is valid input to the pure
@@ -81,14 +83,22 @@ EQ_PASSIVE = "{C0730CBB-5135-4558-9222-C40BDBA036ED}"
 EQ_VINTAGE = "{E1C5E024-C5CD-473C-B08A-6EC177812E01}"
 
 # ---------------------------------------------------------------------------
-# UC 4.7.2 `fatchannelxt.xml` names these exact switch positions.  The values
-# are no longer a Neve-based guess.  What remains unresolved is the proprietary
-# Vintage coefficient builder: feeding these values to the Standard biquad
-# path is only an approximation, so it is never executable as a live call.
+# UC 4.7.2 names these exact switch positions, and its four proprietary band
+# designers are executable offline through `re/uc472_vintage_eq.py`. That
+# analysis requires the retained pinned DLL; feeding the labels to the Standard
+# biquad path remains an approximation and is never executable as a live call.
 VINTAGE_LOW_HZ = (35.0, 60.0, 110.0, 220.0)
 VINTAGE_LOWMID_HZ = (360.0, 700.0, 1600.0)
 VINTAGE_HIMID_HZ = (3200.0, 4800.0, 7200.0)
 VINTAGE_HIGH_HZ = 12000.0
+
+# UC's Passive Program enum order. Its first low-frequency label literally
+# reuses the string ``20kHz`` from the attenuation selector; the designer's
+# circuit branch and the EQP-1A control identify that position as 20 Hz.
+PASSIVE_LOW_HZ = (20.0, 30.0, 60.0, 100.0)
+PASSIVE_HIGH_BOOST_HZ = (3000.0, 4000.0, 5000.0, 8000.0,
+                         10000.0, 12000.0, 16000.0)
+PASSIVE_HIGH_ATTEN_HZ = (5000.0, 10000.0, 20000.0)
 
 
 def load(path):

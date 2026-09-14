@@ -2,7 +2,7 @@
 set -uo pipefail
 if (( $# < 1 || $# > 2 )); then echo 'usage: tests/winusb_function_io_contract.sh WINE_SOURCE_ROOT [MODE]' >&2; exit 2; fi
 readonly source_root=$1 mode=${2:---red}
-case "$mode" in --red|--lifecycle|--initialize|--session|--alternate|--policy|--transfer|--control-descriptor) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
+case "$mode" in --red|--lifecycle|--initialize|--session|--alternate|--policy|--transfer|--control-descriptor|--sync-pipes) ;; *) echo "usage: unsupported MODE: $mode" >&2; exit 2;; esac
 readonly test_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 sanitize_flags=()
 if [[ "$mode" == --initialize ]]; then

@@ -39,6 +39,23 @@ static LIST_ENTRY *busy_select_entry;
 static BOOL busy_select_insertion_armed;
 static unsigned int busy_select_insert_attempts;
 
+PVOID WINAPI ExAllocatePool(POOL_TYPE type, SIZE_T size)
+{
+    (void)type;
+    return calloc(1, size);
+}
+
+VOID WINAPI ExFreePool(PVOID pointer)
+{
+    free(pointer);
+}
+
+VOID WINAPI IoCompleteRequest(PIRP irp, UCHAR boost)
+{
+    (void)irp;
+    (void)boost;
+}
+
 /* Interpose only the actual included production calls.  Test-fixture list
  * setup below continues to use the retained WDM InsertTailList directly. */
 static void io24_InsertTailList(LIST_ENTRY *head, LIST_ENTRY *entry)
@@ -66,6 +83,8 @@ static NTSTATUS WINAPI lower_dispatch(unixlib_handle_t handle, unsigned int code
         lower_last_stack = IoGetCurrentIrpStackLocation(params->irp);
         lower_last_file = params->irp->Tail.Overlay.OriginalFileObject;
         lower_last_urb = *(URB *)lower_last_stack->Parameters.Others.Argument1;
+        if (lower_submit_status == STATUS_PENDING)
+            params->transfer = (void *)(uintptr_t)0x7000;
         return lower_submit_status;
     }
     return STATUS_SUCCESS;
@@ -546,8 +565,12 @@ enum pending_scope_kind
  * scope for this lower-dispatch contract. */
 static void remove_pending_test_irp(IRP *irp)
 {
+    struct wineusb_transfer *transfer = irp->Tail.Overlay.DriverContext[0];
+
     if (irp->Tail.Overlay.ListEntry.Flink && irp->Tail.Overlay.ListEntry.Blink)
         RemoveEntryList(&irp->Tail.Overlay.ListEntry);
+    irp->Tail.Overlay.DriverContext[0] = NULL;
+    if (transfer) ExFreePool(transfer);
 }
 
 static void setup_select_interface_request(IRP *request, IO_STACK_LOCATION *stack,
@@ -866,7 +889,7 @@ static void check_control_routed(const char *name, struct usb_device *device,
     CHECK(!IsListEmpty(&device->irp_list) && request->IoStatus.Status == STATUS_PENDING,
             "%s did not retain pending IRP invariants", name);
     if (status == STATUS_PENDING && !IsListEmpty(&device->irp_list))
-        RemoveEntryList(&request->Tail.Overlay.ListEntry);
+        remove_pending_test_irp(request);
 }
 
 static void check_control_rejected(const char *name, struct usb_device *device,
@@ -961,7 +984,7 @@ static void test_control_descriptor_translation(void)
             lower_last_urb.UrbControlDescriptorRequest.Index == 2 &&
             lower_last_urb.UrbControlDescriptorRequest.LanguageId == 0x0409,
             "descriptor changed selector/output shape");
-    RemoveEntryList(&request.Tail.Overlay.ListEntry);
+    remove_pending_test_irp(&request);
 
     /* Generic control accepts standard/class/vendor and all relevant recipient
      * encodings without rewriting setup bytes or direction flags. */

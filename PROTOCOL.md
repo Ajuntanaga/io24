@@ -2,10 +2,157 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
-## 2026-09-14 controlling live result: block 201 is inert with the gate open and the path open
+## 2026-09-14 controlling correction: replay VoFx, not model state
 
-12S reproduces on a cold-booted unit, and this time with the two explanations
-that could have excused it both eliminated by measurement in the same session.
+The block-201 primary handler at firmware offset `0x553d4` routes the `VoFx`
+selector tag to `0x55388`. Non-selector model-state tags instead tail-call
+generic handler `0x5079c`, which forwards directly to the currently installed
+delegate. Consequently, a model-state frame cannot trigger the selector's
+deferred replacement logic.
+
+The exact replacement sequence is:
+
+```text
+send VoFx selector
+wait 60 ms for the nominal 40 ms bypass transition
+replay the same VoFx selector to install the requested model
+send the model's state frames
+```
+
+The authorized Ring-Mod run used the now-superseded selector -> wait -> state ->
+wait -> state-replay order. Its valid gate control moved `-19.278 dB`; Ring Mod
+moved only `-0.099 dB` against a `2.814 dB` threshold. That resolves the old
+sequence as ineffective, not the corrected selector-replay sequence or Ring Mod
+itself. `Io24.send_fx` now implements the source-bound order, hardware-free
+verified by 871 passing tests with one expected skip. Fresh exact authorization
+is required for another live operation.
+
+## 2026-09-14 superseded test design: zero-output Ring Mod is decisive
+
+Model 3 is source-bound through installer call `0x5f1cc`, constructor
+`0x58920`, tagged handler `0x58db0`, and process `0x4ff6c`. The `botb` handler
+stores on, output volume, and mix at model offsets `+0x14`, `+0x20`, and
+`+0x2c`. The process derives:
+
+```text
+dry gain = volume * (1 - mix)
+wet gain = 2 * volume * mix
+output = wet signal * wet gain + input * dry gain
+```
+
+When the model is off, the process uses dry gain 1 and wet gain 0. Therefore a
+fully-wet active call with `vol=0, mix=1` must produce dry gain 0 and wet gain
+0. This is materially stronger than the underpowered Delay energy test: a
+stable flat result with a valid same-session gate control was designed to
+resolve the Host sequence used by that run. Static follow-up later proved the
+sequence needed selector replay rather than state replay.
+
+The guarded implementation is `re/io24_corrected_ringmod_probe.py`; the pinned
+static analyzer is `re/cp34_ringmod_discriminator_static.py`. Both were offline
+verified, including restoration-on-failure. The later live execution is
+classified by the controlling correction above.
+
+## 2026-09-14 controlling static result: Delay state and lanes are fully bound
+
+The model-5 continuation closes the static question raised by the live scalar
+result. Lazy installer `0x5f130` dispatches model 5 to constructor `0x56f34`.
+Its primary vtable is `0x6012c7e8`; vtable `+0x00` reaches tagged handler
+`0x57240`, and `+0x0c` reaches process routine `0x4ebd4`.
+
+For a non-`VoFx` block-201 message, generic handler `0x5079c` loads
+`block+0x14` and tail-calls the delegate's vtable `+0x00`. Model 5 accepts tag
+`vech` and copies on, mix, feedback, and time to `model+0x10..+0x1c`. Its
+process reads those exact fields.
+
+The audio root's descriptor gives the model one input, two outputs, frame count,
+workspace at `device+0x11d0`, and zero at both descriptor flags `+0x18/+0x1c`.
+Input and output tables both point at `device+0x5068`, so processing is in
+place. The model's on path implements:
+
+```text
+delay_write = input + feedback * delayed
+output = mix * delayed + (1 - mix) * input
+```
+
+This eliminates missing model-5 construction, state application, process
+dispatch, or lane binding. It also proves why the live scalar test was
+underpowered: feedback coefficient 0.5 at fully wet predicts only +1.249 dB for
+stationary white noise. The next objective discriminator must use a temporal
+signature or a model such as Ring Mod whose predicted scalar change exceeds
+the detector threshold.
+
+## 2026-09-14 superseded live correction: first paced Delay test was inconclusive
+
+The first paced state-replay sequence was tested live on serial
+`AB7C22200355`, firmware `0128`, with the Channel-1 path open. The controlling
+correction above proves it did not trigger rebuild. Fully wet Delay
+at feedback 1.0 moved the Main/Input-1 ratio by only **-0.148 dB** against a
+**1.990 dB** threshold; off-state drift was **-0.040 dB**. The same-session
+direct-gate positive control moved **-18.313 dB** against a **12.014 dB**
+threshold with **-0.049 dB** drift. The meter was sensitive to a gross gate
+change, but that does not make the Delay level test sensitive enough.
+
+The old +6 dB expectation was wrong for this stimulus. The API's feedback 1.0
+is coefficient 0.5 on the wire; for uncorrelated stationary noise, the model's
+recurrence predicts only **+1.249 dB**, below the run's **1.990 dB** detection
+threshold. Therefore this run proves only that corrected Delay produced no
+resolved scalar-level change. It does **not** prove Delay remained inert and
+does not accept or reject Host pacing as the missing audibility mechanism.
+
+Readable flags, slots, gains, Main, headphones, link, phantom, and processing
+permutation restored exactly. Host-known Transformer-off and `MAIN` gate state
+were resent; routes, slots, DSP Amount, and `processingChannel` were untouched.
+Evidence:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T113431-0700-corrected-fx-rebuild-live/`.
+
+## 2026-09-14 controlling correction: block 201 is scheduled through model 0
+
+Constructor `0x591bc` does initially store zero at `block+0x14`, but it then
+selects model 0. Selector `0x55388` sets `block+0x44=1`, sees the null delegate,
+and calls primary vtable `+0x34`, `0x5f1f4`. Lazy installer `0x5f130` constructs
+the model-0 object at `block+0x60`, stores it at `block+0x14` at `0x5f170`, and
+clears `block+0x44` at `0x5f184`.
+
+The block audio routine corrects the first continuation's “rebuild-only” label.
+`+0x44` is target bypass (`0=process`, `1=bypass`), `+0x39` is latched bypass,
+and `+0x40` is the crossfade countdown. Selection requests bypass before model
+replacement; installation clears bypass afterward. Handler `0x50af8` first
+forwards messages to delegate `vtable+0x10`, then uses the three fields to defer
+rebuild work until the old model is safely bypassed. They are audio transition
+state, not an absent install gate.
+
+The function previously named the chain installer, `0x3e608`, is a workspace
+sizer. Caller `0x3f13a` supplies three object pointers, but `0x3e608` only calls
+each object's `vtable+0x18`, takes the maximum returned requirement, and
+allocates/resizes `device+0x11d0`. It does not retain those pointers or prove
+that block 201 is in the audible processing graph.
+
+The actual graph edge is source-bound elsewhere. Block 201 primary
+`vtable+0x0c` maps to reset-relocated raw routine `0x1a580`; it loads
+`block+0x14` and invokes selected-model `vtable+0x0c`. Model 0 maps to the known
+DSP process at raw `0x1e1a8`. Audio root raw `0x20546..0x2054e` builds the
+buffer descriptor at `stack+0x40`, forms `device+0x11e0`, and directly calls
+the block routine. Its call condition is sample rate at or below 96 kHz
+(`device+0x5e71`) with stereo-link bit 12 clear. The cold-boot run's declared
+96 kHz/unlinked state lies on that branch.
+
+The cold-boot negative remains valid for its transmitted sequence. Setup
+computes a nominal 40 ms bypass fade; at 96 kHz / 512 this is eight blocks,
+42.667 ms. The first correction extended the former 20 ms gap but mistakenly
+used a model-state frame to trigger rebuild. Primary handler `0x553d4` proves
+those tags bypass the selector and go to the old delegate.
+
+`Io24.send_fx` now sends selector, waits 60 ms, replays selector to invoke the
+rebuild, then sends model state. This sequence is hardware-free verified but
+not live-executed; neither the underpowered Delay run nor the later decisive
+Ring-Mod null tested it.
+Evidence:
+`.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T105415-0700-block201-delegate-lifecycle/`.
+
+## 2026-09-14 controlling live result: block 201 is inert with the channel path open
+
+12S reproduces on a cold-booted unit with an open Channel-1 path and a decisive
+same-session positive control.
 
 Setup: physical cold boot (`devnum` 2 -> 4), Host closed, Voice FX owner read
 from the device (Channel 1), Main-to-Input-1 ratio, 40-sample windows.
@@ -22,10 +169,13 @@ Channel-1 processing.
 | filters, fully wet | -0.129 dB | 2.15 dB |
 | ringmod 220 Hz, fully wet | -0.051 dB | 2.18 dB |
 
-So the gate conditions are satisfied at construction, the channel reaches Main,
-three fully wet models are armed, and nothing happens. **13a is what is left:
-the insert-FX slot is a chain member that must be installed.** Block 201 is
-present, addressable, accepts writes, and is not in the audio chain.
+The channel reaches Main, three fully wet models are armed, and nothing happens.
+The later controlling correction above proves the selected-model delegate is
+constructed, the audio root calls block 201 with buffers, and the block calls
+the model process. It also withdraws the old §13a “chain installer” label. The
+corrected deferred-rebuild check is now closed negatively above. The remaining
+question is downstream per-model process/lane state, not an assumed missing
+outer flag, scheduler, install call, or Host wait.
 
 **Separately: selection does not re-apply a stored preset.** After forcing the
 power-on gate, selecting slot 0 left the ratio at -0.294 dB; a real re-apply of
@@ -39,12 +189,12 @@ holds `MAIN` in slot 0 and applies it at boot.
 
 Evidence: `.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T102740-0700-cold-boot-block201/`.
 
-## 2026-09-14 controlling firmware correction: block 201's gate is satisfied at construction
+## 2026-09-14 superseded firmware reading: selector sets +0x44 during construction
 
-13c's three gate conditions are reconfirmed byte-exact, and so is the 2026-08-31
-finding that the native `Stat` loader supplies all three. What is new is that
-the **block-201 constructor supplies them too**, so the gate is open from device
-boot and a shut gate cannot be the explanation for silent block-201 writes.
+The byte sequence below is correct but the former end-state interpretation was
+not. The controlling correction above follows selector `0x55388` through its
+work virtual: lazy installer `0x5f130` constructs the delegate and clears
+`+0x44` before the constructor returns.
 
 Constructor `0x591bc`:
 
@@ -61,11 +211,11 @@ Selector `0x55388` rejects only a negative model or one >= 6; its `bne 0x553cc`
 branch calls a delegate and returns to the same check, so it is not an exit.
 `r5` is callee-saved across the intervening `bl 0x10d7e0`.
 
-Read the 2026-08-31 note as "the `Stat` load **also** supplies the three
-conditions", not "uniquely supplies". Why direct block-201 writes were
-inaudible in 12S and in the 2026-09-14 live runs is therefore open again, with
-13a's point -- that the FX slot is a chain member which must be *installed* --
-now the stronger candidate.
+Do not read `+0x44` as an ordinary positive enable. The controlling trace above
+shows it is target bypass: selection sets it so replacement waits for a safe
+dry state, and installation clears it to request processing. The §13a
+installation interpretation is separately superseded by the `0x3e608`
+workspace trace above.
 
 Scope: the construction path only. No claim is made that nothing later changes
 those fields; a whole-image displacement scan cannot be attributed to this
@@ -4519,7 +4669,13 @@ it is called settled. The USB return cannot feed the FX send (§12M: `return/chN
 has no `FXA` field), so it needs a real input signal — a cable from an output
 back to an input, or an instrument.
 
-## 13a. Block 201 is a signal-chain MEMBER, not a standalone processor (2026-08-03)
+## 13a. SUPERSEDED — the three-object call sizes workspace; it does not install a chain (2026-08-03)
+
+The disassembly below correctly identifies the three temporary object pointers,
+but the “chain installer” interpretation is withdrawn by the 2026-09-14
+controlling correction at the top of this document. Callee `0x6005e608` queries
+each object's `vtable+0x18`, takes the maximum workspace requirement, and sizes
+`device+0x11d0`; it does not retain or link these pointers.
 
 A different line of attack on block 201, made possible by capstone (§12Z): stop
 probing the wire and read what the firmware does with the object.
@@ -4551,7 +4707,8 @@ without contradiction: **the coefficients land in an object that is not currentl
 in the signal path.** Parameters written to a block that is not installed would
 be stored faithfully and do nothing — exactly what was measured.
 
-The chain installer `0x6005e608` has only two callers: this one, and 0x3e768,
+The function then labeled the chain installer, `0x6005e608`, has two callers:
+this one, and 0x3e768,
 which assembles a different set of objects (`dev+0x5048`, `dev+0x6a20`) and is
 therefore a different chain.
 
@@ -4569,9 +4726,10 @@ chain at 0x3f13a to be built with the FX slot in it"**. Concretely:
    state rather than accepting it, which would explain why writing it did nothing
    (§12Z/§13)
 
-All three are offline, and none needs the device. This is a better line than any
-remaining wire experiment, because it works from the firmware's own working path
-rather than inferring from silence.
+This historical next-step list is superseded. The controlling trace at the top
+source-binds the real audio-root call, buffer handoff, and too-short Host
+replacement sequence. The remaining target is live validation of the corrected
+sequence, not `0x6005e608`.
 
 ## 13b. CORRECTION to §12W — the FourCC scan mixed wire tags with internal ones
 
@@ -5381,7 +5539,12 @@ patterns matching at unaligned offsets. Pointer-reference searches must require
 4-byte alignment and a non-code location. Same family of error as §13b/§13c: a
 scan that cannot see structure attributes things to the wrong owner.
 
-## 13m. Settled — the gate opens during chain construction, on heap nodes the block resolver cannot address (2026-08-05)
+## 13m. PARTLY SUPERSEDED — heap-node construction is real; its block-201 gate interpretation is not (2026-08-05)
+
+The heap-node construction trace below is retained. Its interpretation as the
+block-201 audio-enable path is withdrawn: the controlling typed lifecycle shows
+`block+0x44` is target bypass used to stage safe model replacement, and the
+actual audio-root call and buffer handoff are source-bound elsewhere.
 
 §13l reopened §13d by showing two ancestors of the flag-A setter are
 pointer-referenced (`fw 0x48a7c` in vtable fw 0x10bba4 slot +0x18, and

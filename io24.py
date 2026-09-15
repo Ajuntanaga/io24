@@ -59,6 +59,14 @@ PARI = 0x50617269   # int write   (SetP only)
 STATE_BLOB_SIZE = 0x7EC
 DATA_START = 0x1C          # payload offset where the float array begins
 
+# Block 201 crossfades to bypass for a nominal 40 ms before replacing its
+# selected model.  Leave scheduling margin around that firmware transition;
+# replaying the selector after the fade triggers the deferred rebuild before
+# any model-state frame is sent (see ``send_fx``).
+FX_MODEL_REBUILD_SETTLE_S = 0.06
+FX_FRAME_INTERVAL_S = 0.02
+_VOFX_TAG = 0x566F4678
+
 
 def fourcc(s):
     """C constant 'A'<<24|'B'<<16|'C'<<8|'D' — reverse the ASCII, read LE.
@@ -2237,29 +2245,52 @@ class Io24:
         return len(live), applied
 
     # ------------------------------------------------------------- insert FX
-    # Block 201 is a singleton (blockIndex ignored). Direct model writes do not
-    # establish its internal processing gate, and the latest framing trace
-    # proves tagged device-slot recall does not establish it either. Voice FX
-    # is distinct from shared reverb block 202. Transformer/Doubler uses its own
-    # private reverb-core instance over two structural audio lanes.
+    # Block 201 is a singleton (blockIndex ignored). Its audio-root call,
+    # selected-model delegate, and buffers are source-bound. Model replacement
+    # is deferred until a roughly 40 ms fade to bypass completes, so the send
+    # sequence below must replay the selector after bypass, then send state.
+    # Voice FX is distinct from shared reverb block 202. Transformer/Doubler
+    # uses its own private reverb-core instance over two structural audio lanes.
 
     FX_MODELS = {"transformer": 0, "detuner": 1, "vocoder": 2,
                  "ringmod": 3, "filters": 4, "delay": 5}
 
-    def send_fx(self, payloads):
+    def send_fx(self, payloads, *, sleep_fn=time.sleep):
         """Send a list from io24_fx's set_fx_* helpers.
 
         Those helpers return payloads that ALREADY carry the 8-byte paesdk
         header, while _exec() prepends its own — so the header has to come off
         here. Passing one straight to _exec double-headers it, and the device
         answers normally while doing nothing at all.
+
+        A ``VoFx`` selector does not replace an active model immediately.  It
+        requests a roughly 40 ms fade to bypass.  Ordinary model-state tags go
+        directly to the selected delegate and never revisit the selector's
+        rebuild check.  Replay ``VoFx`` after the fade so the selector installs
+        the requested model synchronously, then send each model-state frame to
+        the new delegate.
         """
         if isinstance(payloads, (bytes, bytearray)):
             payloads = [payloads]
-        for p in payloads:
-            self._exec(bytes(p)[8:])
-            time.sleep(0.02)          # block 201 is a singleton; do not pipeline
-        return len(payloads)
+        frames = [bytes(payload) for payload in payloads]
+        bodies = [frame[8:] for frame in frames]
+        model_sequence = (
+            len(frames) >= 2 and len(frames[0]) >= 24 and
+            struct.unpack_from("<I", frames[0], 8)[0] == SETP and
+            struct.unpack_from("<I", frames[0], 12)[0] == 201 and
+            struct.unpack_from("<I", frames[0], 20)[0] == _VOFX_TAG)
+
+        start = 0
+        if model_sequence:
+            self._exec(bodies[0])
+            sleep_fn(FX_MODEL_REBUILD_SETTLE_S)
+            self._exec(bodies[0])
+            start = 1
+
+        for body in bodies[start:]:
+            self._exec(body)
+            sleep_fn(FX_FRAME_INTERVAL_S)
+        return len(frames)
 
     def set_fx(self, model, **kw):
         """Arm an insert-FX model by name: transformer/detuner/vocoder/
@@ -2770,9 +2801,8 @@ _SHADOWED = ("set_fx_mix", "set_highpass", "set_mute", "set_hp_mute",
              # domain.  Preset enable is deliberately absent: it delegates to
              # set_fx_mix and is the same processing scalar, not a selector.
              "set_preset_mode", "set_preset_slot",
-             # The insert-FX model. Block 201 is unreachable (§13m), so this
-             # writes nothing audible today; it is recorded so a preset saved now
-             # still describes what was asked for.
+             # The insert-FX model. Its write-only state is recorded so a
+             # preset saved now still describes what was asked for.
              "set_fx")
 
 

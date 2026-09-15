@@ -1,0 +1,736 @@
+{
+  "audio_execution": {
+    "block201_process_raw_offset": "0x1a580",
+    "block201_process_virtual_slot": "vtable+0x0c",
+    "block201_process_vtable_pointer": "0x19869",
+    "block_process_reaches_model0_process": true,
+    "bypass_state": {
+      "bypass_value": 1,
+      "latched": "block+0x39",
+      "processing_value": 0,
+      "target": "block+0x44",
+      "transition_countdown": "block+0x40"
+    },
+    "model0_process_raw_offset": "0x1e1a8",
+    "model0_process_vtable_pointer": "0x1d491",
+    "selected_model_process_virtual_slot": "vtable+0x0c"
+  },
+  "audio_root_binding": {
+    "block201_object": "device+0x11e0",
+    "buffer_descriptor": "stack+0x40",
+    "call_gate": {
+      "call_condition": "sample-rate eligible and stereo link clear",
+      "sample_rate_eligibility_field": "device+0x5e71",
+      "sample_rate_limit_bits": "0x47bb8000",
+      "sample_rate_rule_hz": "sample_rate <= 96000",
+      "sample_rate_source_field": "device+0x5dc0",
+      "stereo_link_field": "device+0x5e58 bit 12"
+    },
+    "call_source_raw_offset": "0x20546",
+    "direct_call_raw_offset": "0x2054e",
+    "direct_call_runtime_target": "0x19868",
+    "scheduler_and_buffer_handoff_source_bound": true
+  },
+  "calls": {
+    "constructor_calls_selector": {
+      "offset": "0x59248",
+      "target_offset": "0x55388"
+    },
+    "installer_calls_model5_constructor": {
+      "offset": "0x5f1dc",
+      "target_offset": "0x56f34"
+    },
+    "model_zero_constructor": {
+      "offset": "0x5f18c",
+      "target_offset": "0x5e270"
+    },
+    "three_member_array_calls_workspace_sizer": {
+      "offset": "0x3f13a",
+      "target_offset": "0x3e608"
+    },
+    "work_calls_lazy_installer": {
+      "offset": "0x5f1fa",
+      "target_offset": "0x5f130"
+    }
+  },
+  "code_slices": {
+    "audio_root_buffer_descriptor": {
+      "offset": "0x1f39e",
+      "sha256": "8269b30b2f0c961089fcaa42193098c17acba94ee57206d7d3dfb770e12a65b3",
+      "size": 54
+    },
+    "audio_root_call_gate": {
+      "offset": "0x1f39e",
+      "sha256": "74d256729067c65bd32daedcf03e14545d85a19545fdc3adadac6978f1acb8b5",
+      "size": 56
+    },
+    "audio_root_itcm_call": {
+      "offset": "0x20546",
+      "sha256": "66eb5517fdf9f3e5570009007d161ab070ad4499fc6d002eda97e5bd2e46ffb2",
+      "size": 16
+    },
+    "block201_constructor": {
+      "offset": "0x591bc",
+      "sha256": "d65cd9f8c37ab71204970a70eb842e96e12cd5648d81dc337389ae1a15ae8b60",
+      "size": 148
+    },
+    "block201_itcm_process": {
+      "offset": "0x1a580",
+      "sha256": "e53f8dc0d86058f2ed17576b374ad610f344fb6606e94d7c002c45a9d4db8f35",
+      "size": 632
+    },
+    "block201_primary_handler": {
+      "offset": "0x553d4",
+      "sha256": "99fab8507b4eb5192b14224b6ba62f0ac495f481c9660ad5637dd3f326c01c58",
+      "size": 136
+    },
+    "block201_primary_vtable": {
+      "offset": "0x10c6bc",
+      "sha256": "c5dd80f8b6eeeb7be825e8d94a9a832a95ccaf90a677a47bd2e21c751eb6b107",
+      "size": 60
+    },
+    "block_setu_construction": {
+      "offset": "0x3dbec",
+      "sha256": "16d2a710c9e22339f219fc2aad33dd2ea73b19c18b168240e0f5973e00bfb0a9",
+      "size": 52
+    },
+    "block_transition_configuration": {
+      "offset": "0x4d6a8",
+      "sha256": "3fb5b313e87cecba8446c0444fe1ee835a279c629dfc26c586ae795cfc1b48ae",
+      "size": 88
+    },
+    "generic_delegate_handler": {
+      "offset": "0x5079c",
+      "sha256": "71c782713c33c8bdfc935564c47ea381cd0739cfe4b001eb8a8103c437031d53",
+      "size": 36
+    },
+    "lazy_delegate_installer": {
+      "offset": "0x5f130",
+      "sha256": "37e1c3d9e4fe583055873bc1065783a344a667ee43e39fc6868c7650472d395a",
+      "size": 186
+    },
+    "model0_primary_vtable": {
+      "offset": "0x10c890",
+      "sha256": "631d77d1dd8d7d97941fa5ff72963eca1a17b8db8423269c55f7a35a1fec556f",
+      "size": 64
+    },
+    "model5_constructor": {
+      "offset": "0x56f34",
+      "sha256": "b40e9f3c4888679c0698e854e5dce0fd8c0481ccb1311e3b45295999c85a1fd6",
+      "size": 68
+    },
+    "model5_constructor_dispatch": {
+      "offset": "0x5f1d2",
+      "sha256": "8b5622aea93be40b350c9df9ff7ab3f6d2bb883d87bfa3201454ab79f873a40e",
+      "size": 24
+    },
+    "model5_primary_vtable": {
+      "offset": "0x10c7e8",
+      "sha256": "1a5200b12ce4061daf15970618e443b3f990d731964bc5011968c83981c8fd16",
+      "size": 52
+    },
+    "model5_process": {
+      "offset": "0x4ebd4",
+      "sha256": "d57ce9f225d075e145eceb6fdbe96faff76cdd230aba7605724b2cdeb5601f23",
+      "size": 298
+    },
+    "model5_tagged_handler": {
+      "offset": "0x57240",
+      "sha256": "8e395ac9011518921d91d31090acf164ed94069883dce8ba1cf9c7ac633ea260",
+      "size": 52
+    },
+    "model_selector": {
+      "offset": "0x55388",
+      "sha256": "8f1ecb6e2ed75578c94d1d1fe641c3fd2ca39186a404bf7ce35546dcfdcaa96a",
+      "size": 72
+    },
+    "parameter_handler": {
+      "offset": "0x50af8",
+      "sha256": "c2ca241ae540c492e57b6aca68c64f28e417b5a2ebde78eefe9eb5aa1e84c48e",
+      "size": 44
+    },
+    "sample_rate_eligibility_gate": {
+      "offset": "0x3dc20",
+      "sha256": "fc21ea1d995f6473547276b6585dfef41cd7118e59cfddfcb5b809d4afe8c692",
+      "size": 32
+    },
+    "stereo_link_capture": {
+      "offset": "0x3f8f0",
+      "sha256": "b69602a02398ea96118eb1fe25f1d346e0306e0979418054d03e1a6b0ad25153",
+      "size": 36
+    },
+    "three_member_workspace_call": {
+      "offset": "0x3f110",
+      "sha256": "cb7cca1b4c15fe3c25b0c99310dc10428df99c1ae80af02afc7d37c62842ac02",
+      "size": 46
+    },
+    "work_virtual": {
+      "offset": "0x5f1f4",
+      "sha256": "fe312f957ef1181e5fca7fb1653e7f144ab3b09c3610e83d150ea6e92f1c5ad2",
+      "size": 88
+    },
+    "workspace_sizer_core": {
+      "offset": "0x3e608",
+      "sha256": "65ea67d780ed531f092742c96f01dc35b25d0ca28b3221adf178b1ab6c43274f",
+      "size": 162
+    }
+  },
+  "conclusion": {
+    "delegate_null_explains_live_inertness": false,
+    "required_host_sequence": "selector -> wait for bypass -> selector replay -> model state",
+    "selector_state_replay_sequence_falsified": true,
+    "signal_path_execution_proven": true
+  },
+  "delegate_lifecycle": {
+    "constructor_path_installs_delegate": true,
+    "delegate_object_offset": "block+0x60",
+    "delegate_pointer_field": "block+0x14",
+    "initial_model": 0,
+    "installer_requests_processing": "block+0x44=0",
+    "manager_field": "block+0x10",
+    "manager_object_offset": "block+0x50",
+    "path": [
+      "0x591bc constructor",
+      "0x59248 -> 0x55388 select model 0",
+      "null block+0x14 -> primary vtable+0x34",
+      "0x5f1f4 -> 0x5f130 lazy installer",
+      "0x5f18c -> 0x5e270 model-0 constructor",
+      "0x5f170 stores block+0x60 at block+0x14",
+      "0x5f184 clears block+0x44"
+    ],
+    "plus_0x44_semantics": "target bypass state; 0 processes, 1 bypasses",
+    "selector_requests_bypass": "block+0x44=1"
+  },
+  "firmware": {
+    "load_base": "0x60020000",
+    "sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "size": 1104448
+  },
+  "instructions": {
+    "audio_root_masks_stereo_link": {
+      "mnemonic": "and",
+      "offset": "0x3f902",
+      "operands": "lr, lr, #0x1000"
+    },
+    "audio_root_reads_flags": {
+      "mnemonic": "ldr.w",
+      "offset": "0x3f8fa",
+      "operands": "lr, [r0, lr]"
+    },
+    "audio_root_stores_stereo_link": {
+      "mnemonic": "str.w",
+      "offset": "0x3f90e",
+      "operands": "lr, [sp, #0x28]"
+    },
+    "constructor_embedded_manager": {
+      "mnemonic": "add.w",
+      "offset": "0x591be",
+      "operands": "r1, r0, #0x50"
+    },
+    "constructor_manager_field": {
+      "mnemonic": "str",
+      "offset": "0x591d4",
+      "operands": "r1, [r4, #0x10]"
+    },
+    "constructor_model_zero": {
+      "mnemonic": "mov",
+      "offset": "0x59240",
+      "operands": "r1, r5"
+    },
+    "constructor_null_delegate": {
+      "mnemonic": "str",
+      "offset": "0x59200",
+      "operands": "r5, [r4, #0x14]"
+    },
+    "generic_calls_tagged_handler": {
+      "mnemonic": "bx",
+      "offset": "0x507bc",
+      "operands": "r3"
+    },
+    "generic_loads_delegate": {
+      "mnemonic": "ldr",
+      "offset": "0x507ae",
+      "operands": "r0, [r5, #0x14]"
+    },
+    "generic_loads_tagged_handler": {
+      "mnemonic": "ldr",
+      "offset": "0x507b6",
+      "operands": "r3, [r3]"
+    },
+    "handler_calls_delegate": {
+      "mnemonic": "blx",
+      "offset": "0x50b04",
+      "operands": "r3"
+    },
+    "handler_delegate_slot": {
+      "mnemonic": "ldr",
+      "offset": "0x50b02",
+      "operands": "r3, [r3, #0x10]"
+    },
+    "handler_reads_delegate": {
+      "mnemonic": "ldr",
+      "offset": "0x50afc",
+      "operands": "r0, [r0, #0x14]"
+    },
+    "handler_then_checks_rebuild": {
+      "mnemonic": "ldrb.w",
+      "offset": "0x50b06",
+      "operands": "r3, [r4, #0x44]"
+    },
+    "installer_embedded_model": {
+      "mnemonic": "add.w",
+      "offset": "0x5f158",
+      "operands": "r6, r5, #0x10"
+    },
+    "installer_reads_delegate": {
+      "mnemonic": "ldr",
+      "offset": "0x5f134",
+      "operands": "r0, [r0, #0x14]"
+    },
+    "installer_reads_manager": {
+      "mnemonic": "ldr",
+      "offset": "0x5f136",
+      "operands": "r5, [r4, #0x10]"
+    },
+    "installer_requests_processing": {
+      "mnemonic": "strb.w",
+      "offset": "0x5f184",
+      "operands": "r3, [r4, #0x44]"
+    },
+    "installer_stores_delegate": {
+      "mnemonic": "str",
+      "offset": "0x5f170",
+      "operands": "r6, [r4, #0x14]"
+    },
+    "literal_pool_alignment": {
+      "mnemonic": "nop",
+      "offset": "0x5f24a",
+      "operands": ""
+    },
+    "model5_constructor_vtable_store": {
+      "mnemonic": "str",
+      "offset": "0x56f5e",
+      "operands": "r2, [r0]"
+    },
+    "model5_dispatch_compare": {
+      "mnemonic": "cmp",
+      "offset": "0x5f1d6",
+      "operands": "r1, #1"
+    },
+    "model5_handler_reads_on": {
+      "mnemonic": "ldr",
+      "offset": "0x5725c",
+      "operands": "r5, [r3, #0xc]!"
+    },
+    "model5_handler_stores_feedback": {
+      "mnemonic": "str",
+      "offset": "0x5726a",
+      "operands": "r1, [r0, #0x18]"
+    },
+    "model5_handler_stores_mix": {
+      "mnemonic": "str",
+      "offset": "0x57268",
+      "operands": "r4, [r0, #0x14]"
+    },
+    "model5_handler_stores_on": {
+      "mnemonic": "str",
+      "offset": "0x57266",
+      "operands": "r5, [r0, #0x10]"
+    },
+    "model5_handler_stores_time": {
+      "mnemonic": "str",
+      "offset": "0x5726c",
+      "operands": "r3, [r0, #0x1c]"
+    },
+    "model5_process_dry_gain": {
+      "mnemonic": "vfma.f32",
+      "offset": "0x4eca8",
+      "operands": "s15, s14, s12"
+    },
+    "model5_process_feedback_accumulate": {
+      "mnemonic": "vfma.f32",
+      "offset": "0x4ec6c",
+      "operands": "s15, s13, s14"
+    },
+    "model5_process_reads_descriptor_flag": {
+      "mnemonic": "ldr",
+      "offset": "0x4ebd8",
+      "operands": "r3, [r1, #0x18]"
+    },
+    "model5_process_reads_feedback": {
+      "mnemonic": "vldr",
+      "offset": "0x4ec62",
+      "operands": "s13, [r0, #0x18]"
+    },
+    "model5_process_reads_mix": {
+      "mnemonic": "vldr",
+      "offset": "0x4ec02",
+      "operands": "s11, [r0, #0x14]"
+    },
+    "model5_process_reads_on": {
+      "mnemonic": "ldr",
+      "offset": "0x4ebe6",
+      "operands": "r5, [r0, #0x10]"
+    },
+    "model5_process_wet_gain": {
+      "mnemonic": "vmul.f32",
+      "offset": "0x4ec92",
+      "operands": "s15, s11, s14"
+    },
+    "primary_compares_vofx": {
+      "mnemonic": "cmp",
+      "offset": "0x553f2",
+      "operands": "r2, r5"
+    },
+    "primary_nonselector_branch": {
+      "mnemonic": "bne",
+      "offset": "0x553f4",
+      "operands": "#0x6007541c"
+    },
+    "primary_nonselector_to_generic": {
+      "mnemonic": "b.w",
+      "offset": "0x5541e",
+      "operands": "#0x6007079c"
+    },
+    "primary_reads_tag": {
+      "mnemonic": "ldr",
+      "offset": "0x553d6",
+      "operands": "r2, [r1]"
+    },
+    "primary_ringmod_model_id": {
+      "mnemonic": "movs",
+      "offset": "0x55432",
+      "operands": "r1, #3"
+    },
+    "primary_ringmod_to_selector": {
+      "mnemonic": "b.w",
+      "offset": "0x55436",
+      "operands": "#0x60075388"
+    },
+    "sample_rate_gate_false": {
+      "mnemonic": "movs",
+      "offset": "0x3dc3a",
+      "operands": "r1, #0"
+    },
+    "sample_rate_gate_field": {
+      "mnemonic": "movw",
+      "offset": "0x3dc26",
+      "operands": "r2, #0x5e71"
+    },
+    "sample_rate_gate_store": {
+      "mnemonic": "strb",
+      "offset": "0x3dc3c",
+      "operands": "r1, [r5, r2]"
+    },
+    "sample_rate_gate_true": {
+      "mnemonic": "movs",
+      "offset": "0x3dc38",
+      "operands": "r1, #1"
+    },
+    "selector_calls_work": {
+      "mnemonic": "blx",
+      "offset": "0x553be",
+      "operands": "r3"
+    },
+    "selector_null_to_work": {
+      "mnemonic": "cbz",
+      "offset": "0x553ac",
+      "operands": "r2, #0x600753b8"
+    },
+    "selector_reads_delegate": {
+      "mnemonic": "ldr",
+      "offset": "0x553a4",
+      "operands": "r2, [r4, #0x14]"
+    },
+    "selector_reads_latched_bypass": {
+      "mnemonic": "ldrb.w",
+      "offset": "0x553ae",
+      "operands": "r0, [r4, #0x39]"
+    },
+    "selector_reads_transition_countdown": {
+      "mnemonic": "ldr",
+      "offset": "0x553b4",
+      "operands": "r3, [r4, #0x40]"
+    },
+    "selector_requests_bypass": {
+      "mnemonic": "strb.w",
+      "offset": "0x553a8",
+      "operands": "r3, [r4, #0x44]"
+    },
+    "selector_stores_requested_model": {
+      "mnemonic": "str",
+      "offset": "0x553a6",
+      "operands": "r5, [r4, #0x18]"
+    },
+    "selector_waits_for_bypass": {
+      "mnemonic": "cbz",
+      "offset": "0x553b2",
+      "operands": "r0, #0x600753c8"
+    },
+    "selector_waits_for_countdown": {
+      "mnemonic": "cbnz",
+      "offset": "0x553b6",
+      "operands": "r3, #0x600753c2"
+    },
+    "selector_work_slot": {
+      "mnemonic": "ldr",
+      "offset": "0x553bc",
+      "operands": "r3, [r3, #0x34]"
+    },
+    "work_loads_first_literal": {
+      "mnemonic": "ldr",
+      "offset": "0x5f214",
+      "operands": "r5, [pc, #0x34]"
+    },
+    "work_loads_second_literal": {
+      "mnemonic": "ldr",
+      "offset": "0x5f218",
+      "operands": "r2, [pc, #0x34]"
+    },
+    "work_returns": {
+      "mnemonic": "pop",
+      "offset": "0x5f248",
+      "operands": "{r4, r5, pc}"
+    },
+    "workspace_array_block201": {
+      "mnemonic": "add.w",
+      "offset": "0x3f110",
+      "operands": "r3, r5, #0x11e0"
+    },
+    "workspace_array_count": {
+      "mnemonic": "movs",
+      "offset": "0x3f11c",
+      "operands": "r2, #3"
+    },
+    "workspace_destination_offset": {
+      "mnemonic": "movw",
+      "offset": "0x3e634",
+      "operands": "r4, #0x11d0"
+    },
+    "workspace_member_load": {
+      "mnemonic": "ldr",
+      "offset": "0x3e620",
+      "operands": "r0, [r4, #4]!"
+    },
+    "workspace_member_size_call": {
+      "mnemonic": "blx",
+      "offset": "0x3e628",
+      "operands": "r3"
+    },
+    "workspace_member_size_slot": {
+      "mnemonic": "ldr",
+      "offset": "0x3e626",
+      "operands": "r3, [r3, #0x18]"
+    },
+    "workspace_takes_maximum": {
+      "mnemonic": "mov",
+      "offset": "0x3e62e",
+      "operands": "r5, r0"
+    }
+  },
+  "itcm_instructions": {
+    "audio_root_block201_object": {
+      "mnemonic": "add.w",
+      "operands": "r0, r3, #0x11e0",
+      "raw_offset": "0x2054a",
+      "runtime_address": "0x1f832"
+    },
+    "audio_root_buffer_descriptor": {
+      "mnemonic": "add",
+      "operands": "r1, sp, #0x40",
+      "raw_offset": "0x20548",
+      "runtime_address": "0x1f830"
+    },
+    "audio_root_calls_if_unlinked": {
+      "mnemonic": "beq.w",
+      "operands": "#0x1f82e",
+      "raw_offset": "0x1f3d2",
+      "runtime_address": "0x1e6ba"
+    },
+    "audio_root_eligibility_field": {
+      "mnemonic": "movw",
+      "operands": "r1, #0x5e71",
+      "raw_offset": "0x1f3a8",
+      "runtime_address": "0x1e690"
+    },
+    "audio_root_loads_device": {
+      "mnemonic": "ldr",
+      "operands": "r3, [sp, #0xc]",
+      "raw_offset": "0x20546",
+      "runtime_address": "0x1f82e"
+    },
+    "audio_root_reads_eligibility": {
+      "mnemonic": "ldrb",
+      "operands": "r1, [r4, r1]",
+      "raw_offset": "0x1f3b6",
+      "runtime_address": "0x1e69e"
+    },
+    "audio_root_reads_stereo_link": {
+      "mnemonic": "ldr",
+      "operands": "r3, [sp, #0x28]",
+      "raw_offset": "0x1f3ce",
+      "runtime_address": "0x1e6b6"
+    },
+    "audio_root_skips_if_ineligible": {
+      "mnemonic": "cbz",
+      "operands": "r1, #0x1e6be",
+      "raw_offset": "0x1f3cc",
+      "runtime_address": "0x1e6b4"
+    },
+    "block_calls_model_process": {
+      "mnemonic": "blx",
+      "operands": "r3",
+      "raw_offset": "0x1a5b6",
+      "runtime_address": "0x1989e"
+    },
+    "block_loads_model_process_slot": {
+      "mnemonic": "ldr",
+      "operands": "r3, [r3, #0xc]",
+      "raw_offset": "0x1a5b4",
+      "runtime_address": "0x1989c"
+    },
+    "block_reads_delegate": {
+      "mnemonic": "ldr",
+      "operands": "r0, [r6, #0x14]",
+      "raw_offset": "0x1a59e",
+      "runtime_address": "0x19886"
+    },
+    "block_reads_latched_bypass": {
+      "mnemonic": "ldrb.w",
+      "operands": "r3, [r0, #0x39]",
+      "raw_offset": "0x1a588",
+      "runtime_address": "0x19870"
+    },
+    "block_reads_target_bypass": {
+      "mnemonic": "ldrb.w",
+      "operands": "ip, [r0, #0x44]",
+      "raw_offset": "0x1a582",
+      "runtime_address": "0x1986a"
+    },
+    "descriptor_flags_clear": {
+      "mnemonic": "strd",
+      "operands": "r3, r3, [sp, #0x58]",
+      "raw_offset": "0x1f3c8",
+      "runtime_address": "0x1e6b0"
+    },
+    "descriptor_frame_workspace": {
+      "mnemonic": "strd",
+      "operands": "r2, r5, [sp, #0x50]",
+      "raw_offset": "0x1f3c0",
+      "runtime_address": "0x1e6a8"
+    },
+    "descriptor_input_output_counts": {
+      "mnemonic": "strd",
+      "operands": "r4, r0, [sp, #0x48]",
+      "raw_offset": "0x1f3c4",
+      "runtime_address": "0x1e6ac"
+    },
+    "descriptor_input_table": {
+      "mnemonic": "str",
+      "operands": "r3, [sp, #0x40]",
+      "raw_offset": "0x1f3ba",
+      "runtime_address": "0x1e6a2"
+    },
+    "descriptor_output_table": {
+      "mnemonic": "str",
+      "operands": "r3, [sp, #0x44]",
+      "raw_offset": "0x1f3bc",
+      "runtime_address": "0x1e6a4"
+    }
+  },
+  "literal_pool_after_work": {
+    "alignment_nop_offset": "0x5f24a",
+    "first_literal_is_code": false,
+    "first_literal_offset": "0x5f24c",
+    "first_literal_u32": "0x49466163",
+    "second_literal_offset": "0x5f250",
+    "second_literal_u32": "0x4d525370",
+    "work_return_offset": "0x5f248"
+  },
+  "message_routing": {
+    "model_state_path": "0x553d4 -> 0x5079c -> delegate vtable+0x00",
+    "model_state_revisits_rebuild_check": false,
+    "primary_handler": "0x553d4",
+    "required_deferred_rebuild_trigger": "replay VoFx selector after bypass transition",
+    "selector_path": "0x553d4 -> 0x55388",
+    "selector_rebuild_conditions": [
+      "block+0x14 delegate exists",
+      "block+0x39 latched bypass is 1",
+      "block+0x40 transition countdown is 0"
+    ],
+    "selector_tag": "VoFx",
+    "selector_tag_u32": "0x5646784f"
+  },
+  "model5_execution": {
+    "buffer_descriptor": {
+      "flags_at_plus_0x18_and_0x1c": [
+        0,
+        0
+      ],
+      "frame_count": "audio callback descriptor +0x08",
+      "in_place_pointer_table": true,
+      "input_count": 1,
+      "input_pointer_table": "device+0x5068",
+      "output_count": 2,
+      "output_pointer_table": "device+0x5068",
+      "workspace": "device+0x11d0"
+    },
+    "constructor_raw_offset": "0x56f34",
+    "message_path": [
+      "block primary handler 0x553d4",
+      "non-VoFx tag -> generic delegate handler 0x5079c",
+      "block+0x14 -> model vtable+0x00",
+      "model-5 handler 0x57240 accepts vech",
+      "copies on/mix/feedback/time into model+0x10..+0x1c"
+    ],
+    "model5_state_and_lane_path_source_bound": true,
+    "model_id": 5,
+    "parameter_fields": {
+      "feedback": "model+0x18",
+      "mix": "model+0x14",
+      "on": "model+0x10",
+      "time_seconds": "model+0x1c"
+    },
+    "primary_vtable": "0x6012c7e8",
+    "process_equation": {
+      "feedback_loop": "delay_write = input + feedback * delayed",
+      "feedback_wire_value_for_api_1_0": 0.5,
+      "output": "mix * delayed + (1 - mix) * input",
+      "stationary_white_noise_gain_db_at_full_wet": 1.2493873660829993
+    },
+    "process_pointer": "0x6006ebd5",
+    "process_raw_offset": "0x4ebd4",
+    "tag": "vech",
+    "tagged_handler_pointer": "0x60077241",
+    "tagged_handler_raw_offset": "0x57240"
+  },
+  "model_replacement_transition": {
+    "blocks_at_96khz_512": 8,
+    "blocks_formula": "round(sample_rate * 40 / quantum / 1000)",
+    "countdown_field": "block+0x3c",
+    "duration_at_96khz_512_ms": 42.666666666666664,
+    "nominal_duration_ms": 40.0,
+    "quantum_source": "Setu+0x0c -> block+0x28",
+    "rebuild_trigger_order": "replayed selector invokes rebuild after bypass",
+    "sample_rate_source": "Setu+0x08 -> block+0x24"
+  },
+  "parameter_handler": {
+    "delegate_forward_field": "block+0x14",
+    "delegate_virtual_slot": "vtable+0x10",
+    "forward_precedes_rebuild_check": true,
+    "offset": "0x50af8",
+    "primary_setp_message_path": false,
+    "sequencing_relevance": "does not make ordinary model-state messages revisit the selector rebuild check"
+  },
+  "schema": "cp34-block201-delegate-lifecycle-v4",
+  "three_member_workspace_sizer": {
+    "call_offset": "0x3f13a",
+    "destination_field": "device+0x11d0",
+    "function_offset": "0x3e608",
+    "input_member_count": 3,
+    "member_virtual_slot": "vtable+0x18",
+    "operation": "maximum member workspace requirement",
+    "proves_signal_chain_installation": false,
+    "retains_member_pointers": false
+  }
+}

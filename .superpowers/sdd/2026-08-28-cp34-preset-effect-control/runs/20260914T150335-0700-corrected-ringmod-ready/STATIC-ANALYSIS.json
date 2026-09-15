@@ -1,0 +1,168 @@
+{
+  "code_slices": {
+    "model3_constructor_head": {
+      "offset": "0x58920",
+      "sha256": "778d452849f9677811d97ab0d5df880eaddd37cc3447163a5ac0759ebd92fee0",
+      "size": 64
+    },
+    "model3_installer_dispatch": {
+      "offset": "0x5f1c6",
+      "sha256": "f9066fbccb2886171b54c64d3c3bf9229322fd18de1a7dbd3969f2a015fd6620",
+      "size": 12
+    },
+    "model3_parameter_apply": {
+      "offset": "0x58b80",
+      "sha256": "d5760681f3ac513e804e047ab933f6bb2ebf06313ba4573b287bae164d9fc25d",
+      "size": 82
+    },
+    "model3_primary_vtable": {
+      "offset": "0x10c9a4",
+      "sha256": "37b685cce6f93b88d853320f01ee6e506415ae0eec38eecfcc86e3a8a16ffd02",
+      "size": 48
+    },
+    "model3_process_gain_head": {
+      "offset": "0x4ff6c",
+      "sha256": "6272e52697837b241ccbe3fac888ed49c01776ea26f8d68eea9f3e63185320d9",
+      "size": 54
+    },
+    "model3_process_output": {
+      "offset": "0x5035e",
+      "sha256": "f55277d3c05aeb3a38be08c954fa0cafa0ce5ce9711821b707fbeaf68b8debba",
+      "size": 18
+    },
+    "model3_tagged_handler": {
+      "offset": "0x58db0",
+      "sha256": "87642970570d366fde1c154966ae1b27e8111d7ebb5f2a64dffd68096f6ebfef",
+      "size": 68
+    },
+    "off_wet_gain_literal": {
+      "offset": "0x5034c",
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "size": 4
+    }
+  },
+  "firmware": {
+    "load_base": "0x60020000",
+    "sha256": "65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a",
+    "size": 1104448
+  },
+  "instructions": {
+    "apply_sets_active_byte": {
+      "mnemonic": "strb",
+      "offset": "0x58bc4",
+      "operands": "r3, [r4, #0x10]"
+    },
+    "constructor_stores_vtables": {
+      "mnemonic": "strd",
+      "offset": "0x58952",
+      "operands": "r2, r0, [r4]"
+    },
+    "handler_reads_on": {
+      "mnemonic": "ldr",
+      "offset": "0x58dd0",
+      "operands": "r5, [r1, #0xc]!"
+    },
+    "handler_stores_mix": {
+      "mnemonic": "str",
+      "offset": "0x58dec",
+      "operands": "r3, [r0, #0x2c]"
+    },
+    "handler_stores_on": {
+      "mnemonic": "str",
+      "offset": "0x58dda",
+      "operands": "r5, [r0, #0x14]"
+    },
+    "handler_stores_volume": {
+      "mnemonic": "str",
+      "offset": "0x58ddc",
+      "operands": "r6, [r0, #0x20]"
+    },
+    "installer_selects_model3": {
+      "mnemonic": "cmp",
+      "offset": "0x5f1c6",
+      "operands": "r1, #3"
+    },
+    "output_adds_dry_gain": {
+      "mnemonic": "vfma.f32",
+      "offset": "0x5036a",
+      "operands": "s15, s14, s16"
+    },
+    "output_applies_wet_gain": {
+      "mnemonic": "vmul.f32",
+      "offset": "0x50366",
+      "operands": "s15, s17, s15"
+    },
+    "process_dry_gain": {
+      "mnemonic": "vmul.f32",
+      "offset": "0x4ff9a",
+      "operands": "s16, s16, s15"
+    },
+    "process_one_minus_mix": {
+      "mnemonic": "vsub.f32",
+      "offset": "0x4ff92",
+      "operands": "s16, s16, s14"
+    },
+    "process_reads_active": {
+      "mnemonic": "ldrb",
+      "offset": "0x4ff70",
+      "operands": "r3, [r0, #0x10]"
+    },
+    "process_reads_mix": {
+      "mnemonic": "vldr",
+      "offset": "0x4ff8a",
+      "operands": "s14, [r0, #0x2c]"
+    },
+    "process_reads_volume": {
+      "mnemonic": "vldr",
+      "offset": "0x4ff8e",
+      "operands": "s15, [r0, #0x20]"
+    },
+    "process_twice_volume": {
+      "mnemonic": "vadd.f32",
+      "offset": "0x4ff96",
+      "operands": "s17, s15, s15"
+    },
+    "process_wet_gain": {
+      "mnemonic": "vmul.f32",
+      "offset": "0x4ff9e",
+      "operands": "s17, s17, s14"
+    }
+  },
+  "model3_execution": {
+    "constructor_raw_offset": "0x58920",
+    "model_id": 3,
+    "parameter_fields": {
+      "active_byte": "model+0x10",
+      "mix": "model+0x2c",
+      "on": "model+0x14",
+      "volume": "model+0x20"
+    },
+    "primary_vtable": "0x6012c9a4",
+    "process_equation": {
+      "dry_gain": "volume * (1 - mix)",
+      "output": "wet_signal * wet_gain + input * dry_gain",
+      "wet_gain": "2 * volume * mix"
+    },
+    "process_pointer": "0x6006ff6d",
+    "process_raw_offset": "0x4ff6c",
+    "tag": "botb",
+    "tagged_handler_pointer": "0x60078db1",
+    "tagged_handler_raw_offset": "0x58db0"
+  },
+  "schema": "cp34-ringmod-zero-output-discriminator-v1",
+  "zero_output_discriminator": {
+    "active_output_gains": {
+      "dry": 0.0,
+      "wet": 0.0
+    },
+    "off_output_gains": {
+      "dry": 1.0,
+      "wet": 0.0
+    },
+    "parameters": {
+      "mix": 1.0,
+      "volume": 0.0
+    },
+    "resolved_scalar_discriminator": true
+  }
+}

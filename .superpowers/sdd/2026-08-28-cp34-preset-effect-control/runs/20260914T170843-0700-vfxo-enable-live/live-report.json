@@ -1,0 +1,108 @@
+{
+  "battery_after": 26,
+  "battery_before": 26,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "finished": "2026-09-14T17:09:00.938622-07:00",
+  "positive_control": {
+    "classification": "DIRECT_GATE_EFFECT_DETECTED",
+    "detection_threshold_db": 4.01462511393116,
+    "drift_db": 0.18722137242149106,
+    "effect_delta_db": -19.646801579502778,
+    "effect_detected": true,
+    "maximum_window_mad_db": 0.6691041856551934,
+    "stable": true
+  },
+  "readable_after": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "main_volume": 0.7499995827674866
+  },
+  "readable_before": {
+    "flags": 897,
+    "hp_volume": 0.510000467300415,
+    "input1_gain_db": 30.0,
+    "input1_processing_channel": 0,
+    "input1_slot": 0,
+    "input2_gain_db": 24.287769317626953,
+    "main_volume": 0.7499995827674866
+  },
+  "restored": [
+    "vfxo_zero",
+    "ringmod_off",
+    "gate_power_on",
+    "input1_gain",
+    "main_volume"
+  ],
+  "schema": "io24-vfxo-enable-probe-v1",
+  "started": "2026-09-14T17:08:43.811020-07:00",
+  "vfxo": {
+    "classification": "NO_VFXO_ENABLE_EFFECT_DETECTED",
+    "detection_threshold_db": 2.72409416480742,
+    "drift_db": 0.07605086190621929,
+    "effect_delta_db": -0.13238511260886915,
+    "effect_detected": false,
+    "maximum_window_mad_db": 0.45401569413457,
+    "stable": true
+  },
+  "vfxo_blob_hex": "4f 78 46 56 0c 00 00 00 01 00 00 00",
+  "windows": {
+    "positive_control": [
+      {
+        "label": "control_gate_off_before",
+        "mad_db": 0.36529184990326835,
+        "median_input1": 0.0008904298883862793,
+        "median_main": 0.0008546195167582482,
+        "median_ratio_db": -0.3586124819502453
+      },
+      {
+        "label": "control_gate_on",
+        "mad_db": 0.6691041856551934,
+        "median_input1": 0.0008728056272957474,
+        "median_main": 8.73241533554392e-05,
+        "median_ratio_db": -19.91180337524228
+      },
+      {
+        "label": "control_gate_off_after",
+        "mad_db": 0.32448411685855444,
+        "median_input1": 0.0008351760916411877,
+        "median_main": 0.0008074545621639118,
+        "median_ratio_db": -0.17139110952875425
+      }
+    ],
+    "vfxo": [
+      {
+        "label": "armed_vfxo_untouched",
+        "mad_db": 0.37166462027056624,
+        "median_input1": 0.0008442940306849778,
+        "median_main": 0.0008130681817419827,
+        "median_ratio_db": -0.21074789289087034
+      },
+      {
+        "label": "armed_vfxo_1",
+        "mad_db": 0.45401569413457,
+        "median_input1": 0.0008613503014203161,
+        "median_main": 0.0008242104668170214,
+        "median_ratio_db": -0.30510757454662985
+      },
+      {
+        "label": "armed_vfxo_0",
+        "mad_db": 0.36166420524493903,
+        "median_input1": 0.000853618752444163,
+        "median_main": 0.000844950380269438,
+        "median_ratio_db": -0.13469703098465105
+      }
+    ]
+  },
+  "writes": [
+    "set_fx ringmod on",
+    "VFxO=1",
+    "VFxO=0"
+  ]
+}

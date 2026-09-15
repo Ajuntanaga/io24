@@ -45,7 +45,8 @@ model -> class binding (proved, not guessed):
 # of the same reverb-core implementation used by block 202; it does not use the
 # block-202 send/return object.  Native Stat recall stores the high-level model
 # state and configures that private core.  These direct blob builders are a
-# separate live-control path and do not themselves open the native Stat gate.
+# separate live-control path. Model selection uses a deferred bypass/rebuild
+# transition; Io24.send_fx supplies the required pacing and state replay.
 
 
 import math

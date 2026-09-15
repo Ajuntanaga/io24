@@ -2,6 +2,147 @@
 
 Timestamp: 2026-09-06T14:54:07-07:00
 
+## 2026-09-14 controlling selector-replay and live-null evidence
+
+The authorized Ring-Mod run's direct-gate positive control changed the
+Main/Input-1 ratio by `-19.277711 dB` against an `11.794912 dB` threshold.
+Zero-output Ring Mod changed it by only `-0.098927 dB` against a `2.813849 dB`
+threshold; off-state drift was `+0.054058 dB`. Raw report SHA-256:
+`9157dd84bc6d3e9f91db6870a7eeb7de484f2b5565ccb6ee085b904dc519f001`.
+
+That is a resolved negative for the transmitted selector -> wait -> state ->
+wait -> state-replay sequence. Static follow-up pins block primary handler
+`0x553d4`: `VoFx` reaches selector `0x55388`, while ordinary model-state tags
+tail-call generic delegate handler `0x5079c` and never revisit the deferred
+rebuild check. The required sequence is selector -> wait for bypass -> selector
+replay -> model state. `Io24.send_fx` now emits that order.
+
+The raw readable restoration guard differed only in flags bit 9 (`385 -> 897`).
+Existing power-cycle evidence classifies it as session/stream state. Every other
+readable field matched, both Host-known write-only intents were resent, and no
+restoration call failed. No additional device write followed.
+
+Executable analyzer schema `cp34-block201-delegate-lifecycle-v4` and the full
+hardware-free suite pass 871 tests with one expected skip. The new Host sequence
+is not live-proven. Evidence:
+`runs/20260914T152132-0700-corrected-ringmod-live/`.
+
+## 2026-09-14 superseded offline Ring-Mod discriminator design
+
+Pinned firmware SHA-256
+`65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a`
+source-binds model 3 to constructor `0x58920`, `botb` handler `0x58db0`, and
+process `0x4ff6c`. Handler writes on/volume/mix to model offsets
+`+0x14/+0x20/+0x2c`; process instructions `0x4ff92..0x4ff9e` derive
+`dry=volume*(1-mix)` and `wet=2*volume*mix`, applied at
+`0x50366..0x5036a`. The off wet-gain literal at `0x5034c` is zero and the dry
+gain remains one.
+
+The offline-ready profile `vol=0, mix=1` therefore has active gains dry 0 / wet
+0 and off gains dry 1 / wet 0. This is a decisive scalar test independent of
+carrier energy. `re/cp34_ringmod_discriminator_static.py` pins the firmware
+slices and instructions; `re/io24_corrected_ringmod_probe.py` implements the
+same-process gate control, Ring-Mod A/B/A, and exact restoration. Focused tests
+pass 8/8; the full hardware-free suite ran 870 tests cleanly: 869 passed and
+one skipped. The later authorized run executed this design, but its Host
+sequencing was superseded by the selector-replay correction above.
+
+## 2026-09-14 controlling model-5 execution extension
+
+Pinned firmware SHA-256
+`65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a`
+source-binds Delay constructor `0x56f34`, tagged handler `0x57240`, process
+`0x4ebd4`, and the one-input/two-output in-place buffer descriptor. Tag `vech`
+writes on/mix/feedback/time to `model+0x10..+0x1c`; the process reads those
+same fields and receives clear descriptor flags.
+
+The process recurrence derives +1.249387 dB expected stationary-white-noise
+gain for the live call's fully-wet wire feedback 0.5. Since the retained live
+threshold was 1.989850 dB, its scalar null is formally underpowered. Missing
+model-5 state or lane binding is not the next hypothesis; use a temporal
+signature or a model with a larger predicted scalar change.
+
+Executable analyzer schema is `cp34-block201-delegate-lifecycle-v3`. Combined
+focused verification passes 22/22; direct analyzer execution, bytecode compile,
+and `git diff --check` pass. No device operation occurred in this extension.
+
+## 2026-09-14 superseded first pacing-corrected live result
+
+The authorized one-writer Delay/gate run completed on serial `AB7C22200355`,
+firmware `0128`. The later primary-handler trace proves this state-replay
+sequence did not trigger rebuild. Fully wet Delay moved the Main/Input-1 ratio
+`-0.148022 dB` against a `1.989850 dB` threshold, with `-0.039869 dB`
+off-state drift. It was not detected. The direct Channel-1 gate positive
+control moved `-18.313364 dB` against a `12.014095 dB` threshold, with
+`-0.049383 dB` drift, so the observation path was sensitive.
+
+The gross gate control does not make this a decisive Delay null. Feedback 1.0
+maps to coefficient 0.5, so uncorrelated stationary noise is expected to gain
+only `1.249387 dB`, below the `1.989850 dB` threshold. The run is therefore
+`INCONCLUSIVE_EXPECTED_LEVEL_SIGNATURE_BELOW_THRESHOLD`: it neither proves
+Delay inert nor rejects Host pacing as the audibility mechanism. The next
+static target is model-5 process state and actual input/output lane binding.
+
+Readable state restored exactly; Host-known Transformer-off and Channel-1
+`MAIN` gate intent were resent without error. Routes, slots, DSP Amount, and
+`processingChannel` were untouched. Battery was 82 percent before and after.
+Focused probe/sequencing verification passed 14/14 before the live action.
+Report SHA-256:
+`672083ccb336e08727abe0509dd6567f85511eee6dad177b465a8f0214f9652f`.
+Evidence:
+`runs/20260914T113431-0700-corrected-fx-rebuild-live/`.
+
+## 2026-09-14 controlling block-201 audio-call-path correction
+
+Pinned firmware proves constructor `0x591bc`'s null `block+0x14` store is only
+intermediate. Its model-0 selector `0x55388` calls primary vtable `+0x34`,
+`0x5f1f4`; helper `0x5f130` constructs the model at `block+0x60`, stores that
+pointer at `block+0x14` (`0x5f170`), and clears `block+0x44` (`0x5f184`).
+Handler `0x50af8` forwards incoming messages to delegate `vtable+0x10` before
+testing `+0x44/+0x39/+0x40`.
+
+The subsequent audio trace corrects the intermediate “rebuild-only” label.
+Block process raw `0x1a580` uses `+0x44` as target bypass (`0=process`,
+`1=bypass`), `+0x39` as latched bypass, and `+0x40` as its transition
+countdown. Selector sets bypass before replacement; installer clears it after
+replacement. Those three fields defer rebuilding until the old model is safely
+bypassed; they are not an absent install gate.
+
+The apparent `str ... [block+0x14]` at `0x5f24c` was a linear-disassembly false
+positive. Work returns at `0x5f248`; `0x5f24c`/`0x5f250` are PC-relative
+literals `0x49466163`/`0x4d525370` used by that function.
+
+The historical “chain installer” at `0x3e608` is also corrected. It calls
+`vtable+0x18` on the temporary three-object array, takes the maximum workspace
+requirement, and sizes `device+0x11d0`; it retains no member pointers and does
+not prove signal-path installation.
+
+The real signal path is nevertheless source-bound. Audio root raw
+`0x20546..0x2054e` passes a `stack+0x40` buffer descriptor to block 201 at
+`device+0x11e0` and directly calls its process routine. The block invokes the
+selected model's process virtual; model 0 reaches raw `0x1e1a8`. The root call
+condition is sample rate at or below 96 kHz (`device+0x5e71`) with stereo-link
+bit 12 clear, which matches the cold-boot run's declared 96 kHz/unlinked state.
+The clean live null is not missing construction, scheduling, or buffer handoff.
+
+The transition is source-bound in the same code. Setup computes a nominal 40 ms
+bypass fade; at 96 kHz / 512 it is eight audio blocks, 42.667 ms. The first
+pacing correction correctly extended the old 20 ms gap, but mistakenly treated
+a model-state frame as the rebuild trigger. Primary handler `0x553d4` proves
+ordinary state tags tail-call `0x5079c` and never reach selector `0x55388`.
+
+`Io24.send_fx` now waits 60 ms and replays the selector itself before sending
+state. The earlier live Delay and Ring-Mod results exercised the superseded
+state-replay sequence; the selector-replay repair is locally verified and
+audibility-unproved.
+
+`re/cp34_block201_delegate_static.py` pins the complete paths and critical
+slices at schema v4. The full hardware-free suite passes 871 tests with one
+expected skip. Evidence:
+`runs/20260914T105415-0700-block201-delegate-lifecycle/`. The complete
+hardware-free suite immediately preceding the focused extension passed 845
+with 1 expected skip and 265 subtests.
+
 ## 2026-09-14 controlling physical-storage completion result
 
 The authorized active-slot discriminator subsequently completed and returned

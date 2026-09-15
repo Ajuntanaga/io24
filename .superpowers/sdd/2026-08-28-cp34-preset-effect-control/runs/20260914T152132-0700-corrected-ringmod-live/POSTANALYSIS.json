@@ -1,0 +1,46 @@
+{
+  "schema": "io24-corrected-ringmod-postanalysis-v2",
+  "raw_report": "live-report.json",
+  "raw_report_sha256": "9157dd84bc6d3e9f91db6870a7eeb7de484f2b5565ccb6ee085b904dc519f001",
+  "measurement": {
+    "classification": "HOST_SELECTOR_STATE_REPLAY_SEQUENCE_NO_EFFECT",
+    "gate_positive_control_delta_db": -19.277711008203358,
+    "gate_positive_control_threshold_db": 11.794912061933587,
+    "ringmod_delta_db": -0.09892698125388366,
+    "ringmod_threshold_db": 2.8138488622382116,
+    "ringmod_off_drift_db": 0.054057653457795896,
+    "interpretation": "The selector-wait-state-wait-state-replay sequence did not engage model-3 zero-output processing on the observed Main path. This resolves that Host sequence only, not Ring Mod under the corrected selector-replay sequence."
+  },
+  "static_followup": {
+    "classification": "HOST_SEQUENCING_V1_FALSIFIED",
+    "primary_handler": "0x553d4",
+    "selector_handler": "0x55388",
+    "model_state_handler": "0x5079c",
+    "finding": "Ordinary model-state tags go directly to the existing delegate and never revisit the deferred rebuild check. After the bypass transition, VoFx itself must be replayed to install the requested model before sending state.",
+    "required_sequence": "selector -> wait for bypass -> selector replay -> model state",
+    "current_host_changed_offline": true,
+    "current_host_live_tested": false
+  },
+  "restoration": {
+    "classification": "USER_AND_DEVICE_CONTROL_STATE_RESTORED",
+    "raw_guard_status": "FALSE_POSITIVE_SESSION_STREAM_BIT_ONLY",
+    "only_readable_difference": {
+      "field": "flags",
+      "before": 385,
+      "after": 897,
+      "xor": 512,
+      "bit": 9
+    },
+    "bit_9_evidence": "Existing power-cycle evidence identifies JaSt flags bit 9 as an unmapped session or stream flag, not preset or gate state.",
+    "all_other_readable_fields_exact": true,
+    "host_known_voicefx_and_gate_intent_resent": true,
+    "restoration_errors": [],
+    "additional_corrective_usb_write": false
+  },
+  "untouched": [
+    "mixer routes",
+    "preset slots",
+    "DSP Amount",
+    "processingChannel"
+  ]
+}

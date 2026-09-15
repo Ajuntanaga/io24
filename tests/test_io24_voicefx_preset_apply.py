@@ -199,12 +199,13 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
             "activation": "UNPROVED",
             "audibility": "UNPROVED",
         })
-        self.assertEqual(len(device.writes), 4)
+        self.assertEqual(len(device.writes), 5)
         self.assertTrue(all(struct.unpack_from("<I", payload, 4)[0] == 201
                             for payload in device.writes))
         self.assertEqual(struct.unpack_from("<I", device.writes[0], 12)[0],
                          io24_fx.TAG_VOFX)
         self.assertEqual(struct.unpack_from("<I", device.writes[0], 24)[0], 0)
+        self.assertEqual(device.writes[0], device.writes[1])
         self.assertEqual(struct.unpack_from("<I", device.writes[-1], 12)[0],
                          io24_fx.TAG_GODV)
 

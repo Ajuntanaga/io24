@@ -57,6 +57,15 @@ lock and refuse the drop rather than pretending.
 One module is shown at a time, for one channel. Both racks stay visible so you
 can reach either.
 
+**Standard EQ:** **EQ** switches the complete equaliser without erasing its
+curve. Each of Low, Low mid, High mid and High has its own independent **band**
+switch. Low and High also have the exact UC shelf switch; switching it off uses
+parametric mode. The two middle bands are always parametric—there is no hidden
+shape menu. All four bands use 36 Hz–18 kHz, ±15 dB and Q 0.1–10 (default 0.6),
+matching UC 4.7.2's embedded `Eqxt4` model. Drag a node for frequency/gain and
+scroll over it for Q. Global and per-band bypass states survive Host snapshots
+and reconnects independently.
+
 **Limiter**: threshold plus **release**, 50 ms to 1.5 s. The device has always
 taken a release coefficient and the driver has always computed it exactly; the
 page simply never offered the control, so every limiter write before this used

@@ -51,9 +51,27 @@ _CACHE = None
 PRESET_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "re", "uc_factory_presets.json")
 
-# eqbandopN is literally named "Low Shelf" / "High Shelf" in UC 4.7.2's
-# fatchannelxt.xml. Bands 2 and 3 carry no usable op field and are always
-# peaking; a true outer-band toggle selects the shelf shape.
+# Exact Standard-EQ presentation contract from UC 4.7.2's embedded
+# ``fatchannelxt.xml``.  ``eqallon`` is independent of the four
+# ``eqbandonN`` toggles; the old Host collapsed both into ``shape=off`` and
+# therefore destroyed the band state every time the whole EQ was bypassed.
+# Bands 2 and 3 have no usable option field and are always parametric.  Only
+# the two outer bands expose the XML's shelf-vs-parametric switch.
+STANDARD_EQ_BAND_SPECS = (
+    {"name": "Low", "default_freq": 130.0, "default_shape": "lowshelf",
+     "shapes": ("peaking", "lowshelf")},
+    {"name": "Low mid", "default_freq": 320.0, "default_shape": "peaking",
+     "shapes": ("peaking",)},
+    {"name": "High mid", "default_freq": 1400.0, "default_shape": "peaking",
+     "shapes": ("peaking",)},
+    {"name": "High", "default_freq": 5000.0, "default_shape": "highshelf",
+     "shapes": ("peaking", "highshelf")},
+)
+STANDARD_EQ_FREQ_RANGE = (36.0, 18000.0)
+STANDARD_EQ_GAIN_RANGE = (-15.0, 15.0)
+STANDARD_EQ_Q_RANGE = (0.1, 10.0)
+STANDARD_EQ_DEFAULT_Q = 0.6
+
 _SHELF = {1: "lowshelf", 4: "highshelf"}
 
 EQ_CLASSES = {
@@ -217,7 +235,13 @@ def _compressor_call(comp):
 
 
 def _standard_eq_bands(eq):
-    """Validate and decode all four Standard bands before any device write."""
+    """Validate and decode all four Standard bands before any device write.
+
+    ``shape`` is the coefficient shape to send now, so it is ``off`` while
+    either the complete EQ or that band is bypassed.  ``mode`` and ``on`` keep
+    the two independent XML controls intact for the GTK editor and preset
+    round trip.
+    """
     _require(eq, ("eqallon",) +
              tuple("eqbandon%d" % band for band in range(1, 5)) +
              tuple("eqfreq%d" % band for band in range(1, 5)) +
@@ -235,23 +259,85 @@ def _standard_eq_bands(eq):
     }
     bands = []
     for band in range(1, 5):
+        spec = STANDARD_EQ_BAND_SPECS[band - 1]
         freq = _finite_in_range(
-            eq, "eqfreq%d" % band, 20.0, 18000.0, "Standard EQ")
+            eq, "eqfreq%d" % band, *STANDARD_EQ_FREQ_RANGE, "Standard EQ")
         gain = _finite_in_range(
-            eq, "eqgain%d" % band, -15.0, 15.0, "Standard EQ")
+            eq, "eqgain%d" % band, *STANDARD_EQ_GAIN_RANGE, "Standard EQ")
         q = _finite_in_range(
-            eq, "eqq%d" % band, 0.1, 10.0, "Standard EQ")
-        shape = "off"
-        if eq_all_on and band_on[band]:
-            shape = _SHELF[band] if band in _SHELF and \
-                shelf_on[band] else "peaking"
+            eq, "eqq%d" % band, *STANDARD_EQ_Q_RANGE, "Standard EQ")
+        mode = _SHELF[band] if band in _SHELF and \
+            shelf_on[band] else "peaking"
+        if mode not in spec["shapes"]:
+            raise ValueError("Standard EQ band %d has invalid mode %s" %
+                             (band, mode))
+        shape = mode if eq_all_on and band_on[band] else "off"
         bands.append({
             "shape": shape,
+            "mode": mode,
+            "on": bool(band_on[band]),
             "freq": freq,
             "gain": gain,
             "q": q,
         })
     return bands
+
+
+def standard_eq_enabled(preset):
+    """The independent ``eqallon`` state of a Standard preset."""
+    eq = preset.get("eq") or {}
+    model = eq_model(eq)
+    if model is None:
+        return False
+    if model != "standard":
+        raise UnsupportedPresetModel(
+            "%s EQ does not use the Standard power control" % model.title())
+    _require(eq, ("eqallon",), "Standard EQ")
+    return bool(_toggle(eq, "eqallon", "Standard EQ"))
+
+
+def standard_band_mode(band, index):
+    """Return one band's stored Standard shape, independent of its power."""
+    try:
+        spec = STANDARD_EQ_BAND_SPECS[int(index)]
+    except (IndexError, TypeError, ValueError):
+        raise ValueError("Standard EQ band index must be 0..3")
+    if not isinstance(band, dict):
+        raise ValueError("Standard EQ band %d must be an object" % (index + 1))
+    mode = band.get("mode")
+    if mode is None:
+        mode = band.get("shape")
+    if mode in (None, "off"):
+        mode = spec["default_shape"]
+    if mode not in spec["shapes"]:
+        raise UnsupportedPresetModel(
+            "EQ band %d shape %s has no Standard-EQ XML mapping" %
+            (index + 1, mode))
+    return mode
+
+
+def standard_band_enabled(band):
+    """Return the XML band-power state, accepting the older shape-only form."""
+    if not isinstance(band, dict):
+        raise ValueError("Standard EQ band must be an object")
+    if "on" in band:
+        value = band["on"]
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        raise ValueError("Standard EQ band on must be a toggle")
+    return band.get("shape") != "off"
+
+
+def default_standard_eq_bands():
+    """UC 4.7.2's four band defaults; the complete EQ defaults to bypassed."""
+    return [
+        {"shape": spec["default_shape"], "mode": spec["default_shape"],
+         "on": True, "freq": spec["default_freq"], "gain": 0.0,
+         "q": STANDARD_EQ_DEFAULT_Q}
+        for spec in STANDARD_EQ_BAND_SPECS
+    ]
 
 
 def direct_apply_support(preset):
@@ -610,49 +696,83 @@ def to_bands(preset):
         raise UnsupportedPresetModel(
             "%s EQ cannot be represented as four Standard bands" % model.title())
     if model is None:
-        return [{"shape": "off", "freq": freq, "gain": 0.0, "q": 0.7}
-                for freq in (120.0, 600.0, 2500.0, 8000.0)]
-    return _standard_eq_bands(eq)
+        return default_standard_eq_bands()
+    bands = _standard_eq_bands(eq)
+    # The editor keeps band power independent of complete-EQ power.  Restore
+    # the stored band shape here; coefficient builders continue to consume the
+    # effective ``shape`` returned directly by _standard_eq_bands().
+    for band in bands:
+        band["shape"] = band["mode"] if band["on"] else "off"
+    return bands
 
 
-def _standard_slot_eq(bands):
+def _standard_slot_eq(bands, eq_on=None):
     """Four Host bands as one complete Standard EQ record section."""
     if not isinstance(bands, (list, tuple)) or len(bands) != 4:
         raise ValueError("current slot EQ must contain four bands")
+    band_states = [standard_band_enabled(band) for band in bands]
     eq = {
         "__classid": next(key for key, value in EQ_CLASSES.items()
                           if value == "standard"),
-        "eqallon": int(any(band.get("shape") != "off" for band in bands)),
+        "eqallon": int(any(band_states) if eq_on is None else bool(eq_on)),
     }
-    allowed = (
-        {"off", "peaking", "lowshelf"},
-        {"off", "peaking"},
-        {"off", "peaking"},
-        {"off", "peaking", "highshelf"},
-    )
     for index, band in enumerate(bands, 1):
         if not isinstance(band, dict) or not {
                 "shape", "freq", "gain", "q"}.issubset(band):
             raise ValueError("current slot EQ band %d is incomplete" % index)
+        mode = standard_band_mode(band, index - 1)
         shape = band["shape"]
-        if shape not in allowed[index - 1]:
-            raise UnsupportedPresetModel(
-                "EQ band %d shape %s has no complete Standard-slot mapping" %
-                (index, shape))
-        eq["eqbandon%d" % index] = int(shape != "off")
+        if shape != "off" and shape != mode:
+            raise ValueError(
+                "EQ band %d shape and stored mode disagree" % index)
+        eq["eqbandon%d" % index] = int(band_states[index - 1])
         eq["eqfreq%d" % index] = float(band["freq"])
         eq["eqgain%d" % index] = float(band["gain"])
         eq["eqq%d" % index] = float(band["q"])
         if index in (1, 4):
             shelf = "lowshelf" if index == 1 else "highshelf"
-            eq["eqbandop%d" % index] = int(shape == shelf)
+            eq["eqbandop%d" % index] = int(mode == shelf)
     _standard_eq_bands(eq)
     return eq
 
 
+def validate_standard_eq_host_state(state):
+    """Validate the GTK-only state needed for independent EQ/band bypass.
+
+    The device shadow records the coefficients actually sent.  When the EQ is
+    bypassed those are four identities and cannot remember the four settings
+    behind the switch, so this small semantic layer belongs in Host snapshots.
+    """
+    if not isinstance(state, dict) or state.get("version") != 1:
+        raise ValueError("standard_eq must be a version-1 object")
+    channels = state.get("channels")
+    if not isinstance(channels, dict):
+        raise ValueError("standard_eq channels must be an object")
+    unknown = set(channels) - {"1", "2"}
+    if unknown:
+        raise ValueError("standard_eq has unknown channel%s" %
+                         ("s" if len(unknown) != 1 else ""))
+    normalized = {"version": 1, "channels": {}}
+    for channel in ("1", "2"):
+        if channel not in channels:
+            continue
+        body = channels[channel]
+        if not isinstance(body, dict) or set(body) != {"on", "bands"}:
+            raise ValueError(
+                "standard_eq channel %s must contain on and bands" % channel)
+        if not isinstance(body["on"], bool):
+            raise ValueError("standard_eq channel %s on must be boolean" % channel)
+        eq = _standard_slot_eq(body["bands"], eq_on=body["on"])
+        normalized["channels"][channel] = {
+            "on": body["on"],
+            "bands": to_bands({"eq": eq}),
+        }
+    return normalized
+
+
 def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
                         gate, compressor_model, compressor, limiter,
-                        voicefx_model, voicefx, alternate_eq=None):
+                        voicefx_model, voicefx, alternate_eq=None, eq_on=None):
     """Overlay current Host controls onto one explicit complete slot base.
 
     The base supplies archive sections that the live UI does not model.  Every
@@ -681,7 +801,7 @@ def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
                 "alternate_eq must be a complete Passive or Vintage EQ section")
         record["eq"] = dict(alternate_eq)
     else:
-        record["eq"] = _standard_slot_eq(bands)
+        record["eq"] = _standard_slot_eq(bands, eq_on=eq_on)
 
     gate_fields = {
         "on", "threshold_db", "range_db", "attack_s", "release_s",

@@ -55,7 +55,7 @@ separately rather than implied to be independently measured.
 | Aux sends: assign, bus master, mirror-main | master exact to **0.00 dB**, no crosstalk between buses |
 | GTK Mix A/B capture | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; both published successfully in the live 96 kHz / 512 smoke |
 | CLI pan / balance for a stereo pair | send-level balance using Universal Control's recovered law; centre −3.00 dB, measured within ±1 dB on hardware |
-| 4-band parametric EQ | frequency accuracy and band indexing both measured |
+| Standard 4-band EQ | exact UC 4.7.2 controls: independent global and four band-power switches, parametric middle bands, outer shelf/parametric selectors, 36 Hz–18 kHz; frequency accuracy and band indexing measured |
 | Gate, compressor (3 models), limiter | |
 | Reverb | measured processing; **both channels can feed it at once** |
 | Output delay, 0–500 ms | one global delay plus a bus selector — not an independent delay per bus. 50 ms asked, 49.50 ms measured |
@@ -235,7 +235,8 @@ python3 io24gtk.py
 A native GTK4 / libadwaita application — the Linux replacement for Universal
 Control's window. Live meters for both inputs and all three buses, gain reduction
 for the gate, compressor and limiter, channel strips, monitoring, a four-band EQ
-with a 256-bin overlapping live spectrum and response curve, dynamics, and
+with UC's independent global/band switches, exact outer shelf controls, a
+256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
 the Presets page holds your presets and the factory presets in two drop-downs,
 loads one with the row's **Load** button, and can put one on the unit's Preset button.

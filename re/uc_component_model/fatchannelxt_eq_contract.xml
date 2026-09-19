@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bounded Eqxt4 contract recovered from UC 4.7.2 fatchannelxt.xml, embedded in
+  Plugins/studiolivepanel.dll. This is the presentation/state schema used by
+  the Linux Host; USB framing and coefficient design are documented elsewhere.
+-->
+<uc:ComponentModel xmlns:uc="urn:presonus-universal-control">
+  <uc:Definitions>
+    <uc:Range id="EqGain" min="-15" max="15" def="0" curve="linear" units="gain"/>
+    <uc:Range id="EqxtLFreq" min="36" max="18000" def="130" curve="log" units="freq"/>
+    <uc:Range id="EqxtLMFreq" min="36" max="18000" def="320" curve="log" units="freq"/>
+    <uc:Range id="EqxtHMFreq" min="36" max="18000" def="1400" curve="log" units="freq"/>
+    <uc:Range id="EqxtHFreq" min="36" max="18000" def="5000" curve="log" units="freq"/>
+    <uc:Range id="EqxtQ" min="0.1" max="10.0" mid="0.6" def="0.6" curve="skew"/>
+  </uc:Definitions>
+  <uc:Parameters>
+    <uc:ParamList id="Eqxt4">
+      <uc:Param id="eqallon" name="EQ On" type="toggle" def="0" flags="storable linkable user1"/>
+
+      <uc:Param id="eqtype1" name="Low Type" type="list" def="1" flags="readonly"/>
+      <uc:Param id="eqgain1" name="Low Gain" type="float" range="EqGain" flags="storable linkable user1 bipolar"/>
+      <uc:Param id="eqq1" name="Low Q" type="float" range="EqxtQ" flags="storable linkable user1"/>
+      <uc:Param id="eqfreq1" name="Low Freq" type="float" range="EqxtLFreq" flags="storable linkable user1"/>
+      <uc:Param id="eqbandon1" name="Low On" type="toggle" def="1" flags="storable linkable user1"/>
+      <uc:Param id="eqbandop1" name="Low Shelf" type="toggle" flags="storable linkable user1"/>
+
+      <uc:Param id="eqtype2" name="Low-Mid Type" type="list" def="3" flags="readonly"/>
+      <uc:Param id="eqgain2" name="Low-Mid Gain" type="float" range="EqGain" flags="storable linkable user1 bipolar"/>
+      <uc:Param id="eqq2" name="Low-Mid Q" type="float" range="EqxtQ" flags="storable linkable user1"/>
+      <uc:Param id="eqfreq2" name="Low-Mid Freq" type="float" range="EqxtLMFreq" flags="storable linkable user1"/>
+      <uc:Param id="eqbandon2" name="Low-Mid On" type="toggle" def="1" flags="storable linkable user1"/>
+      <uc:Param id="eqbandop2" name="Low-Mid Opt" type="toggle" flags=""/>
+
+      <uc:Param id="eqtype3" name="Hi-Mid Type" type="list" def="3" flags="readonly"/>
+      <uc:Param id="eqgain3" name="Hi-Mid Gain" type="float" range="EqGain" flags="storable linkable user1 bipolar"/>
+      <uc:Param id="eqq3" name="Hi-Mid Q" type="float" range="EqxtQ" flags="storable linkable user1"/>
+      <uc:Param id="eqfreq3" name="Hi-Mid Freq" type="float" range="EqxtHMFreq" flags="storable linkable user1"/>
+      <uc:Param id="eqbandon3" name="Hi-Mid On" type="toggle" def="1" flags="storable linkable user1"/>
+      <uc:Param id="eqbandop3" name="Hi-Mid Opt" type="toggle" flags=""/>
+
+      <uc:Param id="eqtype4" name="High Type" type="list" def="2" flags="readonly"/>
+      <uc:Param id="eqgain4" name="High Gain" type="float" range="EqGain" flags="storable linkable user1 bipolar"/>
+      <uc:Param id="eqq4" name="High Q" type="float" range="EqxtQ" flags="storable linkable user1"/>
+      <uc:Param id="eqfreq4" name="High Freq" type="float" range="EqxtHFreq" flags="storable linkable user1"/>
+      <uc:Param id="eqbandon4" name="High On" type="toggle" def="1" flags="storable linkable user1"/>
+      <uc:Param id="eqbandop4" name="High Shelf" type="toggle" flags="storable linkable user1"/>
+    </uc:ParamList>
+  </uc:Parameters>
+</uc:ComponentModel>

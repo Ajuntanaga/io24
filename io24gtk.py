@@ -58,8 +58,11 @@ M_MIXB = (16, 17)
 P_HP, P_MAIN, P_BLEND, P_G1, P_G2 = 43, 44, 45, 46, 47
 
 PROFILE = bool(os.environ.get('IO24_PROFILE'))
-BAND_NAMES = ["Low", "Low mid", "High mid", "High"]
-SHAPES = ["off", "peaking", "lowshelf", "highshelf", "hp", "lp"]
+BAND_NAMES = [spec["name"] for spec in io24_presets.STANDARD_EQ_BAND_SPECS]
+# Kept as a public compatibility constant for tests/extensions.  The GTK page
+# no longer offers one free-form shape menu: UC 4.7.2 exposes only Low Shelf on
+# band 1 and High Shelf on band 4; the two middle bands are always parametric.
+SHAPES = ["off", "peaking", "lowshelf", "highshelf"]
 FLOOR = -60.0
 HPF_BASIC_HZ = (24.0, 40.0, 80.0, 160.0)
 DEVICE_SLOT_REGISTRY_PATH = os.path.join(
@@ -2133,14 +2136,15 @@ class EQCurve(ChannelBound, Canvas):
         best, bd = 0, 1e18
         for i, b in enumerate(self.bands):
             bx = self._x(b["freq"], w)
-            by = h / 2 - self.win.response_db(b["freq"]) / 18.0 * (h / 2)
+            by = h / 2 - self.win.response_for(
+                self.channel, b["freq"], enabled=True) / 18.0 * (h / 2)
             d = (bx - x) ** 2 + ((by - y) * 0.65) ** 2
             if d < bd:
                 best, bd = i, d
         return best
 
     def _clicked(self, _g, _n, x, y):
-        self.win.select_band(self._nearest(x, y))
+        self.win.select_band(self._nearest(x, y), self.channel)
 
     def _motion(self, _c, x, y):
         n = self._nearest(x, y)
@@ -2150,15 +2154,25 @@ class EQCurve(ChannelBound, Canvas):
 
     def _f_from_x(self, x, w):
         t = max(0.0, min(1.0, x / max(w, 1)))
-        return max(20.0, min(18000.0, 20.0 * (24000 / 20.0) ** t))
+        low, high = io24_presets.STANDARD_EQ_FREQ_RANGE
+        return max(low, min(high, 20.0 * (24000 / 20.0) ** t))
 
     def _drag_begin(self, g, x, y):
         self.drag_band = self._nearest(x, y)
-        self.win.select_band(self.drag_band)
+        self.win.select_band(self.drag_band, self.channel)
+        if not self.win.eq_enabled(self.channel):
+            self.win._set_eq_enabled(self.channel, True)
         b = self.bands[self.drag_band]
         if b["shape"] == "off":            # grabbing an unused band switches it on
-            b["shape"] = "peaking"
-            self.wid("shape").set_selected(SHAPES.index("peaking"))
+            b["shape"] = self.win._standard_band_mode(
+                self.channel, self.drag_band)
+            b["on"] = True
+            prior = self.win._adopt_mute
+            self.win._adopt_mute = True
+            try:
+                self.wid("band_on").set_active(True)
+            finally:
+                self.win._adopt_mute = prior
         self._start = (x, y, b["freq"], b["gain"])
 
     def _drag_update(self, g, dx, dy):
@@ -2193,7 +2207,12 @@ class EQCurve(ChannelBound, Canvas):
         if i == self.cur_band:
             self.wid("q").set_value(b["q"])
         else:
-            self.win._push_band()
+            prior = self.cur_band
+            self.cur_band = i
+            try:
+                self.win._push_band(self.channel)
+            finally:
+                self.cur_band = prior
         self.queue_draw()
         return True
 
@@ -2251,19 +2270,23 @@ class EQCurve(ChannelBound, Canvas):
             # rather than draw a flat line or bands it never had.
             label(self, sn, "%s EQ from the recalled preset: curve not drawable"
                   % alt["model"].title(), 8, h / 2 - 18, pal(INK, 0.8), 9)
-            label(self, sn, "its switch frequencies are not decoded; the stored "
-                  "values are listed below", 8, h / 2, pal(INK, 0.5), 8)
+            label(self, sn, "its switches are decoded below; this proprietary "
+                  "curve is not drawn", 8, h / 2, pal(INK, 0.5), 8)
             return
+        active = self.win.eq_enabled(self.channel)
         pts = self.win.curve_points(w, h, self.channel)
-        if any(b["shape"] != "off" for b in self.bands):
+        if active and any(b["shape"] != "off" for b in self.bands):
             fill_poly(sn, pts + [(w, h / 2), (0, h / 2)], pal(acc, 0.14))
-        glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
+        if active:
+            glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
+        else:
+            polyline(sn, pts, pal(acc, 0.32), 1.4)
         for i, b in enumerate(self.bands):
             if b["shape"] == "off":
                 continue
             x = self._x(b["freq"], w)
             y = max(8, min(h - 8, h / 2 - self.win.response_for(
-                self.channel, b["freq"]) / 18.0 * (h / 2)))
+                self.channel, b["freq"], enabled=True) / 18.0 * (h / 2)))
             sel = (i == self.cur_band)
             hov = (i == self.hover)
             r = 8 if sel else (7 if hov else 5)
@@ -2575,8 +2598,7 @@ class Rack(ChannelBound, Canvas):
                  "COMP": self.win.dyn_for(self.channel)["comp"],
                  "EQ": (self.win._alt_eq(self.channel)["on"]
                         if self.win._alt_eq(self.channel) is not None
-                        else any(b["shape"] != "off"
-                                 for b in self.win.bands_by_ch[self.channel])),
+                        else self.win.eq_enabled(self.channel)),
                  "LIM": self.win.dyn_for(self.channel)["lim"]}
         for i, mod in enumerate(self.order):
             x = i * uw
@@ -2950,9 +2972,13 @@ class Win(Adw.ApplicationWindow):
         # The fat channel is per channel on the hardware, so keep a full set of
         # state for each and let the page switch between them — or drive both at
         # once, which the original software never offered.
-        self.bands_by_ch = {c: [{"shape": "off", "freq": f, "gain": 0.0, "q": 0.7}
-                                for f in (120.0, 600.0, 2500.0, 8000.0)]
-                            for c in (1, 2)}
+        self.bands_by_ch = {
+            c: io24_presets.default_standard_eq_bands() for c in (1, 2)
+        }
+        # fatchannelxt.xml has one EQ On toggle plus four independent band On
+        # toggles.  Keeping this separately is what lets bypass preserve the
+        # complete curve instead of flattening it destructively.
+        self.eq_on_by_ch = {1: False, 2: False}
         self.dyn_by_ch = {c: {"gate": False, "comp": False, "lim": False}
                           for c in (1, 2)}
         self.cur_band_by_ch = {1: 0, 2: 0}
@@ -3238,6 +3264,70 @@ class Win(Adw.ApplicationWindow):
         for r in self.racks.values():
             r.queue_draw()
 
+    def eq_enabled(self, ch):
+        """The complete EQ switch, independent of every band's switch."""
+        alternate = self._alt_eq(ch)
+        if alternate is not None:
+            return bool(alternate["on"])
+        states = getattr(self, "eq_on_by_ch", None)
+        if states is not None and ch in states:
+            return bool(states[ch])
+        # Compatibility for small test doubles and older in-process state.
+        return any(band.get("shape") != "off"
+                   for band in getattr(self, "bands_by_ch", {}).get(ch, ()))
+
+    def _standard_band_mode(self, ch, index):
+        return io24_presets.standard_band_mode(
+            self.bands_by_ch[ch][index], index)
+
+    def _effective_eq_band(self, ch, index):
+        """One stored band reduced to the coefficient state sent right now."""
+        band = dict(self.bands_by_ch[ch][index])
+        if not self.eq_enabled(ch) or not \
+                io24_presets.standard_band_enabled(band):
+            band["shape"] = "off"
+        else:
+            band["shape"] = io24_presets.standard_band_mode(band, index)
+        return band
+
+    def _set_eq_enabled(self, ch, on):
+        """Switch the whole EQ without changing any of its four band states."""
+        on = bool(on)
+        targets = self._eq_write_targets(ch)
+        if not hasattr(self, "eq_on_by_ch"):
+            self.eq_on_by_ch = {}
+        for target in targets:
+            self.eq_on_by_ch[target] = on
+            controls = getattr(self, "w", {}).get(target, {})
+            switch = controls.get("eq_on")
+            if switch is not None and switch.get_active() != on:
+                prior = self._adopt_mute
+                self._adopt_mute = True
+                try:
+                    switch.set_active(on)
+                finally:
+                    self._adopt_mute = prior
+            if on:
+                for index in range(4):
+                    band = self._effective_eq_band(target, index)
+                    self.ctl.submit(
+                        lambda dev, x=target, j=index, bb=band, fs=self._fs:
+                        dev.set_eq_band(x, j, bb["shape"], bb["freq"],
+                                        bb["gain"], bb["q"], fs=fs))
+            else:
+                self.ctl.submit(lambda dev, x=target: dev.eq_off(x))
+            curve = controls.get("curve")
+            if curve is not None:
+                curve.queue_draw()
+        self.invalidate_curve()
+        for rack in getattr(self, "racks", {}).values():
+            rack.queue_draw()
+
+    def _eq_power_changed(self, row, _param, ch):
+        if self._adopt_mute:
+            return
+        self._set_eq_enabled(ch, row.get_active())
+
     def toggle_module(self, ch, mod):
         """Click a rack unit to switch that module in or out."""
         if mod == "HPF":
@@ -3245,25 +3335,7 @@ class Win(Adw.ApplicationWindow):
             self.set_hpf(ch, 24.0 if cur > 25 else 120.0)
             return
         if mod == "EQ":
-            bands = self.bands_by_ch[ch]
-            if any(b["shape"] != "off" for b in bands):
-                self._saved_eq = [dict(b) for b in bands]
-                self._eq_flat(ch)
-            else:
-                saved = getattr(self, "_saved_eq", None)
-                if saved:
-                    self.bands_by_ch[ch] = [dict(b) for b in saved]
-                    self.invalidate_curve()
-                    for i, b in enumerate(self.bands_by_ch[ch]):
-                        self.ctl.submit(
-                            lambda dev, x=ch, j=i, bb=dict(b), fs=self._fs:
-                            dev.set_eq_band(x, j, bb["shape"], bb["freq"],
-                                            bb["gain"], bb["q"], fs=fs))
-                    self._adopt_band(ch)
-                else:
-                    self.say("Nothing to restore — set some EQ bands first")
-            for r in self.racks.values():
-                r.queue_draw()
+            self._set_eq_enabled(ch, not self.eq_enabled(ch))
             return
         key = {"GATE": "gate", "COMP": "comp", "LIM": "lim"}[mod]
         new = not self.dyn_by_ch[ch][key]
@@ -3282,7 +3354,11 @@ class Win(Adw.ApplicationWindow):
         for c in ((1, 2) if self.link_both else (ch,)):
             self.ctl.submit(lambda dev, x=c: dev.set_comp_eq_order(x, eq_first))
 
-    def response_for(self, ch, f, fs=48000.0, bands=None):
+    def response_for(self, ch, f, fs=48000.0, bands=None, enabled=None):
+        if enabled is None:
+            enabled = self.eq_enabled(ch)
+        if not enabled:
+            return 0.0
         re, im = 1.0, 0.0
         if bands is None:
             bands = tuple(dict(b) for b in self.bands_by_ch[ch])
@@ -4116,7 +4192,17 @@ class Win(Adw.ApplicationWindow):
 
         e = Adw.PreferencesGroup(title="Equaliser")
         W["curve"] = EQCurve(self, ch)
-        e.add(W["curve"])
+        # PreferencesGroup lays out PreferencesRows as full-width list rows.
+        # Adding a bare custom widget was accepted but allocated it no height,
+        # which silently hid both the response graph and the band selector.
+        curve_row = Adw.PreferencesRow()
+        curve_row.set_child(W["curve"])
+        e.add(curve_row)
+        W["eq_on"] = Adw.SwitchRow(
+            title="EQ",
+            subtitle="Independent power for the complete four-band equaliser")
+        W["eq_on"].connect("notify::active", self._eq_power_changed, ch)
+        e.add(W["eq_on"])
         bb = Gtk.Box(halign=Gtk.Align.CENTER, margin_top=8, margin_bottom=4)
         bb.add_css_class("linked")
         W["bands"] = []
@@ -4125,16 +4211,23 @@ class Win(Adw.ApplicationWindow):
             t.connect("toggled", self._band_toggled, i, ch)
             bb.append(t)
             W["bands"].append(t)
-        e.add(bb)
-        W["shape"] = Adw.ComboRow(title="Shape", model=Gtk.StringList.new(SHAPES))
-        W["shape"].connect("notify::selected", self._shape_changed, ch)
-        e.add(W["shape"])
+        band_selector_row = Adw.PreferencesRow()
+        band_selector_row.set_child(bb)
+        e.add(band_selector_row)
+        W["band_on"] = Adw.SwitchRow(title="Low band")
+        W["band_on"].connect("notify::active", self._band_power_changed, ch)
+        e.add(W["band_on"])
+        W["shelf"] = Adw.SwitchRow(
+            title="Low shelf",
+            subtitle="Off selects the XML's parametric mode")
+        W["shelf"].connect("notify::active", self._shelf_changed, ch)
+        e.add(W["shelf"])
         for key, title, lo, hi, st, dv, fmt, sub in (
-                ("freq", "Frequency", 20, 18000, 1, 120,
+                ("freq", "Frequency", 36, 18000, 1, 130,
                  lambda v: "%.0f Hz" % v, None),
                 ("gain", "Gain", -15, 15, 0.1, 0,
                  lambda v: "%+.1f dB" % v, None),
-                ("q", "Q", 0.1, 10, 0.05, 0.7, lambda v: "%.2f" % v,
+                ("q", "Q", 0.1, 10, 0.05, 0.6, lambda v: "%.2f" % v,
                  "Above 1 a shelf resonates and overshoots")):
             r, W[key] = self._srow(title, lo, hi, st, dv, fmt,
                                    lambda v, k=key, c=ch: self._band_set(k, v, c),
@@ -5315,7 +5408,10 @@ class Win(Adw.ApplicationWindow):
         return True
 
     # ------------------------------------------------- alternate-model EQ
-    _ALT_EQ_CONTROLS = ("curve", "shape", "freq", "gain", "q", "eq_flat")
+    _ALT_EQ_CONTROLS = (
+        "curve", "eq_on", "band_on", "shelf", "freq", "gain", "q",
+        "eq_flat",
+    )
 
     def _alt_eq(self, ch):
         """The recalled Passive/Vintage EQ shown on a channel, or None."""
@@ -5344,6 +5440,14 @@ class Win(Adw.ApplicationWindow):
                 W[key].set_sensitive(editable)
         for button in W.get("bands", ()):
             button.set_sensitive(editable)
+        if "eq_on" in W:
+            prior_mute = self._adopt_mute
+            self._adopt_mute = True
+            try:
+                W["eq_on"].set_active(
+                    self.eq_enabled(ch) if editable else bool(view["on"]))
+            finally:
+                self._adopt_mute = prior_mute
         if "alt_eq_note" in W:
             W["alt_eq_note"].set_text("" if editable else self._alt_eq_text(view))
             W["alt_eq_note"].set_visible(not editable)
@@ -5728,9 +5832,15 @@ class Win(Adw.ApplicationWindow):
             for key in ("gate", "comp", "lim"):
                 self._dyn_push(key, ch)
         for ch in (1, 2):
-            for index, band in enumerate(self.bands_by_ch[ch]):
+            if self._alt_eq(ch) is not None:
+                # The exact alternate-model designers are not part of the
+                # running Host.  A clock change must not overwrite a recalled
+                # Passive/Vintage body with stale Standard bands.
+                continue
+            for index in range(4):
+                band = self._effective_eq_band(ch, index)
                 self.ctl.submit(
-                    lambda dev, x=ch, j=index, bb=dict(band), fs=self._fs:
+                    lambda dev, x=ch, j=index, bb=band, fs=self._fs:
                     dev.set_eq_band(x, j, bb["shape"], bb["freq"],
                                     bb["gain"], bb["q"], fs=fs))
         self._push_reverb()
@@ -6270,6 +6380,7 @@ class Win(Adw.ApplicationWindow):
         return self.PR.current_slot_record(
             base, preset_name,
             bands=[dict(band) for band in self.bands_by_ch[target]],
+            eq_on=self.eq_enabled(target),
             hpf_hz=self.hpf_by_ch[target],
             eq_first=self.order_by_ch[target],
             gate=gate, compressor_model=comp_model,
@@ -6373,8 +6484,22 @@ class Win(Adw.ApplicationWindow):
         """
         if getattr(self, "PR", None) is None:
             return False
+        if not hasattr(self, "eq_on_by_ch"):
+            self.eq_on_by_ch = {}
         for ch in chans:
             self.bands_by_ch[ch] = self.PR.to_bands(pr)
+            enabled = getattr(self.PR, "standard_eq_enabled", None)
+            if callable(enabled):
+                try:
+                    self.eq_on_by_ch[ch] = enabled(pr)
+                except io24_presets.UnsupportedPresetModel:
+                    # Alternate models are reattached immediately below by the
+                    # recall path and carry their own independent power value.
+                    self.eq_on_by_ch[ch] = False
+            else:
+                self.eq_on_by_ch[ch] = any(
+                    band.get("shape") != "off"
+                    for band in self.bands_by_ch[ch])
             # This record's EQ (or its absence) now describes the channel; a
             # recall re-marks a Passive/Vintage body after adopting the rest.
             if getattr(self, "alt_eq_by_ch", {}).get(ch) is not None:
@@ -6392,6 +6517,9 @@ class Win(Adw.ApplicationWindow):
         try:
             for ch in chans:
                 self._adopt_band(ch)
+                if "eq_on" in self.w[ch]:
+                    self.w[ch]["eq_on"].set_active(
+                        self.eq_on_by_ch.get(ch, False))
                 self._adopt_hpf_controls(ch, self.hpf_by_ch[ch])
                 self._adopt_dynamics(ch, pr)
                 for key in ("gate", "comp", "lim"):
@@ -6653,23 +6781,54 @@ class Win(Adw.ApplicationWindow):
         self.w[ch]["curve"].queue_draw()
 
     def _adopt_band(self, ch):
-        b = self.bands_by_ch[ch][self.cur_band_by_ch[ch]]
+        index = self.cur_band_by_ch[ch]
+        b = self.bands_by_ch[ch][index]
+        mode = io24_presets.standard_band_mode(b, index)
+        band_on = io24_presets.standard_band_enabled(b)
         W = self.w[ch]
         prior = self._adopt_mute
         self._adopt_mute = True
         try:
-            W["shape"].set_selected(SHAPES.index(b["shape"]))
+            if "eq_on" in W:
+                W["eq_on"].set_active(self.eq_enabled(ch))
+            W["band_on"].set_title("%s band" % BAND_NAMES[index])
+            W["band_on"].set_active(band_on)
+            outer = index in (0, 3)
+            W["shelf"].set_visible(outer)
+            if outer:
+                shelf = "lowshelf" if index == 0 else "highshelf"
+                W["shelf"].set_title(
+                    "Low shelf" if index == 0 else "High shelf")
+                W["shelf"].set_active(mode == shelf)
             W["freq"].set_value(b["freq"])
             W["gain"].set_value(b["gain"])
             W["q"].set_value(b["q"])
         finally:
             self._adopt_mute = prior
 
-    def _shape_changed(self, row, _p, ch):
-        self.bands_by_ch[ch][self.cur_band_by_ch[ch]]["shape"] = \
-            SHAPES[row.get_selected()]
+    def _band_power_changed(self, row, _p, ch):
         if self._adopt_mute:
             return
+        index = self.cur_band_by_ch[ch]
+        band = self.bands_by_ch[ch][index]
+        mode = io24_presets.standard_band_mode(band, index)
+        band["mode"] = mode
+        band["on"] = bool(row.get_active())
+        band["shape"] = mode if band["on"] else "off"
+        self._push_band(ch)
+
+    def _shelf_changed(self, row, _p, ch):
+        if self._adopt_mute:
+            return
+        index = self.cur_band_by_ch[ch]
+        if index not in (0, 3):
+            return
+        band = self.bands_by_ch[ch][index]
+        shelf = "lowshelf" if index == 0 else "highshelf"
+        mode = shelf if row.get_active() else "peaking"
+        band["mode"] = mode
+        if io24_presets.standard_band_enabled(band):
+            band["shape"] = mode
         self._push_band(ch)
 
     def _band_set(self, key, v, ch):
@@ -6740,26 +6899,30 @@ class Win(Adw.ApplicationWindow):
     def _push_band(self, ch):
         self.invalidate_curve()
         i = self.cur_band_by_ch[ch]
-        b = dict(self.bands_by_ch[ch][i])
         for c in self._eq_write_targets(ch):
             if c != ch:
-                self.bands_by_ch[c][i] = dict(b)
+                self.bands_by_ch[c][i] = dict(self.bands_by_ch[ch][i])
                 self._adopt_band(c)
-            self.ctl.submit(lambda dev, x=c, fs=self._fs: dev.set_eq_band(
-                x, i, b["shape"], b["freq"], b["gain"], b["q"], fs=fs))
+            band = self._effective_eq_band(c, i)
+            self.ctl.submit(
+                lambda dev, x=c, j=i, bb=band, fs=self._fs:
+                dev.set_eq_band(x, j, bb["shape"], bb["freq"], bb["gain"],
+                                bb["q"], fs=fs))
         for c in self.w:
             self.w[c]["curve"].queue_draw()
 
     def _eq_flat(self, ch):
         self.invalidate_curve()
         for c in self._eq_write_targets(ch):
-            for b in self.bands_by_ch[c]:
-                b["shape"] = "off"
+            for index, band in enumerate(self.bands_by_ch[c]):
+                band["mode"] = io24_presets.standard_band_mode(band, index)
+                band["on"] = False
+                band["shape"] = "off"
             self.ctl.submit(lambda dev, x=c: dev.eq_off(x))
             prior = self._adopt_mute
             self._adopt_mute = True
             try:
-                self.w[c]["shape"].set_selected(0)
+                self.w[c]["band_on"].set_active(False)
             finally:
                 self._adopt_mute = prior
             self.w[c]["curve"].queue_draw()
@@ -7023,6 +7186,7 @@ class Win(Adw.ApplicationWindow):
         when a band changes, so cache it against the band state and the width.
         """
         key = (int(w), int(h), ch,
+               self.eq_enabled(ch),
                tuple((b["shape"], round(b["freq"], 2), round(b["gain"], 3),
                       round(b["q"], 3)) for b in self.bands_by_ch[ch]))
         cache = getattr(self, "_curves", None)
@@ -7090,10 +7254,19 @@ class Win(Adw.ApplicationWindow):
                 -2 * cw / a0, (1 - al) / a0)
 
     def _host_features_state(self):
-        """The Host-only half of a snapshot: Multiband, reverb character, and
-        which inputs have Auto gain on (remembered at the user's request,
-        2026-09-11; recorded only while one is on)."""
+        """The Host-only half of a snapshot.
+
+        The Standard EQ entry preserves the controls hidden behind its global
+        and per-band bypass switches.  The driver's shadow contains only the
+        effective coefficients and therefore cannot reconstruct those values
+        after four identity filters were sent.
+        """
         host_features = {}
+        standard_eq_state = getattr(self, "_standard_eq_state", None)
+        if callable(standard_eq_state):
+            standard_eq = standard_eq_state()
+            if standard_eq is not None:
+                host_features["standard_eq"] = standard_eq
         insert = self._insert_state()
         if insert is not None:
             host_features["multiband_insert"] = insert
@@ -7105,6 +7278,76 @@ class Win(Adw.ApplicationWindow):
         if autogain:
             host_features["autogain"] = {"version": 1, "on": autogain}
         return host_features
+
+    def _standard_eq_state(self):
+        """Return the semantic Standard-EQ state that coefficients cannot hold."""
+        channels = {}
+        bands_by_ch = getattr(self, "bands_by_ch", {})
+        for ch in (1, 2):
+            bands = bands_by_ch.get(ch)
+            if not isinstance(bands, (list, tuple)) or len(bands) != 4:
+                continue
+            if self._alt_eq(ch) is not None:
+                # A recalled Passive/Vintage section remains in its slot body;
+                # it must never be mislabeled as four Standard bands.
+                continue
+            channels[str(ch)] = {
+                "on": self.eq_enabled(ch),
+                "bands": [dict(band) for band in bands],
+            }
+        if not channels:
+            return None
+        return io24_presets.validate_standard_eq_host_state({
+            "version": 1,
+            "channels": channels,
+        })
+
+    def _adopt_standard_eq_state(self, state):
+        """Restore Standard controls without replaying a second device write."""
+        if state is None:
+            return None
+        try:
+            state = io24_presets.validate_standard_eq_host_state(state)
+        except (TypeError, ValueError) as error:
+            return "Standard EQ was not restored: %s" % error
+        if not hasattr(self, "eq_on_by_ch"):
+            self.eq_on_by_ch = {}
+        if not hasattr(self, "bands_by_ch"):
+            self.bands_by_ch = {}
+        prior = getattr(self, "_adopt_mute", False)
+        self._adopt_mute = True
+        restored = []
+        try:
+            for channel, body in state["channels"].items():
+                ch = int(channel)
+                self.eq_on_by_ch[ch] = body["on"]
+                self.bands_by_ch[ch] = [dict(band)
+                                        for band in body["bands"]]
+                show_alternate = getattr(self, "_show_alternate_eq", None)
+                if callable(show_alternate):
+                    show_alternate(ch, None)
+                controls = getattr(self, "w", {}).get(ch, {})
+                switch = controls.get("eq_on")
+                if switch is not None:
+                    switch.set_active(body["on"])
+                adopt_band = getattr(self, "_adopt_band", None)
+                if callable(adopt_band) and controls:
+                    adopt_band(ch)
+                curve = controls.get("curve")
+                if curve is not None:
+                    curve.queue_draw()
+                restored.append(ch)
+        finally:
+            self._adopt_mute = prior
+        invalidate = getattr(self, "invalidate_curve", None)
+        if callable(invalidate):
+            invalidate()
+        for rack in getattr(self, "racks", {}).values():
+            rack.queue_draw()
+        if restored:
+            return "Standard EQ controls restored on Input %s" % \
+                " and ".join(str(ch) for ch in restored)
+        return None
 
     def _save_last_session(self, path=None):
         """Remember the Host-only state for the next launch.
@@ -7166,7 +7409,17 @@ class Win(Adw.ApplicationWindow):
         automatic resume.
         """
         session = load_last_session(path) if first else None
-        host_features = (session or {}).get("host_features") if first else None
+        if first:
+            host_features = (session or {}).get("host_features")
+        else:
+            # Reapply sends the effective EQ shadow.  If a complete EQ was
+            # bypassed that shadow is four identity filters, so keep the live
+            # semantic controls beside it and re-adopt them after reconnect.
+            standard_eq_state = getattr(self, "_standard_eq_state", None)
+            standard_eq = standard_eq_state() \
+                if callable(standard_eq_state) else None
+            host_features = ({"standard_eq": standard_eq}
+                             if standard_eq is not None else None)
 
         def work(dev):
             # The worker hands each job the Io24 driver itself
@@ -7309,6 +7562,11 @@ class Win(Adw.ApplicationWindow):
                     self.bands_by_ch[ch][band] = dict(values)
                 if state["eq"][ch]:
                     # the load has just written Standard bands to this channel
+                    if not hasattr(self, "eq_on_by_ch"):
+                        self.eq_on_by_ch = {}
+                    self.eq_on_by_ch[ch] = any(
+                        band.get("shape") != "off"
+                        for band in state["eq"][ch].values())
                     self._show_alternate_eq(ch, None)
                     self._adopt_band(ch)
 
@@ -7431,6 +7689,8 @@ class Win(Adw.ApplicationWindow):
             rack.queue_draw()
         host_messages = []
         if host_features:
+            standard_eq_message = self._adopt_standard_eq_state(
+                host_features.get("standard_eq"))
             multiband_message = self._adopt_legacy_multiband(
                 host_features.get("multiband"))
             insert_message = self._adopt_insert_state(
@@ -7440,7 +7700,8 @@ class Win(Adw.ApplicationWindow):
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
             host_messages = [message for message in
-                             (multiband_message, insert_message,
+                             (standard_eq_message, multiband_message,
+                              insert_message,
                               reverb_message, autogain_message) if message]
         self._insert_reconcile()
         if completion_message is not None:

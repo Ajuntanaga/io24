@@ -106,6 +106,7 @@ class AlternateEqViewTests(unittest.TestCase):
 class _Widget:
     def __init__(self):
         self.sensitive, self.visible, self.text, self.draws = True, None, "", 0
+        self.active = False
 
     def set_sensitive(self, value):
         self.sensitive = bool(value)
@@ -115,6 +116,12 @@ class _Widget:
 
     def set_text(self, text):
         self.text = text
+
+    def set_active(self, value):
+        self.active = bool(value)
+
+    def get_active(self):
+        return self.active
 
     def queue_draw(self):
         self.draws += 1
@@ -144,6 +151,7 @@ def _eq_widgets():
 
 def _window():
     window = io24gtk.Win.__new__(io24gtk.Win)
+    window._adopt_mute = False
     window.messages = []
     window.say = window.messages.append
     window.link_both = False

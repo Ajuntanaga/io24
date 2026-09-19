@@ -13,6 +13,7 @@ that describe this device.
 |---|---|
 | `dsp_fx_params.xml` | the Voice FX and reverb parameter lists, plus the Voice FX class-ID template table |
 | `dspusb_component_model.xml` | the DSP-USB channel model: `MicLineInputDSP` / `StereoLineInputDSP` templates and the `starttag` numbering |
+| `fatchannelxt_eq_contract.xml` | bounded UC 4.7.2 `Eqxt4` Standard-EQ contract: global power, four independent band-power fields, the two outer shelf selectors, ranges and defaults |
 
 ## Why it matters
 
@@ -43,3 +44,9 @@ structure: `voicefxopt/fxmodel` becomes the one `VoFx` selection, and each
 component's own first `on` parameter is encoded in its model-state tag. There
 is no container-level/master VoiceFX enable. After materialization, UC sends
 only the selected component's state for On/Off and ordinary edits.
+
+The Standard-EQ excerpt has the same boundary. It proves that `eqallon` is a
+complete-EQ switch distinct from `eqbandon1..4`; that only `eqbandop1` and
+`eqbandop4` are real mutable shelf selectors; and that all four frequency
+controls span 36–18000 Hz with Q 0.1–10 (default/midpoint 0.6). The device still
+receives only the resulting four coefficient blobs.

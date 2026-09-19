@@ -3035,7 +3035,8 @@ def _normalise_host_features(features):
     # contents when it adopts them and reports what it could not use. They
     # were saved but refused here, so a snapshot with either failed to save.
     unknown = set(features) - {"multiband", "multiband_insert", "pan",
-                               "reverb_character", "autogain"}
+                               "reverb_character", "autogain",
+                               "standard_eq"}
     if unknown:
         raise ValueError("unknown host feature%s: %s" %
                          ("" if len(unknown) == 1 else "s",
@@ -3047,6 +3048,11 @@ def _normalise_host_features(features):
             if not isinstance(features[name], dict):
                 raise ValueError("host feature %s must be an object" % name)
             normalized[name] = json.loads(json.dumps(features[name]))
+    if "standard_eq" in features:
+        import io24_presets
+        normalized["standard_eq"] = \
+            io24_presets.validate_standard_eq_host_state(
+                features["standard_eq"])
     if "multiband" in features:
         # The retired computer-playback multiband. Still read, so its band
         # settings can seed the Multiband compressor type; never switched on.

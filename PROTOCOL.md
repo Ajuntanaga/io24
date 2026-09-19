@@ -2855,9 +2855,18 @@ dev.set_eq_band(1, "high",  "highshelf", freq_hz=8000, gain_db=+2)
 dev.eq_off(1)
 ```
 
-Bands: `low` / `lowmid` / `himid` / `high` (or 0–3). Shapes: `peaking`,
-`lowshelf`, `highshelf`, `hp`, `lp`, `off`. Ranges follow the host descriptors —
-gain ±15 dB, Q 0.1–10, freq 20–18000 Hz.
+The low-level driver API names bands `low` / `lowmid` / `himid` / `high` (or
+0–3) and also retains `hp` / `lp` helper shapes for direct callers. Those two
+helpers are not controls in UC's Standard component.
+
+The GTK Host follows UC 4.7.2's embedded `fatchannelxt.xml` `Eqxt4` contract
+exactly: `eqallon` is one complete-EQ switch, independent of
+`eqbandon1..4`; Low and High alone expose `eqbandop1/4` for shelf versus
+parametric mode; Low-Mid and Hi-Mid are fixed parametric bands. All four
+frequency ranges are 36–18000 Hz, gain is ±15 dB, and Q is 0.1–10 with 0.6 as
+both default and skew midpoint. Defaults are 130, 320, 1400 and 5000 Hz. The
+bounded recovered schema is retained at
+`re/uc_component_model/fatchannelxt_eq_contract.xml`.
 
 Standard peaking, low shelf, and high shelf are transcribed in binary64
 instruction order from UC 4.7.2 designer selectors 6, 8, and 9, including
@@ -2940,8 +2949,11 @@ bands each asked for +15 dB give **+60 dB**, not +15. The measurements above use
 cuts for exactly this reason. Nothing in the API prevents the stack — the device
 clamps each band's parameters, not their product.
 
-The high-shelf designer is still the un-transcribed one, so it is verified as
-*working*, not as *bit-identical to Universal Control*.
+The high-shelf designer is now transcribed from UC 4.7.2 selector 9, alongside
+peaking selector 6 and low-shelf selector 8. These are source-bound binary64
+instruction transcriptions with binary32 boundaries; their vectors are
+regressions of the transcription, not an independent captured-UC bit-identity
+proof.
 
 ### All six FX models
 
@@ -4278,12 +4290,14 @@ They are distinguishable in a `.scene` by class GUID and by field set:
 
 | model | GUID | fields | real-world model | status here |
 |---|---|---|---|---|
-| Standard | `{A0A8A068-…}` | `eqgain1..4`, `eqq1..4`, `eqfreq1..4` (Hz), `eqbandon1..4`, `eqbandop1/4` | — | **applied as-is**; this GUID is also what the firmware's factory presets carry |
+| Standard | `{A0A8A068-…}` | `eqallon`; `eqgain1..4`, `eqq1..4`, `eqfreq1..4` (Hz), independent `eqbandon1..4`, outer `eqbandop1/4` | — | **applied as-is**; GTK mirrors UC's exact `Eqxt4` controls and this GUID is also what the firmware's factory presets carry |
 | Vintage 1970s | `{E1C5E024-…}` | `lowgain/lowfreq`, `lowmidgain/lowmidfreq`, `himidgain/himidfreq`, `higain` | **Neve 1073** — LF 35/60/110/220 Hz, low-mid 360/700/1600 Hz, hi-mid 3200/4800/7200 Hz, fixed HF, ±16 dB | tables and all four designers recovered offline from pinned UC 4.7.2; direct-live Host editing remains paused because the executable path depends on the retained DLL |
 | Passive Program | `{C0730CBB-…}` | Low Boost, Low Attenuation, Low Frequency Select, High Bandwidth, High Boost, High Attenuation, High Frequency, Attenuation Select | **Pultec EQP-1A** — the boost/attenuate-at-once topology is unmistakable | factory **Big Vocal** fixture recovered; both exact designers executable offline from pinned UC 4.7.2; running Host remains fail-closed without that retained DLL |
 
-`eqbandop1` / `eqbandop4` are confirmed as the Low Shelf and High Shelf toggles by
-the manual's Standard EQ control list, which is how `io24_scene.py` treats them.
+`eqallon` is distinct from all four per-band switches. `eqbandop1` /
+`eqbandop4` are confirmed as the Low Shelf and High Shelf toggles by both the
+manual and UC 4.7.2's embedded `fatchannelxt.xml`; the middle option fields have
+empty flags and are not exposed as controls.
 
 ### Compressor models
 

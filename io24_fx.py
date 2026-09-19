@@ -4,12 +4,10 @@ Runnable and self-tested (python3 io24_fx.py -> "OK -- all six models").
 Also saved at
 
 Block 201 is the insert-FX slot (dev+0x11e0, a singleton -- blockIndex ignored).
-Arming a model always takes two writes:
-
-    1)  SetP | 201 | 'VoFx' size 0x10 | {u32 model}         model 0..5
-    2)  SetP | 201 | <the model's own blob>
-
-Models 0, 1 and 2 additionally push auxiliary biquad blobs on the SAME block.
+UC 4.7.2 selects a model once, immediately materializes that model's complete
+runtime state, and then sends state-only writes for ordinary On/Off and control
+edits.  Models 0, 1 and 2 also push sample-rate-dependent filter material on
+the same block when the model or its filter configuration changes.
 Everything here is static analysis of the Windows host driver dspusbdevice.dll
 (PE32+, imagebase 0x180000000) cross-checked against the io24's own Thumb-2
 firmware embedded in that DLL (file 0x216030..0x323a70, load VA 0x60020000;
@@ -24,7 +22,7 @@ model -> class binding (proved, not guessed):
   exactly ONCE as an immediate in the whole .text, inside exactly one push:
 
     m  name            case        ctor/inline   vtable       setParam     push         tag    size
-    0  Transformer     0x1800499e0 0x18004ae90   0x1804362a0  0x1800229f0  0x180022a90  godv   0x20
+    0  Transformer     0x1800499e0 0x18004ae90   0x1804362a0  0x1800222d0  0x180022370  godv   0x20
     1  De-Tuner        0x180049be3 0x18004b430   0x180435f30  0x1800236b0  0x180023740  may4   0x24
     2  Vocoder         0x180049a0f 0x18004b080   0x180436400  0x180022ce0  0x180022dc0  bota   0x28
     3  Ring Modulator  0x180049a3e 0x18004b280   0x180436090  0x180023390  0x1800234b0  botb   0x28
@@ -46,7 +44,7 @@ model -> class binding (proved, not guessed):
 # block-202 send/return object.  Native Stat recall stores the high-level model
 # state and configures that private core.  These direct blob builders are a
 # separate live-control path. Model selection uses a deferred bypass/rebuild
-# transition; Io24.send_fx supplies the required pacing and state replay.
+# transition.  UC does not add a host-side delay or replay the selector.
 
 
 import math
@@ -78,6 +76,7 @@ TAG_BOTC = 0x626f7463   # 'botc'  model 4
 TAG_VECH = 0x76656368   # 'vech'  model 5  (verified)
 TAG_INIA = 0x696e6961   # 'inia'  model 2 filter bank
 TAG_BQDF = 0x42716466   # 'Bqdf'  generic single biquad (models 0 and 1)
+TAG_MBDF = 0x4d426466   # 'MBdf'  sample-rate-indexed biquad table (model 0)
 
 MODEL_NAMES = ['Transformer', 'De-Tuner', 'Vocoder',
                'Ring Modulator', 'Filters', 'Delay']
@@ -101,36 +100,160 @@ _VOICEFX_MODEL_BY_CLASS_ID = {
     for model, class_id in VOICEFX_CLASS_IDS.items()
 }
 
-# (serialized UC field, io24 builder keyword, conversion kind).  UC saves only
-# the selected mutable child's fields; these six schemas are the exact
-# storable parameter lists in dsp_fx_params.xml.
+# A runtime-safe transcription of ``re/uc_component_model/dsp_fx_params.xml``.
+# The retained XML is the authority for order, names, type, bounds, defaults,
+# curve, midpoint, units, flags and list labels.  ``builder`` is the one local
+# addition: it names the exact keyword accepted by the recovered wire builder.
+# Keeping that adapter beside the XML field prevents the Host UI, preset JSON
+# and packet builders from acquiring three independently maintained maps.
+VOICEFX_XML_SCHEMA = {
+    'transformer': {
+        'paramlist': 'VoiceOfGod',
+        'title': 'Doubler / Transformer',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'lows', 'name': 'Lows', 'type': 'float', 'builder': 'lows',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+            {'id': 'width', 'name': 'Width', 'type': 'float', 'builder': 'width',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+    'detuner': {
+        'paramlist': 'DarthVoice',
+        'title': 'Detuner',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'detune', 'name': 'Detune', 'type': 'list',
+             'builder': 'detune', 'default': 4,
+             'units': 'TuneList',
+             'choices': ('-8', '-7', '-6', '-5', '-4', '-3', '-2', '-1', '0'),
+             'flags': ('storable',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+    'vocoder': {
+        'paramlist': 'RobotVoiceA',
+        'title': 'Vocoder',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'avol', 'name': 'Volume', 'type': 'float', 'builder': 'vol',
+             'min': 0.0, 'max': 1.0, 'default': 1.0, 'units': 'percent',
+             'flags': ('storable',)},
+            {'id': 'acarriertype', 'name': 'Carrier Type', 'type': 'list',
+             'builder': 'carrier_type', 'default': 1, 'units': 'Carriers',
+             'choices': ('Noise', 'Sawtooth', 'Rect'),
+             'flags': ('storable',)},
+            {'id': 'acarrierfreq', 'name': 'Carrier Frequency', 'type': 'float',
+             'builder': 'carrier_freq', 'min': 50.0, 'max': 500.0,
+             'curve': 'skew', 'mid': 100.0, 'default': 80.0, 'units': 'freq',
+             'flags': ('storable',)},
+            {'id': 'avoiced', 'name': 'Voiced', 'type': 'float', 'builder': None,
+             'min': 0.0, 'max': 1.0, 'flags': ('readonly',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+    'ringmod': {
+        'paramlist': 'RobotVoiceB',
+        'title': 'Ring Modulator',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'bcarrierfreq', 'name': 'Frequency', 'type': 'float',
+             'builder': 'carrier_hz', 'min': 0.1, 'max': 2000.0,
+             'curve': 'skew', 'mid': 30.0, 'default': 30.0, 'units': 'freq',
+             'flags': ('storable',)},
+            {'id': 'bcarrier2', 'name': 'Sub Carrier', 'type': 'toggle',
+             'builder': 'carrier2', 'flags': ('storable',)},
+            {'id': 'bcarrier2freq', 'name': 'Sub Carrier Frequency',
+             'type': 'float', 'builder': 'carrier2_hz', 'min': 0.1,
+             'max': 2000.0, 'curve': 'skew', 'mid': 30.0, 'default': 50.0,
+             'units': 'freq', 'flags': ('storable',)},
+            {'id': 'bdist', 'name': 'Distortion', 'type': 'float',
+             'builder': 'dist', 'min': 0.0, 'max': 1.0, 'default': 0.5,
+             'units': 'percent', 'flags': ('storable',)},
+            {'id': 'bvol', 'name': 'Volume', 'type': 'float', 'builder': 'vol',
+             'min': 0.0, 'max': 1.0, 'default': 1.0, 'units': 'percent',
+             'flags': ('storable',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+    'filters': {
+        'paramlist': 'RobotVoiceC',
+        'title': 'Filters',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'ctune', 'name': 'Pitch', 'type': 'float', 'builder': 'pitch',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+            {'id': 'cfb', 'name': 'Regeneration', 'type': 'float',
+             'builder': 'regeneration', 'min': 0.0, 'max': 1.0,
+             'default': 0.5, 'units': 'percent', 'flags': ('storable',)},
+            {'id': 'cdamp', 'name': 'Damping', 'type': 'float',
+             'builder': 'damping', 'min': 0.0, 'max': 1.0,
+             'default': 0.5, 'units': 'percent', 'flags': ('storable',)},
+            {'id': 'cdist', 'name': 'Distortion', 'type': 'float',
+             'builder': 'distortion', 'min': 0.0, 'max': 1.0,
+             'default': 0.5, 'units': 'percent', 'flags': ('storable',)},
+            {'id': 'cvol', 'name': 'Volume', 'type': 'float',
+             'builder': 'volume', 'min': 0.0, 'max': 1.0, 'default': 1.0,
+             'units': 'percent', 'flags': ('storable',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+    'delay': {
+        'paramlist': 'VocalEcho',
+        'title': 'Delay',
+        'parameters': (
+            {'id': 'on', 'name': 'On', 'type': 'toggle', 'builder': 'on',
+             'flags': ('storable',)},
+            {'id': 'time', 'name': 'Time', 'type': 'float', 'builder': 'time_s',
+             'min': 0.0001, 'max': 0.25, 'mid': 0.125, 'default': 0.125,
+             'units': 'time', 'flags': ('storable',)},
+            {'id': 'feedback', 'name': 'Feedback', 'type': 'float',
+             'builder': 'feedback', 'min': 0.0, 'max': 1.0,
+             'default': 0.5, 'units': 'percent', 'flags': ('storable',)},
+            {'id': 'mix', 'name': 'WetDry', 'type': 'float', 'builder': 'mix',
+             'min': 0.0, 'max': 1.0, 'default': 0.5, 'units': 'percent',
+             'flags': ('storable',)},
+        ),
+    },
+}
+
+
+def _voicefx_conversion(parameter):
+    if parameter['type'] == 'toggle':
+        return 'bool'
+    if parameter['type'] == 'list':
+        return 'int'
+    return 'float'
+
+
+# (serialized UC field, io24 builder keyword, conversion kind), derived from
+# the schema above. Read-only XML fields such as Vocoder ``avoiced`` have no
+# builder and therefore cannot accidentally become a SetP argument.
 _VOICEFX_PRESET_FIELDS = {
-    'transformer': (
-        ('on', 'on', 'bool'), ('lows', 'lows', 'float'),
-        ('width', 'width', 'float'), ('mix', 'mix', 'float')),
-    'detuner': (
-        ('on', 'on', 'bool'), ('detune', 'detune', 'int'),
-        ('mix', 'mix', 'float')),
-    'vocoder': (
-        ('on', 'on', 'bool'), ('avol', 'vol', 'float'),
-        ('acarriertype', 'carrier_type', 'int'),
-        ('acarrierfreq', 'carrier_freq', 'float'),
-        ('mix', 'mix', 'float')),
-    'ringmod': (
-        ('on', 'on', 'bool'), ('bcarrierfreq', 'carrier_hz', 'float'),
-        ('bcarrier2', 'carrier2', 'bool'),
-        ('bcarrier2freq', 'carrier2_hz', 'float'),
-        ('bdist', 'dist', 'float'), ('bvol', 'vol', 'float'),
-        ('mix', 'mix', 'float')),
-    'filters': (
-        ('on', 'on', 'bool'), ('ctune', 'pitch', 'float'),
-        ('cfb', 'regeneration', 'float'),
-        ('cdamp', 'damping', 'float'),
-        ('cdist', 'distortion', 'float'),
-        ('cvol', 'volume', 'float'), ('mix', 'mix', 'float')),
-    'delay': (
-        ('on', 'on', 'bool'), ('time', 'time_s', 'float'),
-        ('feedback', 'feedback', 'float'), ('mix', 'mix', 'float')),
+    model: tuple((parameter['id'], parameter['builder'],
+                  _voicefx_conversion(parameter))
+                 for parameter in component['parameters']
+                 if parameter['builder'] is not None)
+    for model, component in VOICEFX_XML_SCHEMA.items()
 }
 
 
@@ -303,6 +426,32 @@ def bqdf_blob(band, coeffs, index=0):
     return b
 
 
+def mbdf_blob(table, rate_coefficients, index=0):
+    """Build UC's 0x1f4-byte sample-rate-indexed ``MBdf`` table.
+
+    ``rate_coefficients`` is an iterable of ``(sample_rate, five_coeffs)``.
+    UC 4.7.2 allocates room for 20 entries, writes the active entry count at
+    +0x1f0, and currently supplies 44.1/48/88.2/96 kHz.  Its unused stack
+    slots contain indeterminate bytes; zeroing them is deterministic and safe
+    because firmware consumes only ``count`` entries.
+    """
+    entries = list(rate_coefficients)
+    if not 0 <= int(table) <= 0xFFFFFFFF:
+        raise ValueError("MBdf table must fit u32")
+    if not 0 < len(entries) <= 20:
+        raise ValueError("MBdf requires 1..20 sample-rate entries")
+    blob = bytearray(0x1F4)
+    struct.pack_into('<IIII', blob, 0, TAG_MBDF, 0x1F4, index, int(table))
+    for position, (sample_rate, coefficients) in enumerate(entries):
+        coefficients = tuple(coefficients)
+        if len(coefficients) != 5:
+            raise ValueError("each MBdf entry requires five coefficients")
+        struct.pack_into('<6f', blob, 0x10 + position * 0x18,
+                         *coefficients, f32(sample_rate))
+    struct.pack_into('<I', blob, 0x1F0, len(entries))
+    return bytes(blob)
+
+
 # ======================================================================
 # model 5 -- DELAY  (reference; hardware-verified, reproduced UNCHANGED
 #                    from io24_meters.py)
@@ -315,18 +464,19 @@ def fx_delay(on, time_s, feedback, mix):
 
 
 # ======================================================================
-# model 0 -- TRANSFORMER   tag 'godv' 0x20  (+ two 'Bqdf' 0x24)
+# model 0 -- TRANSFORMER   tag 'godv' 0x20
+#                         (+ two 'Bqdf' 0x24, two 'MBdf' 0x1f4)
 # ======================================================================
 # The factory preset titled "Reverb" selects this model.  Its scene/Stat JSON
 # contains only class id + on/lows/width/mix.  In firmware, model 0 constructs
 # a private reverb core at model+0x384 using the same 0x5af14 constructor and
 # 0x5a6a8 configurator as shared reverb block 202.  Do not add vrvb/FXA state
 # when storing this model; sample-rate-dependent configuration is runtime state.
-# setParam 0x1800229f0: id0 on -> obj+0x60 (u32, (v>=1.0f))
+# setParam 0x1800222d0: id0 on -> obj+0x60 (u32, (v>=1.0f))
 #                       id1 lows -> obj+0x64 AND obj+0x6c, sets dirty obj+0x110
 #                       id2 width -> obj+0x68     id3 mix -> obj+0x70
-# push 0x180022a90:  if dirty: Bqdf(band 0, 600 Hz) ; Bqdf(band 1, 550 Hz)
-#                              [+ 2 x 'MBdf' guarded by obj+0x48, ctor-zeroed]
+# push 0x180022370:  if dirty: Bqdf(band 0, 600 Hz) ; Bqdf(band 1, 550 Hz)
+#                              MBdf(table 0, 600 Hz); MBdf(table 1, 550 Hz)
 #                    always : 'godv' = movups obj+0x60..0x6f then obj+0x70
 # firmware 'godv' handler 0x6007bc0a copies exactly 5 dwords blob+0x0c..+0x1c
 #   -> dev+0x340..+0x350, and dev+0x358 = 0.2 + blob[0x14]*0.2 (width).
@@ -334,11 +484,46 @@ def fx_delay(on, time_s, feedback, mix):
 TRANSFORMER_SHELF_FREQ = (f32(600.0), f32(550.0))   # 0x180481aa8 / 0x180481aa4
 TRANSFORMER_SHELF_Q = f32(0.7)                      # 0x1804818f0
 TRANSFORMER_SHELF_MAXDB = f32(12.0)                 # 0x180481a14
+TRANSFORMER_SAMPLE_RATES = (44100.0, 48000.0, 88200.0, 96000.0)
+
+
+def fx_transformer(on=True, lows=0.5, width=0.5, mix=0.5, index=0):
+    """Return the Transformer model-state ``godv`` blob."""
+    lows = min(max(f32(lows), 0.0), 1.0)
+    width = min(max(f32(width), 0.0), 1.0)
+    mix = min(max(f32(mix), 0.0), 1.0)
+    blob = struct.pack('<III', TAG_GODV, 0x20, index) + struct.pack(
+        '<Iffff', 1 if on else 0, lows, width, lows, mix)
+    assert len(blob) == 0x20
+    return blob
+
+
+def fx_transformer_tone_blobs(lows=0.5, fs=48000.0, index=0):
+    """Return UC's two current-rate filters and two all-rate tables."""
+    lows = min(max(f32(lows), 0.0), 1.0)
+    gain_db = f32(lows * TRANSFORMER_SHELF_MAXDB)
+    current = [
+        bqdf_blob(table, biquad_lowshelf(frequency, gain_db, fs,
+                                         TRANSFORMER_SHELF_Q), index)
+        for table, frequency in enumerate(TRANSFORMER_SHELF_FREQ)
+    ]
+    tables = []
+    for table, frequency in enumerate(TRANSFORMER_SHELF_FREQ):
+        entries = [
+            (sample_rate,
+             biquad_lowshelf(frequency, gain_db, sample_rate,
+                             TRANSFORMER_SHELF_Q))
+            for sample_rate in TRANSFORMER_SAMPLE_RATES
+        ]
+        tables.append(mbdf_blob(table, entries, index))
+    return current + tables
 
 
 def fx_transformer_blobs(on=True, lows=0.5, width=0.5, mix=0.5,
                          fs=48000.0, index=0):
-    """Returns the three blobs in push order: Bqdf band 0, Bqdf band 1, godv.
+    """Return UC's five materialization blobs in their captured push order.
+
+    The order is Bqdf 0, Bqdf 1, MBdf 0, MBdf 1, then godv.
 
     'godv', size 0x20:
        +0x0c u32 on | +0x10 f32 lows | +0x14 f32 width
@@ -351,18 +536,8 @@ def fx_transformer_blobs(on=True, lows=0.5, width=0.5, mix=0.5,
 
     Both Bqdf blobs are RBJ low shelves at Q 0.7 with gain = lows * 12 dB,
     at 600 Hz (band 0) and 550 Hz (band 1)."""
-    lows = min(max(f32(lows), 0.0), 1.0)
-    width = min(max(f32(width), 0.0), 1.0)
-    mix = min(max(f32(mix), 0.0), 1.0)
-    gain_db = f32(lows * TRANSFORMER_SHELF_MAXDB)
-    godv = struct.pack('<III', TAG_GODV, 0x20, index) + struct.pack(
-        '<Iffff', 1 if on else 0, lows, width, lows, mix)
-    assert len(godv) == 0x20
-    return [bqdf_blob(0, biquad_lowshelf(TRANSFORMER_SHELF_FREQ[0], gain_db,
-                                         fs, TRANSFORMER_SHELF_Q), index),
-            bqdf_blob(1, biquad_lowshelf(TRANSFORMER_SHELF_FREQ[1], gain_db,
-                                         fs, TRANSFORMER_SHELF_Q), index),
-            godv]
+    return (fx_transformer_tone_blobs(lows, fs, index) +
+            [fx_transformer(on, lows, width, mix, index)])
 
 
 # ======================================================================
@@ -586,6 +761,53 @@ def set_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5):
 
 
 # ======================================================================
+# convenience: steady-state updates after a model has been materialized
+# ======================================================================
+def update_fx_transformer(on=True, lows=0.5, width=0.5, mix=0.5,
+                          fs=48000.0, index=0, refresh_tone=False):
+    """Update Transformer without replaying ``VoFx``.
+
+    On, Width and WetDry edits are one ``godv`` write.  Lows (or sample-rate)
+    changes refresh the same four filter payloads UC emits before ``godv``.
+    """
+    blobs = []
+    if refresh_tone:
+        blobs.extend(fx_transformer_tone_blobs(lows, fs, index))
+    blobs.append(fx_transformer(on, lows, width, mix, index))
+    return [setp(BLOCK_FX, blob) for blob in blobs]
+
+
+def update_fx_detuner(on=True, detune=4, mix=0.5, fs=48000.0, index=0,
+                      refresh_tone=False):
+    blobs = [fx_detuner(on, detune, mix, index)]
+    if refresh_tone:
+        blobs.append(fx_detuner_biquad(fs, index))
+    return [setp(BLOCK_FX, blob) for blob in blobs]
+
+
+def update_fx_vocoder(on=True, carrier_type=1, carrier_freq=80.0, vol=1.0,
+                      mix=0.5, fs=48000.0, index=0,
+                      refresh_filters=False):
+    blobs = []
+    if refresh_filters:
+        blobs.append(fx_vocoder_filters(fs, index))
+    blobs.append(fx_vocoder(on, carrier_type, carrier_freq, vol, mix, index))
+    return [setp(BLOCK_FX, blob) for blob in blobs]
+
+
+def update_fx_ringmod(**kw):
+    return [setp(BLOCK_FX, fx_ringmod(**kw))]
+
+
+def update_fx_filters(**kw):
+    return [setp(BLOCK_FX, fx_filters(**kw))]
+
+
+def update_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5):
+    return [setp(BLOCK_FX, fx_delay(on, time_s, feedback, mix))]
+
+
+# ======================================================================
 # self-test -- each push routine is re-simulated from its disassembly
 # ======================================================================
 if __name__ == '__main__':
@@ -724,7 +946,7 @@ if __name__ == '__main__':
         '00000000' '00000000' '00000000' '0000003f')
     assert struct.unpack_from('<III', fx_detuner(True, 8, 0.3), 0x14) == (0, 0, 0)
 
-    # -- model 0: push 0x180022a90 -----------------------------------------
+    # -- model 0: push 0x180022370 -----------------------------------------
     def m0_sim(on, lows, width, mix):
         m = bytearray(0x120)
         struct.pack_into('<I', m, 0x60, 1 if on >= 1.0 else 0)
@@ -740,13 +962,17 @@ if __name__ == '__main__':
         return bytes(buf)
 
     bl = fx_transformer_blobs(True, 0.75, 0.8, 0.9)
-    assert [len(x) for x in bl] == [0x24, 0x24, 0x20]
-    assert bl[0][:4] == b'fdqB' and bl[1][:4] == b'fdqB' and bl[2][:4] == b'vdog'
+    assert [len(x) for x in bl] == [0x24, 0x24, 0x1f4, 0x1f4, 0x20]
+    assert (bl[0][:4] == b'fdqB' and bl[1][:4] == b'fdqB' and
+            bl[2][:4] == b'fdBM' and bl[3][:4] == b'fdBM' and
+            bl[4][:4] == b'vdog')
     assert struct.unpack_from('<I', bl[0], 0x0c)[0] == 0
     assert struct.unpack_from('<I', bl[1], 0x0c)[0] == 1
-    assert m0_sim(1.0, 0.75, 0.8, 0.9) == bl[2]
-    assert struct.unpack_from('<f', bl[2], 0x10)[0] == \
-           struct.unpack_from('<f', bl[2], 0x18)[0]
+    assert struct.unpack_from('<I', bl[2], 0x1f0)[0] == 4
+    assert struct.unpack_from('<I', bl[3], 0x1f0)[0] == 4
+    assert m0_sim(1.0, 0.75, 0.8, 0.9) == bl[4]
+    assert struct.unpack_from('<f', bl[4], 0x10)[0] == \
+           struct.unpack_from('<f', bl[4], 0x18)[0]
 
     # -- biquads: independent textbook cross-checks ------------------------
     def ref_hp(f, fs, Q):

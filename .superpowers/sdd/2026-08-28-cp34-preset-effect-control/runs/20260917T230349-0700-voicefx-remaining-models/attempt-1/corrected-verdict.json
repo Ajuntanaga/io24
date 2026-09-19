@@ -1,0 +1,382 @@
+{
+  "detected_models": [
+    "detuner",
+    "filters",
+    "ringmod",
+    "transformer",
+    "vocoder"
+  ],
+  "missing_models": [],
+  "models": {
+    "detuner": {
+      "exact_signature": {
+        "cycles": [
+          {
+            "detected": true,
+            "inconclusive": false,
+            "ratio": 0.6299605249474366,
+            "tones": [
+              {
+                "delta_db": 41.13518190954029,
+                "detected": true,
+                "guards": [
+                  {
+                    "hz": 463.96841995794927,
+                    "on_dbfs": -44.61067204673177
+                  },
+                  {
+                    "hz": 543.9684199579492,
+                    "on_dbfs": -59.81650406955585
+                  }
+                ],
+                "off_dbfs": -68.80354694438907,
+                "on_dbfs": -27.668365034848776,
+                "prominence_db": 16.942307011882995,
+                "shifted_hz": 503.96841995794927,
+                "source_hz": 800.0
+              },
+              {
+                "delta_db": 34.94135378744589,
+                "detected": true,
+                "guards": [
+                  {
+                    "hz": 737.3712877851368,
+                    "on_dbfs": -54.57127298496794
+                  },
+                  {
+                    "hz": 817.3712877851368,
+                    "on_dbfs": -56.862173728067546
+                  }
+                ],
+                "off_dbfs": -57.16734759607057,
+                "on_dbfs": -22.225993808624676,
+                "prominence_db": 32.34527917634327,
+                "shifted_hz": 777.3712877851368,
+                "source_hz": 1234.0
+              }
+            ]
+          },
+          {
+            "detected": true,
+            "inconclusive": false,
+            "ratio": 0.6299605249474366,
+            "tones": [
+              {
+                "delta_db": 40.30351723400648,
+                "detected": true,
+                "guards": [
+                  {
+                    "hz": 463.96841995794927,
+                    "on_dbfs": -47.51752377123491
+                  },
+                  {
+                    "hz": 543.9684199579492,
+                    "on_dbfs": -58.050124546309256
+                  }
+                ],
+                "off_dbfs": -68.41715724316431,
+                "on_dbfs": -28.113640009157837,
+                "prominence_db": 19.403883762077076,
+                "shifted_hz": 503.96841995794927,
+                "source_hz": 800.0
+              },
+              {
+                "delta_db": 33.871863903783584,
+                "detected": true,
+                "guards": [
+                  {
+                    "hz": 737.3712877851368,
+                    "on_dbfs": -51.67651695590418
+                  },
+                  {
+                    "hz": 817.3712877851368,
+                    "on_dbfs": -51.35462316218537
+                  }
+                ],
+                "off_dbfs": -56.67546506812812,
+                "on_dbfs": -22.803601164344535,
+                "prominence_db": 28.551021997840834,
+                "shifted_hz": 777.3712877851368,
+                "source_hz": 1234.0
+              }
+            ]
+          }
+        ],
+        "detected": true,
+        "kind": "two_tone_minus_8_semitone_partners"
+      },
+      "processing_detected": true,
+      "profile": {
+        "detune": 0,
+        "fs": 48000.0,
+        "mix": 1.0
+      },
+      "shape": {
+        "cycle_1": {
+          "detected": true,
+          "distance_db": 7.696435276573338,
+          "threshold_db": 2.5397339819546136
+        },
+        "cycle_2": {
+          "detected": true,
+          "distance_db": 7.559076377707845,
+          "threshold_db": 2.5397339819546136
+        },
+        "detected": true,
+        "maximum_off_state_distance_db": 1.0397339819546139,
+        "metric": "gain_normalized_log_band_rms_db",
+        "off_state_distances_db": [
+          0.5378979661287255,
+          0.912285200916269,
+          1.0397339819546139
+        ],
+        "threshold_db": 2.5397339819546136
+      }
+    },
+    "filters": {
+      "exact_signature": {
+        "cycles": [
+          {
+            "burst_delta_db": 3.057513355504433,
+            "delta_db": 2.445048800924269,
+            "detected": false,
+            "off_gap_rms_dbfs": -39.97088418935285,
+            "on_gap_rms_dbfs": -37.52583538842858
+          },
+          {
+            "burst_delta_db": 3.055927957192477,
+            "delta_db": 2.778238332410595,
+            "detected": false,
+            "off_gap_rms_dbfs": -40.264731631316394,
+            "on_gap_rms_dbfs": -37.4864932989058
+          }
+        ],
+        "detected": false,
+        "kind": "resonant_gap_tail"
+      },
+      "processing_detected": true,
+      "profile": {
+        "damping": 0.0,
+        "distortion": 0.0,
+        "mix": 1.0,
+        "pitch": 0.5,
+        "regeneration": 1.0,
+        "volume": 1.0
+      },
+      "shape": {
+        "cycle_1": {
+          "detected": true,
+          "distance_db": 4.218426223678958,
+          "threshold_db": 2.7107701693616577
+        },
+        "cycle_2": {
+          "detected": true,
+          "distance_db": 3.8556440804143355,
+          "threshold_db": 2.7107701693616577
+        },
+        "detected": true,
+        "maximum_off_state_distance_db": 1.2107701693616577,
+        "metric": "gain_normalized_log_band_rms_db",
+        "off_state_distances_db": [
+          1.2107701693616577,
+          0.8653179997273086,
+          0.8608473339564343
+        ],
+        "threshold_db": 2.7107701693616577
+      }
+    },
+    "ringmod": {
+      "exact_signature": {
+        "cycles": [
+          {
+            "bands": {
+              "lower_hz": {
+                "delta_db": 29.500745170301926,
+                "hz": 920.3,
+                "off_dbfs": -62.39631768257123,
+                "on_dbfs": -32.895572512269304
+              },
+              "upper_hz": {
+                "delta_db": 33.09027228575822,
+                "hz": 1547.7,
+                "off_dbfs": -66.01714133161694,
+                "on_dbfs": -32.92686904585872
+              }
+            },
+            "carrier_hz": 313.7,
+            "detected": true,
+            "guards": {
+              "guard_lower_hz": {
+                "delta_db": -3.646707721423944,
+                "hz": 1077.15,
+                "off_dbfs": -63.38121191255971,
+                "on_dbfs": -67.02791963398366
+              },
+              "guard_upper_hz": {
+                "delta_db": -11.203191525774187,
+                "hz": 1390.85,
+                "off_dbfs": -61.198059498571595,
+                "on_dbfs": -72.40125102434578
+              }
+            },
+            "inconclusive": false,
+            "max_guard_rise_db": -3.646707721423944,
+            "max_sideband_rise_db": 33.09027228575822,
+            "partial_hz": 1234.0
+          },
+          {
+            "bands": {
+              "lower_hz": {
+                "delta_db": 28.920136761805082,
+                "hz": 920.3,
+                "off_dbfs": -61.79963188272748,
+                "on_dbfs": -32.8794951209224
+              },
+              "upper_hz": {
+                "delta_db": 34.40921334609974,
+                "hz": 1547.7,
+                "off_dbfs": -67.34531007247826,
+                "on_dbfs": -32.936096726378516
+              }
+            },
+            "carrier_hz": 313.7,
+            "detected": true,
+            "guards": {
+              "guard_lower_hz": {
+                "delta_db": -3.775886938685943,
+                "hz": 1077.15,
+                "off_dbfs": -64.42792274780939,
+                "on_dbfs": -68.20380968649533
+              },
+              "guard_upper_hz": {
+                "delta_db": -12.508035788222621,
+                "hz": 1390.85,
+                "off_dbfs": -61.30152051399045,
+                "on_dbfs": -73.80955630221307
+              }
+            },
+            "inconclusive": false,
+            "max_guard_rise_db": -3.775886938685943,
+            "max_sideband_rise_db": 34.40921334609974,
+            "partial_hz": 1234.0
+          }
+        ],
+        "detected": true,
+        "kind": "carrier_sidebands"
+      },
+      "processing_detected": true,
+      "profile": {
+        "carrier2": false,
+        "carrier2_hz": 50.0,
+        "carrier_hz": 313.7,
+        "dist": 0.0,
+        "mix": 1.0,
+        "vol": 1.0
+      },
+      "shape": {
+        "cycle_1": {
+          "detected": true,
+          "distance_db": 9.327143719320878,
+          "threshold_db": 2.5332333955174473
+        },
+        "cycle_2": {
+          "detected": true,
+          "distance_db": 9.46141273191606,
+          "threshold_db": 2.5332333955174473
+        },
+        "detected": true,
+        "maximum_off_state_distance_db": 1.0332333955174475,
+        "metric": "gain_normalized_log_band_rms_db",
+        "off_state_distances_db": [
+          1.0332333955174475,
+          0.5846888802328437,
+          1.021105852483453
+        ],
+        "threshold_db": 2.5332333955174473
+      }
+    },
+    "transformer": {
+      "exact_signature": null,
+      "processing_detected": true,
+      "profile": {
+        "fs": 48000.0,
+        "lows": 1.0,
+        "mix": 1.0,
+        "width": 1.0
+      },
+      "shape": {
+        "cycle_1": {
+          "detected": true,
+          "distance_db": 7.2006542485993075,
+          "threshold_db": 2.3641179038137152
+        },
+        "cycle_2": {
+          "detected": true,
+          "distance_db": 7.447855243654483,
+          "threshold_db": 2.3641179038137152
+        },
+        "detected": true,
+        "maximum_off_state_distance_db": 0.8641179038137152,
+        "metric": "gain_normalized_log_band_rms_db",
+        "off_state_distances_db": [
+          0.8641179038137152,
+          0.49842561746309266,
+          0.6611472549827209
+        ],
+        "threshold_db": 2.3641179038137152
+      }
+    },
+    "vocoder": {
+      "exact_signature": null,
+      "processing_detected": true,
+      "profile": {
+        "carrier_freq": 220.0,
+        "carrier_type": 1,
+        "fs": 48000.0,
+        "mix": 1.0,
+        "vol": 1.0
+      },
+      "shape": {
+        "cycle_1": {
+          "detected": true,
+          "distance_db": 11.520602402874529,
+          "threshold_db": 2.432851448826318
+        },
+        "cycle_2": {
+          "detected": true,
+          "distance_db": 11.821029580771011,
+          "threshold_db": 2.432851448826318
+        },
+        "detected": true,
+        "maximum_off_state_distance_db": 0.9328514488263183,
+        "metric": "gain_normalized_log_band_rms_db",
+        "off_state_distances_db": [
+          0.9328514488263183,
+          0.6800614753314741,
+          0.8098860345873068
+        ],
+        "threshold_db": 2.432851448826318
+      }
+    }
+  },
+  "off_state_burst_drift_db": 0.006491969803175124,
+  "off_state_held": true,
+  "physical_input1_stimulus": {
+    "burst_rms_dbfs": -22.352954504058175,
+    "bursts_found": 5,
+    "gap_rms_dbfs": -41.87759052070309,
+    "gate_contrast_db": 19.524636016644912,
+    "maximum_off_stage_drift_db": 0.0064919719373541795,
+    "stable": true,
+    "usable": true
+  },
+  "reverb_control": {
+    "burst_delta_db": -1.4199735998256457,
+    "delta_db": 11.707622156584979,
+    "detected": true,
+    "off_gap_rms_dbfs": -40.237381856901195,
+    "on_gap_rms_dbfs": -28.529759700316216
+  },
+  "run_valid": true,
+  "status": "VOICEFX_REMAINING_MODELS_PROCESSING_DETECTED"
+}

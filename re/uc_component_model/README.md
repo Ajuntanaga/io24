@@ -35,7 +35,11 @@ Filters' controls are officially **Pitch** and **Regeneration**.
 follow) and `VocDetectorMode` (off / Voiced-Unvoiced) string lists, which are
 declared but referenced by no parameter in the shipped model.
 
-## What it does not contain
+## Relationship to the wire capture
 
-Nothing that opens the Voice FX gate. The model is host-side presentation:
-which controls exist and how they are drawn. It never describes the wire.
+The XML describes presentation and component state, not USB framing. The
+2026-09-17 UC 4.7.2 capture supplies that missing half and confirms the XML's
+structure: `voicefxopt/fxmodel` becomes the one `VoFx` selection, and each
+component's own first `on` parameter is encoded in its model-state tag. There
+is no container-level/master VoiceFX enable. After materialization, UC sends
+only the selected component's state for On/Off and ordinary edits.

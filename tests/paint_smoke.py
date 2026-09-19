@@ -130,6 +130,22 @@ def capture_window(win, output_path):
         renderer.unrealize()
 
 
+def scroll_page_to_end(widget):
+    """Move the first page scroller to its bottom for lower-section captures."""
+    pending = [widget]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, Gtk.ScrolledWindow):
+            adjustment = current.get_vadjustment()
+            adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
+            return True
+        child = current.get_first_child()
+        while child is not None:
+            pending.append(child)
+            child = child.get_next_sibling()
+    return False
+
+
 def main():
     # This harness exists to inspect rendering, not audio capture. Keeping the
     # real Spectrum constructor here would make visiting the Channel page open
@@ -156,7 +172,8 @@ def main():
     # 'passes' while a preview window happened to be open.
     app.set_application_id('org.io24.PaintSmoke%d' % os.getpid())
 
-    state = {"i": 0, "pages": None, "seen": [], "capture_pending": None}
+    state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
+             "scroll_settled": False}
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
         capture_dir = Path(capture_dir)
@@ -168,14 +185,27 @@ def main():
             return True
         st = win.stack
         if state["pages"] is None:
+            width = int(os.environ.get("IO24_PAINT_WIDTH", "1040"))
+            height = int(os.environ.get("IO24_PAINT_HEIGHT", "800"))
+            win.set_default_size(width, height)
             state["pages"] = [c.get_name() for c in st.get_pages()] \
                 if hasattr(st, "get_pages") else None
             if not state["pages"]:
                 state["pages"] = ["mix", "ch", "fx", "route", "dev", "presets"]
+            only_page = os.environ.get("IO24_PAINT_PAGE")
+            if only_page:
+                state["pages"] = [only_page]
             print("PAGES: %s" % state["pages"], flush=True)
         pending = state["capture_pending"]
         if pending is not None:
             page_number, page_name = pending
+            if (os.environ.get("IO24_PAINT_SCROLL_END") == "1"
+                    and not state["scroll_settled"]):
+                scroll_page_to_end(st.get_visible_child())
+                state["scroll_settled"] = True
+                # Let GTK allocate and paint the newly visible children before
+                # asking WidgetPaintable for a render node.
+                return True
             for _ in range(3):
                 win.queue_draw()
                 while GLib.MainContext.default().pending():
@@ -186,6 +216,7 @@ def main():
                 capture_window(win, path)
                 print("CAPTURE -> %s" % path, flush=True)
             state["capture_pending"] = None
+            state["scroll_settled"] = False
         i = state["i"]
         if i >= len(state["pages"]):
             print("CYCLED ALL PAGES", flush=True)
@@ -207,7 +238,8 @@ def main():
                 GLib.MainContext.default().iteration(False)
         return True
 
-    GLib.timeout_add(1200, drive)
+    interval_ms = int(os.environ.get("IO24_PAINT_INTERVAL_MS", "1200"))
+    GLib.timeout_add(interval_ms, drive)
     GLib.timeout_add(40000, lambda: (app.quit(), False)[1])   # hard stop
     rc = app.run([])
     ctl.close()

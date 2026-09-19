@@ -16,12 +16,20 @@ showed that the tagged body does not apply as an io24 slot. Firmware configures
 block 201 as one shared
 settings object over two structural input/output lanes. The GTK Host therefore
 configures it once for both inputs and never mutates the separate
-`processingChannel` permutation as an FX owner control. Audible on/off and
-simultaneous two-lane processing remain separately authorization-gated. See
+`processingChannel` permutation as an FX owner control. Its UC 4.7.2 lifecycle
+is now captured and implemented: select/materialize once, then state-only edits
+with no reverb-return mutation. All six Host VoiceFX models are objectively
+waveform-verified through physical Input 1; simultaneous two-lane processing
+remains unproved. See
 [Current hardware and validation limits](#current-hardware-and-validation-limits).
 
 The control implementation is not based on unpublished PreSonus source code.
-The protocol and exact Host algorithms were recovered from shipped Universal
+The project began with
+[oddbear/Revelator.io24.Api](https://github.com/oddbear/Revelator.io24.Api),
+whose public UCNET work documents the host-to-service layer and supplied the
+original route/client reference. The device does not speak UCNET over USB, so
+this project continues below that layer. The native protocol and exact Host
+algorithms were recovered from shipped Universal
 Control binaries and the device's own firmware, with public manuals used for
 names and intended behavior and live claims kept separate. The write-up is in
 [PROTOCOL.md](PROTOCOL.md) — it is the real documentation, and if you want to
@@ -56,7 +64,7 @@ separately rather than implied to be independently measured.
 | Channel-name read-back (`names`) | the device's own `'CHNP'` table |
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
 | Device-slot `MemP/Stat` save | exact transport primitive only, not a working save: tagged and native Standard-EQ/native-gate A/B/A bodies all failed to become active DSP state despite selector readback, including native gate writes made while the target slot was active. Source-bound firmware data flow joins the `Stat` adapter to the physical compare/program/wait path, with no separate commit command, but `SetP` exposes no live storage result. The preset menu remains disabled; next investigation is UC's distinct `PrsM` Store route. |
-| FX / Doubler private reverb | one global settings object over two structural lanes; live direct Transformer processing is positive, while models 1–5 and simultaneous two-lane acceptance remain unresolved |
+| Voice FX control model and UC transaction | exact XML-ordered controls and builders for all six models, a six-unit visual rack, one global settings object over two structural lanes, and a separate **On** state per model component. A UC 4.7.2 USB capture controls model selection, state-only edits, Transformer `MBdf` tables and pacing. All six models are objectively verified through physical Input 1 in two on/off cycles each: exact Delay timing, Detuner pitch targets, Ring Modulator sidebands, and repeatable Transformer/Vocoder/Filters spectral changes, with same-path reverb controls and stable off states. |
 | **Universal Control scene import** (`io24_scene.py`) | applies a real UC `.scene` file — 35 settings from one of the author's own scenes |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
 | Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
@@ -77,12 +85,16 @@ the shared model in its host tree. The firmware evidence is more direct: block
 `processingChannel` swaps physical inputs between two DSP chains and can also
 exchange exposed slot indicators. The Linux Host no longer uses that routing
 mutation for ordinary FX control. It selects one global model and applies
-`voicefx.on` and its fields once.
+that mutable component's own `voicefx.on` and fields once. The GTK page mirrors
+the vendor model: its rack selects among the six mutable components, each page
+has its own **On** switch, and the remaining controls follow XML order, names,
+ranges, defaults, lists, and skew curves. Only the selected model exists in the
+one shared block-201 settings instance.
 
 | | |
 |---|---|
 | Physical acceptance of device save/recall | Negative for the current Host writer: slot selection worked, but neither a native +15 dB shelf nor an independent native gate off/on body took effect. Stop body variants until a missing commit/apply edge is recovered; cold-boot persistence remains unresolved. |
-| Direct standalone FX activation | Transformer is positively detected through direct block-201 writes in the current armed state. Models 1–5, cold-start activation, and simultaneous lanes remain unresolved. |
+| Corrected Host VoiceFX audibility | All six models process audio on physical Input 1 in two repeatable on/off cycles each. Delay timing, Detuner pitch targets, and Ring Modulator sidebands are frequency/time-specific; Transformer, Vocoder, and Filters have repeatable gain-normalized spectral signatures. The prior dry listening campaign used the superseded transaction. A separate valid Input-2 run detected no Delay, so simultaneous/two-lane operation is not implied. Saved VoiceFX data still does not establish standalone audibility. |
 | Private reverb on both inputs at once | Structurally supported, not audibly proved: block 201/model 0 has one settings instance and its private core binds lanes 0 and 1. The Host configures that state globally; simultaneous routing/gating still needs the live experiment. |
 | Independent private-reverb settings per channel | Not possible without custom firmware: both lanes share one `on/lows/width/mix` setting set. |
 | More than 2 presets per channel standalone | Four slots, firmware-clamped. |
@@ -455,16 +467,15 @@ python3 re/cp34_channel2_voicefx_materialization_stage.py
 
 That default command is hardware-free and pins Channel 2, global slot 3, the
 exact factory-derived maximum-wet record, its four model-before-state messages,
-the exact slot frame, and `Assign Voice FX = Ch2`. The separately authorized
-corrected live run sent that sequence and exposed Channel 2 on global slot 3,
-but after unplugging and reconnecting the interface the user noticed no audible
-change. Subsequent checks found that the Linux Host's routing shadow and visible
-state were inconsistent, including a missing FX-return level and wrong
-Channel-2 factory targeting. The listening result is therefore retained but no
-longer treated as a terminal device verdict; a clean Host-controlled round trip
-is still needed before isolating record commit, persistence, parsing,
-activation, or recall. The old paired builder remains only for offline custom-
-firmware comparison; current GTK control does not use its owner assignment.
+the exact slot frame, and `Assign Voice FX = Ch2`. Its historical live run was
+confounded by inconsistent Host routing. A later clean listening campaign
+opened the same send/return path, proved that path with audible block-202
+reverb, then found Delay and an all-six fully wet block-201 sweep dry. That
+Host transaction is superseded: the current UC-derived transaction is now
+waveform-verified for all six models on Input 1. Cold boot with a stored
+Voice-FX-on slot and no Host attached remains a separate standalone-preset
+question. The old paired builder remains only for offline custom-firmware
+comparison; current GTK control does not use its owner assignment.
 
 The Fat Channel (EQ, gate, compressor, limiter) is separately per-channel — the
 firmware has two instances of each block. And `procchan` chooses which physical
@@ -552,10 +563,10 @@ so several clients can share it.
 | `io24.py` | transport, named parameters, DSP chain, presets, CLI |
 | `io24_dsp.py` | recovered coefficient maths — gate, compressor, limiter, biquads |
 | `io24_mixer.py` | fader taper and pan law, mixer blob builders |
-| `io24_fx.py` | the six FX models |
+| `io24_fx.py` | exact packet builders plus the retained-XML schema and XML-field → builder-keyword routes for all six Voice FX models |
 | `io24_meters.py` | meter datagram decoding, reverb |
 | `io24d.py` | daemon: holds the device, multiplexes clients |
-| `io24gtk.py` | the GTK4 mixer app — the main interface |
+| `io24gtk.py` | the GTK4 mixer app — including the six-unit Voice FX rack, parameter-driven selected-model visual, and exact XML controls |
 | `io24web.py` | the same, in a browser, for phones and tablets |
 | `ucnet_shim.py` | speaks UCNET, so existing clients can drive the device |
 | `io24_scene.py` | applies a Universal Control `.scene` file to the device |
@@ -586,8 +597,9 @@ The dry run lists every setting it will send and, just as importantly, every one
 it will not. Applied: preamp gain, phantom, mute, stereo link, processing
 channel, the main/aux sends with their assigns, high-pass, gate, compressor,
 limiter, the parametric EQ, and the output delay. Reported but skipped by this
-direct-setter importer: `voicefx`, because its supported activation path is
-saved slot recall rather than a standalone parameter write; UC's
+direct-setter importer: `voicefx`, because successful standalone parameter
+writes did not produce audible block-201 processing and the remaining stored-
+slot cold-boot path is a separate hardware test; UC's
 *simplified* EQ form where band frequencies are indices rather than Hz; and
 `pan`/`stereopan`/`FXA`/`solo`, which the driver does not implement yet.
 

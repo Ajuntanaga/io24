@@ -197,46 +197,57 @@ real room, the time sound takes to reach a surface and come back.
 Block 201 is one Voice FX settings instance configured as a **two-input,
 two-output processor**. Firmware maps both physical inputs into its two
 processing lanes, and Doubler/Transformer binds its private reverb core to lane
-0 and lane 1. The Host therefore presents one global **FX active** switch and
-one model/settings surface for both inputs. It does not change
+0 and lane 1. The six-unit rack is the model navigator: click a unit to select
+its XML component, or double-click it to toggle that component's own **On**
+field. The **FX Model** row beneath it provides the same selector for keyboard
+and screen-reader use. The Host presents one model at a time, and each model
+page has its own **On** switch because `On` belongs to that model's component; there
+is no master enable above the six models in Universal Control's component
+tree. Those are independent stored controls, not six simultaneous processors:
+selecting a model still replaces the one shared block-201 state. The Host does not change
 `processingChannel`, which swaps physical inputs between DSP chains and is
 unrelated routing state. What the hardware cannot hold is two different FX
 models or settings: both lanes share one state.
 
-The private core is not the shared Reverb section above. It does not use block
-202 or the FX return. The factory preset named
-**Reverb** is actually Doubler model 0 with the private-core settings stored in
-its `voicefx` JSON object.
+The private core is not the shared Reverb section above and does not use block
+202. UC's captured VoiceFX transaction also does not open or change the reverb
+return; that routing belongs to the Reverb section alone. The factory preset
+named **Reverb** is actually Doubler model 0 with the private-core settings
+stored in its `voicefx` JSON object.
 
 UC remembers the selected algorithm as `voicefx.__classid`. On load the Host
-resolves that class, selects the model, and only then applies `voicefx.on` and
-the model fields. It sends this global state once, including when a Host-known
-device preset is recalled. Saving either channel carries the same global FX
-state. Detuner starts at the factory Detuned Vocal values (minus 7 semitones,
-80 percent wet) instead of the neutral zero-semitone position.
+resolves that class, selects and fully materializes the model, and only then
+applies later control edits directly to that model. It does not resend the
+selector for On/Off or an ordinary knob move. Saving either channel carries
+the same global FX state. A fresh component uses the XML defaults; loading a
+preset replaces them with that preset's values. Detuner therefore starts at
+XML index 4 (minus 4 semitones) and 50 percent WetDry.
 
-#### The device's Voice FX gate
+#### What the Host sends
 
-`FX active` expresses the requested state; a control reply by itself is not an
-audibility indicator.
-Block 201's USB handler checks three internal flags and silently ignores writes
-when they are not armed. The newest framing trace also shows that a tagged UC
-device-slot record reaches the native loader with its `{` archive word where
-the loader requires `2`. Consequently neither a successful control reply nor a
-device-preset recall proves that block 201 is active. The old **Device
-activation** readiness row was removed because it claimed knowledge the Host
-does not have.
+The selected model's **On** switch is the device command: it is the first word
+of that model's state blob. The complete UC 4.7.2 USB capture contains no
+separate master enable or hidden activation tag. Selecting Delay sends
+`VoFx + vech`; later On/Off sends only `vech`. Selecting Transformer sends
+`VoFx + two Bqdf + two MBdf + godv`; later On/Off, Width and WetDry changes send
+only `godv`. The Host now follows those rules and adds no artificial delay.
 
-The current device state now has a positive audio-path result for Transformer.
-With a gate-free Input 1 self-noise stimulus, switching Transformer from off to
-on moved the normalized Main/Mix bus level by 4.02 dB; both off baselines were
-within 0.05 dB. Direct block-201 Transformer control is therefore functional
-when its internal gate is already armed. The same level-only test did not
-resolve De-Tuner, Vocoder, Ring Modulator, Filters, or Delay; pitch and delay
-can preserve broadband energy, so absence of a level change is not an
-inaudibility finding. Cold-start activation, both-lane audibility, and those
-five models remain separate acceptance items. The shared reverb above is a
-different engine and is already measured working.
+The earlier Linux listening campaign used the superseded transaction: it
+reselected on every edit, omitted both Transformer `MBdf` tables, inserted
+20 ms gaps and opened the reverb return. Its dry result is real for that older
+Host but does not test the corrected one. The corrected protocol is implemented
+and hardware-verified for all six models on physical Input 1, with two
+independent on/off cycles per model. Delay produced the programmed 250, 500 and
+750 ms repeats; Detuner produced the exact -8-semitone targets; Ring Modulator
+produced the programmed carrier sidebands; and Transformer, Vocoder and Filters
+each produced repeatable spectral changes. The same-path reverb control and all
+VoiceFX-off baselines passed. The corresponding Input-2 Delay run was a valid
+null, so do not infer simultaneous/two-lane processing from the Input-1 result.
+Reverb is a different engine and is independently measured working.
+
+Saving a preset does not substitute for that Host transaction. The record can
+contain the VoiceFX fields while standalone recall remains dry; only Fat
+Channel processing is established as audible without a host.
 
 #### Deferred post-publication custom firmware
 
@@ -283,19 +294,27 @@ device update from this project. Any eventual hardware test is a separate
 authorization and requires the original complete vendor firmware/package to be
 available for recovery first.
 
-| model | controls (PreSonus's own names) |
+| model | controls in exact XML order (every row also has On) |
 |---|---|
-| Transformer | Lows, Width, Wet/Dry — richness and depth with a hint of reverb |
-| Detuner | Detune, Wet/Dry. Nine steps, −8 to 0 semitones: it only pitches **down** |
-| Vocoder | Carrier Type (Noise / Sawtooth / Rect), Carrier Frequency, Volume, Wet/Dry |
-| Ring Modulator | Frequency, Sub Carrier, Sub Carrier Frequency, Distortion, Volume, Wet/Dry |
-| Filters | Pitch, Regeneration, Damping, Distortion, Volume, Wet/Dry |
-| Delay | Time, Feedback, Wet/Dry |
+| Transformer | Lows, Width, WetDry |
+| Detuner | Detune, WetDry. Nine steps, −8 to 0 semitones: it only pitches **down** |
+| Vocoder | Volume, Carrier Type (Noise / Sawtooth / Rect), Carrier Frequency, Voiced (read-only), WetDry |
+| Ring Modulator | Frequency, Sub Carrier, Sub Carrier Frequency, Distortion, Volume, WetDry |
+| Filters | Pitch, Regeneration, Damping, Distortion, Volume, WetDry |
+| Delay | Time, Feedback, WetDry |
 
 These names, ranges and defaults are not guesses: they are Universal Control's
 own component model, recovered from its binary and kept in
 [re/uc_component_model/](re/uc_component_model/). It agrees with this project's
 decode on every parameter.
+
+The implementation follows the same split: [`io24_fx.py`](io24_fx.py) contains
+the six exact model packet builders, while `FXVisual` and the per-model control
+pages live in [`io24gtk.py`](io24gtk.py). The visual for the selected model is
+driven by that model's decoded parameters and visibly marks that model **OFF**
+when its own On switch is off. The six-unit rack reuses those signatures as
+compact live previews; the XML parameter ID and its exact builder keyword are
+the one route behind each editable row.
 
 > **A naming discrepancy worth knowing about.** Universal Control's binary (and
 > its UI) calls model 0 **Transformer**; both the io24 and io44 owner's manuals

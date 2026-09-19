@@ -1,0 +1,48 @@
+{
+  "classifier_correction": {
+    "reason": "The io24 USB input send is post-DSP during insert processing. Delay-on reference changes are effect evidence, not physical-source drift.",
+    "source_stability_basis": [
+      "control_off",
+      "control_reverb",
+      "control_off_after",
+      "delay_off_1",
+      "delay_off_2"
+    ]
+  },
+  "delay_repeatability": {
+    "cycle_1": {
+      "detected": true,
+      "maximum_tap_rise_db": 12.970526538595767,
+      "tap_250ms_rise_db": 10.483974028424303,
+      "tap_500ms_rise_db": 3.9310762892501714,
+      "tap_750ms_rise_db": 12.970526538595767
+    },
+    "cycle_2": {
+      "detected": true,
+      "maximum_tap_rise_db": 12.98486472661687,
+      "tap_250ms_rise_db": 10.514347389877294,
+      "tap_500ms_rise_db": 3.9592446317032355,
+      "tap_750ms_rise_db": 12.98486472661687
+    }
+  },
+  "off_state_gap_drift_db": {
+    "control_off_after_to_delay_off_1": -0.06329791900150639,
+    "control_off_to_control_off_after": -0.02413675069892207,
+    "delay_off_1_to_delay_off_2": 0.021483686469281338
+  },
+  "off_state_held": true,
+  "physical_input1_stimulus": {
+    "burst_rms_dbfs": -22.34994628357007,
+    "gate_contrast_db": 20.40998126324616,
+    "maximum_off_state_burst_drift_db": 0.0028517397501275354,
+    "stable": true,
+    "usable": true
+  },
+  "reverb_positive_control": {
+    "detected": true,
+    "gap_rise_db": 12.575783747434471
+  },
+  "raw_live_report_sha256": "979c420f72df209f5df7716e81bdca4e4ca1902ffcdb07c515c9b089dedbdca5",
+  "run_valid": true,
+  "status": "VOICEFX_DELAY_PROCESSING_DETECTED"
+}

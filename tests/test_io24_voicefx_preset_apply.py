@@ -80,11 +80,19 @@ class _RecordingDevice:
 
     def set_fx(self, model, **kwargs):
         self.calls.append(("set_fx", model, kwargs))
-        return {"transformer": 4, "detuner": 3, "vocoder": 3,
+        return {"transformer": 6, "detuner": 3, "vocoder": 3,
                 "ringmod": 2, "filters": 2, "delay": 2}[model]
 
     def set_voicefx_channel(self, channel):
         self.calls.append(("set_voicefx_channel", channel))
+
+    def establish_effects_return(self, bus="main", return_db=0.0, channel=1,
+                                 channel_mix=None):
+        self.calls.append(("establish_effects_return", bus, return_db,
+                           channel_mix))
+        return {"bus": bus, "return_db": return_db, "channel": channel,
+                "channel_mix": channel_mix, "written": ["return_level",
+                                                        "return_assigned"]}
 
     def set_comp_eq_order(self, channel, value):
         self.calls.append(("set_comp_eq_order", channel, value))
@@ -131,7 +139,7 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
             ("set_fx", "transformer", EXPECTED_KWARGS["transformer"]),
         ])
         self.assertEqual(done, [
-            "voicefx=transformer (4 writes; activation unresolved)",
+            "voicefx=transformer (6 writes; UC 4.7.2 state transaction)",
         ])
 
     def test_disabled_selected_model_is_still_restored(self):
@@ -140,12 +148,11 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
         done = io24_presets.apply_preset(
             device, {"voicefx": STATES["delay"]}, with_fx=True)
 
+        # A model being restored in its off state needs no return opening.
         self.assertEqual(device.calls, [
             ("set_fx", "delay", EXPECTED_KWARGS["delay"]),
         ])
-        self.assertEqual(done, [
-            "voicefx=delay off (2 writes; activation unresolved)",
-        ])
+        self.assertEqual(done, ["voicefx=delay off (2 writes; off)"])
 
     def test_default_path_keeps_voicefx_record_resident_and_does_not_write(self):
         device = _RecordingDevice()
@@ -188,24 +195,22 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
     def test_complete_snapshot_emits_model_selector_before_model_state(self):
         device = _ProtocolDevice()
 
-        with mock.patch.object(io24.time, "sleep"):
-            report = device.apply_voicefx_snapshot(STATES["transformer"])
+        report = device.apply_voicefx_snapshot(STATES["transformer"])
 
         self.assertEqual(report, {
             "model": "transformer",
             "enabled": True,
-            "parameter_writes": 4,
+            "parameter_writes": 6,
             "selection_order": "MODEL_BEFORE_STATE",
             "activation": "UNPROVED",
             "audibility": "UNPROVED",
         })
-        self.assertEqual(len(device.writes), 5)
+        self.assertEqual(len(device.writes), 6)
         self.assertTrue(all(struct.unpack_from("<I", payload, 4)[0] == 201
                             for payload in device.writes))
         self.assertEqual(struct.unpack_from("<I", device.writes[0], 12)[0],
                          io24_fx.TAG_VOFX)
         self.assertEqual(struct.unpack_from("<I", device.writes[0], 24)[0], 0)
-        self.assertEqual(device.writes[0], device.writes[1])
         self.assertEqual(struct.unpack_from("<I", device.writes[-1], 12)[0],
                          io24_fx.TAG_GODV)
 

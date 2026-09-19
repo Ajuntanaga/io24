@@ -77,6 +77,14 @@ class ProtocolDevice(io24.Io24):
 
 
 class CallDevice:
+    # The effects-return transaction lives in the driver; borrowing the real
+    # one keeps these assertions on the exact writes it makes.
+    BUS_ALIASES = io24.Io24.BUS_ALIASES
+    MIXER_BUSES = io24.Io24.MIXER_BUSES
+    FX_RETURN_SOURCE = io24.Io24.FX_RETURN_SOURCE
+    _bus = io24.Io24._bus
+    establish_effects_return = io24.Io24.establish_effects_return
+
     def __init__(self):
         self.calls = []
 
@@ -1047,9 +1055,6 @@ class HostRefinementTests(unittest.TestCase):
         class Device:
             def __init__(self):
                 self.fail = False
-
-            def set_voicefx_channel(self, _channel):
-                pass
 
             def set_fx(self, _model, **_params):
                 if self.fail:

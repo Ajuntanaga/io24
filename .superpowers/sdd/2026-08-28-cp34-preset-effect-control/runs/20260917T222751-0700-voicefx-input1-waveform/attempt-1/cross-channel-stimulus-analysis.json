@@ -1,0 +1,36 @@
+{
+  "analysis": "10 ms RMS-envelope normalized correlation against the exact played stimulus",
+  "capture": "control_off.wav",
+  "input1_attempt1": {
+    "channel_1": {
+      "active_rms_dbfs": -60.873,
+      "best_correlation": 0.047255,
+      "best_lag_seconds": 1.46,
+      "gate_contrast_db": 0.029,
+      "interpretation": "steady Input-1 noise floor; stimulus absent"
+    },
+    "channel_2": {
+      "active_rms_dbfs": -116.845,
+      "best_correlation": 0.990773,
+      "best_lag_seconds": 0.51,
+      "gate_contrast_db": 28.494,
+      "interpretation": "correlated trace below the preregistered -75 dBFS usability floor"
+    },
+    "channels_3_to_6": {
+      "best_correlation": 0.047232,
+      "gate_contrast_db": 0.029,
+      "interpretation": "only the same steady Input-1 noise propagated through Mix A and Mix B"
+    }
+  },
+  "known_good_input2_attempt3_calibration": {
+    "channel_2": {
+      "active_rms_dbfs": -20.604,
+      "best_correlation": 0.986718,
+      "best_lag_seconds": 0.51,
+      "gate_contrast_db": 25.936,
+      "interpretation": "valid physical Input-2 waveform"
+    },
+    "report": "../../20260917T220849-0700-voicefx-input2-waveform/attempt-3/live-report.json"
+  },
+  "result": "NO_USABLE_STIMULUS_ON_PHYSICAL_INPUT_1"
+}

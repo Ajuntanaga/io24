@@ -488,12 +488,15 @@ def describe(p):
     return ", ".join(bits) or "flat"
 
 
-def apply_preset(dev, preset, channel=1, with_fx=False):
+def apply_preset(dev, preset, channel=1, with_fx=False,
+                 establish_return=True, return_db=0.0):
     """Send a factory preset to a channel. Returns a list of what was applied.
 
     ``with_fx`` is an explicit opt-in to configure the one global block-201
     settings object after applying the selected channel's Fat Channel state.
-    It never changes ``processingChannel`` routing.
+    It never changes ``processingChannel`` routing. ``establish_return`` is
+    retained for call compatibility but ignored: the UC 4.7.2 capture changes
+    no mixer return as part of a VoiceFX transaction.
     """
     if isinstance(preset, str):
         preset = load()[preset]
@@ -564,13 +567,39 @@ def apply_preset(dev, preset, channel=1, with_fx=False):
 
     if fx_call is not None:
         model, kwargs = fx_call
-        writes = dev.set_fx(model, **kwargs)
-        state = "" if kwargs["on"] else " off"
-        done.append("voicefx=%s%s (%d writes; activation unresolved)" %
-                    (model, state, writes))
+        done.append(_apply_voicefx_call(dev, fx_call, establish_return))
     elif fx.get("on"):
         done.append("[voicefx retained for device-slot save; direct replay omitted]")
     return done
+
+
+def _apply_voicefx_call(dev, fx_call, establish_return, return_db=0.0,
+                        bus="main", channel_mix=None):
+    """Apply the captured UC VoiceFX transaction without mixer side effects."""
+    _ = establish_return, return_db, bus, channel_mix
+    model, kwargs = fx_call
+    writes = dev.set_fx(model, **kwargs)
+    state = "" if kwargs["on"] else " off"
+    how = "UC 4.7.2 state transaction" if kwargs["on"] else "off"
+    return "voicefx=%s%s (%d writes; %s)" % (model, state, writes, how)
+
+
+def apply_voicefx(dev, preset, establish_return=True, return_db=0.0,
+                  bus="main", channel_mix=None):
+    """Apply only a preset's global FX state and return its report string.
+
+    Deliberately separate from the Fat Channel replay, so an ordinary preset
+    load still completes if the VoiceFX transaction fails. Malformed FX still
+    fails before any write. Legacy return arguments are accepted but ignored.
+    """
+    if isinstance(preset, str):
+        preset = load()[preset]
+    fx = preset.get("voicefx") or {}
+    if not fx:
+        return None
+    return _apply_voicefx_call(
+        dev, io24_fx.voicefx_preset_call(fx), establish_return,
+        return_db=return_db, bus=bus, channel_mix=channel_mix)
 
 
 def to_bands(preset):

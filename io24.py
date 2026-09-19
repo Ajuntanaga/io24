@@ -59,13 +59,9 @@ PARI = 0x50617269   # int write   (SetP only)
 STATE_BLOB_SIZE = 0x7EC
 DATA_START = 0x1C          # payload offset where the float array begins
 
-# Block 201 crossfades to bypass for a nominal 40 ms before replacing its
-# selected model.  Leave scheduling margin around that firmware transition;
-# replaying the selector after the fade triggers the deferred rebuild before
-# any model-state frame is sent (see ``send_fx``).
-FX_MODEL_REBUILD_SETTLE_S = 0.06
-FX_FRAME_INTERVAL_S = 0.02
-_VOFX_TAG = 0x566F4678
+# UC 4.7.2 submits the block-201 materialization frames back-to-back.  _exec()
+# already serializes each USB request/reply; do not add a second host delay.
+FX_FRAME_INTERVAL_S = 0.0
 
 
 def fourcc(s):
@@ -2246,9 +2242,10 @@ class Io24:
 
     # ------------------------------------------------------------- insert FX
     # Block 201 is a singleton (blockIndex ignored). Its audio-root call,
-    # selected-model delegate, and buffers are source-bound. Model replacement
-    # is deferred until a roughly 40 ms fade to bypass completes, so the send
-    # sequence below must replay the selector after bypass, then send state.
+    # selected-model delegate, and buffers are source-bound. UC 4.7.2 selects
+    # and materializes a model once, then sends state-only frames for ordinary
+    # control edits. Its USB capture has no separate activation command and no
+    # host-invented inter-frame sleep.
     # Voice FX is distinct from shared reverb block 202. Transformer/Doubler
     # uses its own private reverb-core instance over two structural audio lanes.
 
@@ -2263,45 +2260,57 @@ class Io24:
         here. Passing one straight to _exec double-headers it, and the device
         answers normally while doing nothing at all.
 
-        A ``VoFx`` selector does not replace an active model immediately.  It
-        requests a roughly 40 ms fade to bypass.  Ordinary model-state tags go
-        directly to the selected delegate and never revisit the selector's
-        rebuild check.  Replay ``VoFx`` after the fade so the selector installs
-        the requested model synchronously, then send each model-state frame to
-        the new delegate.
+        Preserve the builder order exactly. ``_exec`` is synchronous, so each
+        next frame follows the prior USB reply just as in the UC 4.7.2 capture;
+        the earlier 20 ms sleep was not vendor behavior.
         """
         if isinstance(payloads, (bytes, bytearray)):
             payloads = [payloads]
         frames = [bytes(payload) for payload in payloads]
-        bodies = [frame[8:] for frame in frames]
-        model_sequence = (
-            len(frames) >= 2 and len(frames[0]) >= 24 and
-            struct.unpack_from("<I", frames[0], 8)[0] == SETP and
-            struct.unpack_from("<I", frames[0], 12)[0] == 201 and
-            struct.unpack_from("<I", frames[0], 20)[0] == _VOFX_TAG)
-
-        start = 0
-        if model_sequence:
-            self._exec(bodies[0])
-            sleep_fn(FX_MODEL_REBUILD_SETTLE_S)
-            self._exec(bodies[0])
-            start = 1
-
-        for body in bodies[start:]:
-            self._exec(body)
-            sleep_fn(FX_FRAME_INTERVAL_S)
+        for frame in frames:
+            self._exec(frame[8:])
+            if FX_FRAME_INTERVAL_S:
+                sleep_fn(FX_FRAME_INTERVAL_S)
         return len(frames)
 
     def set_fx(self, model, **kw):
-        """Arm an insert-FX model by name: transformer/detuner/vocoder/
-        ringmod/filters/delay. Keyword args go to that model's builder."""
+        """Select/materialize a VoiceFX model or update its current state.
+
+        UC sends ``VoFx`` only when the selected implementation changes.  A
+        subsequent edit goes straight to that model's state tag. Transformer
+        Lows and sample-rate edits additionally refresh its Bqdf/MBdf material.
+        """
         X = _fx_mod()
         name = str(model).lower()
         if name not in self.FX_MODELS:
             raise ValueError("unknown FX model %r — one of %s"
                              % (model, "/".join(self.FX_MODELS)))
-        builder = getattr(X, "set_fx_" + name)
-        return self.send_fx(builder(**kw))
+        previous_model = getattr(self, "_voicefx_selected_model", None)
+        previous_state = getattr(self, "_voicefx_selected_state", {})
+        if previous_model != name:
+            frames = getattr(X, "set_fx_" + name)(**kw)
+        else:
+            def changed(parameter, default):
+                before = previous_state.get(parameter, default)
+                after = kw.get(parameter, default)
+                return X.f32(before) != X.f32(after)
+
+            if name == "transformer":
+                frames = X.update_fx_transformer(
+                    refresh_tone=(changed("lows", 0.5) or
+                                  changed("fs", 48000.0)), **kw)
+            elif name == "detuner":
+                frames = X.update_fx_detuner(
+                    refresh_tone=changed("fs", 48000.0), **kw)
+            elif name == "vocoder":
+                frames = X.update_fx_vocoder(
+                    refresh_filters=changed("fs", 48000.0), **kw)
+            else:
+                frames = getattr(X, "update_fx_" + name)(**kw)
+        written = self.send_fx(frames)
+        self._voicefx_selected_model = name
+        self._voicefx_selected_state = dict(kw)
+        return written
 
     def apply_voicefx_snapshot(self, state):
         """Apply one complete UC ``voicefx`` component in source order.
@@ -2333,6 +2342,35 @@ class Io24:
         written = self.set_fx(name, **kw)
         return {"model": name, "parameter_writes": written,
                 "audible": False, "activation": "unresolved"}
+
+    # Shared-reverb return routing. UC 4.7.2 does not call this transaction for
+    # VoiceFX selection or state edits; block 201 and block 202 are independent.
+    FX_RETURN_SOURCE = "fxreturn/ch1"
+
+    def establish_effects_return(self, bus="main", return_db=0.0, channel=1,
+                                 channel_mix=None):
+        """Open the shared reverb feed and return.
+
+        This is the block-202 transaction. VoiceFX block 201 does not mutate
+        the mixer return in the captured UC 4.7.2 lifecycle.
+        ``channel_mix`` of ``None`` leaves the channel's processing scalar
+        alone, which is what a bypassed channel wants -- wire 4 is a single
+        scalar, so writing it would take the channel out of bypass, and that
+        changes what the main output carries.  The caller is expected to say
+        why the effect stays silent instead.
+        """
+        if channel not in (1, 2):
+            raise ValueError("channel must be 1 or 2")
+        written = []
+        if channel_mix is not None:
+            self.set_fx_mix(channel, channel_mix)
+            written.append("channel_mix")
+        self.set_send_db(self.FX_RETURN_SOURCE, bus, return_db)
+        self.set_send_assigned(self.FX_RETURN_SOURCE, bus, True)
+        written += ["return_level", "return_assigned"]
+        return {"source": self.FX_RETURN_SOURCE, "bus": self._bus(bus),
+                "return_db": return_db, "channel": channel,
+                "channel_mix": channel_mix, "written": written}
 
     def fx_on(self, channel=1, send=1.0, return_db=0.0, bus="main"):
         """Refuse an unproved standalone direct-gate write.

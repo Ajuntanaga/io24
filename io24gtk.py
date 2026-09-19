@@ -41,6 +41,7 @@ from gi.repository import (Adw, GLib, Gtk, Gio, Gdk, Gsk, Graphene,  # noqa: E40
 
 import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
 import io24_dsp                            # noqa: E402  (exact compressor models)
+import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 from io24_preset_record import (           # noqa: E402
@@ -75,6 +76,11 @@ LAST_SESSION_PATH = os.path.join(
 # change made on the hardware while the Host was closed stands.
 RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link",
                "set_processing_channel")
+
+# The shared effects return row bottoms out here; at its floor an established
+# return is inaudible, which is worth saying rather than leaving the user with
+# an armed effect and silence.
+RETURN_EFFECTIVELY_OFF_DB = -59.9
 
 # Compressor models on the Fat Channel page. The first three are the unit's;
 # Multiband runs on the computer, right after the Fat Channel (io24_mbc).
@@ -202,6 +208,45 @@ def bus_meter_columns():
         ("mixa", "Mix A", "USB capture channels 3–4"),
         ("mixb", "Mix B", "USB capture channels 5–6"),
     )
+
+
+def effects_path_plan(win):
+    """What opening the shared reverb path would take, or ``None``.
+
+    The values are the user's existing channel-processing scalar and reverb
+    return level. A bypassed channel keeps its bypass. ``None`` means the Host
+    has not built those controls yet, and nothing is established. VoiceFX does
+    not use this helper; UC 4.7.2 changes no mixer return for block 201.
+    """
+    controls = getattr(win, "processing_mix_controls", None)
+    returns = getattr(win, "rev_return_controls", None)
+    if not controls or not returns or "main" not in returns:
+        return None
+    control = controls.get(1)
+    if control is None:
+        return None
+    bypassed = control.bypassed()
+    return_db = returns["main"].get_value()
+    return {
+        "channel_mix": None if bypassed else control.get_value(),
+        "return_db": return_db,
+        "bypassed": bypassed,
+        # The row bottoms out at -60 dB. Establishing a return at its own floor
+        # is indistinguishable from not establishing it, so the Host says so
+        # rather than presenting an armed effect nobody can hear.
+        "return_off": bool(return_db <= RETURN_EFFECTIVELY_OFF_DB),
+    }
+
+
+def establish_effects_path(dev, channel_mix, return_db, bus="main"):
+    """Open the shared effects feed and return before arming reverb.
+
+    The transaction itself lives in ``Io24.establish_effects_return`` so the
+    driver and Host cannot drift apart. The UC 4.7.2 capture proves VoiceFX
+    edits do not perform this mixer-return transaction.
+    """
+    return dev.establish_effects_return(
+        bus=bus, return_db=return_db, channel_mix=channel_mix)
 
 
 def append_host_migration_notices(completion_message, migrations):
@@ -1191,6 +1236,65 @@ class _ComboValue:
         self.row.set_selected(int(round((v - self.lo) / self.step)))
 
 
+class _SkewValue:
+    """Expose an XML ``curve=skew`` fader in its real parameter units.
+
+    GTK's scale is linear, so it carries a normalized 0..1 position.  The
+    exponent is solved from UC's declared midpoint: position 0.5 maps exactly
+    to ``mid`` while both endpoints remain exact.
+    """
+
+    def __init__(self, scale, lo, hi, mid):
+        self.scale = scale
+        self.lo = float(lo)
+        self.hi = float(hi)
+        fraction = (float(mid) - self.lo) / (self.hi - self.lo)
+        if not 0.0 < fraction < 1.0:
+            raise ValueError("skew midpoint must lie inside the parameter range")
+        self.exponent = math.log(fraction) / math.log(0.5)
+
+    def value_from_position(self, position):
+        position = max(0.0, min(1.0, float(position)))
+        return self.lo + (self.hi - self.lo) * position ** self.exponent
+
+    def position_from_value(self, value):
+        fraction = ((max(self.lo, min(self.hi, float(value))) - self.lo) /
+                    (self.hi - self.lo))
+        return fraction ** (1.0 / self.exponent)
+
+    def get_value(self):
+        return self.value_from_position(self.scale.get_value())
+
+    def set_value(self, value):
+        self.scale.set_value(self.position_from_value(value))
+
+
+class _SelectedFxPower:
+    """Compatibility view of the selected model's own XML ``On`` control.
+
+    Universal Control does not define a container-level Voice FX enable. Each
+    mutable model component owns a storable ``on`` parameter instead. Keeping
+    this adapter lets preset/session plumbing address the selected model
+    without collapsing the six controls back into one shared switch.
+    """
+
+    def __init__(self, selector, controls, order):
+        self.selector = selector
+        self.controls = controls
+        self.order = order
+
+    def _selected(self):
+        index = max(0, min(len(self.order) - 1,
+                           self.selector.get_selected()))
+        return self.controls[self.order[index]]
+
+    def get_active(self):
+        return bool(self._selected().get_value())
+
+    def set_active(self, value):
+        self._selected().set_value(bool(value))
+
+
 # --------------------------------------------------------------------------
 # A very small 3D wireframe renderer.
 #
@@ -1230,10 +1334,10 @@ class FXVisual(Canvas):
 
     Each one is a picture of the transformation that model performs, plotted
     from its OWN decoded parameters — so the display says what the effect is
-    and moves when you change it. Universal Control shows these as rack units;
-    copying that would be dishonest here, because on this device the processor
-    is present but held off by firmware state, and a photoreal front panel would
-    be a picture of a machine that does nothing.
+    and moves when you change it. The rack above is the compact six-component
+    selector; this is the selected component's larger parameter-driven view.
+    Neither transport success nor an animated view is presented as proof that
+    block 201 is audible.
     """
 
     ANIMATED = ("detuner", "ringmod", "delay")
@@ -1352,7 +1456,7 @@ class FXVisual(Canvas):
                 glow(sn, lambda x=x, bh=bh, bw=bw, a=a:
                      box(sn, x, base - bh, bw, bh, duo(min(1.0, a), 0.9)), radius=5.0)
             label(self, sn, "%s carrier  ·  %.0f Hz"
-                  % (["Noise", "Sawtooth", "Rectangle"][kind], fr), 10, h - 15,
+                  % (["Noise", "Sawtooth", "Rect"][kind], fr), 10, h - 15,
                   pal(INK, 0.45), 8)
 
         elif m == "ringmod":
@@ -1434,7 +1538,148 @@ class FXVisual(Canvas):
             label(self, sn, "%.0f ms  ·  feedback %.0f%%  ·  %d repeats"
                   % (t_s * 1000, fb * 100, n), 10, h - 15, pal(INK, 0.45), 8)
 
-        label(self, sn, MODEL_LABELS.get(m, m), 10, 7, pal(INK, 0.55), 8)
+        if q("on", 1.0) < 0.5:
+            # On is part of each model component, so its visual should say
+            # when that model is bypassed instead of animating as if active.
+            box(sn, 0, 0, w, h, pal(GROUND, 0.72))
+            label(self, sn, "%s  ·  OFF" % MODEL_LABELS.get(m, m),
+                  10, 7, pal(INK, 0.62), 8)
+        else:
+            label(self, sn, MODEL_LABELS.get(m, m), 10, 7,
+                  pal(INK, 0.55), 8)
+
+
+class VoiceFxRack(Canvas):
+    """Six VoiceFX components as the same live rack language as Fat Channel.
+
+    A click selects the XML mutable component. A double-click operates that
+    component's own ``on`` parameter. The full Model row remains immediately
+    below as the keyboard/screen-reader selector; this canvas is the compact
+    visual navigator and never invents a second model state.
+    """
+
+    SHORT_TITLES = ("Doubler", "Detuner", "Vocoder", "Ring Mod", "Filters",
+                    "Delay")
+
+    def __init__(self, win):
+        super().__init__(-1, 126)
+        self.win = win
+        self.set_hexpand(True)
+        self.set_tooltip_text(
+            "Click a VoiceFX unit to select it; double-click its faceplate "
+            "to toggle that model's own On parameter")
+        click = Gtk.GestureClick()
+        click.connect("released", self._clicked)
+        self.add_controller(click)
+
+    def _slot(self, x):
+        width = self.get_width() or 1
+        return max(0, min(len(self.win.FX_ORDER) - 1,
+                          int(x / (width / len(self.win.FX_ORDER)))))
+
+    def _clicked(self, _gesture, n_press, x, _y):
+        index = self._slot(x)
+        self.win.fx_model.set_selected(index)
+        if n_press >= 2:
+            model = self.win.FX_ORDER[index]
+            power = self.win.fx_power[model]
+            power.set_value(not bool(power.get_value()))
+        self.queue_draw()
+
+    def _state(self, model):
+        controls = getattr(self.win, "fx_params", {}).get(model, {})
+        state = {name: control.get_value() for name, control in controls.items()}
+        power = getattr(self.win, "fx_power", {}).get(model)
+        state["on"] = bool(power.get_value()) if power is not None else False
+        return state
+
+    @staticmethod
+    def _mini(sn, model, state, x, y, w, h, colour):
+        """Compact forms of the six parameter-driven FXVisual signatures."""
+        def value(name, default):
+            try:
+                return float(state.get(name, default))
+            except (TypeError, ValueError):
+                return default
+
+        active = bool(state.get("on"))
+        tone = colour if active else INK
+        acc = pal(tone, 0.9 if active else 0.28)
+        mid = y + h * 0.5
+        if model == "transformer":
+            lows = value("lows", 0.5)
+            pts = []
+            for i in range(25):
+                t = i / 24.0
+                pts.append((x + t * w,
+                            y + h * (0.82 - lows * 0.58 / (1 + (t * 3) ** 2))))
+            polyline(sn, pts, acc, 1.6)
+        elif model == "detuner":
+            shift = (int(value("detune", 4)) - 8) / 8.0
+            for phase, alpha in ((0.0, 1.0), (shift * 2.4, 0.55)):
+                pts = [(x + i / 30.0 * w,
+                        mid + math.sin(i / 30.0 * 10 + phase) * h * 0.25)
+                       for i in range(31)]
+                polyline(sn, pts, pal(tone, alpha if active else 0.25), 1.2)
+        elif model == "vocoder":
+            carrier = int(value("carrier_type", 1))
+            for i in range(8):
+                amplitude = (0.35 + 0.6 / (1 + i * 0.45))
+                if carrier == 2 and i % 2:
+                    amplitude *= 0.22
+                bh = h * amplitude
+                bw = max(2.0, w / 11.0)
+                box(sn, x + i * w / 8.0, y + h - bh, bw, bh, acc)
+        elif model == "ringmod":
+            sub = value("carrier2", 0) >= 0.5
+            pts = []
+            for i in range(41):
+                t = i / 40.0
+                wave = math.sin(t * 18) * math.sin(t * 7)
+                if sub:
+                    wave = wave * 0.72 + math.sin(t * 4) * 0.28
+                pts.append((x + t * w, mid + wave * h * 0.34))
+            polyline(sn, pts, acc, 1.4)
+        elif model == "filters":
+            regeneration = value("regeneration", 0.5)
+            pts = []
+            for i in range(49):
+                t = i / 48.0
+                teeth = abs(math.cos(t * math.pi * (5 + regeneration * 5)))
+                pts.append((x + t * w, y + h - teeth * h * 0.78))
+            polyline(sn, pts, acc, 1.4)
+        else:
+            feedback = value("feedback", 0.5)
+            for i in range(5):
+                level = (0.35 + feedback * 0.55) ** i
+                xx = x + i * w / 5.0
+                polyline(sn, [(xx, y + h), (xx, y + h - h * level)], acc, 1.5)
+
+    def paint(self, sn, w, h):
+        count = len(self.win.FX_ORDER)
+        unit_width = w / count
+        selected = max(0, min(count - 1, self.win.fx_model.get_selected()))
+        for index, model in enumerate(self.win.FX_ORDER):
+            x = index * unit_width
+            state = self._state(model)
+            on = bool(state["on"])
+            face = pal(ACCENT, 0.24) if on else pal(GRID, 0.13)
+            header = pal(ACCENT, 0.34) if on else pal(GRID, 0.20)
+            box(sn, x + 4, 3, unit_width - 8, h - 6, face)
+            box(sn, x + 4, 3, unit_width - 8, 24, header)
+            if selected == index:
+                for ex, ey, ew, eh in ((x + 3, 2, unit_width - 6, 1.5),
+                                       (x + 3, h - 3.5, unit_width - 6, 1.5),
+                                       (x + 3, 2, 1.5, h - 4),
+                                       (x + unit_width - 4.5, 2, 1.5, h - 4)):
+                    box(sn, ex, ey, ew, eh, pal(ACCENT, 0.92))
+            if on:
+                dot(sn, x + 14, 15, 7, pal(ACCENT, 0.24))
+            dot(sn, x + 14, 15, 4, pal(ACCENT) if on else pal(INK, 0.25))
+            label(self, sn, self.SHORT_TITLES[index], x + 24, 8,
+                  pal(INK, 0.95 if on else 0.62), 8)
+            self._mini(sn, model, state, x + 11, 35, unit_width - 22,
+                       h - 49, ACCENT)
 
 
 class ReverbVisual(Canvas):
@@ -1618,20 +1863,49 @@ MODEL_LABELS = {
     "delay": "DELAY   echo",
 }
 
-_INTERVALS = ["unison", "m2", "M2", "m3", "M3", "P4", "TT", "P5", "m6"]
+MODEL_TITLES = [component["title"]
+                for component in io24_fx.VOICEFX_XML_SCHEMA.values()]
 
 
-def _interval_name(v):
-    """Shipped TuneList readout: indices 0..8 are -8..0 semitones."""
-    n = int(v) - 8
-    if n == 0:
-        return "unison"
-    name = _INTERVALS[min(8, abs(n))]
-    return ("\u2193 " if n < 0 else "\u2191 ") + name
+def _voicefx_value_text(parameter, value):
+    """Format one value with the units or list labels declared by UC XML."""
+    if parameter["type"] == "list":
+        choices = parameter["choices"]
+        return choices[max(0, min(len(choices) - 1, int(round(value))))]
+    units = parameter.get("units")
+    if units == "percent":
+        return "%.0f %%" % (value * 100.0)
+    if units == "freq":
+        return ("%.1f Hz" if value < 100.0 else "%.0f Hz") % value
+    if units in ("time", "time/off"):
+        return "%.0f ms" % (value * 1000.0)
+    return "%.3g" % value
 
 
-MODEL_TITLES = ["Doubler / Transformer", "Detuner", "Vocoder", "Ring Modulator",
-                "Filters", "Delay"]
+def _voicefx_ui_fields():
+    """Build the editable Host rows directly from the retained XML schema."""
+    fields = {}
+    for model, component in io24_fx.VOICEFX_XML_SCHEMA.items():
+        rows = []
+        for parameter in component["parameters"]:
+            builder = parameter.get("builder")
+            if builder in (None, "on"):
+                continue
+            if parameter["type"] == "list":
+                lo, hi, step = 0, len(parameter["choices"]) - 1, 1
+            elif parameter["type"] == "toggle":
+                lo, hi, step = 0, 1, 1
+            else:
+                lo, hi = parameter["min"], parameter["max"]
+                step = 0.0001 if parameter.get("units") == "time" else 0.005
+            formatter = lambda value, p=parameter: _voicefx_value_text(p, value)
+            rows.append((builder, parameter["name"], lo, hi, step,
+                         parameter.get("default", 0), formatter))
+        fields[model] = rows
+    return fields
+
+
+VOICEFX_UI_FIELDS = _voicefx_ui_fields()
 
 
 class Knob(Canvas):
@@ -4202,131 +4476,108 @@ class Win(Adw.ApplicationWindow):
         ig = Adw.PreferencesGroup(title="FX")
 
         self.fx_visual = FXVisual("transformer", self._fx_live_params)
-        ig.add(self.fx_visual)
-
-        self.fx_model = Adw.ComboRow(title="Model",
+        self.fx_model = Adw.ComboRow(title="FX Model",
                                      model=Gtk.StringList.new(MODEL_TITLES))
+        self.fx_model.set_tooltip_text(
+            "UC voicefxopt/fxmodel selects the one mutable VoiceFX component")
         self.fx_model.connect("notify::selected", lambda *_a: self._fx_model_changed())
-        ig.add(self.fx_model)
 
-        # Each model's OWN parameters. These were decoded from the host binary
-        # and are what the effect actually takes — the page used to send only
-        # builder defaults, so five of the six models were unadjustable and the
-        # controls that do exist were invisible.
+        # Each mutable model owns its own storable `on` parameter as well as its
+        # own exact XML-ordered controls. There is no container-level Voice FX
+        # enable in the UC component model.
         self.fx_params = {}
+        self.fx_power = {}
         self.fx_param_stack = Gtk.Stack()
         self.fx_param_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        for key, specs in self.FX_PARAMS.items():
+        for key, component in io24_fx.VOICEFX_XML_SCHEMA.items():
             grp = Adw.PreferencesGroup()
             self.fx_params[key] = {}
-            for name, title, lo, hi, step, dv, fmt in specs:
-                # An on/off parameter drawn as a slider is a slider you have to
-                # aim: it looks continuous, and half its travel is a lie. Same
-                # for a three-way choice. Only genuinely continuous values get
-                # a fader.
-                if lo == 0 and hi == 1 and step == 1:
-                    w_ = Adw.SwitchRow(title=title)
-                    w_.set_active(bool(dv))
-                    w_.connect("notify::active", lambda *_a: self._push_fx())
-                    self.fx_params[key][name] = _SwitchValue(w_)
-                    grp.add(w_)
-                elif step >= 1 and (hi - lo) / step <= 4:
-                    labels = [fmt(lo + i * step)
-                              for i in range(int((hi - lo) / step) + 1)]
-                    w_ = Adw.ComboRow(title=title,
-                                      model=Gtk.StringList.new(labels))
-                    w_.set_selected(int((dv - lo) / step))
-                    w_.connect("notify::selected", lambda *_a: self._push_fx())
-                    self.fx_params[key][name] = _ComboValue(w_, lo, step)
-                    grp.add(w_)
+            for parameter in component["parameters"]:
+                builder = parameter.get("builder")
+                route = "UC %s.%s" % (component["paramlist"], parameter["id"])
+                if builder is not None:
+                    route += " → %s" % builder
+
+                if builder == "on":
+                    power = Adw.SwitchRow(
+                        title=parameter["name"],
+                        subtitle="This component's own storable on/off state")
+                    power.set_active(bool(parameter.get("default", False)))
+                    power.set_tooltip_text(route)
+                    power.connect("notify::active", self._fx_power_changed)
+                    self.fx_power[key] = _SwitchValue(power)
+                    grp.add(power)
+                elif builder is None:
+                    row = Adw.ActionRow(
+                        title=parameter["name"],
+                        subtitle="Read-only in UC; block-201 readback unavailable")
+                    value = Gtk.Label(label="Unavailable")
+                    value.add_css_class("dim-label")
+                    row.add_suffix(value)
+                    row.set_tooltip_text(route)
+                    row.set_sensitive(False)
+                    grp.add(row)
+                elif parameter["type"] == "toggle":
+                    control = Adw.SwitchRow(title=parameter["name"])
+                    control.set_active(bool(parameter.get("default", False)))
+                    control.set_tooltip_text(route)
+                    control.connect("notify::active", lambda *_a: self._push_fx())
+                    self.fx_params[key][builder] = _SwitchValue(control)
+                    grp.add(control)
+                elif parameter["type"] == "list":
+                    choices = parameter["choices"]
+                    control = Adw.ComboRow(
+                        title=parameter["name"],
+                        model=Gtk.StringList.new(list(choices)))
+                    control.set_selected(int(parameter["default"]))
+                    control.set_tooltip_text(route)
+                    control.connect("notify::selected", lambda *_a: self._push_fx())
+                    self.fx_params[key][builder] = _ComboValue(control, 0, 1)
+                    grp.add(control)
                 else:
-                    r, sc = self._srow(title, lo, hi, step, dv, fmt,
-                                       lambda v: self._queue_fx_push())
-                    self.fx_params[key][name] = sc
-                    grp.add(r)
+                    formatter = lambda value, p=parameter: _voicefx_value_text(p, value)
+                    step = (0.0001 if parameter.get("units") == "time"
+                            else 0.005)
+                    row, control = self._srow(
+                        parameter["name"], parameter["min"], parameter["max"],
+                        step, parameter["default"], formatter,
+                        lambda _value: self._queue_fx_push(),
+                        curve=parameter.get("curve"), mid=parameter.get("mid"))
+                    row.set_tooltip_text(route)
+                    self.fx_params[key][builder] = control
+                    grp.add(row)
             self.fx_param_stack.add_named(grp, key)
         self.fx_param_stack.set_visible_child_name("transformer")
-        ig.add(self.fx_param_stack)
 
-        self.fx_arm = Adw.SwitchRow(
-            title="FX active")
-        self.fx_arm.set_active(True)
-        self.fx_arm.connect("notify::active", lambda *_a: self._push_fx())
-        ig.add(self.fx_arm)
+        # Older call sites use ``fx_arm`` for the selected model. It is an
+        # adapter now, not a seventh/master switch.
+        self.fx_arm = _SelectedFxPower(
+            self.fx_model, self.fx_power, self.FX_ORDER)
+
+        self.fx_rack = VoiceFxRack(self)
+        ig.add(self.fx_rack)
+        ig.add(self.fx_visual)
+        ig.add(self.fx_model)
+        ig.add(self.fx_param_stack)
 
         page.add(ig)
         return page
 
-    FX_ORDER = ("transformer", "detuner", "vocoder", "ringmod", "filters", "delay")
-
-    # (kwarg, label, min, max, step, default, formatter) per model, taken from
-    # the io24_fx builder signatures rather than invented. Vocoder has no
-    # per-instance parameters beyond on/mix — its character is the fixed
-    # 22-biquad bank — so it gets mix alone.
-    # (kwarg, label, min, max, step, default, formatter). Labels are the
-    # manual's. Several parameters were simply absent before: the vocoder's
-    # carrier Type and Freq, and the ring modulator's Sub Carrier and SC Freq —
-    # so half of two effects was unreachable.
-    _wet = staticmethod(lambda v: "%.0f %% wet" % (v * 100))
-    FX_PARAMS = {
-        "transformer": [("lows", "Lows", 0.0, 1.0, 0.005, 0.06,
-                         lambda v: "%+.1f dB" % (v * 12.0)),
-                        ("width", "Width", 0.0, 1.0, 0.005, 0.405,
-                         lambda v: "%.0f %%" % (v * 100)),
-                        ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.295,
-                         lambda v: "%.0f %% wet" % (v * 100))],
-        # UC's TuneList is exactly indices 0..8 = -8..0 semitones.  The
-        # backend can encode positive values as an experimental extension, but
-        # the public Host does not expose a range that has not passed audio.
-        "detuner": [("detune", "Tune", 0, 8, 1, 8, _interval_name),
-                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %% wet" % (v * 100))],
-        "vocoder": [("carrier_type", "Type", 0, 2, 1, 1,
-                     lambda v: ["Noise", "Sawtooth", "Rectangle"][int(v)]),
-                    ("carrier_freq", "Freq", 50.0, 500.0, 1.0, 80.0,
-                     lambda v: "%.0f Hz" % v),
-                    ("vol", "Output", 0.0, 1.0, 0.005, 1.0,
-                     lambda v: "%.0f %%" % (v * 100)),
-                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %% wet" % (v * 100))],
-        "ringmod": [("dist", "Dist", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %%" % (v * 100)),
-                    ("carrier_hz", "Freq", 0.1, 2000.0, 0.1, 30.0,
-                     lambda v: "%.1f Hz" % v),
-                    ("carrier2", "Sub Carrier", 0, 1, 1, 0,
-                     lambda v: "on" if v >= 0.5 else "off"),
-                    ("carrier2_hz", "SC Freq", 0.1, 2000.0, 0.1, 50.0,
-                     lambda v: "%.1f Hz" % v),
-                    ("vol", "Output", 0.0, 1.0, 0.005, 1.0,
-                     lambda v: "%.0f %%" % (v * 100)),
-                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %% wet" % (v * 100))],
-        "filters": [("pitch", "Tune", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%d samples" % int(v * 1300 + 250.5)),
-                    ("damping", "Damping", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.2f" % (v * 0.6 + 0.3)),
-                    ("regeneration", "Feedback", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.2f" % (v * 0.35 + 0.5)),
-                    ("distortion", "Distortion", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %%" % (v * 100)),
-                    ("volume", "Output", 0.0, 1.0, 0.005, 1.0,
-                     lambda v: "%.0f %%" % (v * 100)),
-                    ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
-                     lambda v: "%.0f %% wet" % (v * 100))],
-        "delay": [("time_s", "Time", 0.0001, 0.25, 0.0001, 0.125,
-                   lambda v: "%.0f ms" % (v * 1000)),
-                  ("feedback", "Feedback", 0.0, 1.0, 0.005, 0.5,
-                   lambda v: "%.0f %%" % (v * 100)),
-                  ("mix", "Wet/Dry", 0.0, 1.0, 0.005, 0.5,
-                   lambda v: "%.0f %% wet" % (v * 100))],
-    }
+    FX_ORDER = tuple(io24_fx.VOICEFX_XML_SCHEMA)
+    # Compatibility/public inspection table: every row is derived from the
+    # exact XML transcription rather than maintained as a second UI schema.
+    FX_PARAMS = VOICEFX_UI_FIELDS
 
     def _fx_live_params(self):
-        """Current slider values for the selected model, for the diagram."""
+        """Current selected component state, including its own XML On value."""
         idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
         model = self.FX_ORDER[idx]
-        return {n: sc.get_value()
-                for n, sc in getattr(self, "fx_params", {}).get(model, {}).items()}
+        state = {n: sc.get_value()
+                 for n, sc in getattr(self, "fx_params", {}).get(model, {}).items()}
+        power = getattr(self, "fx_power", {}).get(model)
+        state["on"] = (power.get_value() if power is not None
+                       else bool(self.fx_arm.get_active()))
+        return state
 
     def _fx_model_changed(self):
         idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
@@ -4336,6 +4587,18 @@ class Win(Adw.ApplicationWindow):
             v.set_model(name)
         if getattr(self, "fx_param_stack", None) is not None:
             self.fx_param_stack.set_visible_child_name(name)
+        rack = getattr(self, "fx_rack", None)
+        if rack is not None:
+            rack.queue_draw()
+        self._push_fx()
+
+    def _fx_power_changed(self, *_args):
+        rack = getattr(self, "fx_rack", None)
+        if rack is not None:
+            rack.queue_draw()
+        visual = getattr(self, "fx_visual", None)
+        if visual is not None:
+            visual.queue_draw()
         self._push_fx()
 
     def _queue_fx_push(self):
@@ -4360,6 +4623,12 @@ class Win(Adw.ApplicationWindow):
         """
         if self._fx_mute:
             return
+        rack = getattr(self, "fx_rack", None)
+        if rack is not None:
+            rack.queue_draw()
+        visual = getattr(self, "fx_visual", None)
+        if visual is not None:
+            visual.queue_draw()
         if self.ctl.dev is None:
             return
         on = self.fx_arm.get_active()
@@ -4372,13 +4641,26 @@ class Win(Adw.ApplicationWindow):
                 params[name] = int(params[name])
         if "carrier2" in params:
             params["carrier2"] = bool(params["carrier2"])
-        def work(dev, name=model, enabled=on, kw=dict(params)):
+        processing = getattr(self, "processing_mix_controls", {}).get(1)
+        bypassed = bool(on and processing is not None and
+                        processing.bypassed())
+
+        def work(dev, name=model, enabled=on, kw=dict(params),
+                 channel_bypassed=bypassed):
             try:
                 dev.set_fx(name, on=enabled, **kw)
             except Exception as error:
                 GLib.idle_add(self.say, "FX send failed: %s" % error)
+                return
+            if channel_bypassed:
+                GLib.idle_add(
+                    self.say,
+                    "FX is armed, but Channel 1 is bypassed, so nothing "
+                    "reaches its processing chain; clear Channel 1 bypass on "
+                    "the Device page to hear it.")
 
         self.ctl.submit(work)
+
 
     # name -> (size, input high-pass Hz, pre-delay s)
     # Chosen for what each name means acoustically: a small bright box, a large
@@ -4504,9 +4786,8 @@ class Win(Adw.ApplicationWindow):
             if establish:
                 # Establish the feed and return before arming the engine. This
                 # is the device order that produces an audible shared reverb.
-                dev.set_fx_mix(1, channel_mix)
-                dev.set_send_db("fxreturn/ch1", "main", return_db)
-                dev.set_send_assigned("fxreturn/ch1", "main", True)
+                # UC 4.7.2 does not open this path for block 201 VoiceFX.
+                establish_effects_path(dev, channel_mix, return_db)
             return dev.set_reverb(
                 on=True, size=size, mix=mix, hp_freq=hp,
                 predelay=max(0.0001, pre), fs=fs)
@@ -5947,7 +6228,10 @@ class Win(Adw.ApplicationWindow):
         fx_model = self.FX_ORDER[max(
             0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))]
         voicefx = self._fx_live_params()
-        voicefx["on"] = self.fx_arm.get_active()
+        # Test doubles and old session adapters may still return parameters
+        # without ``on``. Production _fx_live_params includes the selected
+        # model's own XML On value.
+        voicefx.setdefault("on", self.fx_arm.get_active())
         return fx_model, voicefx
 
     def _current_slot_record(self, base_name, target, preset_name,
@@ -6169,45 +6453,66 @@ class Win(Adw.ApplicationWindow):
         else:
             chans = (1, 2) if self.link_both else (target,)
 
-        def adopt():
-            self._adopt_preset_record(pr, chans)
-
         def work(dev):
+            fx_command_sent = False
+            fx_error = None
             try:
-                # Block 201 is global. When linked, configure it once while
-                # applying the per-channel Fat Channel state to both inputs.
+                # The Fat Channel is the preset's reliable core and must not be
+                # rolled back or reported as failed when the separate global
+                # FX activation handshake is unavailable.
                 for ch in chans:
-                    self.PR.apply_preset(
-                        dev, pr, ch, with_fx=bool(with_fx and ch == target))
+                    self.PR.apply_preset(dev, pr, ch, with_fx=False)
             except Exception as error:
                 GLib.idle_add(
                     self.say, "%s load failed: %s" % (name, error))
                 return
 
+            if with_fx:
+                try:
+                    fx_report = self.PR.apply_voicefx(dev, pr)
+                    fx_command_sent = fx_report is not None
+                except Exception as error:
+                    fx_error = str(error)
+
             def finished():
-                adopt()
+                if fx_command_sent:
+                    # Adopt the requested controls, but do not turn a USB ACK
+                    # into an audibility claim.
+                    self._adopt_preset_record(pr, chans, fx_channel=target)
+                else:
+                    self._adopt_preset_record(pr, chans)
                 channel_text = " and ".join(str(ch) for ch in chans)
-                self.say("Loaded %s on Channel%s %s" % (
-                    name, "s" if len(chans) > 1 else "", channel_text))
+                message = "Loaded %s on Channel%s %s" % (
+                    name, "s" if len(chans) > 1 else "", channel_text)
+                if fx_error:
+                    message += "; FX not loaded: %s" % fx_error
+                elif fx_command_sent:
+                    message += "; Voice FX state sent"
+                self.say(message)
                 return False
 
             GLib.idle_add(finished)
 
         self.ctl.submit(work)
 
-    def _srow(self, title, lo, hi, step, val, fmt, cb, subtitle=None):
+    def _srow(self, title, lo, hi, step, val, fmt, cb, subtitle=None,
+              curve=None, mid=None):
         row = Adw.ActionRow(title=title)
         if subtitle:
             row.set_subtitle(subtitle)
-        sc = fader(lo, hi, step, vertical=False)
-        sc.set_value(val); sc.set_size_request(260, -1)
+        widget = fader(0.0, 1.0, 0.001, vertical=False) \
+            if curve == "skew" else fader(lo, hi, step, vertical=False)
+        sc = (_SkewValue(widget, lo, hi, mid)
+              if curve == "skew" else widget)
+        sc.set_value(val); widget.set_size_request(260, -1)
         lbl = Gtk.Label(label=fmt(val), xalign=1.0)
         lbl.add_css_class("numeric"); lbl.add_css_class("dim-label")
         lbl.set_size_request(80, -1)
         thr = Throttle(cb, 0.002)
 
-        def ch(w):
-            lbl.set_text(fmt(w.get_value()))
+        def ch(_widget):
+            value = sc.get_value()
+            lbl.set_text(fmt(value))
             for c in getattr(self, "w", {}):
                 self.w[c]["curve"].queue_draw()
                 self.w[c]["comp_curve"].queue_draw()
@@ -6215,8 +6520,8 @@ class Win(Adw.ApplicationWindow):
             # before entering Throttle so no callback can escape after the
             # adoption flag is lowered.
             if not getattr(self, "_adopt_mute", False):
-                thr(w.get_value())
-        sc.connect("value-changed", ch)
+                thr(value)
+        widget.connect("value-changed", ch)
 
         # Double-click resets to this control's own default. Every fader is
         # built here with its nominal value already in hand, so the behaviour
@@ -6224,10 +6529,14 @@ class Win(Adw.ApplicationWindow):
         # being remembered per-control. `val` is captured, so a slider always
         # returns to what it was designed to sit at, not to wherever it started
         # this session.
-        reset_on_double_click(sc, val, fmt)
+        reset_value = (sc.position_from_value(val)
+                       if isinstance(sc, _SkewValue) else val)
+        reset_format = ((lambda position: fmt(sc.value_from_position(position)))
+                        if isinstance(sc, _SkewValue) else fmt)
+        reset_on_double_click(widget, reset_value, reset_format)
         row.set_tooltip_text("Double-click to reset to %s" % fmt(val))
 
-        row.add_suffix(sc); row.add_suffix(lbl)
+        row.add_suffix(widget); row.add_suffix(lbl)
         return row, sc
 
     # ------------------------------------------------------------ auto gain

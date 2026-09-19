@@ -223,6 +223,7 @@ LIM = fourcc("lim ")
 REDU = fourcc("Redu")
 CHNP = fourcc("CHNP")   # channel names, block 0 — see PROTOCOL.md §13j
 BQDF = fourcc("Bqdf")
+LFDF = fourcc("Lfdf")
 
 RELEASE_48K = 0x3F7FEA8F        # limiter release coefficient for fs=48000 (= 0.4 s)
 LIM_OFF_THRESHOLD = 0x3FAAB0D5  # firmware power-on value (initialiser 0x60076c6c)
@@ -1517,6 +1518,54 @@ class Io24:
         blob += struct.pack("<5f", *w)
         return self._dsp(SETP, fourcc(block), channel - 1, blob)
 
+    @staticmethod
+    def _stable_denominator(coeffs):
+        """Schur-test one UC wire-format second/third-order denominator.
+
+        UC interleaves numerator coefficients with negated denominator
+        coefficients.  For seven floats the polynomial is
+        ``z^3 - na1*z^2 - na2*z - na3``.  The Schur recursion avoids adding a
+        numerical package merely to guard the one wider section.
+        """
+        if len(coeffs) not in (5, 7):
+            return False
+        padded = tuple(coeffs) + (0.0,) * (7 - len(coeffs))
+        polynomial = [1.0, -padded[1], -padded[3], -padded[5]]
+        if len(coeffs) == 5:
+            polynomial.pop()
+        while len(polynomial) > 1:
+            first, last = polynomial[0], polynomial[-1]
+            if abs(last) >= abs(first):
+                return False
+            degree = len(polynomial) - 1
+            polynomial = [
+                first * polynomial[index] -
+                last * polynomial[degree - index]
+                for index in range(degree)
+            ]
+        return True
+
+    def set_wide_eq(self, channel, coeffs, band=0):
+        """Load UC's seven-float third-order EQ section (``Lfdf``).
+
+        Passive and Vintage each use exactly one of these at live index 0.
+        The float order extends Bqdf's convention:
+        ``[b0, -a1, b1, -a2, b2, -a3, b3]``.
+        """
+        if len(coeffs) != 7:
+            raise ValueError(
+                "need 7 coefficients [b0, -a1, b1, -a2, b2, -a3, b3]")
+        w = struct.unpack("<7f", struct.pack("<7f", *coeffs))
+        if not all(math.isfinite(value) for value in w):
+            raise ValueError("non-finite wide-EQ coefficient: %r" % (w,))
+        if not self._stable_denominator(w):
+            raise ValueError(
+                "unstable wide EQ denominator; refusing to send coefficients %r"
+                % (list(w),))
+        blob = struct.pack("<IIII", LFDF, 0x2C, 0, max(0, min(3, band)))
+        blob += struct.pack("<7f", *w)
+        return self._dsp(SETP, EQ, channel - 1, blob)
+
     def set_highpass_freq(self, channel, freq_hz, fs=48000.0):
         """High-pass cutoff on the 'filt' block, 24..1000 Hz (24 = bypass)."""
         freq_hz = max(24.0, min(1000.0, freq_hz))
@@ -2627,6 +2676,57 @@ class Io24:
             raise ValueError("unknown shape %r" % shape)
         return self.set_biquad("eq  ", channel, coeffs, band=band)
 
+    def set_alternate_eq(self, channel, eq, fs=48000.0, dll_path=None):
+        """Apply one complete exact UC Passive or Vintage EQ state.
+
+        All coefficients are designed and validated before the first write.
+        Packet kind, width, and live index follow the corresponding UC 4.7.2
+        recompute path, rather than the native preset's stored-band order.
+        """
+        import io24_alt_eq
+
+        sections = io24_alt_eq.design_live_sections(
+            eq, rate_hz=fs, dll_path=dll_path)
+        # Validate every section before any transport.  The actual send methods
+        # repeat these checks on the float32 wire values as a last-line guard.
+        for kind, index, coefficients in sections:
+            if kind == "wide":
+                if len(coefficients) != 7 or not \
+                        self._stable_denominator(coefficients):
+                    raise ValueError("invalid UC alternate-EQ wide section")
+            elif kind == "biquad":
+                if len(coefficients) != 5 or not \
+                        self._stable_denominator(coefficients):
+                    raise ValueError("invalid UC alternate-EQ biquad section")
+            else:
+                raise ValueError("unknown UC alternate-EQ section %r" % kind)
+            if index not in (0, 1, 2, 3):
+                raise ValueError("alternate-EQ index must be 0..3")
+
+        replies = []
+        for kind, index, coefficients in sections:
+            if kind == "wide":
+                replies.append(self.set_wide_eq(
+                    channel, coefficients, band=index))
+            else:
+                replies.append(self.set_biquad(
+                    "eq  ", channel, coefficients, band=index))
+        return replies
+
+    def set_passive_eq(self, channel, eq, fs=48000.0, dll_path=None):
+        """Validate and apply one complete Passive Program EQ record."""
+        import io24_alt_eq
+        if io24_alt_eq.model_of(eq) != "passive":
+            raise ValueError("a Passive EQ record is required")
+        return self.set_alternate_eq(channel, eq, fs=fs, dll_path=dll_path)
+
+    def set_vintage_eq(self, channel, eq, fs=48000.0, dll_path=None):
+        """Validate and apply one complete Vintage EQ record."""
+        import io24_alt_eq
+        if io24_alt_eq.model_of(eq) != "vintage":
+            raise ValueError("a Vintage EQ record is required")
+        return self.set_alternate_eq(channel, eq, fs=fs, dll_path=dll_path)
+
     def eq_off(self, channel):
         """Flatten all four EQ bands (identity biquads)."""
         for b in range(4):
@@ -2828,7 +2928,8 @@ def _quarantine_device_preset_calls(calls, include_device_preset_state=False):
 _SHADOWED = ("set_fx_mix", "set_highpass", "set_mute", "set_hp_mute",
              "set_phones_source",
              "set_channel_link", "set_limiter", "set_compressor", "set_gate",
-             "set_highpass_freq", "set_eq_band", "set_send_db",
+             "set_highpass_freq", "set_eq_band", "set_alternate_eq",
+             "set_send_db",
              "set_send_assigned", "set_bus_master", "set_comp_eq_order",
              "set_reverb", "set_output_delay", "set_output_delay_bus",
              "set_processing_channel", "set_pan",
@@ -3036,7 +3137,7 @@ def _normalise_host_features(features):
     # were saved but refused here, so a snapshot with either failed to save.
     unknown = set(features) - {"multiband", "multiband_insert", "pan",
                                "reverb_character", "autogain",
-                               "standard_eq"}
+                               "standard_eq", "alternate_eq"}
     if unknown:
         raise ValueError("unknown host feature%s: %s" %
                          ("" if len(unknown) == 1 else "s",
@@ -3053,6 +3154,11 @@ def _normalise_host_features(features):
         normalized["standard_eq"] = \
             io24_presets.validate_standard_eq_host_state(
                 features["standard_eq"])
+    if "alternate_eq" in features:
+        import io24_presets
+        normalized["alternate_eq"] = \
+            io24_presets.validate_alternate_eq_host_state(
+                features["alternate_eq"])
     if "multiband" in features:
         # The retired computer-playback multiband. Still read, so its band
         # settings can seed the Multiband compressor type; never switched on.
@@ -3085,6 +3191,19 @@ def _shadowed(name):
             b.apply_defaults()
             bound = dict(b.arguments)
             bound.pop("self", None)
+            # Standard and Passive/Vintage are mutually exclusive component
+            # models on one channel. Keeping both call families would make a
+            # reconnect replay whichever dictionary key happened to be older,
+            # not the model the user selected last.
+            channel = bound.get("channel")
+            if name == "set_alternate_eq" and channel in (1, 2):
+                for old_key in tuple(self._shadow):
+                    if old_key.startswith(
+                            "set_eq_band#channel=%s," % channel):
+                        self._shadow.pop(old_key, None)
+            elif name == "set_eq_band" and channel in (1, 2):
+                self._shadow.pop(
+                    "set_alternate_eq#channel=%s" % channel, None)
             self._shadow[_shadow_key(key_name, bound)] = {
                 "fn": name, "kwargs": _jsonable(bound)}
             self._shadow_dirty = True
@@ -3103,7 +3222,12 @@ def _jsonable(d):
     out = {}
     for k, v in d.items():
         if isinstance(v, dict):        # set_compressor(**kw)
-            out.update(_jsonable(v))
+            if k == "eq":
+                # Alternate EQ is one semantic object. Flattening it into the
+                # call kwargs would make a saved shadow unreplayable.
+                out[k] = _jsonable(v)
+            else:
+                out.update(_jsonable(v))
         elif v is None or isinstance(v, (bool, int, float, str)):
             out[k] = v
         elif isinstance(v, (list, tuple)):

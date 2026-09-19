@@ -286,7 +286,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
         ]
         self.assertEqual(len(alternate_rows), 34)
         self.assertTrue(all(
-            "alternate_eq_exact_builder_pending" in row["blockers"]
+            "set_alternate_eq" in row["api"] and not row["blockers"]
             for row in alternate_rows
         ))
         passive_frequency = [
@@ -296,7 +296,7 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
         ]
         self.assertEqual(len(passive_frequency), 2)
         self.assertTrue(all(
-            "vendor_20kHz_literal_requires_resolution" in row["blockers"]
+            row["stimuli"] == [20, 30, 60, 100]
             for row in passive_frequency
         ))
 

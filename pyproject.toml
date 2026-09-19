@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
-dependencies = ["pyusb>=1.2"]
+dependencies = ["pyusb>=1.2", "capstone>=5,<6"]
 classifiers = [
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
@@ -35,5 +35,6 @@ io24-scene = "io24_scene:main"
 py-modules = [
     "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters",
     "io24_mbc", "io24_native_stat", "io24_preset_record", "io24_presets",
+    "io24_alt_eq", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
     "io24_scene", "io24d", "io24web", "io24gtk", "ucnet_shim", "calibrate",
 ]

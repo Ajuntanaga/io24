@@ -2,6 +2,43 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-18 controlling result: Passive and Vintage EQ have exact Host routes
+
+Passive Program and Vintage 1970s EQ are now first-class Linux Host models.
+UC 4.7.2's embedded component XML supplies their class IDs, fields, ranges,
+switch lists, defaults and one independent `eqallon` power field per selected
+model. Neither alternate model declares Standard EQ's four per-band power
+fields.
+
+The recompute call sites bind the semantic controls to the live packets. UC's
+Passive path calls the combined high designer at `0x18001a610`, sends its seven
+coefficients as `Lfdf` index 0, calls the combined low designer at
+`0x18001adb0`, sends it as `Bqdf` index 1, then supplies identity `Bqdf`
+sections at indexes 2 and 3. Vintage calls its low, high, hi-mid and low-mid
+designers at `0x18001d470`, `0x18001cf30`, `0x18001cc20` and `0x18001c910`,
+then sends them as `Lfdf[0]`, `Bqdf[1]`, `Bqdf[2]` and `Bqdf[3]`. The bounded
+analyzer checks each call target plus the adjacent tag, byte width and index.
+
+The Linux driver now validates the complete semantic model before transport,
+interprets those hash-pinned designers, checks every float32 denominator for
+stability, and emits the four packets in UC's live order. The GTK Host exposes
+the exact controls and response curve, model-specific power, preset loading,
+Host snapshots and reconnect replay. Selecting Standard removes the alternate
+shadow for that input, and selecting Passive or Vintage removes its Standard
+band shadow, so reconnect cannot replay two competing EQ models.
+
+The proprietary DLL is read as data and never loaded or executed. The default
+path is the retained UC 4.7.2 artifact; `IO24_UC472_DSPUSBDEVICE` may point to
+another lawful copy, whose exact size and SHA-256 must match. Hardware-free
+source, designer, packet, preset and UI-state regressions pass. No USB/device
+operation was used for this result, so exact implementation is established but
+a dedicated audible hardware A/B remains a separate gated test.
+
+Primary artifacts: `io24_alt_eq.py`, `io24_uc472_passive_eq.py`,
+`io24_uc472_vintage_eq.py`,
+`re/uc472_alt_eq_live_route.py`, and
+`re/uc_component_model/fatchannelxt_alternate_eq_contract.xml`.
+
 ## 2026-09-17 controlling result: all six Host VoiceFX models process audio
 
 The corrected UC 4.7.2 lifecycle is now verified across every model on the
@@ -672,11 +709,11 @@ same one-main-plus-wide structural shape.
 
 `re/uc472_passive_eq.py` now interprets both vendor routines at 44.1, 48, 88.2,
 and 96 kHz and can replace only the EQ coefficients in a validated native
-record. The Host's read-only Passive view now decodes the actual 20/30/60/100
-Hz, 3/4/5/8/10/12/16 kHz, and 5/10/20 kHz switch positions. This closes the
-last coefficient-model gap offline. Like Vintage, it is not wired into the
-running Host because the exact executor depends on the separately retained
-vendor DLL. No device operation was used for this continuation.
+record. At this checkpoint the Host's read-only Passive view decoded the actual
+20/30/60/100 Hz, 3/4/5/8/10/12/16 kHz, and 5/10/20 kHz switch positions, but
+the live Host was not yet wired. The 2026-09-18 result at the top of this file
+supersedes that implementation limit. No device operation was used for this
+continuation.
 
 ## 2026-09-14 controlling device result: native MemP/Stat transport does not apply
 
@@ -726,8 +763,9 @@ peaking selector 6, low-shelf selector 8, and high-shelf selector 9 have
 source-bound instruction transcriptions.
 The Standard semantic builder emits all four native clock sections and its
 record-level wrapper changes only the EQ leaf in a validated native base.
-Passive and Vintage EQ are exact offline coefficient seams that still rely on
-the retained pinned DLL.
+At this checkpoint Passive and Vintage were exact offline coefficient seams
+that relied on the retained pinned DLL; the 2026-09-18 result later connected
+the same pinned designers to the live Host route.
 The Standard coefficient vectors are transcription regressions, not captured
 UC output; bit identity still requires a UC `Bqdf`/`Stat` capture or explicit
 math-library equivalence. No device operation occurred. Evidence:
@@ -4109,9 +4147,14 @@ outer bands — which is how `io24_scene.py` already maps them.
 by the UC 4.7.2 transport DLL's parameter descriptors, not float/double runs.
 They are LF `35, 60, 110, 220 Hz`, low-mid `360, 700, 1600 Hz`, and hi-mid
 `3200, 4800, 7200 Hz`. All four coefficient designers were also located and
-made executable offline against the pinned DLL. Direct live import remains
-skipped because the running Host does not depend on that retained binary; it no
-longer labels the switch frequencies as guessed or unverified.
+made executable offline against the pinned DLL. At that checkpoint direct live
+import was skipped because the running Host did not depend on that retained
+binary; it no longer labelled the switch frequencies as guessed or unverified.
+
+**2026-09-18 correction:** the Host now treats the pinned local artifact as an
+explicit runtime dependency for these two exact models and fails before
+transport when it is unavailable. Direct live import and editing are no longer
+skipped; no Standard-biquad approximation is used.
 
 ### SUPERSEDED: manual-based one-channel inference
 
@@ -4291,8 +4334,8 @@ They are distinguishable in a `.scene` by class GUID and by field set:
 | model | GUID | fields | real-world model | status here |
 |---|---|---|---|---|
 | Standard | `{A0A8A068-…}` | `eqallon`; `eqgain1..4`, `eqq1..4`, `eqfreq1..4` (Hz), independent `eqbandon1..4`, outer `eqbandop1/4` | — | **applied as-is**; GTK mirrors UC's exact `Eqxt4` controls and this GUID is also what the firmware's factory presets carry |
-| Vintage 1970s | `{E1C5E024-…}` | `lowgain/lowfreq`, `lowmidgain/lowmidfreq`, `himidgain/himidfreq`, `higain` | **Neve 1073** — LF 35/60/110/220 Hz, low-mid 360/700/1600 Hz, hi-mid 3200/4800/7200 Hz, fixed HF, ±16 dB | tables and all four designers recovered offline from pinned UC 4.7.2; direct-live Host editing remains paused because the executable path depends on the retained DLL |
-| Passive Program | `{C0730CBB-…}` | Low Boost, Low Attenuation, Low Frequency Select, High Bandwidth, High Boost, High Attenuation, High Frequency, Attenuation Select | **Pultec EQP-1A** — the boost/attenuate-at-once topology is unmistakable | factory **Big Vocal** fixture recovered; both exact designers executable offline from pinned UC 4.7.2; running Host remains fail-closed without that retained DLL |
+| Vintage 1970s | `{E1C5E024-…}` | `lowgain/lowfreq`, `lowmidgain/lowmidfreq`, `himidgain/himidfreq`, `higain` | **Neve 1073** — LF 35/60/110/220 Hz, low-mid 360/700/1600 Hz, hi-mid 3200/4800/7200 Hz, fixed HF, ±16 dB | exact editable Host route using the pinned UC designers; missing/mismatched local artifact fails before transport |
+| Passive Program | `{C0730CBB-…}` | Low Boost, Low Attenuation, Low Frequency Select, High Bandwidth, High Boost, High Attenuation, High Frequency, Attenuation Select | **Pultec EQP-1A** — the boost/attenuate-at-once topology is unmistakable | factory **Big Vocal** fixture plus exact editable Host route using both pinned UC designers; missing/mismatched local artifact fails before transport |
 
 `eqallon` is distinct from all four per-band switches. `eqbandop1` /
 `eqbandop4` are confirmed as the Low Shelf and High Shelf toggles by both the

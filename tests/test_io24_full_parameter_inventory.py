@@ -396,7 +396,7 @@ class AtomicParameterMatrixTests(unittest.TestCase):
                       if row["scope"] == {"model": model}}
             self.assertEqual(actual, expected, model)
 
-    def test_alternate_eq_fields_are_present_and_cannot_silently_pass(self):
+    def test_alternate_eq_fields_are_present_on_exact_live_routes(self):
         expected = {
             "passive": {"eqallon", "bboost", "batten", "bfreq", "mboost",
                         "bbwidth", "mfreq", "hatten", "hsfreq"},
@@ -413,10 +413,18 @@ class AtomicParameterMatrixTests(unittest.TestCase):
                 self.assertEqual(actual, fields, (channel, model))
                 selected = [row for row in rows
                             if row["scope"] == {"channel": channel, "model": model}]
-                self.assertTrue(all(row["profile"] == "implementation_gap"
+                expected_profile = {
+                    "eqallon": "dsp_audio_toggle",
+                    **{field: "dsp_audio_enum" for field in fields
+                       if field.endswith("freq")},
+                }
+                self.assertTrue(all(
+                    row["profile"] == expected_profile.get(
+                        row["parameter"], "dsp_audio_scalar")
+                    for row in selected))
+                self.assertTrue(all(row["api"] == ["set_alternate_eq"]
                                     for row in selected))
-                self.assertTrue(all("alternate_eq_exact_builder_pending" in row["blockers"]
-                                    for row in selected))
+                self.assertTrue(all(not row["blockers"] for row in selected))
 
     def test_every_safe_public_control_api_is_accounted_for(self):
         self.assertEqual(

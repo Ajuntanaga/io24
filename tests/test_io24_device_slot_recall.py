@@ -413,7 +413,7 @@ class RecalledBodyDisplayTests(unittest.TestCase):
     def test_an_unsupported_body_is_not_shown_and_says_why(self):
         # A body whose non-EQ sections the Host cannot model is not put on
         # the controls at all. (A Passive/Vintage EQ alone no longer blocks
-        # this: the rest is shown and the EQ is listed read-only -- see
+        # this: the rest is shown and the EQ gets its exact editable panel -- see
         # test_io24_vintage_eq_view.)
         window = _window(entries=[_entry(1, 1, "ODD", False)])
         window.PR = self._PR(

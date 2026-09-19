@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bounded PassiveEQ/VintageEQ contract recovered from UC 4.7.2's embedded
+  fatchannelxt.xml in Plugins/studiolivepanel.dll. The first Passive low label
+  is preserved exactly as shipped ("20kHz"); the corresponding designer branch
+  and physical EQP-1A control establish its effective value as 20 Hz.
+-->
+<uc:ComponentModel xmlns:uc="urn:presonus-universal-control">
+  <uc:Definitions>
+    <uc:StringList id="BassFreqListPassive">
+      <uc:String text="20kHz" effectiveHz="20"/>
+      <uc:String text="30" effectiveHz="30"/>
+      <uc:String text="60" effectiveHz="60"/>
+      <uc:String text="100" effectiveHz="100"/>
+    </uc:StringList>
+    <uc:StringList id="MidFreqListPassive">
+      <uc:String text="3kHz" effectiveHz="3000"/>
+      <uc:String text="4kHz" effectiveHz="4000"/>
+      <uc:String text="5kHz" effectiveHz="5000"/>
+      <uc:String text="8kHz" effectiveHz="8000"/>
+      <uc:String text="10kHz" effectiveHz="10000"/>
+      <uc:String text="12kHz" effectiveHz="12000"/>
+      <uc:String text="16kHz" effectiveHz="16000"/>
+    </uc:StringList>
+    <uc:StringList id="HsFreqListPassive">
+      <uc:String text="5kHz" effectiveHz="5000"/>
+      <uc:String text="10kHz" effectiveHz="10000"/>
+      <uc:String text="20kHz" effectiveHz="20000"/>
+    </uc:StringList>
+    <uc:Range id="Boost" min="0" max="10" mid="5" def="0" curve="linear" units=""/>
+
+    <uc:StringList id="LoFreqListVintage">
+      <uc:String text="35Hz" effectiveHz="35"/>
+      <uc:String text="60Hz" effectiveHz="60"/>
+      <uc:String text="110Hz" effectiveHz="110"/>
+      <uc:String text="220Hz" effectiveHz="220"/>
+    </uc:StringList>
+    <uc:StringList id="LoMidFreqListVintage">
+      <uc:String text="360Hz" effectiveHz="360"/>
+      <uc:String text="700Hz" effectiveHz="700"/>
+      <uc:String text="1.6kHz" effectiveHz="1600"/>
+    </uc:StringList>
+    <uc:StringList id="HiMidFreqListVintage">
+      <uc:String text="3.2kHz" effectiveHz="3200"/>
+      <uc:String text="4.8kHz" effectiveHz="4800"/>
+      <uc:String text="7.2kHz" effectiveHz="7200"/>
+    </uc:StringList>
+    <uc:Range id="GainVintage" min="-16" max="16" def="0" curve="linear" units="gain"/>
+  </uc:Definitions>
+
+  <uc:Parameters>
+    <uc:ParamList id="PassiveEQ">
+      <uc:Param id="eqallon" name="EQ On" type="toggle" def="0" flags="storable linkable user1"/>
+      <uc:Param id="bboost" name="Low Boost" short="LOW Boost" type="float" range="Boost" def="0" flags="storable linkable user1"/>
+      <uc:Param id="batten" name="Low Atten" short="LOW Atten" type="float" range="Boost" def="0" flags="storable linkable user1"/>
+      <uc:Param id="bfreq" name="Low Frequency" short="LOW Freq" type="list" units="BassFreqListPassive" def="0" flags="storable linkable user1"/>
+      <uc:Param id="mboost" name="High Boost" short="HIGH Boost" type="float" range="Boost" def="1.5" flags="storable linkable user1"/>
+      <uc:Param id="bbwidth" name="High Bandwidth" short="HIGH Bndwdth" type="float" range="Boost" def="10" flags="storable linkable user1"/>
+      <uc:Param id="mfreq" name="High Freq" short="HIGH Freq" type="list" units="MidFreqListPassive" def="4" flags="storable linkable user1"/>
+      <uc:Param id="hatten" name="High Atten" short="HIGH Atten" type="float" range="Boost" def="1.5" flags="storable linkable user1"/>
+      <uc:Param id="hsfreq" name="Attenuation Select" short="ATTN Select" type="list" units="HsFreqListPassive" def="2" flags="storable linkable user1"/>
+    </uc:ParamList>
+    <uc:ParamList id="VintageEQ">
+      <uc:Param id="eqallon" name="EQ On" type="toggle" def="0" flags="storable linkable user1"/>
+      <uc:Param id="lowgain" name="Low Gain" short="LOW Gain" type="float" range="GainVintage" def="0" flags="storable linkable bipolar user1"/>
+      <uc:Param id="lowfreq" name="Low Frequency" short="LOW Freq" type="list" units="LoFreqListVintage" def="1" flags="storable linkable user1"/>
+      <uc:Param id="lowmidgain" name="Low-Mid Gain" short="L-MID Gain" type="float" range="GainVintage" def="0" flags="storable linkable bipolar user1"/>
+      <uc:Param id="lowmidfreq" name="Low-Mid Freq" short="L-MID Freq" type="list" units="LoMidFreqListVintage" def="2" flags="storable linkable user1"/>
+      <uc:Param id="himidgain" name="Hi-Mid Gain" short="H-MID Gain" type="float" range="GainVintage" def="0" flags="storable linkable bipolar user1"/>
+      <uc:Param id="himidfreq" name="Hi-Mid Freq" short="H-MID Freq" type="list" units="HiMidFreqListVintage" def="2" flags="storable linkable user1"/>
+      <uc:Param id="higain" name="High Gain" short="HIGH Gain" type="float" range="GainVintage" def="0" flags="storable linkable bipolar user1"/>
+    </uc:ParamList>
+  </uc:Parameters>
+
+  <uc:Templates>
+    <uc:Template id="{C0730CBB-5135-4558-9222-C40BDBA036ED}" paramlist="PassiveEQ" classname="PassiveEQComponent"/>
+    <uc:Template id="{E1C5E024-C5CD-473C-B08A-6EC177812E01}" paramlist="VintageEQ" classname="VintageEQComponent"/>
+  </uc:Templates>
+</uc:ComponentModel>

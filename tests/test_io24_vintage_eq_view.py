@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Hardware-free contracts for recalled Passive/Vintage EQ bodies.
+"""Hardware-free contracts for editable Passive/Vintage EQ bodies.
 
-The Host has no exact live builder for either model and no Standard-band form
-for them. After a recall it shows the rest of the chain, lists the stored EQ
-read-only, pauses the Standard editor on that channel, and carries the stored
-EQ through a save verbatim instead of replacing it with four Standard bands.
+The Host keeps each model in its own UC semantic form, exposes the exact
+switches and amounts, draws the vendor-designed response, and carries that
+state through save/reconnect without coercing it into Standard bands.
 
 Nothing here opens USB.
 """
@@ -12,6 +11,7 @@ Nothing here opens USB.
 import unittest
 from types import SimpleNamespace
 
+import io24
 import io24_presets
 import io24gtk
 
@@ -82,11 +82,10 @@ class AlternateEqViewTests(unittest.TestCase):
         self.assertIsNone(io24_presets.alternate_eq_view({}))
         self.assertIsNone(io24_presets.alternate_eq_view({"eq": {}}))
 
-    def test_an_out_of_range_switch_is_reported_not_guessed(self):
-        view = io24_presets.alternate_eq_view(
-            {"eq": dict(VINTAGE, lowfreq=7)})
-        self.assertEqual(view["rows"][0][1],
-                         "position 8 (outside the 4-way switch)")
+    def test_an_out_of_range_switch_is_rejected_not_guessed(self):
+        with self.assertRaisesRegex(ValueError, "lowfreq must be in"):
+            io24_presets.alternate_eq_view(
+                {"eq": dict(VINTAGE, lowfreq=7)})
 
     def test_saving_carries_the_stored_vintage_eq_verbatim(self):
         base = io24_presets.load()["Broadcast"]
@@ -107,6 +106,8 @@ class _Widget:
     def __init__(self):
         self.sensitive, self.visible, self.text, self.draws = True, None, "", 0
         self.active = False
+        self.value = 0.0
+        self.selected = 0
 
     def set_sensitive(self, value):
         self.sensitive = bool(value)
@@ -122,6 +123,18 @@ class _Widget:
 
     def get_active(self):
         return self.active
+
+    def set_value(self, value):
+        self.value = float(value)
+
+    def get_value(self):
+        return self.value
+
+    def set_selected(self, value):
+        self.selected = int(value)
+
+    def get_selected(self):
+        return self.selected
 
     def queue_draw(self):
         self.draws += 1
@@ -142,10 +155,16 @@ class _Value:
 
 
 def _eq_widgets():
-    W = {key: _Widget() for key in io24gtk.Win._ALT_EQ_CONTROLS}
+    W = {key: _Widget() for key in (
+        "curve", "eq_on", "eq_model", "band_on", "shelf", "freq",
+        "gain", "q", "eq_flat", "p_bboost", "p_batten", "p_bfreq",
+        "p_mboost", "p_bbwidth", "p_mfreq", "p_hatten", "p_hsfreq",
+        "v_lowgain", "v_lowfreq", "v_lowmidgain", "v_lowmidfreq",
+        "v_himidgain", "v_himidfreq", "v_higain")}
     W["bands"] = [_Widget() for _ in range(4)]
-    W["alt_eq_note"] = _Widget()
-    W["alt_eq_release"] = _Widget()
+    W["_standard_eq_rows"] = [_Widget() for _ in range(7)]
+    W["_passive_eq_rows"] = [_Widget() for _ in range(8)]
+    W["_vintage_eq_rows"] = [_Widget() for _ in range(7)]
     return W
 
 
@@ -155,6 +174,14 @@ def _window():
     window.messages = []
     window.say = window.messages.append
     window.link_both = False
+    window._fs = 48000.0
+    window.eq_on_by_ch = {1: False, 2: False}
+    window.bands_by_ch = {
+        1: io24_presets.default_standard_eq_bands(),
+        2: io24_presets.default_standard_eq_bands(),
+    }
+    window.alt_eq_by_ch = {1: None, 2: None}
+    window._curves = {}
     window.racks = {}
     window.w = {}
     window.submitted = []
@@ -171,53 +198,60 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         window._host_slot_entry = lambda slot: {"record": record}
         adopted = []
         window._adopt_preset_record = \
-            lambda rec, chans, fx_channel=None: adopted.append(
-                (rec, chans, fx_channel)) or True
+            lambda rec, chans, fx_channel=None: (
+                adopted.append((rec, chans, fx_channel)),
+                window._show_alternate_eq(
+                    chans[0], io24_presets.alternate_eq_view(rec)),
+                True)[-1]
         self.assertTrue(window._adopt_recalled_slot(1, 0))
         self.assertEqual(len(adopted), 1)
         shown, chans, fx_channel = adopted[0]
-        self.assertNotIn("eq", shown)
+        self.assertEqual(shown["eq"], VINTAGE)
         self.assertEqual((chans, fx_channel), ((1,), 1))
         self.assertEqual(window._alt_eq(1)["eq"], VINTAGE)
         self.assertIsNone(window._alt_eq(2))
-        self.assertIn("Vintage EQ the Host can show but not draw",
+        self.assertIn("editable Vintage EQ",
                       window.messages[-1])
         self.assertEqual(record["eq"], VINTAGE)      # the entry is untouched
 
-    def test_the_standard_editor_pauses_then_releases_without_a_write(self):
+    def test_vintage_controls_are_editable_and_send_the_exact_model(self):
         window = _window()
         window.w = {1: _eq_widgets()}
         view = io24_presets.alternate_eq_view({"eq": dict(VINTAGE)})
         window._show_alternate_eq(1, view)
         W = window.w[1]
-        for key in io24gtk.Win._ALT_EQ_CONTROLS:
-            self.assertFalse(W[key].sensitive, key)
-        self.assertFalse(any(b.sensitive for b in W["bands"]))
-        self.assertTrue(W["alt_eq_note"].visible)
-        self.assertIn("Vintage EQ from the recalled preset", W["alt_eq_note"].text)
-        self.assertIn("Low shelf: position 1 of 4 (35 Hz), +1.8 dB",
-                      W["alt_eq_note"].text)
-        self.assertIn("switch frequencies are decoded",
-                      W["alt_eq_note"].text)
-        self.assertNotIn("not decoded", W["alt_eq_note"].text)
-        self.assertTrue(W["alt_eq_release"].visible)
+        self.assertEqual(W["eq_model"].selected, 2)
+        self.assertFalse(any(row.visible for row in W["_standard_eq_rows"]))
+        self.assertTrue(all(row.visible for row in W["_vintage_eq_rows"]))
+        self.assertFalse(any(row.visible for row in W["_passive_eq_rows"]))
+        self.assertTrue(W["eq_on"].active)
+        self.assertEqual(W["v_lowfreq"].selected, 0)
+        self.assertAlmostEqual(W["v_lowgain"].value, 1.76)
+        self.assertIsNotNone(window._alt_eq(1)["sections"])
+        self.assertNotEqual(window.response_for(1, 35.0), 0.0)
 
-        window._release_alternate_eq(1)
-        self.assertIsNone(window._alt_eq(1))
-        self.assertTrue(all(W[key].sensitive
-                            for key in io24gtk.Win._ALT_EQ_CONTROLS))
-        self.assertTrue(all(b.sensitive for b in W["bands"]))
-        self.assertFalse(W["alt_eq_note"].visible)
-        self.assertFalse(W["alt_eq_release"].visible)
-        self.assertIn("Nothing was sent", window.messages[-1])
-        self.assertEqual(window.submitted, [])
+        window._alternate_eq_set(1, "higain", 4.0)
+        self.assertEqual(len(window.submitted), 1)
+
+        class Device:
+            calls = []
+
+            def set_alternate_eq(self, channel, eq, fs):
+                self.calls.append((channel, eq, fs))
+
+        device = Device()
+        window.submitted.pop()(device)
+        self.assertEqual(device.calls[0][0], 1)
+        self.assertEqual(device.calls[0][1]["higain"], 4.0)
+        self.assertEqual(device.calls[0][2], 48000.0)
 
     def test_clearing_a_channel_that_was_never_marked_touches_nothing(self):
         window = _window()
         window.w = {1: _eq_widgets()}
         window._show_alternate_eq(1, None)
-        self.assertEqual(window.w[1]["curve"].draws, 0)
-        self.assertIsNone(window.w[1]["alt_eq_note"].visible)
+        self.assertEqual(window.w[1]["curve"].draws, 1)
+        self.assertTrue(all(row.visible
+                            for row in window.w[1]["_standard_eq_rows"]))
 
     def test_linked_edits_skip_a_held_channel_and_say_so_once(self):
         window = _window()
@@ -227,7 +261,7 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         self.assertEqual(window._eq_write_targets(1), (1,))
         self.assertEqual(window._eq_write_targets(1), (1,))
         self.assertEqual(len(window.messages), 1)
-        self.assertIn("Channel 2 keeps its recalled Vintage EQ",
+        self.assertIn("skipped Channel 2 because its EQ model differs",
                       window.messages[0])
 
     def test_saving_passes_the_stored_eq_through(self):
@@ -256,6 +290,43 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
             1: io24_presets.alternate_eq_view({"eq": dict(VINTAGE)}), 2: None}
         window._current_slot_record("base", 1, "MAIN")
         self.assertEqual(seen[-1]["alternate_eq"], VINTAGE)
+
+    def test_host_snapshot_round_trips_two_independent_alternate_models(self):
+        window = _window()
+        window.w = {1: _eq_widgets(), 2: _eq_widgets()}
+        window._show_alternate_eq(
+            1, io24_presets.alternate_eq_view({"eq": dict(PASSIVE)}))
+        window._show_alternate_eq(
+            2, io24_presets.alternate_eq_view({"eq": dict(VINTAGE)}))
+
+        state = window._alternate_eq_state()
+        normalized, migrations = io24._normalise_host_features(
+            {"alternate_eq": state})
+        self.assertEqual(migrations, [])
+        self.assertEqual(normalized["alternate_eq"], state)
+
+        restored = _window()
+        restored.w = {1: _eq_widgets(), 2: _eq_widgets()}
+        message = restored._adopt_alternate_eq_state(state)
+        self.assertEqual(restored._eq_model_name(1), "passive")
+        self.assertEqual(restored._eq_model_name(2), "vintage")
+        self.assertEqual(restored._alt_eq(1)["eq"], PASSIVE)
+        self.assertEqual(restored._alt_eq(2)["eq"], VINTAGE)
+        self.assertEqual(restored.submitted, [])
+        self.assertIn("Input 1 and 2", message)
+
+    def test_power_changes_only_the_selected_model_on_one_input(self):
+        window = _window()
+        window.w = {1: _eq_widgets(), 2: _eq_widgets()}
+        passive_off = dict(PASSIVE, eqallon=0)
+        window._show_alternate_eq(
+            1, io24_presets.alternate_eq_view({"eq": passive_off}))
+
+        window._set_eq_enabled(1, True)
+        self.assertTrue(window.eq_enabled(1))
+        self.assertFalse(window.eq_enabled(2))
+        self.assertEqual(window._alt_eq(1)["eq"]["eqallon"], 1)
+        self.assertEqual(len(window.submitted), 1)
 
 
 if __name__ == "__main__":

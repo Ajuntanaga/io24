@@ -340,6 +340,24 @@ def default_standard_eq_bands():
     ]
 
 
+def default_passive_eq(on=False):
+    """UC 4.7.2's exact Passive Program EQ defaults."""
+    import io24_alt_eq
+    return io24_alt_eq.default_eq("passive", on=on)
+
+
+def default_vintage_eq(on=False):
+    """UC 4.7.2's exact Vintage EQ defaults."""
+    import io24_alt_eq
+    return io24_alt_eq.default_eq("vintage", on=on)
+
+
+def validate_alternate_eq(eq):
+    """Validate and normalize a complete Passive or Vintage section."""
+    import io24_alt_eq
+    return io24_alt_eq.validate_eq(eq)
+
+
 def direct_apply_support(preset):
     """Whether a factory record has an exact direct-live Host mapping."""
     try:
@@ -349,8 +367,12 @@ def direct_apply_support(preset):
         eq = preset.get("eq") or {}
         model = eq_model(eq)
         if model in ("passive", "vintage"):
-            return False, "%s EQ is device-slot only; exact live builder pending" % \
-                model.title()
+            import io24_alt_eq
+            normalized = io24_alt_eq.validate_eq(eq)
+            if normalized["eqallon"]:
+                available, detail = io24_alt_eq.designer_status()
+                if not available:
+                    return False, detail
         if model == "standard":
             _standard_eq_bands(eq)
     except ValueError as error:
@@ -359,13 +381,11 @@ def direct_apply_support(preset):
 
 
 def alternate_eq_view(preset):
-    """Read-only rows for a Passive/Vintage EQ body, or None for any other.
+    """Editable semantic view of a Passive/Vintage body, else ``None``.
 
-    Those models have no exact live builder and no Standard-band form, so the
-    Host can neither draw nor edit them. Their stored fields are still plain
-    numbers it can show as they are. The Vintage frequency switches are
-    positions; their exact Hz labels were recovered from UC 4.7.2's own
-    parameter lists in the 2026-09-14 native-slot-builder run.
+    Labels, defaults, and switch positions come from UC 4.7.2's embedded
+    component XML.  The returned ``eq`` is strict and normalized so UI edits,
+    direct application, and preset round trips share one representation.
     """
     eq = preset.get("eq") or {}
     if not eq:
@@ -376,7 +396,8 @@ def alternate_eq_view(preset):
         return None
     if model not in ("passive", "vintage"):
         return None
-    import io24_scene
+    import io24_alt_eq
+    eq = io24_alt_eq.validate_eq(eq)
 
     def switch(field, table):
         pos = int(round(float(eq.get(field, 0))))
@@ -392,11 +413,11 @@ def alternate_eq_view(preset):
             return "%+.1f dB" % float(eq.get(field, 0.0))
 
         rows = [
-            ("Low shelf", switch("lowfreq", io24_scene.VINTAGE_LOW_HZ),
+            ("Low shelf", switch("lowfreq", io24_alt_eq.VINTAGE_LOW_HZ),
              gain("lowgain")),
-            ("Low mid", switch("lowmidfreq", io24_scene.VINTAGE_LOWMID_HZ),
+            ("Low mid", switch("lowmidfreq", io24_alt_eq.VINTAGE_LOWMID_HZ),
              gain("lowmidgain")),
-            ("High mid", switch("himidfreq", io24_scene.VINTAGE_HIMID_HZ),
+            ("High mid", switch("himidfreq", io24_alt_eq.VINTAGE_HIMID_HZ),
              gain("himidgain")),
             ("High shelf", "fixed frequency", gain("higain")),
         ]
@@ -404,16 +425,16 @@ def alternate_eq_view(preset):
         def amount(field):
             return "%.1f / 10" % float(eq.get(field, 0.0))
 
-        low = switch("bfreq", io24_scene.PASSIVE_LOW_HZ)
+        low = switch("bfreq", io24_alt_eq.PASSIVE_LOW_HZ)
         rows = [
             ("Low boost", low, amount("bboost")),
             ("Low attenuation", low, amount("batten")),
             ("High boost",
-             switch("mfreq", io24_scene.PASSIVE_HIGH_BOOST_HZ),
+             switch("mfreq", io24_alt_eq.PASSIVE_HIGH_BOOST_HZ),
              "%s; bandwidth %s" %
              (amount("mboost"), amount("bbwidth"))),
             ("High attenuation",
-             switch("hsfreq", io24_scene.PASSIVE_HIGH_ATTEN_HZ),
+             switch("hsfreq", io24_alt_eq.PASSIVE_HIGH_ATTEN_HZ),
              amount("hatten")),
         ]
     return {"model": model, "on": bool(eq.get("eqallon", 1)),
@@ -575,7 +596,7 @@ def describe(p):
 
 
 def apply_preset(dev, preset, channel=1, with_fx=False,
-                 establish_return=True, return_db=0.0):
+                 establish_return=True, return_db=0.0, fs=48000.0):
     """Send a factory preset to a channel. Returns a list of what was applied.
 
     ``with_fx`` is an explicit opt-in to configure the one global block-201
@@ -594,10 +615,13 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
     comp_call = _compressor_call(comp) if comp else None
     eq = preset.get("eq") or {}
     eq_kind = eq_model(eq)
-    if eq_kind in ("passive", "vintage"):
-        raise UnsupportedPresetModel(
-            "%s EQ has no exact direct-live builder; use the complete device-slot "
-            "record instead" % eq_kind.title())
+    alternate_eq = validate_alternate_eq(eq) \
+        if eq_kind in ("passive", "vintage") else None
+    if alternate_eq is not None and alternate_eq["eqallon"]:
+        import io24_alt_eq
+        available, detail = io24_alt_eq.designer_status()
+        if not available:
+            raise UnsupportedPresetModel(detail)
     eq_bands = _standard_eq_bands(eq) if eq_kind == "standard" else None
     done = []
 
@@ -643,6 +667,9 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
             done.append("eq(4)")
         else:
             dev.eq_off(channel)
+    elif alternate_eq is not None:
+        dev.set_alternate_eq(channel, alternate_eq, fs=fs)
+        done.append("eq(%s)" % eq_kind)
 
     lm = preset.get("limit") or {}
     if lm:
@@ -770,6 +797,25 @@ def validate_standard_eq_host_state(state):
     return normalized
 
 
+def validate_alternate_eq_host_state(state):
+    """Validate Host semantic state for independently selected alt EQ models."""
+    if not isinstance(state, dict) or state.get("version") != 1:
+        raise ValueError("alternate_eq must be a version-1 object")
+    channels = state.get("channels")
+    if not isinstance(channels, dict):
+        raise ValueError("alternate_eq channels must be an object")
+    unknown = set(channels) - {"1", "2"}
+    if unknown:
+        raise ValueError("alternate_eq has unknown channel%s" %
+                         ("s" if len(unknown) != 1 else ""))
+    normalized = {"version": 1, "channels": {}}
+    for channel in ("1", "2"):
+        if channel in channels:
+            normalized["channels"][channel] = validate_alternate_eq(
+                channels[channel])
+    return normalized
+
+
 def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
                         gate, compressor_model, compressor, limiter,
                         voicefx_model, voicefx, alternate_eq=None, eq_on=None):
@@ -780,10 +826,8 @@ def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
     merged with a stale model.  The result remains a complete-body candidate;
     it does not imply device readback, selection, recall, or audibility.
 
-    ``alternate_eq`` is a recalled Passive/Vintage EQ section the Host shows
-    but cannot rebuild. When given it is stored verbatim and ``bands`` is not
-    used, so saving such a channel never turns its EQ into four Standard bands
-    the user did not set.
+    ``alternate_eq`` is an editable Passive/Vintage semantic section.  When
+    given it is validated and stored instead of the Standard bands.
     """
     from io24_preset_record import complete_device_slot_record
 
@@ -795,11 +839,7 @@ def current_slot_record(base, preset_name, *, bands, hpf_hz, eq_first,
     record["filter"] = {"hpf": float(hpf_hz)}
 
     if alternate_eq is not None:
-        if not isinstance(alternate_eq, dict) or \
-                eq_model(alternate_eq) not in ("passive", "vintage"):
-            raise ValueError(
-                "alternate_eq must be a complete Passive or Vintage EQ section")
-        record["eq"] = dict(alternate_eq)
+        record["eq"] = validate_alternate_eq(alternate_eq)
     else:
         record["eq"] = _standard_slot_eq(bands, eq_on=eq_on)
 

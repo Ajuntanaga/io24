@@ -281,7 +281,7 @@ class FactoryPresetDispatchTests(unittest.TestCase):
         self.assertEqual(bands[0]["shape"], "lowshelf")
         self.assertEqual(bands[3]["shape"], "peaking")
 
-    def test_alternate_eq_is_rejected_atomically_instead_of_flattened(self):
+    def test_alternate_eq_dispatches_exactly_without_standard_flattening(self):
         for class_id, model in (
                 ("{C0730CBB-5135-4558-9222-C40BDBA036ED}", "Passive"),
                 ("{E1C5E024-C5CD-473C-B08A-6EC177812E01}", "Vintage")):
@@ -289,16 +289,21 @@ class FactoryPresetDispatchTests(unittest.TestCase):
                 preset = self._by_class("eq", class_id)
                 preset["opt"] = {"swapcompeq": 1}
                 dev = CallDevice()
-                with self.assertRaisesRegex(
-                        io24_presets.UnsupportedPresetModel,
-                        "%s EQ has no exact direct-live builder" % model):
-                    io24_presets.apply_preset(dev, preset, channel=2)
-                self.assertEqual(dev.calls, [])
+                done = io24_presets.apply_preset(
+                    dev, preset, channel=2, fs=96000.0)
+                self.assertEqual(dev.calls[0], (
+                    "set_comp_eq_order", (2, True), {}))
+                alternate_call = next(
+                    call for call in dev.calls
+                    if call[0] == "set_alternate_eq")
+                self.assertEqual(alternate_call[1][0], 2)
+                self.assertEqual(alternate_call[2]["fs"], 96000.0)
+                self.assertIn("eq(%s)" % model.lower(), done)
                 with self.assertRaises(io24_presets.UnsupportedPresetModel):
                     io24_presets.to_bands(preset)
                 supported, reason = io24_presets.direct_apply_support(preset)
-                self.assertFalse(supported)
-                self.assertIn("device-slot only", reason)
+                self.assertTrue(supported, reason)
+                self.assertEqual(reason, "exact direct-live mapping")
 
     def test_malformed_standard_eq_fails_before_an_order_write(self):
         preset = self._by_class(
@@ -455,7 +460,7 @@ class ArtifactAndResourceTests(unittest.TestCase):
                 expected = hashlib.sha256((self.ROOT / name).read_bytes()).hexdigest()
                 self.assertEqual(matrix["source_sha256"].get(name), expected)
 
-    def test_inventory_records_implemented_host_routes_and_fail_closed_eq(self):
+    def test_inventory_records_implemented_exact_host_routes(self):
         inventory = json.loads((self.RUN / "PARAMETER-INVENTORY.json").read_text())
         unresolved = set(inventory["known_unimplemented_or_unresolved"])
         self.assertNotIn("global/phonesSrc", unresolved)
@@ -463,8 +468,11 @@ class ArtifactAndResourceTests(unittest.TestCase):
         # (2026-09-11), so UC's Hot Key routes are unimplemented again.
         self.assertIn("line/ch1/presetHotKey", unresolved)
         self.assertIn("line/ch2/presetHotKey", unresolved)
+        self.assertNotIn("passive_eq_exact_builder", unresolved)
+        self.assertNotIn("vintage_eq_exact_builder", unresolved)
         policy = inventory["alternate_eq_per_physical_channel"]["direct_live_policy"]
-        self.assertIn("fail-closed", policy)
+        self.assertIn("exact model-specific live routes", policy)
+        self.assertIn("fail before transport", policy)
         self.assertIn("no Standard-biquad approximation", policy)
         supported = inventory["supported_host_capabilities"]
         self.assertEqual(supported["phones_source"]["route"],

@@ -248,8 +248,9 @@
       "himidfreq",
       "higain"
     ],
-    "current_gate": "exact alternate-model coefficient builders and the Passive bfreq 20kHz vendor literal must be resolved before live verification",
-    "direct_live_policy": "Passive and Vintage EQ are fail-closed; no Standard-biquad approximation may be emitted"
+    "implementation": "exact UC 4.7.2 designers interpreted from a hash-pinned local dspusbdevice.dll; Lfdf index 0 plus Bqdf indexes 1 through 3",
+    "direct_live_policy": "Passive and Vintage use exact model-specific live routes; missing or mismatched designer artifacts fail before transport; no Standard-biquad approximation is emitted",
+    "live_validation": "dedicated audible hardware A/B pending"
   },
   "shared_reverb": [
     "on",
@@ -353,8 +354,6 @@
     "unknown_unmapped"
   ],
   "known_unimplemented_or_unresolved": [
-    "passive_eq_exact_builder",
-    "vintage_eq_exact_builder",
     "generic_backend_line/ch3_io24_applicability",
     "line/ch1/presetHotKey",
     "line/ch2/presetHotKey"

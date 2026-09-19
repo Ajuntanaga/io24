@@ -56,6 +56,7 @@ separately rather than implied to be independently measured.
 | GTK Mix A/B capture | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; both published successfully in the live 96 kHz / 512 smoke |
 | CLI pan / balance for a stereo pair | send-level balance using Universal Control's recovered law; centre −3.00 dB, measured within ±1 dB on hardware |
 | Standard 4-band EQ | exact UC 4.7.2 controls: independent global and four band-power switches, parametric middle bands, outer shelf/parametric selectors, 36 Hz–18 kHz; frequency accuracy and band indexing measured |
+| Passive Program / Vintage 1970s EQ | exact editable UC 4.7.2 controls, designers and `Lfdf[0]` + `Bqdf[1..3]` live routes; source- and packet-verified offline, with a dedicated audible A/B still pending |
 | Gate, compressor (3 models), limiter | |
 | Reverb | measured processing; **both channels can feed it at once** |
 | Output delay, 0–500 ms | one global delay plus a bus selector — not an independent delay per bus. 50 ms asked, 49.50 ms measured |
@@ -597,23 +598,29 @@ python3 io24_scene.py "B A S E.scene"
 The dry run lists every setting it will send and, just as importantly, every one
 it will not. Applied: preamp gain, phantom, mute, stereo link, processing
 channel, the main/aux sends with their assigns, high-pass, gate, compressor,
-limiter, the parametric EQ, and the output delay. Reported but skipped by this
+limiter, Standard/Passive/Vintage EQ, and the output delay. Reported but skipped by this
 direct-setter importer: `voicefx`, because successful standalone parameter
 writes did not produce audible block-201 processing and the remaining stored-
 slot cold-boot path is a separate hardware test; UC's
 *simplified* EQ form where band frequencies are indices rather than Hz; and
 `pan`/`stereopan`/`FXA`/`solo`, which the driver does not implement yet.
 
-A channel saved with UC's **Passive** or **Vintage 1970s** EQ is preserved but
-skipped by the direct-setter importer. Both models' switch positions and exact
-coefficient designers are recovered offline from UC 4.7.2; Passive is grounded
-by the retained factory **Big Vocal** preset rather than guessed controls. The
-executable analyses currently depend on the separately retained vendor DLL and
-are not self-contained runtime Host dependencies.
-The former `--vintage-eq` Standard-biquad approximation is disabled, so passing
-the flag cannot produce a direct-live EQ call. A validated native record can
-receive an exact Passive or Vintage EQ replacement offline without changing
-its other components.
+A channel saved with UC's **Passive Program** or **Vintage 1970s** EQ now loads
+directly into the Linux Host. The model selector, power switch, amount controls,
+frequency switches, defaults, coefficient designers, packet tags, widths and
+live indexes all come from UC 4.7.2. The Host emits the same complete route UC
+does: `Lfdf` index 0 followed by `Bqdf` indexes 1, 2 and 3. It never flattens an
+alternate model into four Standard biquads.
+
+The exact designers read the separately retained, hash-pinned UC 4.7.2
+`dspusbdevice.dll` as data; the DLL is not loaded or executed. Set
+`IO24_UC472_DSPUSBDEVICE` to a lawful local copy when it is not at the retained
+project path. An enabled alternate EQ fails before transport if that artifact
+or the Capstone decoder is unavailable. A bypassed model can still emit four
+exact identity sections without the artifact. The factory **Big Vocal** record
+supplies an authentic Passive state, and validated native records can also
+receive exact Passive or Vintage replacements without changing other
+components.
 
 Two things the importer gets right that are easy to get wrong. The two channels
 can be running **different compressor models** — UC tags each block with a class
@@ -737,10 +744,11 @@ double-precision designers, including binary32 input narrowing, operation
 order, and output-field order. Their current regression vectors use Python's
 math library and are not independent UC output captures. A complete Standard
 EQ can be encoded at all four device clocks into a validated native record.
-Passive and Vintage designers are executable offline against the pinned UC DLL,
-but the running Host remains fail-closed because that binary is not a runtime
-dependency. The compressor's knee semantics remain inferred rather than
-proved.
+Passive and Vintage are exact, editable Host models when the pinned local UC
+4.7.2 DLL is available. Their UC live call sites and packet order are
+source-bound, and hardware-free packet regressions pass; their audible device
+response has not yet received a dedicated live A/B run. The compressor's knee
+semantics remain inferred rather than proved.
 
 **The device can drop into its bootloader under sustained load** — see Safety
 below. It has always recovered from a power cycle.

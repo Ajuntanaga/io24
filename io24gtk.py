@@ -40,6 +40,7 @@ from gi.repository import (Adw, GLib, Gtk, Gio, Gdk, Gsk, Graphene,  # noqa: E40
                            Pango)
 
 import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
+import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage EQ)
 import io24_dsp                            # noqa: E402  (exact compressor models)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
@@ -2137,16 +2138,22 @@ class EQCurve(ChannelBound, Canvas):
         for i, b in enumerate(self.bands):
             bx = self._x(b["freq"], w)
             by = h / 2 - self.win.response_for(
-                self.channel, b["freq"], enabled=True) / 18.0 * (h / 2)
+                self.channel, b["freq"], fs=self.win._fs,
+                enabled=True) / 18.0 * (h / 2)
             d = (bx - x) ** 2 + ((by - y) * 0.65) ** 2
             if d < bd:
                 best, bd = i, d
         return best
 
     def _clicked(self, _g, _n, x, y):
+        if self.win._alt_eq(self.channel) is not None:
+            return
         self.win.select_band(self._nearest(x, y), self.channel)
 
     def _motion(self, _c, x, y):
+        if self.win._alt_eq(self.channel) is not None:
+            self.hover = None
+            return
         n = self._nearest(x, y)
         if n != self.hover:
             self.hover = n
@@ -2158,6 +2165,9 @@ class EQCurve(ChannelBound, Canvas):
         return max(low, min(high, 20.0 * (24000 / 20.0) ** t))
 
     def _drag_begin(self, g, x, y):
+        if self.win._alt_eq(self.channel) is not None:
+            self.drag_band = None
+            return
         self.drag_band = self._nearest(x, y)
         self.win.select_band(self.drag_band, self.channel)
         if not self.win.eq_enabled(self.channel):
@@ -2200,6 +2210,8 @@ class EQCurve(ChannelBound, Canvas):
         self.drag_band = None
 
     def _scroll(self, _c, _dx, dy):
+        if self.win._alt_eq(self.channel) is not None:
+            return True
         i = self.hover if self.hover is not None else self.cur_band
         b = self.bands[i]
         b["q"] = max(0.1, min(10.0, b["q"] * (1.12 if dy > 0 else 1 / 1.12)))
@@ -2266,12 +2278,19 @@ class EQCurve(ChannelBound, Canvas):
 
         alt = self.win._alt_eq(self.channel)
         if alt is not None:
-            # No exact curve exists for this body. Say so on the graph itself
-            # rather than draw a flat line or bands it never had.
-            label(self, sn, "%s EQ from the recalled preset: curve not drawable"
-                  % alt["model"].title(), 8, h / 2 - 18, pal(INK, 0.8), 9)
-            label(self, sn, "its switches are decoded below; this proprietary "
-                  "curve is not drawn", 8, h / 2, pal(INK, 0.5), 8)
+            active = self.win.eq_enabled(self.channel)
+            pts = self.win.curve_points(w, h, self.channel)
+            if active:
+                fill_poly(sn, pts + [(w, h / 2), (0, h / 2)],
+                          pal(acc, 0.14))
+                glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
+            else:
+                polyline(sn, pts, pal(acc, 0.32), 1.4)
+            label(self, sn, "%s EQ — exact UC 4.7.2 response"
+                  % alt["model"].title(), 8, 20, pal(INK, 0.72), 8)
+            if alt.get("error"):
+                label(self, sn, alt["error"][:64], 8, h / 2,
+                      pal(RED, 0.75), 8)
             return
         active = self.win.eq_enabled(self.channel)
         pts = self.win.curve_points(w, h, self.channel)
@@ -2286,7 +2305,8 @@ class EQCurve(ChannelBound, Canvas):
                 continue
             x = self._x(b["freq"], w)
             y = max(8, min(h - 8, h / 2 - self.win.response_for(
-                self.channel, b["freq"], enabled=True) / 18.0 * (h / 2)))
+                self.channel, b["freq"], fs=self.win._fs,
+                enabled=True) / 18.0 * (h / 2)))
             sel = (i == self.cur_band)
             hov = (i == self.hover)
             r = 8 if sel else (7 if hov else 5)
@@ -2979,6 +2999,10 @@ class Win(Adw.ApplicationWindow):
         # toggles.  Keeping this separately is what lets bypass preserve the
         # complete curve instead of flattening it destructively.
         self.eq_on_by_ch = {1: False, 2: False}
+        # ``None`` means Standard. Alternate entries hold the normalized UC XML
+        # state plus its exact cached live sections for graphing and replay.
+        self.alt_eq_by_ch = {1: None, 2: None}
+        self._alt_eq_warned = None
         self.dyn_by_ch = {c: {"gate": False, "comp": False, "lim": False}
                           for c in (1, 2)}
         self.cur_band_by_ch = {1: 0, 2: 0}
@@ -3291,13 +3315,12 @@ class Win(Adw.ApplicationWindow):
         return band
 
     def _set_eq_enabled(self, ch, on):
-        """Switch the whole EQ without changing any of its four band states."""
+        """Switch the selected EQ model without changing its hidden controls."""
         on = bool(on)
         targets = self._eq_write_targets(ch)
         if not hasattr(self, "eq_on_by_ch"):
             self.eq_on_by_ch = {}
         for target in targets:
-            self.eq_on_by_ch[target] = on
             controls = getattr(self, "w", {}).get(target, {})
             switch = controls.get("eq_on")
             if switch is not None and switch.get_active() != on:
@@ -3307,7 +3330,13 @@ class Win(Adw.ApplicationWindow):
                     switch.set_active(on)
                 finally:
                     self._adopt_mute = prior
-            if on:
+            alternate = self._alt_eq(target)
+            if alternate is not None:
+                alternate["eq"]["eqallon"] = int(on)
+                alternate["on"] = on
+                self._queue_alternate_eq(target)
+            elif on:
+                self.eq_on_by_ch[target] = True
                 for index in range(4):
                     band = self._effective_eq_band(target, index)
                     self.ctl.submit(
@@ -3315,6 +3344,7 @@ class Win(Adw.ApplicationWindow):
                         dev.set_eq_band(x, j, bb["shape"], bb["freq"],
                                         bb["gain"], bb["q"], fs=fs))
             else:
+                self.eq_on_by_ch[target] = False
                 self.ctl.submit(lambda dev, x=target: dev.eq_off(x))
             curve = controls.get("curve")
             if curve is not None:
@@ -3359,6 +3389,13 @@ class Win(Adw.ApplicationWindow):
             enabled = self.eq_enabled(ch)
         if not enabled:
             return 0.0
+        alternate = self._alt_eq(ch)
+        if alternate is not None:
+            sections = alternate.get("sections")
+            if not sections or alternate.get("error"):
+                return 0.0
+            return io24_alt_eq.response_db(
+                sections, f, alternate.get("rate_hz", fs))
         re, im = 1.0, 0.0
         if bands is None:
             bands = tuple(dict(b) for b in self.bands_by_ch[ch])
@@ -4198,9 +4235,16 @@ class Win(Adw.ApplicationWindow):
         curve_row = Adw.PreferencesRow()
         curve_row.set_child(W["curve"])
         e.add(curve_row)
+        W["eq_model"] = Adw.ComboRow(
+            title="EQ model",
+            subtitle="UC 4.7.2 Standard, Passive, and Vintage component models",
+            model=Gtk.StringList.new(["Standard", "Passive", "Vintage"]))
+        W["eq_model"].connect(
+            "notify::selected", self._eq_model_changed, ch)
+        e.add(W["eq_model"])
         W["eq_on"] = Adw.SwitchRow(
             title="EQ",
-            subtitle="Independent power for the complete four-band equaliser")
+            subtitle="Independent power for the selected equaliser model")
         W["eq_on"].connect("notify::active", self._eq_power_changed, ch)
         e.add(W["eq_on"])
         bb = Gtk.Box(halign=Gtk.Align.CENTER, margin_top=8, margin_bottom=4)
@@ -4214,14 +4258,17 @@ class Win(Adw.ApplicationWindow):
         band_selector_row = Adw.PreferencesRow()
         band_selector_row.set_child(bb)
         e.add(band_selector_row)
+        W["_standard_eq_rows"] = [band_selector_row]
         W["band_on"] = Adw.SwitchRow(title="Low band")
         W["band_on"].connect("notify::active", self._band_power_changed, ch)
         e.add(W["band_on"])
+        W["_standard_eq_rows"].append(W["band_on"])
         W["shelf"] = Adw.SwitchRow(
             title="Low shelf",
             subtitle="Off selects the XML's parametric mode")
         W["shelf"].connect("notify::active", self._shelf_changed, ch)
         e.add(W["shelf"])
+        W["_standard_eq_rows"].append(W["shelf"])
         for key, title, lo, hi, st, dv, fmt, sub in (
                 ("freq", "Frequency", 36, 18000, 1, 130,
                  lambda v: "%.0f Hz" % v, None),
@@ -4233,26 +4280,97 @@ class Win(Adw.ApplicationWindow):
                                    lambda v, k=key, c=ch: self._band_set(k, v, c),
                                    sub)
             e.add(r)
+            W["_standard_eq_rows"].append(r)
         flat = Gtk.Button(label="Flatten", margin_top=6)
         flat.connect("clicked", lambda _b, c=ch: self._eq_flat(c))
         e.add(flat)
         W["eq_flat"] = flat
-        # Shown only while a recalled Passive/Vintage body is on the device:
-        # its fields as stored, plus the one way back to the Standard editor.
-        W["alt_eq_note"] = Gtk.Label(xalign=0, wrap=True, margin_top=8)
-        W["alt_eq_note"].add_css_class("caption")
-        W["alt_eq_note"].set_visible(False)
-        e.add(W["alt_eq_note"])
-        W["alt_eq_release"] = Gtk.Button(
-            label="Edit with Standard EQ instead", margin_top=4)
-        W["alt_eq_release"].set_tooltip_text(
-            "Unlocks the Standard band controls. Nothing is sent until you "
-            "change a band; from then on the Standard bands are written over "
-            "the recalled EQ.")
-        W["alt_eq_release"].connect(
-            "clicked", lambda _b, c=ch: self._release_alternate_eq(c))
-        W["alt_eq_release"].set_visible(False)
-        e.add(W["alt_eq_release"])
+        W["_standard_eq_rows"].append(flat)
+
+        # Passive Program EQ: exact fields, order, ranges, and defaults from
+        # UC 4.7.2's embedded PassiveEQ parameter list.
+        W["_passive_eq_rows"] = []
+        for key, title, lo, hi, step, default in (
+                ("p_bboost", "Low Boost", 0, 10, 0.1, 0.0),
+                ("p_batten", "Low Atten", 0, 10, 0.1, 0.0)):
+            field = key[2:]
+            row, W[key] = self._srow(
+                title, lo, hi, step, default, lambda v: "%.1f / 10" % v,
+                lambda v, c=ch, f=field: self._alternate_eq_set(c, f, v))
+            e.add(row); W["_passive_eq_rows"].append(row)
+        row = Adw.ComboRow(
+            title="Low Frequency",
+            model=Gtk.StringList.new(["20 Hz", "30 Hz", "60 Hz", "100 Hz"]))
+        row.connect("notify::selected", self._alternate_eq_switch_changed,
+                    ch, "bfreq")
+        W["p_bfreq"] = row; e.add(row); W["_passive_eq_rows"].append(row)
+        for key, title, default, subtitle in (
+                ("p_mboost", "High Boost", 1.5, None),
+                ("p_bbwidth", "High Bandwidth", 10.0,
+                 "Broad at 10, narrow at 0")):
+            field = key[2:]
+            row, W[key] = self._srow(
+                title, 0, 10, 0.1, default, lambda v: "%.1f / 10" % v,
+                lambda v, c=ch, f=field: self._alternate_eq_set(c, f, v),
+                subtitle)
+            e.add(row); W["_passive_eq_rows"].append(row)
+        row = Adw.ComboRow(
+            title="High Freq",
+            model=Gtk.StringList.new(
+                ["3 kHz", "4 kHz", "5 kHz", "8 kHz", "10 kHz",
+                 "12 kHz", "16 kHz"]))
+        row.connect("notify::selected", self._alternate_eq_switch_changed,
+                    ch, "mfreq")
+        W["p_mfreq"] = row; e.add(row); W["_passive_eq_rows"].append(row)
+        row, W["p_hatten"] = self._srow(
+            "High Atten", 0, 10, 0.1, 1.5, lambda v: "%.1f / 10" % v,
+            lambda v, c=ch: self._alternate_eq_set(c, "hatten", v))
+        e.add(row); W["_passive_eq_rows"].append(row)
+        row = Adw.ComboRow(
+            title="Attenuation Select",
+            model=Gtk.StringList.new(["5 kHz", "10 kHz", "20 kHz"]))
+        row.connect("notify::selected", self._alternate_eq_switch_changed,
+                    ch, "hsfreq")
+        W["p_hsfreq"] = row; e.add(row); W["_passive_eq_rows"].append(row)
+
+        # Vintage EQ: the three switched bands and fixed high shelf declared
+        # by UC's VintageEQ component.
+        W["_vintage_eq_rows"] = []
+        vintage_rows = (
+            ("lowgain", "Low Gain", 0.0, None),
+            ("lowmidgain", "Low-Mid Gain", 0.0, None),
+            ("himidgain", "Hi-Mid Gain", 0.0, None),
+            ("higain", "High Gain", 0.0, "Fixed high-shelf frequency"),
+        )
+        vintage_switches = {
+            "lowgain": ("lowfreq", "Low Frequency",
+                        ["35 Hz", "60 Hz", "110 Hz", "220 Hz"], 1),
+            "lowmidgain": ("lowmidfreq", "Low-Mid Freq",
+                           ["360 Hz", "700 Hz", "1.6 kHz"], 2),
+            "himidgain": ("himidfreq", "Hi-Mid Freq",
+                          ["3.2 kHz", "4.8 kHz", "7.2 kHz"], 2),
+        }
+        for field, title, default, subtitle in vintage_rows:
+            key = "v_" + field
+            row, W[key] = self._srow(
+                title, -16, 16, 0.1, default, lambda v: "%+.1f dB" % v,
+                lambda v, c=ch, f=field: self._alternate_eq_set(c, f, v),
+                subtitle)
+            e.add(row); W["_vintage_eq_rows"].append(row)
+            switch = vintage_switches.get(field)
+            if switch is not None:
+                switch_field, switch_title, labels, default_index = switch
+                combo = Adw.ComboRow(
+                    title=switch_title, model=Gtk.StringList.new(labels))
+                combo.set_selected(default_index)
+                combo.connect(
+                    "notify::selected", self._alternate_eq_switch_changed,
+                    ch, switch_field)
+                W["v_" + switch_field] = combo
+                e.add(combo); W["_vintage_eq_rows"].append(combo)
+
+        for row in W["_passive_eq_rows"] + W["_vintage_eq_rows"]:
+            row.set_visible(False)
 
         gt = Adw.PreferencesGroup(
             title="Gate / expander",)
@@ -5382,116 +5500,198 @@ class Win(Adw.ApplicationWindow):
         if entry is None or getattr(self, "PR", None) is None:
             return False
         record = entry["record"]
-        # A Passive/Vintage body has no Standard-band representation, so its
-        # EQ cannot go on the band controls. Everything else in it can, and the
-        # EQ is listed read-only as stored rather than drawn as four bands
-        # derived from a model the record never used.
+        # Alternate models retain their own semantic controls; they are never
+        # coerced into four Standard bands.
         view = self.PR.alternate_eq_view(record)
-        shown = record if view is None else \
-            {key: value for key, value in record.items() if key != "eq"}
-        supported, reason = self.PR.direct_apply_support(shown)
+        supported, reason = self.PR.direct_apply_support(record)
         if not supported:
             self.say("Recalled body is not shown on the controls: %s. They "
                      "still show the previous sound." % reason)
             return False
         try:
-            self._adopt_preset_record(shown, (ch,), fx_channel=ch)
+            self._adopt_preset_record(record, (ch,), fx_channel=ch)
         except Exception as error:
             self.say("Recalled body could not be shown on the controls: %s"
                      % error)
             return False
         if view is not None:
-            self._show_alternate_eq(ch, view)
-            self.say("Channel %d is running a %s EQ the Host can show but not "
-                     "draw; it is listed read-only on the Equaliser page"
+            self.say("Channel %d is running an editable %s EQ with its exact "
+                     "UC 4.7.2 controls and response curve"
                      % (ch, view["model"].title()))
         return True
 
     # ------------------------------------------------- alternate-model EQ
-    _ALT_EQ_CONTROLS = (
-        "curve", "eq_on", "band_on", "shelf", "freq", "gain", "q",
-        "eq_flat",
-    )
+    EQ_MODELS = ("standard", "passive", "vintage")
 
     def _alt_eq(self, ch):
-        """The recalled Passive/Vintage EQ shown on a channel, or None."""
+        """The editable Passive/Vintage state on a channel, or ``None``."""
         return getattr(self, "alt_eq_by_ch", {}).get(ch)
 
-    def _show_alternate_eq(self, ch, view):
-        """Show a recalled Passive/Vintage EQ read-only, or clear it (None).
+    def _eq_model_name(self, ch):
+        alternate = self._alt_eq(ch)
+        return "standard" if alternate is None else alternate["model"]
 
-        While one is shown the Standard editor on that channel is paused: a
-        band edit would send Standard bands over an EQ the Host cannot draw,
-        and a later save would store them in its place.
-        """
+    def _show_alternate_eq(self, ch, view):
+        """Adopt an alternate model into its exact controls without sending."""
         if not hasattr(self, "alt_eq_by_ch"):
             self.alt_eq_by_ch = {1: None, 2: None}
-        prior = self.alt_eq_by_ch.get(ch)
+        if view is not None:
+            eq = io24_alt_eq.validate_eq(view["eq"])
+            view = io24_presets.alternate_eq_view({"eq": eq})
+            try:
+                view["sections"] = io24_alt_eq.design_live_sections(
+                    eq, getattr(self, "_fs", 48000.0))
+                view["error"] = None
+            except Exception as error:
+                view["sections"] = None
+                view["error"] = str(error)
+            view["rate_hz"] = float(getattr(self, "_fs", 48000.0))
         self.alt_eq_by_ch[ch] = view
         self._alt_eq_warned = None
-        if view is None and prior is None:
-            return
+
         W = getattr(self, "w", {}).get(ch)
         if not W:
             return
-        editable = view is None
-        for key in self._ALT_EQ_CONTROLS:
-            if key in W:
-                W[key].set_sensitive(editable)
-        for button in W.get("bands", ()):
-            button.set_sensitive(editable)
-        if "eq_on" in W:
-            prior_mute = self._adopt_mute
-            self._adopt_mute = True
-            try:
-                W["eq_on"].set_active(
-                    self.eq_enabled(ch) if editable else bool(view["on"]))
-            finally:
-                self._adopt_mute = prior_mute
-        if "alt_eq_note" in W:
-            W["alt_eq_note"].set_text("" if editable else self._alt_eq_text(view))
-            W["alt_eq_note"].set_visible(not editable)
-        if "alt_eq_release" in W:
-            W["alt_eq_release"].set_visible(not editable)
-        if "curve" in W:
-            W["curve"].queue_draw()
+        model = "standard" if view is None else view["model"]
+        prior_mute = getattr(self, "_adopt_mute", False)
+        self._adopt_mute = True
+        try:
+            selector = W.get("eq_model")
+            if selector is not None:
+                selector.set_selected(self.EQ_MODELS.index(model))
+            for row in W.get("_standard_eq_rows", ()):
+                row.set_visible(model == "standard")
+            for row in W.get("_passive_eq_rows", ()):
+                row.set_visible(model == "passive")
+            for row in W.get("_vintage_eq_rows", ()):
+                row.set_visible(model == "vintage")
+            switch = W.get("eq_on")
+            if switch is not None:
+                switch.set_active(
+                    self.eq_on_by_ch.get(ch, False) if view is None
+                    else bool(view["eq"]["eqallon"]))
+            if view is not None:
+                eq = view["eq"]
+                prefix = "p_" if model == "passive" else "v_"
+                for field, value in eq.items():
+                    control = W.get(prefix + field)
+                    if control is None:
+                        continue
+                    if field.endswith("freq"):
+                        control.set_selected(int(value))
+                    else:
+                        control.set_value(float(value))
+        finally:
+            self._adopt_mute = prior_mute
+        self.invalidate_curve()
+        curve = W.get("curve")
+        if curve is not None:
+            curve.queue_draw()
         for rack in getattr(self, "racks", {}).values():
             rack.queue_draw()
 
     @staticmethod
     def _alt_eq_text(view):
-        lines = ["%s EQ from the recalled preset%s, shown as stored:"
-                 % (view["model"].title(), "" if view["on"] else " (switched off)")]
-        for name, where, gain in view["rows"]:
-            lines.append("  %s: %s" % (name, ", ".join(
-                part for part in (where, gain) if part)))
-        lines.append("Its switch frequencies are decoded, but this running "
-                     "Host does not carry the exact alternate-EQ designers, so "
-                     "the curve cannot be drawn and the band controls are "
-                     "paused. Saving this channel keeps the EQ exactly as "
-                     "stored.")
-        return "\n".join(lines)
+        """Compact diagnostic text retained for tests and non-GTK clients."""
+        status = "on" if view["eq"]["eqallon"] else "off"
+        return "%s EQ (%s), editable with exact UC 4.7.2 controls" % (
+            view["model"].title(), status)
+
+    def _queue_alternate_eq(self, ch):
+        """Design once for UI feedback, then queue the complete UC live route."""
+        view = self._alt_eq(ch)
+        if view is None:
+            return False
+        try:
+            eq = io24_alt_eq.validate_eq(view["eq"])
+            sections = io24_alt_eq.design_live_sections(eq, self._fs)
+        except Exception as error:
+            view["error"] = str(error)
+            view["sections"] = None
+            self.say("%s EQ was not sent: %s" %
+                     (view["model"].title(), error))
+            return False
+        view.update(eq=eq, on=bool(eq["eqallon"]), sections=sections,
+                    rate_hz=float(self._fs), error=None)
+        self.ctl.submit(
+            lambda dev, x=ch, state=dict(eq), fs=self._fs:
+            dev.set_alternate_eq(x, state, fs=fs))
+        self.invalidate_curve()
+        controls = getattr(self, "w", {}).get(ch, {})
+        if controls.get("curve") is not None:
+            controls["curve"].queue_draw()
+        return True
+
+    def _alternate_eq_set(self, ch, field, value):
+        if getattr(self, "_adopt_mute", False):
+            return
+        source = self._alt_eq(ch)
+        if source is None or field not in source["eq"]:
+            return
+        source["eq"][field] = float(value)
+        for target in self._eq_write_targets(ch):
+            if target != ch:
+                mirrored = io24_presets.alternate_eq_view(
+                    {"eq": dict(source["eq"])})
+                self._show_alternate_eq(target, mirrored)
+            self._queue_alternate_eq(target)
+
+    def _alternate_eq_switch_changed(self, row, _param, ch, field):
+        if not getattr(self, "_adopt_mute", False):
+            self._alternate_eq_set(ch, field, int(row.get_selected()))
+
+    def _eq_model_changed(self, row, _param, ch):
+        if getattr(self, "_adopt_mute", False):
+            return
+        index = max(0, min(2, int(row.get_selected())))
+        model = self.EQ_MODELS[index]
+        targets = (1, 2) if getattr(self, "link_both", False) else (ch,)
+        for target in targets:
+            was_on = self.eq_enabled(target)
+            if model == "standard":
+                self.eq_on_by_ch[target] = was_on
+                self._show_alternate_eq(target, None)
+                if was_on:
+                    for band in range(4):
+                        state = self._effective_eq_band(target, band)
+                        self.ctl.submit(
+                            lambda dev, x=target, j=band, bb=state, fs=self._fs:
+                            dev.set_eq_band(x, j, bb["shape"], bb["freq"],
+                                            bb["gain"], bb["q"], fs=fs))
+                else:
+                    self.ctl.submit(lambda dev, x=target: dev.eq_off(x))
+            else:
+                eq = io24_alt_eq.default_eq(model, on=was_on)
+                self._show_alternate_eq(
+                    target, io24_presets.alternate_eq_view({"eq": eq}))
+                self._queue_alternate_eq(target)
+        self.say("%s EQ selected on Channel %s" %
+                 (model.title(), " and ".join(str(c) for c in targets)))
 
     def _release_alternate_eq(self, ch):
-        chans = (1, 2) if getattr(self, "link_both", False) else (ch,)
-        for c in chans:
-            self._show_alternate_eq(c, None)
-        self.say("Standard EQ unlocked on Channel %s. Nothing was sent; the "
-                 "next band change writes the Standard bands over the recalled "
-                 "EQ." % " and ".join(str(c) for c in chans))
+        """Compatibility action: select and immediately apply Standard EQ."""
+        controls = getattr(self, "w", {}).get(ch, {})
+        selector = controls.get("eq_model")
+        if selector is not None:
+            selector.set_selected(0)
+        else:
+            class Selection:
+                @staticmethod
+                def get_selected():
+                    return 0
+            self._eq_model_changed(Selection(), None, ch)
 
     def _eq_write_targets(self, ch):
-        """The channels an EQ edit may reach: never one still holding a
-        recalled Passive/Vintage body the user has not released."""
-        chans = (1, 2) if self.link_both else (ch,)
-        held = tuple(c for c in chans if self._alt_eq(c) is not None)
-        if held and getattr(self, "_alt_eq_warned", None) != held:
-            self._alt_eq_warned = held
-            self.say("Channel %s keeps its recalled %s EQ; use \"Edit with "
-                     "Standard EQ instead\" there first"
-                     % (" and ".join(str(c) for c in held),
-                        self._alt_eq(held[0])["model"].title()))
-        return tuple(c for c in chans if c not in held)
+        """Linked edits reach only channels currently using the same model."""
+        chans = (1, 2) if getattr(self, "link_both", False) else (ch,)
+        source_model = self._eq_model_name(ch)
+        mismatched = tuple(c for c in chans
+                           if self._eq_model_name(c) != source_model)
+        if mismatched and getattr(self, "_alt_eq_warned", None) != mismatched:
+            self._alt_eq_warned = mismatched
+            self.say("Linked EQ edit skipped Channel %s because its EQ model "
+                     "differs" % " and ".join(str(c) for c in mismatched))
+        return tuple(c for c in chans if c not in mismatched)
 
     def _recall_host_preset(self, _button, entry):
         """Select one Host-known slot on the device and follow it in the UI."""
@@ -5833,9 +6033,7 @@ class Win(Adw.ApplicationWindow):
                 self._dyn_push(key, ch)
         for ch in (1, 2):
             if self._alt_eq(ch) is not None:
-                # The exact alternate-model designers are not part of the
-                # running Host.  A clock change must not overwrite a recalled
-                # Passive/Vintage body with stale Standard bands.
+                self._queue_alternate_eq(ch)
                 continue
             for index in range(4):
                 band = self._effective_eq_band(ch, index)
@@ -6374,8 +6572,8 @@ class Win(Adw.ApplicationWindow):
         except KeyError as error:
             raise io24.HostActionError(
                 "complete-body base %r is unavailable" % base_name) from error
-        # A recalled Passive/Vintage EQ the Host cannot rebuild is carried
-        # through verbatim instead of being replaced by the paused bands.
+        # A selected Passive/Vintage model keeps its own semantic controls;
+        # never replace it with the hidden Standard bands while saving.
         alt = self._alt_eq(target)
         return self.PR.current_slot_record(
             base, preset_name,
@@ -6484,26 +6682,30 @@ class Win(Adw.ApplicationWindow):
         """
         if getattr(self, "PR", None) is None:
             return False
+        alternate_view_fn = getattr(self.PR, "alternate_eq_view", None)
+        alternate_view = alternate_view_fn(pr) \
+            if callable(alternate_view_fn) else None
+        shown = pr if alternate_view is None else {
+            key: value for key, value in pr.items() if key != "eq"
+        }
         if not hasattr(self, "eq_on_by_ch"):
             self.eq_on_by_ch = {}
         for ch in chans:
-            self.bands_by_ch[ch] = self.PR.to_bands(pr)
+            self.bands_by_ch[ch] = self.PR.to_bands(shown)
             enabled = getattr(self.PR, "standard_eq_enabled", None)
-            if callable(enabled):
+            if alternate_view is not None:
+                # Keep the hidden Standard state; the selected alternate owns
+                # the visible power switch and exact semantic controls.
+                self.eq_on_by_ch.setdefault(ch, False)
+            elif callable(enabled):
                 try:
-                    self.eq_on_by_ch[ch] = enabled(pr)
+                    self.eq_on_by_ch[ch] = enabled(shown)
                 except io24_presets.UnsupportedPresetModel:
-                    # Alternate models are reattached immediately below by the
-                    # recall path and carry their own independent power value.
                     self.eq_on_by_ch[ch] = False
             else:
                 self.eq_on_by_ch[ch] = any(
                     band.get("shape") != "off"
                     for band in self.bands_by_ch[ch])
-            # This record's EQ (or its absence) now describes the channel; a
-            # recall re-marks a Passive/Vintage body after adopting the rest.
-            if getattr(self, "alt_eq_by_ch", {}).get(ch) is not None:
-                self._show_alternate_eq(ch, None)
             self.dyn_by_ch[ch] = {
                 "gate": bool(pr.get("gate", {}).get("on")),
                 "comp": bool(pr.get("comp", {}).get("on")),
@@ -6526,6 +6728,9 @@ class Win(Adw.ApplicationWindow):
                     self.w[ch][key + "_on"].set_active(
                         self.dyn_by_ch[ch][key])
                 self.w[ch]["curve"].queue_draw()
+                show_alternate = getattr(self, "_show_alternate_eq", None)
+                if callable(show_alternate):
+                    show_alternate(ch, alternate_view)
             self._sync_order_row(self._current_channel())
         finally:
             self._adopt_mute = False
@@ -6580,6 +6785,9 @@ class Win(Adw.ApplicationWindow):
             chans = tuple(channels)
         else:
             chans = (1, 2) if self.link_both else (target,)
+        alternate_view = getattr(self.PR, "alternate_eq_view", None)
+        alternate_eq = callable(alternate_view) and \
+            alternate_view(pr) is not None
 
         def work(dev):
             fx_command_sent = False
@@ -6589,7 +6797,11 @@ class Win(Adw.ApplicationWindow):
                 # rolled back or reported as failed when the separate global
                 # FX activation handshake is unavailable.
                 for ch in chans:
-                    self.PR.apply_preset(dev, pr, ch, with_fx=False)
+                    if alternate_eq:
+                        self.PR.apply_preset(
+                            dev, pr, ch, with_fx=False, fs=self._fs)
+                    else:
+                        self.PR.apply_preset(dev, pr, ch, with_fx=False)
             except Exception as error:
                 GLib.idle_add(
                     self.say, "%s load failed: %s" % (name, error))
@@ -7185,10 +7397,15 @@ class Win(Adw.ApplicationWindow):
         each looping four biquads with trig, 30 times a second. It only changes
         when a band changes, so cache it against the band state and the width.
         """
-        key = (int(w), int(h), ch,
-               self.eq_enabled(ch),
-               tuple((b["shape"], round(b["freq"], 2), round(b["gain"], 3),
-                      round(b["q"], 3)) for b in self.bands_by_ch[ch]))
+        alternate = self._alt_eq(ch)
+        if alternate is None:
+            semantic = tuple(
+                (b["shape"], round(b["freq"], 2), round(b["gain"], 3),
+                 round(b["q"], 3)) for b in self.bands_by_ch[ch])
+        else:
+            semantic = tuple(sorted(alternate["eq"].items()))
+        key = (int(w), int(h), ch, self.eq_enabled(ch), semantic,
+               round(float(getattr(self, "_fs", 48000.0)), 3))
         cache = getattr(self, "_curves", None)
         if cache is None:
             cache = self._curves = {}
@@ -7198,7 +7415,8 @@ class Win(Adw.ApplicationWindow):
         pts = []
         for px in range(0, int(w) + 1, step):
             f = 20.0 * (24000 / 20.0) ** (px / max(w, 1))
-            y = h / 2 - self.response_for(ch, f) / 18.0 * (h / 2)
+            y = h / 2 - self.response_for(
+                ch, f, fs=getattr(self, "_fs", 48000.0)) / 18.0 * (h / 2)
             pts.append((px, max(1, min(h - 1, y))))
         cache[ch] = (key, pts)
         return pts
@@ -7267,6 +7485,11 @@ class Win(Adw.ApplicationWindow):
             standard_eq = standard_eq_state()
             if standard_eq is not None:
                 host_features["standard_eq"] = standard_eq
+        alternate_eq_state = getattr(self, "_alternate_eq_state", None)
+        alternate_eq = alternate_eq_state() \
+            if callable(alternate_eq_state) else None
+        if alternate_eq is not None:
+            host_features["alternate_eq"] = alternate_eq
         insert = self._insert_state()
         if insert is not None:
             host_features["multiband_insert"] = insert
@@ -7301,6 +7524,39 @@ class Win(Adw.ApplicationWindow):
             "version": 1,
             "channels": channels,
         })
+
+    def _alternate_eq_state(self):
+        """Return complete semantic Passive/Vintage state for both channels."""
+        channels = {}
+        for ch in (1, 2):
+            view = self._alt_eq(ch)
+            if view is not None:
+                channels[str(ch)] = dict(view["eq"])
+        if not channels:
+            return None
+        return io24_presets.validate_alternate_eq_host_state({
+            "version": 1,
+            "channels": channels,
+        })
+
+    def _adopt_alternate_eq_state(self, state):
+        """Restore selected alternate models without echoing a device write."""
+        if state is None:
+            return None
+        try:
+            state = io24_presets.validate_alternate_eq_host_state(state)
+        except (TypeError, ValueError) as error:
+            return "Alternate EQ was not restored: %s" % error
+        restored = []
+        for channel, eq in state["channels"].items():
+            ch = int(channel)
+            self._show_alternate_eq(
+                ch, io24_presets.alternate_eq_view({"eq": eq}))
+            restored.append(ch)
+        if restored:
+            return "Alternate EQ controls restored on Input %s" % \
+                " and ".join(str(ch) for ch in restored)
+        return None
 
     def _adopt_standard_eq_state(self, state):
         """Restore Standard controls without replaying a second device write."""
@@ -7418,8 +7674,15 @@ class Win(Adw.ApplicationWindow):
             standard_eq_state = getattr(self, "_standard_eq_state", None)
             standard_eq = standard_eq_state() \
                 if callable(standard_eq_state) else None
-            host_features = ({"standard_eq": standard_eq}
-                             if standard_eq is not None else None)
+            alternate_eq_state = getattr(self, "_alternate_eq_state", None)
+            alternate_eq = alternate_eq_state() \
+                if callable(alternate_eq_state) else None
+            host_features = {}
+            if standard_eq is not None:
+                host_features["standard_eq"] = standard_eq
+            if alternate_eq is not None:
+                host_features["alternate_eq"] = alternate_eq
+            host_features = host_features or None
 
         def work(dev):
             # The worker hands each job the Io24 driver itself
@@ -7691,6 +7954,8 @@ class Win(Adw.ApplicationWindow):
         if host_features:
             standard_eq_message = self._adopt_standard_eq_state(
                 host_features.get("standard_eq"))
+            alternate_eq_message = self._adopt_alternate_eq_state(
+                host_features.get("alternate_eq"))
             multiband_message = self._adopt_legacy_multiband(
                 host_features.get("multiband"))
             insert_message = self._adopt_insert_state(
@@ -7700,7 +7965,8 @@ class Win(Adw.ApplicationWindow):
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
             host_messages = [message for message in
-                             (standard_eq_message, multiband_message,
+                             (standard_eq_message, alternate_eq_message,
+                              multiband_message,
                               insert_message,
                               reverb_message, autogain_message) if message]
         self._insert_reconcile()

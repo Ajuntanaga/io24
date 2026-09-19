@@ -446,7 +446,7 @@ def build() -> dict:
         "passive": {
             "eqallon": [False, True], "bboost": [0.0, 5.0, 10.0],
             "batten": [0.0, 5.0, 10.0],
-            "bfreq": ["vendor_literal_20kHz", "30", "60", "100"],
+            "bfreq": [20, 30, 60, 100],
             "mboost": [0.0, 5.0, 10.0], "bbwidth": [0.0, 5.0, 10.0],
             "mfreq": [3000, 4000, 5000, 8000, 10000, 12000, 16000],
             "hatten": [0.0, 5.0, 10.0], "hsfreq": [5000, 10000, 20000],
@@ -517,20 +517,27 @@ def build() -> dict:
             api=("set_comp_eq_order",), source=("io24.py opt/Pari",),
             requires=("non_commutative_audio_fixture",))
         add("fat.channel%d.eq_model" % ch, "P4", "fat_eq_model",
-            "mutable EQ model", "implementation_gap", scope={"channel": ch},
+            "mutable EQ model", "dsp_audio_enum", scope={"channel": ch},
             stimuli=["standard", "passive", "vintage"],
-            source=("UC 4.7.2 fatchannelxt.xml",),
-            blockers=("alternate_eq_exact_builder_pending",))
+            api=("set_eq_band", "set_alternate_eq", "set_passive_eq",
+                 "set_vintage_eq", "set_wide_eq"),
+            source=("UC 4.7.2 fatchannelxt.xml",
+                    "re/uc472_alt_eq_live_route.py", "io24_alt_eq.py"),
+            requires=("retained_uc472_dspusbdevice",
+                      "deterministic_audio_rig@batch"))
         for model, fields in alternate_eq.items():
             for field, stimuli in fields.items():
-                blockers = ["alternate_eq_exact_builder_pending"]
-                if model == "passive" and field == "bfreq":
-                    blockers.append("vendor_20kHz_literal_requires_resolution")
+                profile = "dsp_audio_toggle" if field == "eqallon" else \
+                    "dsp_audio_enum" if field.endswith("freq") else \
+                    "dsp_audio_scalar"
                 add("fat.channel%d.eq.%s.%s" % (ch, model, field), "P4",
                     "fat_eq_alternate", field,
-                    "implementation_gap", scope={"channel": ch, "model": model},
-                    stimuli=stimuli, source=("UC 4.7.2 fatchannelxt.xml",),
-                    blockers=tuple(blockers))
+                    profile, scope={"channel": ch, "model": model},
+                    stimuli=stimuli, api=("set_alternate_eq",),
+                    source=("UC 4.7.2 fatchannelxt.xml",
+                            "re/uc472_alt_eq_live_route.py", "io24_alt_eq.py"),
+                    requires=("retained_uc472_dspusbdevice",
+                              "deterministic_audio_rig@batch"))
         for block in ("gate", "compressor", "limiter"):
             add("fat.channel%d.%s.instance_targeting" % (ch, block), "P1",
                 "serializer_targeting", "DSP sub-instance 0/1/both", "serializer",

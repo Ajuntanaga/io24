@@ -151,6 +151,9 @@ def main():
     # real Spectrum constructor here would make visiting the Channel page open
     # ALSA whenever an interface happened to be attached.
     G.Spectrum = FakeSpectrum
+    # A visual test must neither adopt nor overwrite the user's real session.
+    G.load_last_session = lambda path=None: None
+    G.Win._save_last_session = lambda self, path=None: None
     # PipeWire is the same problem by another route: the Mixer page's watchdog
     # looks for the io24's nodes and starts the real bus-source chains, and
     # Multiband would look for its own, whenever an interface happened to be
@@ -173,7 +176,7 @@ def main():
     app.set_application_id('org.io24.PaintSmoke%d' % os.getpid())
 
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
-             "scroll_settled": False}
+             "scroll_settled": False, "eq_model_set": False}
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
         capture_dir = Path(capture_dir)
@@ -196,6 +199,17 @@ def main():
             if only_page:
                 state["pages"] = [only_page]
             print("PAGES: %s" % state["pages"], flush=True)
+        if not state["eq_model_set"]:
+            model_name = os.environ.get("IO24_PAINT_EQ_MODEL", "").lower()
+            if model_name:
+                try:
+                    model_index = G.Win.EQ_MODELS.index(model_name)
+                except ValueError:
+                    raise RuntimeError(
+                        "IO24_PAINT_EQ_MODEL must be standard, passive, or vintage")
+                win.w[1]["eq_model"].set_selected(model_index)
+                print("EQ MODEL -> %s" % model_name, flush=True)
+            state["eq_model_set"] = True
         pending = state["capture_pending"]
         if pending is not None:
             page_number, page_name = pending

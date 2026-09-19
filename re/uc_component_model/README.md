@@ -14,6 +14,7 @@ that describe this device.
 | `dsp_fx_params.xml` | the Voice FX and reverb parameter lists, plus the Voice FX class-ID template table |
 | `dspusb_component_model.xml` | the DSP-USB channel model: `MicLineInputDSP` / `StereoLineInputDSP` templates and the `starttag` numbering |
 | `fatchannelxt_eq_contract.xml` | bounded UC 4.7.2 `Eqxt4` Standard-EQ contract: global power, four independent band-power fields, the two outer shelf selectors, ranges and defaults |
+| `fatchannelxt_alternate_eq_contract.xml` | bounded UC 4.7.2 Passive/Vintage contract: class IDs, independent global power, every amount and switch, exact defaults, ranges, and list order |
 
 ## Why it matters
 
@@ -50,3 +51,10 @@ complete-EQ switch distinct from `eqbandon1..4`; that only `eqbandop1` and
 `eqbandop4` are real mutable shelf selectors; and that all four frequency
 controls span 36–18000 Hz with Q 0.1–10 (default/midpoint 0.6). The device still
 receives only the resulting four coefficient blobs.
+
+The alternate-EQ excerpt closes the equivalent semantic boundary for Passive
+and Vintage. Each has its own independent `eqallon`; neither declares
+per-band power switches. The corresponding UC DSP recompute routines send one
+seven-float `Lfdf` section at live index 0 and three five-float `Bqdf` sections
+at indexes 1 through 3. The Linux Host reads UC's pinned designers as data to
+produce those exact sections; it does not substitute generic shelves or peaks.

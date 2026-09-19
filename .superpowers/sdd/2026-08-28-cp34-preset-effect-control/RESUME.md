@@ -1,5 +1,23 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-18 controlling offline result: Passive and Vintage EQ are Host models
+
+The Linux Host now implements UC 4.7.2's exact Passive Program and Vintage
+1970s EQ paths. Their embedded XML supplies the model IDs, complete controls,
+switch lists, defaults and independent global power. The source-bound live
+routes are `Lfdf[0] + Bqdf[1..3]`: Passive sends combined high, combined low
+and two identities; Vintage sends low, high, hi-mid and low-mid. The retained
+vendor designers are interpreted from the hash-pinned DLL as data and are
+never loaded or executed.
+
+The GTK Host exposes the exact editable model panels and response curves,
+factory/user preset dispatch, per-input Host snapshots and reconnect replay.
+Standard and alternate shadows are mutually exclusive per input. Missing or
+mismatched vendor data fails before transport; no generic Standard-biquad
+substitute can be emitted. The source analyzer, exact wire regressions and UI
+paint captures pass. No USB or audio operation was used, so a dedicated
+audible hardware A/B remains separate.
+
 ## 2026-09-14 controlling checkpoint: selector replay is the missing rebuild trigger
 
 The authorized zero-output Ring-Mod A/B/A completed on serial

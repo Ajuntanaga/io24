@@ -2,6 +2,26 @@
 
 Timestamp: 2026-09-06T14:54:07-07:00
 
+## 2026-09-18 exact Passive/Vintage Host EQ route
+
+UC 4.7.2 source binding is complete for both alternate EQ classes. Passive
+calls designers `0x18001a610` and `0x18001adb0` and emits high as `Lfdf[0]`,
+low as `Bqdf[1]`, then identity `Bqdf[2:3]`. Vintage calls
+`0x18001d470`, `0x18001cf30`, `0x18001cc20`, and `0x18001c910`, emitted as
+low `Lfdf[0]`, high `Bqdf[1]`, hi-mid `Bqdf[2]`, and low-mid `Bqdf[3]`.
+`re/uc472_alt_eq_live_route.py` checks every call target, tag, size and index
+against the pinned DLL.
+
+Production entry points are `io24_alt_eq.py`,
+`io24_uc472_passive_eq.py`, and `io24_uc472_vintage_eq.py`; the exact XML
+contract is `re/uc_component_model/fatchannelxt_alternate_eq_contract.xml`.
+Hardware-free regressions cover strict schemas/defaults, exact factory
+coefficients, all four wire packets, stability rejection before transport,
+preset dispatch, editable GTK controls, model-exclusive shadow replay and
+Host-state round trips. Stub-only GTK captures cover Passive at desktop width
+and Vintage at the constrained narrow width. No USB/audio/device action
+occurred; audible device response remains untested in this result.
+
 ## 2026-09-14 controlling selector-replay and live-null evidence
 
 The authorized Ring-Mod run's direct-gate positive control changed the

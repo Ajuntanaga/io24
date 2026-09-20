@@ -283,6 +283,12 @@ def main():
                 if not handled or after <= before:
                     raise RuntimeError(
                         "Effects wheel capture did not advance the page")
+                expected = G.effects_wheel_step(
+                    adjustment.get_page_increment())
+                if abs((after - before) - expected) > 0.2:
+                    raise RuntimeError(
+                        "Effects wheel moved %.1f px, expected %.1f px" % (
+                            after - before, expected))
                 print("WHEEL SCROLL -> %.1f to %.1f" % (before, after),
                       flush=True)
                 state["wheel_tested"] = True

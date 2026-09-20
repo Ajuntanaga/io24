@@ -220,11 +220,17 @@ class GlobalFxTests(unittest.TestCase):
         self.assertIn("keep_page_wheel_scrolling(page)", rendered)
         self.assertIn("self.fx_param_stack.set_vhomogeneous(False)", rendered)
         self.assertEqual(io24gtk.wheel_scroll_value(
+            100, 0, 1000, 400, 1), 124)
+        self.assertEqual(io24gtk.wheel_scroll_value(
             100, 0, 1000, 400, 1, 56), 156)
         self.assertEqual(io24gtk.wheel_scroll_value(
             590, 0, 1000, 400, 1, 56), 600)
         self.assertEqual(io24gtk.wheel_scroll_value(
             10, 0, 1000, 400, -1, 56), 0)
+        self.assertEqual(io24gtk.effects_wheel_step(0), 24)
+        self.assertEqual(io24gtk.effects_wheel_step(200), 18)
+        self.assertAlmostEqual(io24gtk.effects_wheel_step(676), 27.04)
+        self.assertEqual(io24gtk.effects_wheel_step(1000), 32)
 
     def test_skew_adapter_hits_xml_midpoint_and_round_trips(self):
         scale = _Value(0.5)

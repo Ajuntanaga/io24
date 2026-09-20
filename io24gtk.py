@@ -149,10 +149,18 @@ def wide_preferences_page():
     return page
 
 
-def wheel_scroll_value(value, lower, upper, page_size, delta, step=56.0):
+def wheel_scroll_value(value, lower, upper, page_size, delta, step=24.0):
     """Clamp one page-wheel movement without letting a child fader consume it."""
     end = max(float(lower), float(upper) - float(page_size))
     return max(float(lower), min(end, float(value) + float(delta) * float(step)))
+
+
+def effects_wheel_step(page_increment):
+    """A precise Effects-page wheel step for both short and tall windows."""
+    increment = float(page_increment)
+    if increment <= 0.0:
+        return 24.0
+    return max(18.0, min(32.0, increment * 0.04))
 
 
 def first_descendant(root, widget_type):
@@ -190,9 +198,7 @@ def keep_page_wheel_scrolling(page):
         if scroller is None:
             return False
         adjustment = scroller.get_vadjustment()
-        page_increment = float(adjustment.get_page_increment())
-        step = max(42.0, min(92.0, page_increment * 0.12)) \
-            if page_increment > 0.0 else 56.0
+        step = effects_wheel_step(adjustment.get_page_increment())
         adjustment.set_value(wheel_scroll_value(
             adjustment.get_value(), adjustment.get_lower(),
             adjustment.get_upper(), adjustment.get_page_size(), dy, step))

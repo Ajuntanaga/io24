@@ -425,7 +425,7 @@ class HostStateRepairTests(unittest.TestCase):
             ("processing_mix", 2, 1.0),
         ])
 
-    def test_gtk_labels_host_snapshots_and_hides_experiment_controls(self):
+    def test_gtk_labels_snapshots_and_hides_experiment_controls(self):
         source = (ROOT / "io24gtk.py").read_text()
         tree = ast.parse(source)
         fx_page = next(
@@ -434,8 +434,8 @@ class HostStateRepairTests(unittest.TestCase):
         )
         rendered = ast.get_source_segment(source, fx_page)
 
-        self.assertIn('menu.append("Save Host snapshot…"', source)
-        self.assertIn('menu.append("Load Host snapshot…"', source)
+        self.assertIn('menu.append("Save snapshot…"', source)
+        self.assertIn('menu.append("Load snapshot…"', source)
         self.assertNotIn("Arm 173 ms Delay on Channel 2", rendered)
         self.assertNotIn("Recall stock Slap Echo on Channel 2", rendered)
         self.assertNotIn("Custom-firmware lane extension", rendered)
@@ -455,7 +455,7 @@ class HostStateRepairTests(unittest.TestCase):
         }
 
         self.assertIn('title="Shared reverb"', rendered)
-        self.assertIn('title="Shared reverb engine"', rendered)
+        self.assertIn('title="Spring reverb"', rendered)
         # The return carries the FX engine too, so it is named for both; the
         # two reverbs are still distinguished by the rows above it.
         self.assertIn('title="Shared effects returns"', rendered)
@@ -464,7 +464,7 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn('"0% bypasses EQ, compression, limiting and effects; "',
                          rendered)
         self.assertNotIn('"Channel %d send"', rendered)
-        self.assertIn('title="FX"', rendered)
+        self.assertIn('title="Voice FX"', rendered)
         self.assertIn('title=parameter["name"]', rendered)
         self.assertIn('VoiceFxRack(self)', rendered)
         self.assertNotIn('title="FX active"', rendered)
@@ -479,7 +479,7 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn("_arm_channel2_delay", methods)
         self.assertNotIn("_load_channel2_factory_slap_echo", methods)
 
-    def test_effects_page_states_current_audio_limits_without_overclaiming(self):
+    def test_effects_page_uses_concise_uc_style_controls(self):
         source = (ROOT / "io24gtk.py").read_text()
         tree = ast.parse(source)
         fx_page = next(
@@ -490,11 +490,12 @@ class HostStateRepairTests(unittest.TestCase):
 
         self.assertNotIn('title="FX activation unresolved"', rendered)
         self.assertNotIn("currently meter-negative", rendered)
-        self.assertIn('title="Host approximation"', rendered)
-        self.assertIn("not separate device algorithms", rendered)
+        self.assertIn('title="Character"', rendered)
         self.assertIn('self._srow("Reverb return blend"', rendered)
-        self.assertIn("direct signal in Main", rendered)
-        self.assertNotIn("100 % puts only reverb on the FX return", rendered)
+        self.assertNotIn('title="Host approximation"', rendered)
+        self.assertNotIn("not separate device algorithms", rendered)
+        self.assertNotIn("device readback unavailable", rendered)
+        self.assertNotIn("block-201 readback unavailable", rendered)
 
     def test_processing_mix_uses_the_slider_as_the_only_establish_action(self):
         source = (ROOT / "io24gtk.py").read_text()
@@ -509,8 +510,7 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn("Set 100%", rendered)
         self.assertNotIn("processing_mix_establish", source)
         self.assertNotIn("sc.set_sensitive(False)", rendered)
-        self.assertIn("Move the slider to establish an exact ", rendered)
-        self.assertIn('"Host value"', rendered)
+        self.assertIn('"Move to set"', rendered)
 
     def test_presets_page_has_current_sound_save_workflows(self):
         source = (ROOT / "io24gtk.py").read_text()
@@ -527,6 +527,27 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertIn("self._save_user_preset_clicked", rendered)
         self.assertNotIn("Store in device slot…", rendered)
         self.assertNotIn("Complete-body base", rendered)
+
+    def test_normal_ui_copy_omits_protocol_and_manual_notation(self):
+        source = (ROOT / "io24gtk.py").read_text()
+
+        for phrase in (
+                "UC 4.7.2 Standard, Passive, and Vintage",
+                "Off selects the XML's parametric mode",
+                "Firmware write-only selector",
+                "Read-only in UC; block-201 readback unavailable",
+                "This uses Universal Control's MemP/PrsM Store route",
+                "WRITE_SENT_UNVERIFIED",
+                "Legacy front-panel block receipt",
+                "Host component names",
+                "richness, depth, a hint of reverb",
+                "artificially lowers the voice",
+                "talking synthesizer",
+                "voice x oscillator",
+                "custom filter bank",
+                'subtitle="index %d"'):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, source)
 
     def test_gtk_separates_fixed_preamp_hpf_from_fat_channel_cutoff(self):
         source = (ROOT / "io24gtk.py").read_text()
@@ -562,11 +583,12 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn("def _forget_cached", source)
         self.assertIn('not dev.has_send_level(\n                    "fxreturn/ch1", "main")',
                       source)
-        self.assertIn("assigned = dev.send_assigned(src, bus) if known else False",
+        self.assertIn("assigned = dev.send_assigned(\n"
+                      "                    src, display_bus) if known else False",
                       source)
-        self.assertIn("No Host level has been sent on this connection", source)
-        self.assertIn('("mixa", "Mix A", "USB capture channels 3–4")', source)
-        self.assertIn('("mixb", "Mix B", "USB capture channels 5–6")', source)
+        self.assertIn('off.set_tooltip_text("Add to mix at 0 dB")', source)
+        self.assertIn('("mixa", "Mix A", "USB capture 3–4")', source)
+        self.assertIn('("mixb", "Mix B", "USB capture 5–6")', source)
 
 if __name__ == "__main__":
     unittest.main()

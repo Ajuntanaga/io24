@@ -205,15 +205,17 @@ class GtkSourceContracts(unittest.TestCase):
         menu_start = source.index("    def _preset_menu(")
         menu_end = source.index("    def _filter_presets(", menu_start)
         menu = source[menu_start:menu_end]
-        self.assertIn("Send to Device Presets", menu)
+        self.assertIn("Save to device", menu)
         self.assertNotIn("Store Fat Channel on device", menu)
         self.assertIn("save_known_device_library_preset", source)
 
-    def test_physical_main_mute_is_presented_as_uc_read_only_state(self):
+    def test_physical_main_mute_is_a_concise_display_only_state(self):
         source = Path("io24gtk.py").read_text()
-        self.assertIn("Physical Main Mute (read-only)", source)
-        self.assertIn("Universal Control also exposes hardwareMute as display-only",
-                      source)
+        self.assertIn("Main output: On", source)
+        self.assertIn("Main output: Muted", source)
+        self.assertIn("Follows the interface's Mute button", source)
+        self.assertNotIn("Physical Main Mute (read-only)", source)
+        self.assertNotIn('self._set("mainmute"', source)
 
 
 if __name__ == "__main__":

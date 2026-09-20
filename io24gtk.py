@@ -210,8 +210,8 @@ def bus_meter_columns():
     """Mixer bus identity, compact visible label, and retained detail."""
     return (
         ("main", "Main", "Main output"),
-        ("mixa", "Mix A", "USB capture channels 3–4"),
-        ("mixb", "Mix B", "USB capture channels 5–6"),
+        ("mixa", "Mix A", "USB capture 3–4"),
+        ("mixb", "Mix B", "USB capture 5–6"),
     )
 
 
@@ -1578,8 +1578,7 @@ class VoiceFxRack(Canvas):
         self.win = win
         self.set_hexpand(True)
         self.set_tooltip_text(
-            "Click a VoiceFX unit to select it; double-click its faceplate "
-            "to toggle that model's own On parameter")
+            "Click to select; double-click to turn on or off")
         click = Gtk.GestureClick()
         click.connect("released", self._clicked)
         self.add_controller(click)
@@ -1867,12 +1866,12 @@ def fx_response(model, P, bins=34):
 # model 4 as a tuned feedback comb — identified from the binary alone before
 # the manual was read.
 MODEL_LABELS = {
-    "transformer": "TRANSFORMER   richness, depth, a hint of reverb",
-    "detuner": "DETUNER   artificially lowers the voice",
-    "vocoder": "VOCODER   talking synthesizer",
-    "ringmod": "RING MODULATOR   voice x oscillator",
-    "filters": "FILTERS   custom filter bank",
-    "delay": "DELAY   echo",
+    "transformer": "TRANSFORMER",
+    "detuner": "DETUNER",
+    "vocoder": "VOCODER",
+    "ringmod": "RING MODULATOR",
+    "filters": "FILTERS",
+    "delay": "DELAY",
 }
 
 MODEL_TITLES = [component["title"]
@@ -2294,8 +2293,8 @@ class EQCurve(ChannelBound, Canvas):
                 glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
             else:
                 polyline(sn, pts, pal(acc, 0.32), 1.4)
-            label(self, sn, "%s EQ — exact UC 4.7.2 response"
-                  % alt["model"].title(), 8, 20, pal(INK, 0.72), 8)
+            label(self, sn, "%s EQ" % alt["model"].title(),
+                  8, 20, pal(INK, 0.72), 8)
             if alt.get("error"):
                 label(self, sn, alt["error"][:64], 8, h / 2,
                       pal(RED, 0.75), 8)
@@ -3134,8 +3133,8 @@ class Win(Adw.ApplicationWindow):
         self.status.add_css_class("dim-label")
         header.pack_start(self.status)
         menu = Gio.Menu()
-        menu.append("Save Host snapshot…", "win.save")
-        menu.append("Load Host snapshot…", "win.load")
+        menu.append("Save snapshot…", "win.save")
+        menu.append("Load snapshot…", "win.load")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",
                                        menu_model=menu))
         for nm, fn in (("save", self.on_save), ("load", self.on_load)):
@@ -3151,7 +3150,7 @@ class Win(Adw.ApplicationWindow):
         # interface and attaches live when it is plugged in. The banner is
         # the one place that says which mode you are in.
         self.offline_banner = Adw.Banner(
-            title="io24 not connected — device controls are parked")
+            title="Revelator io24 not connected")
         self.offline_banner.set_revealed(self.ctl.dev is None)
         tv.add_top_bar(self.offline_banner)
         self._was_offline = self.ctl.dev is None
@@ -3193,14 +3192,14 @@ class Win(Adw.ApplicationWindow):
             self.offline_banner.set_title(
                 "io24 is connected but held by another program"
                 if err and "busy" in err else
-                "io24 not connected — device controls are parked")
+                "Revelator io24 not connected")
         if off != self._was_offline:
             self._was_offline = off
             self.offline_banner.set_revealed(off)
             if off:
-                self.say("io24 disconnected — controls parked until it returns")
+                self.say("Revelator io24 disconnected")
             else:
-                self.say("io24 connected — device controls are available")
+                self.say("Revelator io24 connected")
                 GLib.idle_add(self._sync_mix_widgets)
         return True
 
@@ -3513,10 +3512,7 @@ class Win(Adw.ApplicationWindow):
         self.gain_faders[ch] = self.live[-1]
         auto = Gtk.ToggleButton(label="Auto")
         auto.set_margin_start(6); auto.set_margin_end(6)
-        auto.set_tooltip_text(
-            "Automatic preamp gain: keeps this input near %.0f dBFS while you "
-            "play or speak. The gain fader is locked while it is on."
-            % AutoGain.TARGET_DB)
+        auto.set_tooltip_text("Set preamp gain automatically")
         auto.connect("toggled", self._autogain_toggled, ch)
         box.append(auto)
         self.autogain_toggles = getattr(self, "autogain_toggles", {})
@@ -3535,10 +3531,7 @@ class Win(Adw.ApplicationWindow):
                 self.mute_live = getattr(self, "mute_live", {})
                 self.mute_live[ch] = self.live[-1]
             elif param == "hpf":
-                t.set_tooltip_text(
-                    "Fixed 80 Hz preamp filter; separate from the adjustable "
-                    "Fat Channel HPF. The device does not report this switch "
-                    "back to Host.")
+                t.set_tooltip_text("80 Hz input filter")
                 self.hpf_live = getattr(self, "hpf_live", {})
                 self.hpf_live[ch] = self.live[-1]
             box.append(t)
@@ -3640,9 +3633,7 @@ class Win(Adw.ApplicationWindow):
         self.phones_source_row = Gtk.DropDown.new_from_strings(
             ["Main", "Mix A", "Mix B"])
         self.phones_source_row.set_selected(0)
-        self.phones_source_row.set_tooltip_text(
-            "Firmware write-only selector; the Host remembers the requested "
-            "source because the device does not return it in JaSt")
+        self.phones_source_row.set_tooltip_text("Choose the headphone mix")
         self.phones_source_row.connect(
             "notify::selected", self._phones_source_changed)
         source_row.append(source_label); source_row.append(self.phones_source_row)
@@ -3680,16 +3671,13 @@ class Win(Adw.ApplicationWindow):
         br.append(krow)
         box.append(br)
         self.mainmute_row = Gtk.Label(
-            label="Physical Main Mute (read-only): on", xalign=0.5)
+            label="Main output: On", xalign=0.5)
         self.mainmute_row.add_css_class("caption")
         self.mainmute_row.set_margin_top(4)
         self.mainmute_row.set_tooltip_text(
-            "Mirrors the physical MUTE button. "
-            "Universal Control also exposes hardwareMute as display-only; "
-            "firmware provides no writable "
-            "command for this latch. Output mute below is a separate bus mute.")
+            "Follows the interface's Mute button")
         box.append(self.mainmute_row)
-        for nm, p in (("Output mute (software)", "hpmute"), ("Stereo link", "link")):
+        for nm, p in (("Output mute", "hpmute"), ("Stereo link", "link")):
             t = Gtk.ToggleButton(label=nm)
             t.set_margin_start(10); t.set_margin_end(10)
             self.live.append(Live(t, lambda v, pp=p: self._set(pp, None, v),
@@ -3739,14 +3727,11 @@ class Win(Adw.ApplicationWindow):
         lk_lab = Gtk.Label(label="Stereo link")
         lk_lab.add_css_class("caption"); lk_lab.add_css_class("dim-label")
         self.link_row = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.link_row.set_tooltip_text(
-            "Links the inputs in the hardware (mono → stereo pair) and shows "
-            "one chain")
+        self.link_row.set_tooltip_text("Link the inputs as a stereo pair")
         self.link_row.connect("notify::active", self._link_changed)
         order = Gtk.DropDown.new_from_strings(["Compressor → EQ",
                                                "EQ → Compressor"])
-        order.set_tooltip_text("Chain order — the one reorder the hardware "
-                               "can do")
+        order.set_tooltip_text("Set compressor and EQ order")
         order.connect("notify::selected", self._order_changed)
         self.order_row = order
         suffix.append(lk_lab); suffix.append(self.link_row); suffix.append(order)
@@ -3890,8 +3875,7 @@ class Win(Adw.ApplicationWindow):
             model_slider(standard, bi, "s_gain", "Gain", 0, 28, 0.01, 0.0,
                          lambda v: "%+.2f dB" % v)
             model_switch(standard, bi, "s_knee", "Soft knee", active=True)
-            model_switch(standard, bi, "s_auto", "Auto mode",
-                         "Programme-dependent timing")
+            model_switch(standard, bi, "s_auto", "Auto mode")
             stack.add_named(standard, "standard")
 
             tube = Adw.PreferencesGroup()
@@ -3899,8 +3883,7 @@ class Win(Adw.ApplicationWindow):
                          0.0, lambda v: "%.1f" % v)
             model_slider(tube, bi, "t_gain", "Gain", 0, 100, 0.1, 40.0,
                          lambda v: "%.1f" % v)
-            model_switch(tube, bi, "t_limit", "Limit mode",
-                         "Steeper than Compress")
+            model_switch(tube, bi, "t_limit", "Limit mode")
             stack.add_named(tube, "tube")
 
             fet = Adw.PreferencesGroup()
@@ -3923,12 +3906,10 @@ class Win(Adw.ApplicationWindow):
             stack.set_visible_child_name("standard")
             ex.add_row(stack)
 
-            model_switch(ex, bi, "keyon", "Key filter",
-                         "UC side-chain filter")
+            model_switch(ex, bi, "keyon", "Key filter")
             model_slider(ex, bi, "keyf", "Key frequency", 40, 16000, 1,
                          d["key"], lambda v: "%.0f Hz" % v)
-            model_switch(ex, bi, "listen", "Key listen",
-                         "Hear the model's filtered detector signal")
+            model_switch(ex, bi, "listen", "Key listen")
             g.add(ex)
         return g
 
@@ -4160,9 +4141,9 @@ class Win(Adw.ApplicationWindow):
     def _insert_missing():
         """What this computer lacks for Multiband, or None."""
         if not io24_mbc.pipewire_available():
-            return "needs PipeWire (pipewire and pw-cli)"
+            return "Audio service unavailable"
         if io24_mbc.uc_comp_available() is None:
-            return "cannot build Host compressor: %s" % (
+            return "Compressor unavailable: %s" % (
                 io24_mbc.uc_comp_error() or "unknown compiler error")
         return None
 
@@ -4200,7 +4181,7 @@ class Win(Adw.ApplicationWindow):
                 sink = io24_mbc.find_io24_sink()
                 if not capture or not sink:
                     insert.stop()
-                    waiting = "Waiting for the io24's audio in PipeWire"
+                    waiting = "Waiting for audio"
                 else:
                     states = {ch: self._mbc_snapshot_state(ch)
                               for ch in wanted}
@@ -4298,11 +4279,9 @@ class Win(Adw.ApplicationWindow):
         wanted = self._insert_wanted()
         for ch, row in getattr(self, "mbc_status", {}).items():
             if ch in running:
-                text = ("On · after the limiter · records as “%s”"
-                        " · returns on USB playback 1-2"
-                        % io24_mbc.INSERT_SOURCE_DESC)
+                text = "On"
             elif ch in wanted:
-                text = waiting or "Starting"
+                text = "Waiting for audio" if waiting else "Starting"
             else:
                 text = "Off"
             row.set_subtitle(text)
@@ -4348,14 +4327,11 @@ class Win(Adw.ApplicationWindow):
         e.add(curve_row)
         W["eq_model"] = Adw.ComboRow(
             title="EQ model",
-            subtitle="UC 4.7.2 Standard, Passive, and Vintage component models",
             model=Gtk.StringList.new(["Standard", "Passive", "Vintage"]))
         W["eq_model"].connect(
             "notify::selected", self._eq_model_changed, ch)
         e.add(W["eq_model"])
-        W["eq_on"] = Adw.SwitchRow(
-            title="EQ",
-            subtitle="Independent power for the selected equaliser model")
+        W["eq_on"] = Adw.SwitchRow(title="EQ")
         W["eq_on"].connect("notify::active", self._eq_power_changed, ch)
         e.add(W["eq_on"])
         bb = Gtk.Box(halign=Gtk.Align.CENTER, margin_top=8, margin_bottom=4)
@@ -4374,9 +4350,7 @@ class Win(Adw.ApplicationWindow):
         W["band_on"].connect("notify::active", self._band_power_changed, ch)
         e.add(W["band_on"])
         W["_standard_eq_rows"].append(W["band_on"])
-        W["shelf"] = Adw.SwitchRow(
-            title="Low shelf",
-            subtitle="Off selects the XML's parametric mode")
+        W["shelf"] = Adw.SwitchRow(title="Low shelf")
         W["shelf"].connect("notify::active", self._shelf_changed, ch)
         e.add(W["shelf"])
         W["_standard_eq_rows"].append(W["shelf"])
@@ -4385,8 +4359,8 @@ class Win(Adw.ApplicationWindow):
                  lambda v: "%.0f Hz" % v, None),
                 ("gain", "Gain", -15, 15, 0.1, 0,
                  lambda v: "%+.1f dB" % v, None),
-                ("q", "Q", 0.1, 10, 0.05, 0.6, lambda v: "%.2f" % v,
-                 "Above 1 a shelf resonates and overshoots")):
+                ("q", "Q", 0.1, 10, 0.05, 0.6,
+                 lambda v: "%.2f" % v, None)):
             r, W[key] = self._srow(title, lo, hi, st, dv, fmt,
                                    lambda v, k=key, c=ch: self._band_set(k, v, c),
                                    sub)
@@ -4417,8 +4391,7 @@ class Win(Adw.ApplicationWindow):
         W["p_bfreq"] = row; e.add(row); W["_passive_eq_rows"].append(row)
         for key, title, default, subtitle in (
                 ("p_mboost", "High Boost", 1.5, None),
-                ("p_bbwidth", "High Bandwidth", 10.0,
-                 "Broad at 10, narrow at 0")):
+                ("p_bbwidth", "High Bandwidth", 10.0, None)):
             field = key[2:]
             row, W[key] = self._srow(
                 title, 0, 10, 0.1, default, lambda v: "%.1f / 10" % v,
@@ -4451,7 +4424,7 @@ class Win(Adw.ApplicationWindow):
             ("lowgain", "Low Gain", 0.0, None),
             ("lowmidgain", "Low-Mid Gain", 0.0, None),
             ("himidgain", "Hi-Mid Gain", 0.0, None),
-            ("higain", "High Gain", 0.0, "Fixed high-shelf frequency"),
+            ("higain", "High Gain", 0.0, None),
         )
         vintage_switches = {
             "lowgain": ("lowfreq", "Low Frequency",
@@ -4492,14 +4465,13 @@ class Win(Adw.ApplicationWindow):
                 ("gth", "Threshold", -84, 0, 0.01, -40.0,
                  lambda v: "%.2f dB" % v, None),
                 ("grange", "Range", -84, 0, 0.01, -60.0,
-                 lambda v: "%.2f dB" % v, "How far down it closes"),
+                 lambda v: "%.2f dB" % v, None),
                 ("gatk", "Attack", 0.00002, 0.5, 0.0001, 0.005,
                  lambda v: "%.1f ms" % (v * 1000), None),
                 ("grel", "Release", 0.05, 2.0, 0.001, 0.3,
                  lambda v: "%.0f ms" % (v * 1000), None),
                 ("gkey", "Key filter", 40, 16000, 1, 40,
-                 lambda v: ("off" if v <= 41 else "%.0f Hz" % v),
-                 "40 Hz = off")):
+                 lambda v: ("off" if v <= 41 else "%.0f Hz" % v), None)):
             r, W[key] = self._srow(title, lo, hi, st, dv, fmt,
                                    lambda v, c=ch: self._dyn_push("gate", c), sub)
             gt.add(r)
@@ -4507,8 +4479,7 @@ class Win(Adw.ApplicationWindow):
         W["gklisten"].connect("notify::active",
                               lambda *_a, c=ch: self._dyn_push("gate", c))
         gt.add(W["gklisten"])
-        W["gexp"] = Adw.SwitchRow(title="Expander mode",
-                                  subtitle="Soft, not a hard gate")
+        W["gexp"] = Adw.SwitchRow(title="Expander mode")
         W["gexp"].set_active(True)
         W["gexp"].connect("notify::active",
                           lambda *_a, c=ch: self._dyn_push("gate", c))
@@ -4553,7 +4524,7 @@ class Win(Adw.ApplicationWindow):
             standard.add(r)
         for key, title, sub, default in (
                 ("knee", "Soft knee", "", False),
-                ("auto", "Auto mode", "Programme-dependent timing", False)):
+                ("auto", "Auto mode", "", False)):
             W[key] = Adw.SwitchRow(title=title, subtitle=sub)
             W[key].set_active(default)
             W[key].connect("notify::active",
@@ -4571,8 +4542,7 @@ class Win(Adw.ApplicationWindow):
                 title, lo, hi, st, dv, fmt,
                 lambda v, c=ch: self._dyn_push("comp", c))
             tube.add(r)
-        W["climit"] = Adw.SwitchRow(
-            title="Limit mode", subtitle="Steeper than Compress")
+        W["climit"] = Adw.SwitchRow(title="Limit mode")
         W["climit"].connect("notify::active",
                             lambda *_a, c=ch: self._dyn_push("comp", c))
         tube.add(W["climit"])
@@ -4607,12 +4577,10 @@ class Win(Adw.ApplicationWindow):
         r, W["ckey"] = self._srow(
             "Key filter", 40, 16000, 1, 40,
             lambda v: ("off" if v <= 41 else "%.0f Hz" % v),
-            lambda v, c=ch: self._dyn_push("comp", c),
-            "Side-chain band; 40 Hz = off")
+            lambda v, c=ch: self._dyn_push("comp", c))
         W["ckey_row"] = r
         d.add(r)
-        W["cklisten"] = Adw.SwitchRow(
-            title="Key listen", subtitle="Hear the side-chain")
+        W["cklisten"] = Adw.SwitchRow(title="Key listen")
         W["cklisten"].connect("notify::active",
                               lambda *_a, c=ch: self._dyn_push("comp", c))
         d.add(W["cklisten"])
@@ -4642,7 +4610,6 @@ class Win(Adw.ApplicationWindow):
         hp = Adw.PreferencesGroup(title="HPF")
         W["hpf_mode"] = Adw.ComboRow(
             title="HPF",
-            subtitle="Digital filter; independent of the 80 Hz preamp switch",
             model=Gtk.StringList.new(
                 ["Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
         W["hpf_mode"].set_selected(0)
@@ -4652,8 +4619,7 @@ class Win(Adw.ApplicationWindow):
         r, W["hpf"] = self._srow(
             "Exact cutoff", 24, 1000, 0.5, 24,
             lambda v: ("bypassed" if v <= 25 else "%.0f Hz" % v),
-            lambda v, c=ch: self.set_hpf(c, v),
-            "Advanced 24 Hz–1 kHz; Host-written value, device readback unavailable")
+            lambda v, c=ch: self.set_hpf(c, v))
         W["hpf"].set_sensitive(False)
         hp.add(r)
 
@@ -4715,9 +4681,7 @@ class Win(Adw.ApplicationWindow):
         g.add(self.rev_visual)
 
         self.rev_on = Adw.SwitchRow(
-            title="Shared reverb engine",
-            subtitle="Needs a processing channel (Device page) and an FX "
-                     "return; device readback unavailable")
+            title="On")
         self.rev_on.connect(
             "notify::active",
             lambda *_a: (self._push_reverb(establish_path=True),
@@ -4730,11 +4694,8 @@ class Win(Adw.ApplicationWindow):
         # implying the unit has a spring tank in it. Wet mix stays independent so
         # switching character does not change how much you hear.
         self.rev_type = Adw.ComboRow(
-            title="Host approximation",
+            title="Character",
             model=Gtk.StringList.new([n for n, _ in self.REVERB_TYPES]))
-        self.rev_type.set_subtitle(
-            "Parameter combinations over one reverb; not separate device algorithms")
-        self.rev_type.set_subtitle_lines(2)     # wrap, do not crowd out the value
         self.rev_type.connect("notify::selected", self._reverb_type_changed)
         g.add(self.rev_type)
 
@@ -4744,9 +4705,7 @@ class Win(Adw.ApplicationWindow):
         # static digital tail is made to breathe; on a spring it is most of the
         # character. Costs one small control write per step, well under the rate
         # the mixer sustains.
-        self.rev_mod = Adw.SwitchRow(
-            title="Movement",
-            subtitle="Host-driven room-size drift, not a device reverb mode")
+        self.rev_mod = Adw.SwitchRow(title="Movement")
         self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
         g.add(self.rev_mod)
         r, self.s_rmoddep = self._srow(
@@ -4765,15 +4724,12 @@ class Win(Adw.ApplicationWindow):
         r, self.s_rmix = self._srow("Reverb return blend", 0, 1, 0.005, 1.0,
                                     lambda v: "%.0f %%" % (v * 100),
                                     lambda v: (self._reverb_touched(), self._push_reverb(),
-                                              self._repaint_reverb()),
-                                    "100 % makes the FX return wet; it does not mute "
-                                    "the channel's direct signal in Main")
+                                              self._repaint_reverb()))
         g.add(r)
         r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
                                    lambda v: ("off" if v < 1 else "%.0f Hz" % v),
-                                   lambda v: (self._reverb_touched(), self._push_reverb(),
-                                              self._repaint_reverb()),
-                                   "Keeps low end out of the tail")
+                                    lambda v: (self._reverb_touched(), self._push_reverb(),
+                                              self._repaint_reverb()))
         g.add(r)
         r, self.s_rpre = self._srow("Pre-delay", 0.0001, 0.25, 0.0005, 0.02,
                                     lambda v: "%.0f ms" % (v * 1000),
@@ -4790,9 +4746,8 @@ class Win(Adw.ApplicationWindow):
             r, sc = self._srow("FX return → %s" % bname, -60, 10, 0.1, 0.0,
                                lambda v: "%.1f dB" % v,
                                lambda v, b=bus: self.ctl.submit(
-                                   lambda dev: dev.set_mix_db("fxreturn/ch1", v, bus=b)),
-                               "Carries the reverb and the FX engine; both are "
-                               "inaudible in a bus this return does not reach")
+                                   lambda dev: dev.set_mix_db(
+                                       "fxreturn/ch1", v, bus=b)))
             self.rev_return_controls[bus] = sc
             sg.add(r)
         page.add(sg)
@@ -4802,46 +4757,33 @@ class Win(Adw.ApplicationWindow):
         # Inputs 1/2 feed it after the Fat Channel, USB playback 5-6 carries
         # the return, and that lane is reserved for physical Main 1-2 only
         # while the switch is on.
-        spring = Adw.PreferencesGroup(title="Host spring reverb")
+        spring = Adw.PreferencesGroup(title="Spring reverb")
         self.spring_on = Adw.SwitchRow(
-            title="Spring tank",
-            subtitle="Off · wet return is reserved for Main 1–2 only")
-        self.spring_on.set_subtitle_lines(2)
+            title="On", subtitle="Off")
         self.spring_on.connect("notify::active", self._spring_toggled)
         spring.add(self.spring_on)
 
         lane = Adw.ActionRow(
-            title="Output: Main 1–2",
-            subtitle="USB playback 5–6 is the internal wet-return lane; "
-                     "normal playback 1–2 stays untouched. Disconnect any "
-                     "Main-to-input test loopback before enabling.")
-        lane.set_subtitle_lines(3)
+            title="Output", subtitle="Main 1–2")
         spring.add(lane)
 
         defaults = io24_spring.default_state()
         self.spring_controls = {}
         for key, title, lower, upper, step, formatter, note in (
                 ("input1_db", "Input 1 send", -60.0, 0.0, 0.1,
-                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v,
-                 "Post-Fat Channel send into the spring"),
+                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v, None),
                 ("input2_db", "Input 2 send", -60.0, 0.0, 0.1,
-                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v,
-                 "Post-Fat Channel send into the spring"),
+                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v, None),
                 ("dwell", "Dwell", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100),
-                 "Tank feedback and tail length"),
+                 lambda v: "%.0f %%" % (v * 100), None),
                 ("tone", "Tone", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100),
-                 "Loss in the springs: dark to bright"),
+                 lambda v: "%.0f %%" % (v * 100), None),
                 ("drip", "Drip", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100),
-                 "Transient splash and dispersion"),
+                 lambda v: "%.0f %%" % (v * 100), None),
                 ("width", "Stereo width", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100),
-                 "Zero is mono; 100% keeps both tank paths"),
+                 lambda v: "%.0f %%" % (v * 100), None),
                 ("predelay_s", "Pre-delay", 0.0, 0.1, 0.0005,
-                 lambda v: "%.0f ms" % (v * 1000),
-                 "Delay before the tank is struck")):
+                 lambda v: "%.0f ms" % (v * 1000), None)):
             row, control = self._srow(
                 title, lower, upper, step, defaults[key], formatter,
                 lambda _value: self._spring_controls_changed(), note)
@@ -4852,8 +4794,7 @@ class Win(Adw.ApplicationWindow):
             "Spring return → Main 1–2", -60.0, 10.0, 0.1,
             io24_spring.DEFAULT_RETURN_DB,
             lambda v: "%.1f dB" % v,
-            self._spring_return_changed,
-            "The return is never assigned to Mix A or Mix B")
+            self._spring_return_changed)
         self.spring_return_row = row
         self.spring_return_control.set_sensitive(False)
         spring.add(row)
@@ -4862,13 +4803,11 @@ class Win(Adw.ApplicationWindow):
         # Block 201 is one settings object over two structural input lanes.
         # Configure it once; processingChannel is separate routing state and
         # must not be changed by an FX edit.
-        ig = Adw.PreferencesGroup(title="FX")
+        ig = Adw.PreferencesGroup(title="Voice FX")
 
         self.fx_visual = FXVisual("transformer", self._fx_live_params)
-        self.fx_model = Adw.ComboRow(title="FX Model",
+        self.fx_model = Adw.ComboRow(title="Model",
                                      model=Gtk.StringList.new(MODEL_TITLES))
-        self.fx_model.set_tooltip_text(
-            "UC voicefxopt/fxmodel selects the one mutable VoiceFX component")
         self.fx_model.connect("notify::selected", lambda *_a: self._fx_model_changed())
 
         # Each mutable model owns its own storable `on` parameter as well as its
@@ -4883,33 +4822,23 @@ class Win(Adw.ApplicationWindow):
             self.fx_params[key] = {}
             for parameter in component["parameters"]:
                 builder = parameter.get("builder")
-                route = "UC %s.%s" % (component["paramlist"], parameter["id"])
-                if builder is not None:
-                    route += " → %s" % builder
 
                 if builder == "on":
-                    power = Adw.SwitchRow(
-                        title=parameter["name"],
-                        subtitle="This component's own storable on/off state")
+                    power = Adw.SwitchRow(title=parameter["name"])
                     power.set_active(bool(parameter.get("default", False)))
-                    power.set_tooltip_text(route)
                     power.connect("notify::active", self._fx_power_changed)
                     self.fx_power[key] = _SwitchValue(power)
                     grp.add(power)
                 elif builder is None:
-                    row = Adw.ActionRow(
-                        title=parameter["name"],
-                        subtitle="Read-only in UC; block-201 readback unavailable")
-                    value = Gtk.Label(label="Unavailable")
+                    row = Adw.ActionRow(title=parameter["name"])
+                    value = Gtk.Label(label="—")
                     value.add_css_class("dim-label")
                     row.add_suffix(value)
-                    row.set_tooltip_text(route)
                     row.set_sensitive(False)
                     grp.add(row)
                 elif parameter["type"] == "toggle":
                     control = Adw.SwitchRow(title=parameter["name"])
                     control.set_active(bool(parameter.get("default", False)))
-                    control.set_tooltip_text(route)
                     control.connect("notify::active", lambda *_a: self._push_fx())
                     self.fx_params[key][builder] = _SwitchValue(control)
                     grp.add(control)
@@ -4919,7 +4848,6 @@ class Win(Adw.ApplicationWindow):
                         title=parameter["name"],
                         model=Gtk.StringList.new(list(choices)))
                     control.set_selected(int(parameter["default"]))
-                    control.set_tooltip_text(route)
                     control.connect("notify::selected", lambda *_a: self._push_fx())
                     self.fx_params[key][builder] = _ComboValue(control, 0, 1)
                     grp.add(control)
@@ -4932,7 +4860,6 @@ class Win(Adw.ApplicationWindow):
                         step, parameter["default"], formatter,
                         lambda _value: self._queue_fx_push(),
                         curve=parameter.get("curve"), mid=parameter.get("mid"))
-                    row.set_tooltip_text(route)
                     self.fx_params[key][builder] = control
                     grp.add(row)
             self.fx_param_stack.add_named(grp, key)
@@ -5263,12 +5190,11 @@ class Win(Adw.ApplicationWindow):
             subtitle = detail
         elif wanted and chain is not None and chain.running and \
                 self._spring_routing is not None:
-            subtitle = ("On · wet Input 1/2 spring → physical Main 1–2 "
-                        "(USB playback 5–6 return)")
+            subtitle = "On"
         elif wanted:
-            subtitle = "Starting · reserving the wet return for Main 1–2"
+            subtitle = "Starting"
         else:
-            subtitle = "Off · wet return is reserved for Main 1–2 only"
+            subtitle = "Off"
         row.set_subtitle(subtitle)
         control = getattr(self, "spring_return_control", None)
         if control is not None:
@@ -5288,7 +5214,7 @@ class Win(Adw.ApplicationWindow):
         state = self._spring_state()
         if chain is not None and chain.running and state is not None and \
                 not chain.set_state(state):
-            self.say("Spring control did not reach PipeWire")
+            self.say("Spring reverb update failed")
 
     def _spring_return_changed(self, value):
         switch = getattr(self, "spring_on", None)
@@ -5309,7 +5235,7 @@ class Win(Adw.ApplicationWindow):
                     dev, self._spring_routing)
                 message = None
             except Exception as error:
-                message = "Spring return could not reach Main: %s" % error
+                message = "Spring reverb output failed: %s" % error
             finally:
                 self._spring_route_pending = False
             GLib.idle_add(self._sync_mix_widgets)
@@ -5330,7 +5256,7 @@ class Win(Adw.ApplicationWindow):
                     dev, self._spring_routing)
                 message = None
             except Exception as error:
-                message = "Spring return routes could not be restored: %s" % error
+                message = "Spring reverb cleanup failed: %s" % error
             finally:
                 self._spring_route_pending = False
             GLib.idle_add(self._sync_mix_widgets)
@@ -5370,13 +5296,13 @@ class Win(Adw.ApplicationWindow):
             return
         missing = io24_spring.available()
         if missing:
-            self._spring_give_up("Host spring %s" % missing)
+            self._spring_give_up("Spring reverb %s" % missing)
             return
         capture = io24_mbc.find_io24_capture_source()
         playback = io24_mbc.find_io24_sink()
         if not capture or not playback:
             chain.stop()
-            self._spring_show("Waiting for the io24 audio profile in PipeWire")
+            self._spring_show("Waiting for audio")
             return
         state = self._spring_state()
         try:
@@ -5384,11 +5310,11 @@ class Win(Adw.ApplicationWindow):
                 chain.stop()
             started = chain.start(state, capture, playback)
         except (OSError, ValueError, io24_spring.PluginBuildError) as error:
-            self._spring_give_up("Host spring did not start: %s" % error)
+            self._spring_give_up("Spring reverb did not start: %s" % error)
             return
         if not started:
             self._spring_give_up(
-                "Host spring did not start: %s" %
+                "Spring reverb did not start: %s" %
                 (chain.last_error or "unknown PipeWire error"))
             return
         self._spring_route_main()
@@ -5419,9 +5345,9 @@ class Win(Adw.ApplicationWindow):
         try:
             state = io24_spring.validate_state(state)
         except (TypeError, ValueError) as error:
-            return "Host spring was not restored: %s" % error
+            return "Spring reverb was not restored: %s" % error
         if not getattr(self, "spring_controls", None):
-            return "Host spring state retained; controls unavailable here"
+            return "Spring reverb controls are unavailable"
         if self._spring_routing is None and state["routing"] is not None:
             self._spring_routing = state["routing"]
         prior_adopt, prior_spring = self._adopt_mute, self._spring_mute
@@ -5435,7 +5361,7 @@ class Win(Adw.ApplicationWindow):
             self._spring_mute = prior_spring
             self._adopt_mute = prior_adopt
         self._spring_reconcile()
-        return "Host spring restored%s" % (
+        return "Spring reverb restored%s" % (
             " on Main 1–2" if state["enabled"] else " switched off")
 
     def _spring_shutdown(self):
@@ -5446,8 +5372,7 @@ class Win(Adw.ApplicationWindow):
             getattr(self, "ctl", None), self._spring_routing)
 
     def _mark_processing_mix_known(self, channel):
-        self.processing_mix_rows[channel].set_subtitle(
-            "Host-known exact value; device readback reports only bypass/nonzero")
+        self.processing_mix_rows[channel].set_subtitle("")
 
     def _set_processing_mix(self, channel, value):
         """Set the unified channel processing scalar, never an isolated send.
@@ -5481,14 +5406,12 @@ class Win(Adw.ApplicationWindow):
         self.processing_mix_rows = {}
         for ch in (1, 2):
             bypass = Adw.SwitchRow(
-                title="Channel %d bypass" % ch,
-                subtitle="Skips this channel's EQ, dynamics and effects")
+                title="Channel %d bypass" % ch)
             row, amount = self._srow(
                 "Channel %d DSP amount" % ch, ProcessingMix.AMOUNT_MIN, 1,
                 0.005, 1.0, ProcessingMix.label,
                 lambda v, c=ch: self._set_processing_amount(c, v),
-                "Exact value unknown. Move the slider to establish an exact "
-                "Host value")
+                "Move to set")
             self.processing_mix_controls[ch] = ProcessingMix(amount, bypass)
             self.processing_mix_rows[ch] = row
             bypass.connect(
@@ -5610,14 +5533,14 @@ class Win(Adw.ApplicationWindow):
             t = Gtk.Label(label=bname)
             t.add_css_class("heading")
             head.append(t)
-            sub = {"mixa": "→ USB 3-4", "mixb": "→ USB 5-6"}.get(bus)
+            sub = {"mixa": "USB 3–4", "mixb": "USB 5–6"}.get(bus)
             if sub:
                 head.append(cell_label(sub, xal=0.5))
             head.set_halign(Gtk.Align.CENTER)
             grid.attach(head, 1 + col, 0, 1, 1)
 
         # bus master row: one offset fader per column, mirror on the mixes
-        grid.attach(cell_label("Bus master", ("caption",)), 0, 1, 1, 1)
+        grid.attach(cell_label("Master", ("caption",)), 0, 1, 1, 1)
         for col, (bus, bname) in enumerate(self.BUSES):
             cellbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
             msc = fader(-40, 10, 0.1, vertical=False)
@@ -5637,19 +5560,14 @@ class Win(Adw.ApplicationWindow):
                 icon_name="audio-volume-muted-symbolic",
                 valign=Gtk.Align.CENTER)
             bus_mute.add_css_class("flat")
-            bus_mute.set_tooltip_text(
-                "Mute this complete output bus while retaining every source "
-                "level and assignment")
+            bus_mute.set_tooltip_text("Mute output")
             bus_mute.connect("toggled", self._bus_mute_toggled, bus)
             cellbox.append(bus_mute)
             if bus != "main":
                 mir = Gtk.ToggleButton(icon_name="view-refresh-symbolic",
                                        valign=Gtk.Align.CENTER)
                 mir.add_css_class("flat")
-                mir.set_tooltip_text(
-                    "Mirror Main: while active, this bus follows Main levels, "
-                    "assignments, and stereo-pair balance; its own mix is "
-                    "retained and returns when the latch is cleared")
+                mir.set_tooltip_text("Follow Main")
                 mir.connect("toggled", self._mirror_main_toggled, bus)
                 cellbox.append(mir)
                 self.mirror_widgets[bus] = mir
@@ -5671,9 +5589,7 @@ class Win(Adw.ApplicationWindow):
                     icon_name="audio-volume-muted-symbolic",
                     valign=Gtk.Align.CENTER)
                 source_mute.add_css_class("flat")
-                source_mute.set_tooltip_text(
-                    "Mute this UC source in Main, Mix A, and Mix B while "
-                    "retaining its faders")
+                source_mute.set_tooltip_text("Mute source")
                 source_mute.connect(
                     "toggled", self._source_mute_toggled, src)
                 source_head.append(source_mute)
@@ -5701,9 +5617,7 @@ class Win(Adw.ApplicationWindow):
                 off = Gtk.ToggleButton(icon_name="audio-volume-muted-symbolic",
                                        valign=Gtk.Align.CENTER)
                 off.add_css_class("flat")
-                off.set_tooltip_text(
-                    "Take this source out of the bus (UC calls it assign — the "
-                    "fader keeps its position while unassigned)")
+                off.set_tooltip_text("Remove from mix")
 
                 def cut(b_, s2=src, b=bus, sl=sc):
                     on = not b_.get_active()
@@ -5714,9 +5628,7 @@ class Win(Adw.ApplicationWindow):
                 off.connect("toggled", cut)
                 solo = Gtk.ToggleButton(label="S", valign=Gtk.Align.CENTER)
                 solo.add_css_class("flat")
-                solo.set_tooltip_text(
-                    "Solo in this bus: the bus's other sources go silent until "
-                    "released, then come back at the levels they had")
+                solo.set_tooltip_text("Solo in this mix")
                 solo.connect("toggled", self._solo_toggled, src, bus)
                 cellbox.append(sc); cellbox.append(lbl); cellbox.append(off)
                 cellbox.append(solo)
@@ -5797,13 +5709,9 @@ class Win(Adw.ApplicationWindow):
                 sc.set_sensitive(assigned and not mirrored)
                 off.set_sensitive(not mirrored)
                 if known:
-                    off.set_tooltip_text(
-                        "Take this source out of the bus; its fader position "
-                        "is retained")
+                    off.set_tooltip_text("Remove from mix")
                 else:
-                    off.set_tooltip_text(
-                        "No Host level has been sent on this connection; "
-                        "unmute to create a 0 dB send")
+                    off.set_tooltip_text("Add to mix at 0 dB")
             for bus, msc in self.bus_master_widgets.items():
                 msc.set_value(max(-40.0, min(10.0, dev.bus_master(bus))))
             for source, mute in getattr(
@@ -5985,19 +5893,15 @@ class Win(Adw.ApplicationWindow):
             self._adopt_recalled_slot(ch, slot)
         self._follow_recall_processing(ch, report)
         label = name or intent["name"]
-        enabled = ("; the channel was bypassed, so processing was enabled"
+        enabled = (" · Processing enabled"
                    if report.get("enable_asserted") else "")
         if report.get("host_applied"):
-            self.say("Loaded %s on Channel %d from the Host-known device "
-                     "block; Fat Channel and VoiceFX state were sent by the "
-                     "Host%s" % (label, ch, enabled))
+            self.say("Loaded %s on Input %d%s" % (label, ch, enabled))
         elif report.get("host_apply_error"):
-            self.say("Selected %s on Channel %d%s, but the Host-assisted load "
-                     "failed: %s" %
-                     (label, ch, enabled, report["host_apply_error"]))
+            self.say("Could not load %s on Input %d: %s" %
+                     (label, ch, report["host_apply_error"]))
         else:
-            self.say("Selected %s on Channel %d%s; selection does not reapply "
-                     "the unreadable stored body" % (label, ch, enabled))
+            self.say("Selected %s on Input %d%s" % (label, ch, enabled))
         return False
 
     def _adopt_recalled_slot(self, ch, slot):
@@ -6026,9 +5930,7 @@ class Win(Adw.ApplicationWindow):
                      % error)
             return False
         if view is not None:
-            self.say("Channel %d is running an editable %s EQ with its exact "
-                     "UC 4.7.2 controls and response curve"
-                     % (ch, view["model"].title()))
+            self.say("Input %d · %s EQ" % (ch, view["model"].title()))
         return True
 
     # ------------------------------------------------- alternate-model EQ
@@ -6242,7 +6144,7 @@ class Win(Adw.ApplicationWindow):
             self.rate_row.set_selected(rates.index(self._selected_rate))
         self.rate_row.connect("notify::selected", self._rate_changed)
         g.add(self.rate_row)
-        self.rate_note = Adw.ActionRow(title="Allowed by PipeWire")
+        self.rate_note = Adw.ActionRow(title="Available rates")
         self.rate_note_lbl = Gtk.Label(label="…")
         self.rate_note_lbl.add_css_class("dim-label")
         self.rate_note.add_suffix(self.rate_note_lbl)
@@ -6253,13 +6155,13 @@ class Win(Adw.ApplicationWindow):
             title="Buffer size",)
         self._quanta = list(SUPPORTED_QUANTA)
         self.quantum_row = Adw.ComboRow(
-            title="Quantum",
+            title="Size",
             model=Gtk.StringList.new(["%d frames" % q for q in self._quanta]))
         self.quantum_row.set_selected(
             self._quanta.index(self._selected_quantum))
         self.quantum_row.connect("notify::selected", self._quantum_changed)
         b.add(self.quantum_row)
-        self.latency_row = Adw.ActionRow(title="Resulting latency")
+        self.latency_row = Adw.ActionRow(title="Latency")
         self.latency_lbl = Gtk.Label(label="…")
         self.latency_lbl.add_css_class("numeric")
         self.latency_lbl.add_css_class("dim-label")
@@ -6276,10 +6178,7 @@ class Win(Adw.ApplicationWindow):
         self._delay_buses = [("off", "Off"), ("mixa", "Mix A"), ("mixb", "Mix B")]
         self.delay_bus_row = Adw.ComboRow(
             title="Apply to",
-            subtitle="Mix A and Mix B are measured; the analog outputs cannot "
-                     "be checked without a loopback cable",
             model=Gtk.StringList.new([t for _, t in self._delay_buses]))
-        self.delay_bus_row.set_subtitle_lines(2)   # wrap, don't crowd the value
         self.delay_bus_row.connect("notify::selected", self._delay_bus_changed)
         od.add(self.delay_bus_row)
 
@@ -6317,12 +6216,7 @@ class Win(Adw.ApplicationWindow):
         page.add(self._preset_button_group())
 
         mute_group = Adw.PreferencesGroup(title="Mute behavior")
-        self.mute_sync_row = Adw.SwitchRow(
-            title="Channel Mute Sync",
-            subtitle="UC setting: channel Mute follows Main, Mix A, and Mix B. "
-                     "Write-only; this switch shows the Host setting, not "
-                     "device readback")
-        self.mute_sync_row.set_subtitle_lines(2)
+        self.mute_sync_row = Adw.SwitchRow(title="Channel Mute Sync")
         self.mute_sync_row.connect(
             "notify::active", self._mute_mode_changed)
         mute_group.add(self.mute_sync_row)
@@ -6346,8 +6240,7 @@ class Win(Adw.ApplicationWindow):
         for t, v in (("Model", "Revelator io24"),
                      ("USB ID", "194f:0422"),
                      ("Firmware", self._bcd_device()),
-                     ("Serial", self._usb_serial()),
-                     ("Control protocol", "paesdk over vendor interface 5")):
+                     ("Serial", self._usb_serial())):
             row = Adw.ActionRow(title=t)
             l = Gtk.Label(label=v)
             l.add_css_class("dim-label")
@@ -6355,10 +6248,7 @@ class Win(Adw.ApplicationWindow):
             idg.add(row)
         page.add(idg)
 
-        host_names = Adw.PreferencesGroup(title="Host component names")
-        host_names.set_description(
-            "Stored with Linux Host presets and UC scenes. The io24 has no "
-            "wire command for writing these labels to firmware.")
+        host_names = Adw.PreferencesGroup(title="Names")
         stored_names = {}
         for call in io24._load_shadow().values():
             if isinstance(call, dict) and \
@@ -6392,7 +6282,7 @@ class Win(Adw.ApplicationWindow):
         # group is created hidden and revealed only if the device answers, so a
         # device that returns nothing simply shows no section.
         self._names_group = Adw.PreferencesGroup(
-            title="Device-reported channel names (read-only)")
+            title="Device names")
         self._names_group.set_visible(False)
         page.add(self._names_group)
         self.ctl.submit(
@@ -6406,7 +6296,7 @@ class Win(Adw.ApplicationWindow):
     def _component_name_applied(self, row, component):
         name = row.get_text().strip()
         self.ctl.submit(lambda dev: dev.set_component_name(component, name))
-        self.say("Saved %s name in the Linux Host" % row.get_title())
+        self.say("Saved %s name" % row.get_title())
 
     def _fill_channel_names(self):
         """Populate the channel-name group once the worker thread has read it.
@@ -6421,7 +6311,7 @@ class Win(Adw.ApplicationWindow):
             self._names_tries += 1
             return self._names_tries < 10
         for i, n in sorted(names.items()):
-            self._names_group.add(Adw.ActionRow(title=n, subtitle="index %d" % i))
+            self._names_group.add(Adw.ActionRow(title=n))
         self._names_group.set_visible(True)
         return False
 
@@ -6453,8 +6343,7 @@ class Win(Adw.ApplicationWindow):
         want = self._rates[row.get_selected()]
         allowed = pw_settings().get("clock.allowed-rates", "")
         if str(want) not in allowed:
-            self.say("PipeWire only allows %s — see the note below the selector"
-                     % allowed.strip("[] "))
+            self.say("Available rates: %s" % allowed.strip("[] "))
             return
         ok, msg = pw_set("clock.force-rate", want)
         if not ok:
@@ -6520,7 +6409,7 @@ class Win(Adw.ApplicationWindow):
         rate_ok = True
         if available and rate not in available:
             rate_ok = False
-            self.say("Saved rate %d Hz is not allowed by PipeWire" % rate)
+            self.say("Saved rate %d Hz is unavailable" % rate)
         else:
             try:
                 forced_rate = int(settings.get("clock.force-rate", "0") or 0)
@@ -6598,9 +6487,7 @@ class Win(Adw.ApplicationWindow):
                                     bb["gain"], bb["q"], fs=fs))
         self._push_reverb()
         self._push_fx()
-        self.say("Sample rate is now %.4g kHz; EQ, HPF, dynamics, reverb and "
-                 "Voice FX coefficients were recomputed and re-sent"
-                 % (self._fs / 1000.0))
+        self.say("Sample rate changed to %.4g kHz" % (self._fs / 1000.0))
         return True
 
     def _refresh_device_page(self):
@@ -6647,9 +6534,7 @@ class Win(Adw.ApplicationWindow):
             self.rate_note_lbl.set_text(
                 "%s  (missing %s)" % (", ".join(str(r) for r in sorted(available)),
                                       ", ".join(str(r) for r in missing)))
-            self.rate_note.set_subtitle(
-                "PipeWire is limiting the choice. Widen it in "
-                "~/.config/pipewire/pipewire.conf.d/ with clock.allowed-rates.")
+            self.rate_note.set_subtitle("")
         else:
             self.rate_note_lbl.set_text(
                 ", ".join(str(r) for r in sorted(available)) if available else "any")
@@ -6678,15 +6563,12 @@ class Win(Adw.ApplicationWindow):
 
         self.factory_target = Adw.ComboRow(
             title="Load into",
-            subtitle="Both channels while they are linked",
             model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
         self.factory_target.set_selected(0)
         g.add(self.factory_target)
 
         self.device_preset_slot = Adw.ComboRow(
-            title="Device Presets destination",
-            subtitle="Six UC library entries per Load into channel; separate "
-                     "from the four front-panel button blocks",
+            title="Device preset",
             model=Gtk.StringList.new([
                 "Preset 1", "Preset 2", "Preset 3",
                 "Preset 4", "Preset 5", "Preset 6",
@@ -6707,9 +6589,7 @@ class Win(Adw.ApplicationWindow):
         self.slot_name_row = Adw.EntryRow(title="Preset name")
         save = Gtk.Button(label="Save", valign=Gtk.Align.CENTER)
         save.add_css_class("suggested-action")
-        save.set_tooltip_text(
-            "Saves the Load into channel's current sound, Voice FX included, "
-            "to your presets on this computer")
+        save.set_tooltip_text("Save the current sound")
         save.connect("clicked", self._save_user_preset_clicked)
         self.slot_name_row.add_suffix(save)
         g.add(self.slot_name_row)
@@ -6722,10 +6602,7 @@ class Win(Adw.ApplicationWindow):
         page.add(g)
 
         scenes = Adw.PreferencesGroup(title="Scenes")
-        scene_row = Adw.ActionRow(
-            title="Universal Control scene",
-            subtitle="Includes every complete preset body known to this Host; "
-                     "loading never overwrites the device library")
+        scene_row = Adw.ActionRow(title="Scene")
         scene_save = Gtk.Button(label="Save scene…", valign=Gtk.Align.CENTER)
         scene_save.add_css_class("flat")
         scene_save.connect("clicked", self._save_scene_clicked)
@@ -6785,7 +6662,7 @@ class Win(Adw.ApplicationWindow):
             self.say("Scene was not saved: %s" % error)
             return
         dialog = Gtk.FileDialog(
-            title="Save Universal Control scene",
+            title="Save scene",
             initial_name="io24-host.scene")
 
         def selected(picker, result):
@@ -6802,7 +6679,7 @@ class Win(Adw.ApplicationWindow):
                         dev, host_features=features, presets=preset_state)
                     io24_scene.save(
                         destination, scene, sample_rate_hz=self._fs)
-                    calls, _skips = io24_scene.plan(
+                    _calls, _skips = io24_scene.plan(
                         scene, sample_rate_hz=self._fs)
                 except Exception as error:
                     GLib.idle_add(
@@ -6810,15 +6687,7 @@ class Win(Adw.ApplicationWindow):
                     return
                 GLib.idle_add(
                     self.say,
-                    "Saved %s: %d Host-known settings; %d unavailable "
-                    "value%s omitted; %d front-panel block bod%s and %d "
-                    "Device Preset%s retained" %
-                    (os.path.basename(destination), len(calls), len(omitted),
-                     "" if len(omitted) == 1 else "s",
-                     len(preset_state["slots"]),
-                     "y" if len(preset_state["slots"]) == 1 else "ies",
-                     len(preset_state["userpresets"]),
-                     "" if len(preset_state["userpresets"]) == 1 else "s"))
+                    "Saved %s" % os.path.basename(destination))
 
             self.ctl.submit(work)
 
@@ -6828,7 +6697,7 @@ class Win(Adw.ApplicationWindow):
         if self.ctl.dev is None:
             self.say("Scene not loaded: io24 is not connected")
             return
-        dialog = Gtk.FileDialog(title="Load Universal Control scene")
+        dialog = Gtk.FileDialog(title="Load scene")
 
         def selected(picker, result):
             try:
@@ -6854,7 +6723,7 @@ class Win(Adw.ApplicationWindow):
                 if report["failed"]:
                     rollback = report["rollback"]
                     if rollback["complete"]:
-                        recovery = "Previous Host-known state was restored."
+                        recovery = "Previous state was restored."
                     else:
                         recovery = (
                             "Rollback was partial: %d prior value%s were "
@@ -6869,15 +6738,12 @@ class Win(Adw.ApplicationWindow):
                         (report["failed_setting"], report["applied"],
                          "" if report["applied"] == 1 else "s", recovery))
                     return
-                done = report["applied"]
                 mirror = json.loads(json.dumps(
                     getattr(dev, "_shadow", None) or {}))
-                message = (
-                    "Loaded %s: %d settings applied; %d UC field%s reported "
-                    "as metadata or not representable; device preset blocks "
-                    "were untouched" %
-                    (os.path.basename(path), done, len(omitted),
-                     "" if len(omitted) == 1 else "s"))
+                message = "Loaded %s" % os.path.basename(path)
+                if omitted:
+                    message += " · %d setting%s skipped" % (
+                        len(omitted), "" if len(omitted) == 1 else "s")
                 GLib.idle_add(
                     self._after_scene_load, source, mirror, message)
 
@@ -6918,9 +6784,7 @@ class Win(Adw.ApplicationWindow):
         for entry in getattr(self, "_host_slot_entries", []):
             channel = entry["physical_channel"]
             block = entry["slot"] - self.PRESET_BASE[channel] + 1
-            subtitle = ("Legacy front-panel block receipt · Channel %d, "
-                        "block %d · Host-assisted Load; UC has no Store action "
-                        "for these four selectors" % (channel, block))
+            subtitle = "Input %d · Preset button %d" % (channel, block)
             row = Adw.ActionRow(title=entry["record"]["preset_name"],
                                 subtitle=subtitle)
             load = lambda e=entry: self._load_device_entry(e)
@@ -6928,11 +6792,8 @@ class Win(Adw.ApplicationWindow):
             self._unit_preset_rows[entry["slot"]] = (row, subtitle)
             rows.append(row)
         for entry in getattr(self, "_host_device_preset_entries", []):
-            subtitle = (
-                "Device Presets · Channel %d, preset %d · %s; body readback "
-                "unavailable, Load replays the retained record" %
-                (entry["physical_channel"], entry["channel_slot"] + 1,
-                 entry["status"]))
+            subtitle = "Input %d · Device preset %d" % (
+                entry["physical_channel"], entry["channel_slot"] + 1)
             row = Adw.ActionRow(
                 title=entry["record"]["preset_name"], subtitle=subtitle)
             load = lambda e=entry: self._load_device_library_entry(e)
@@ -7026,7 +6887,7 @@ class Win(Adw.ApplicationWindow):
             return button
 
         button = item(
-            "Send to Device Presets",
+            "Save to device",
             lambda: self._put_in_device_library(name, record, source))
         if PUT_ON_UNIT_UNAVAILABLE:
             button.set_sensitive(False)
@@ -7036,10 +6897,7 @@ class Win(Adw.ApplicationWindow):
         menu = Gtk.MenuButton(icon_name="view-more-symbolic", popover=popover,
                               valign=Gtk.Align.CENTER)
         menu.add_css_class("flat")
-        menu.set_tooltip_text(
-            PUT_ON_UNIT_UNAVAILABLE or
-            "Store in UC's six-entry Device Presets library for the selected "
-            "channel, or delete the Host copy")
+        menu.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE or "Preset actions")
         return menu
 
     def _filter_presets(self):
@@ -7065,7 +6923,7 @@ class Win(Adw.ApplicationWindow):
         self._marked_pslot = list(pslot)
         for slot, (row, subtitle) in getattr(
                 self, "_unit_preset_rows", {}).items():
-            row.set_subtitle(subtitle + (" · playing" if slot in pslot else ""))
+            row.set_subtitle(subtitle + (" · Playing" if slot in pslot else ""))
 
     def _load_device_entry(self, entry):
         """Load a preset that lives on the unit.
@@ -7200,41 +7058,30 @@ class Win(Adw.ApplicationWindow):
             entry["record"]["preset_name"]
             for entry in getattr(self, "_host_device_preset_entries", [])
             if entry["user_index"] == plan["user_index"]), None)
-        destination = "Channel %d Device Preset %d" % (
+        destination = "Input %d · Device preset %d" % (
             plan["target"], plan["channel_slot"] + 1)
-        prior = ("The Host last sent %s there. " % replaced) if replaced else ""
+        warning = ("This may replace %s." % replaced if replaced else
+                   "This may replace the preset currently stored there.")
         self._confirm(
-            "Send %s to %s?" % (name, destination),
-            prior + "This uses Universal Control's MemP/PrsM Store route. "
-            "The device does not expose a readback for the stored body, so "
-            "the result remains WRITE_SENT_UNVERIFIED until independently "
-            "verified. It does not assign a front-panel button block.",
-            "Send", lambda: self._queue_device_library_store(plan))
+            "Save %s to %s?" % (name, destination), warning,
+            "Save", lambda: self._queue_device_library_store(plan))
 
     def _queue_device_library_store(self, plan):
         def work(dev, prepared=plan):
             try:
-                result = dev.save_known_device_library_preset(
+                dev.save_known_device_library_preset(
                     prepared["user_index"], prepared["record"],
                     self.device_preset_library_registry, prepared["source"])
-                transport = result["transport"]
-                message = (
-                    "Sent %s to Channel %d Device Preset %d (%d frame%s, "
-                    "%d repl%s); status %s; stored-body readback unavailable" %
-                    (prepared["name"], prepared["target"],
-                     prepared["channel_slot"] + 1,
-                     transport["fragments_sent"],
-                     "" if transport["fragments_sent"] == 1 else "s",
-                     transport["replies_received"],
-                     "y" if transport["replies_received"] == 1 else "ies",
-                     result["registry"]["status"]))
+                message = "Sent %s to Input %d · Device preset %d" % (
+                    prepared["name"], prepared["target"],
+                    prepared["channel_slot"] + 1)
             except Exception as error:
                 report = getattr(error, "device_preset_transport", None)
                 message = (
-                    "Device Presets body was not sent: %s" % error
+                    "Preset was not sent: %s" % error
                     if report is None else
-                    "Device Presets transport returned, but the local "
-                    "receipt failed: %s" % error)
+                    "Preset was sent, but its local copy could not be saved: %s"
+                    % error)
                 GLib.idle_add(self.say, message)
                 return
             GLib.idle_add(self._device_library_saved, message)
@@ -7266,14 +7113,11 @@ class Win(Adw.ApplicationWindow):
         replaced = next((entry["record"]["preset_name"]
                          for entry in getattr(self, "_host_slot_entries", [])
                          if entry["slot"] == plan["slot"]), None)
-        where = "Channel %d block %d" % (plan["target"],
-                                         plan["relative_slot"] + 1)
-        body = ("This replaces %s in %s on the unit."
-                % (replaced, where) if replaced else
-                "This replaces whatever %s on the unit holds." % where)
-        body += (" Device-body readback is unavailable. VoiceFX is retained "
-                 "in the Host receipt and is sent by Host-assisted Load.")
-        self._confirm("Store %s Fat Channel on the device?" % name, body,
+        where = "Input %d · Preset button %d" % (
+            plan["target"], plan["relative_slot"] + 1)
+        body = ("This may replace %s." % replaced if replaced else
+                "This may replace the preset currently stored there.")
+        self._confirm("Save %s to %s?" % (name, where), body,
                       "Replace",
                       lambda: self._queue_factory_slot_store(plan))
 
@@ -7285,9 +7129,7 @@ class Win(Adw.ApplicationWindow):
         # 'Pari' wire 17 (internal id 2). Write-only: nothing in the state
         # blob reports it, so this row commands and cannot follow the unit.
         self.preset_mode_row = Adw.ComboRow(
-            title="Preset blocks on the unit",
-            subtitle="How many blocks the unit's Preset button steps "
-                     "through; the unit cannot report it back",
+            title="Available presets",
             model=Gtk.StringList.new(["One", "Two", "None"]))
         self.preset_mode_row.set_selected(1)
         self.preset_mode_row.connect("notify::selected",
@@ -7430,37 +7272,27 @@ class Win(Adw.ApplicationWindow):
         """
         def work(dev, prepared=plan):
             try:
-                result = dev.save_known_device_slot(
+                dev.save_known_device_slot(
                     prepared["slot"], prepared["record"],
                     self.device_slot_registry, prepared["source"],
                     sample_rate_hz=prepared.get(
                         "sample_rate_hz", DEFAULT_SAMPLE_RATE))
-                transport = result["transport"]
-                msg = ("Sent %s Fat Channel candidate to Channel %d block %d "
-                       "(%d frame%s, %d repl%s); status %s; device body "
-                       "readback unavailable. VoiceFX remains in the Host "
-                       "receipt for Host-assisted Load." %
-                       (prepared["name"], prepared["target"],
-                        prepared["relative_slot"] + 1,
-                        transport["fragments_sent"],
-                        "" if transport["fragments_sent"] == 1 else "s",
-                        transport["replies_received"],
-                        "y" if transport["replies_received"] == 1 else "ies",
-                        result["registry"]["status"]))
+                msg = "Sent %s to Input %d · Preset button %d" % (
+                    prepared["name"], prepared["target"],
+                    prepared["relative_slot"] + 1)
             except Exception as error:
                 report = getattr(error, "device_slot_transport", None)
                 if report is None:
-                    msg = "Device-slot body was not sent: %s" % error
+                    msg = "Preset was not sent: %s" % error
                 else:
-                    msg = ("Device-slot body transport returned, but the local "
-                           "registry failed: %s" % error)
+                    msg = ("Preset was sent, but its local copy could not be "
+                           "saved: %s" % error)
                 GLib.idle_add(self.say, msg)
                 return
 
             if not prepared.get("activate"):
                 GLib.idle_add(self._slot_saved, prepared,
-                              msg + " Use Load to send Fat Channel and VoiceFX "
-                                    "now.")
+                              msg + " · Use Load to hear it")
                 return
             try:
                 recall = dev.recall_device_slot(
@@ -7469,8 +7301,7 @@ class Win(Adw.ApplicationWindow):
                     dev, prepared["target"], prepared["record"], recall)
             except Exception as error:
                 GLib.idle_add(self._slot_saved, prepared,
-                              msg + " The candidate was sent, but the load "
-                                    "failed: %s" % error)
+                              msg + " · Load failed: %s" % error)
                 return
             GLib.idle_add(self._slot_saved, prepared, msg, recall)
 
@@ -7493,17 +7324,16 @@ class Win(Adw.ApplicationWindow):
         try:
             plan = self._prepare_factory_slot_store(name)
         except Exception as error:
-            self.say("Device-slot store unavailable: %s" % error)
+            self.say("Could not save to device: %s" % error)
             return
         dialog = Adw.MessageDialog.new(
             self,
-            "Overwrite Channel %d device Slot %d?" %
+            "Replace Input %d · Preset button %d?" %
             (plan["target"], plan["relative_slot"] + 1),
-            "%s will replace that unreadable device-resident body. The Host "
-            "will record only that the write was sent; this will not select, "
-            "enable, recall, or directly apply the slot." % plan["name"])
+            "%s may replace the preset currently stored there."
+            % plan["name"])
         dialog.add_response("cancel", "Cancel")
-        dialog.add_response("store", "Overwrite body")
+        dialog.add_response("store", "Replace")
         dialog.set_close_response("cancel")
         dialog.set_default_response("cancel")
         dialog.set_response_appearance(
@@ -7668,7 +7498,7 @@ class Win(Adw.ApplicationWindow):
                 if fx_error:
                     message += "; FX not loaded: %s" % fx_error
                 elif fx_command_sent:
-                    message += "; Voice FX state sent"
+                    message += " · Voice FX updated"
                 self.say(message)
                 return False
 
@@ -8562,7 +8392,7 @@ class Win(Adw.ApplicationWindow):
 
     def _pick(self, saving):
         dlg = Gtk.FileDialog(
-            title="Save Host snapshot" if saving else "Load Host snapshot",
+            title="Save snapshot" if saving else "Load snapshot",
             initial_name="io24-host-snapshot.json")
 
         def done(d, res):
@@ -8589,15 +8419,12 @@ class Win(Adw.ApplicationWindow):
                     if sv:
                         snap = dev.save_preset(
                             path, host_features=features)
-                        msg = "Saved %d host-file settings to %s" % (
-                            len(snap["calls"]) + len(snap["live"]),
-                            os.path.basename(path))
+                        msg = "Saved %s" % os.path.basename(path)
                         quarantined = snap.get(
                             "quarantined_device_preset_calls", 0)
                     else:
                         n_live, n_calls = dev.load_preset(path)
-                        msg = "Loaded %d host-file settings from %s" % (
-                            n_live + n_calls, os.path.basename(path))
+                        msg = "Loaded %s" % os.path.basename(path)
                         load_report = getattr(
                             dev, "_last_preset_load_report", {})
                         quarantined = load_report.get(
@@ -8610,10 +8437,9 @@ class Win(Adw.ApplicationWindow):
                         host_migrations = load_report.get(
                             "host_feature_migrations", [])
                     if quarantined:
-                        msg += ("; left %d device-slot selector entr%s "
-                                "untouched" %
+                        msg += (" · %d device setting%s skipped" %
                                 (quarantined,
-                                 "y" if quarantined == 1 else "ies"))
+                                 "" if quarantined == 1 else "s"))
                 except Exception as e:
                     msg = "%s failed: %s" % ("Save" if sv else "Load", e)
                 if not sv and "mirror" in locals():
@@ -8825,11 +8651,14 @@ class Win(Adw.ApplicationWindow):
                 host_features.get("spring_reverb"))
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
-            host_messages = [message for message in
-                             (standard_eq_message, alternate_eq_message,
-                              multiband_message,
-                              insert_message, reverb_message, spring_message,
-                              autogain_message) if message]
+            messages = (standard_eq_message, alternate_eq_message,
+                        multiband_message, insert_message, reverb_message,
+                        spring_message, autogain_message)
+            host_messages = [message for message in messages
+                             if message and any(word in message.casefold()
+                                                for word in ("not restored",
+                                                             "unavailable",
+                                                             "unreadable"))]
         self._insert_reconcile()
         if completion_message is not None:
             completion_message = append_host_migration_notices(
@@ -8918,14 +8747,10 @@ class Win(Adw.ApplicationWindow):
                     prefix = " · ".join(names)
                     if poff[ch - 1]:
                         status_row.set_subtitle(
-                            (prefix + " — " if prefix else "") +
-                            "Device reports bypass (exact 0%); DSP amount "
-                            "and Bypass are on the Device page")
+                            (prefix + " · " if prefix else "") + "Bypassed")
                     else:
                         status_row.set_subtitle(
-                            (prefix + " — " if prefix else "") +
-                            "Device reports processing active (>0); exact "
-                            "mix is Host-write-only")
+                            (prefix + " · " if prefix else "") + "Active")
                     local = pslot[ch - 1] - self.PRESET_BASE[ch]
                     if 0 <= local <= 1:
                         if sl.get_selected() != local:
@@ -8944,8 +8769,7 @@ class Win(Adw.ApplicationWindow):
                 r.queue_draw()
         muted = s.get("mainmute")
         self.mainmute_row.set_text(
-            "Physical Main Mute (read-only): MUTED" if muted else
-            "Physical Main Mute (read-only): on")
+            "Main output: Muted" if muted else "Main output: On")
         if muted:
             self.mainmute_row.add_css_class("error")
         else:

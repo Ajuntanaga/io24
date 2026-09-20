@@ -138,15 +138,16 @@ class PresetsPageShapeTests(unittest.TestCase):
 
     def test_the_unit_preset_mode_moved_to_the_device_page(self):
         self.assertIn("self._preset_button_group()", _function("_device_page"))
-        self.assertIn('"Preset blocks on the unit"',
+        self.assertIn('title="Available presets"',
                       _function("_preset_button_group"))
 
     def test_uc_scenes_have_visible_validated_save_and_load_actions(self):
         page = _function("_presets_page")
         self.assertIn('title="Scenes"', page)
+        self.assertIn('title="Scene"', page)
         self.assertIn('label="Save scene…"', page)
         self.assertIn('label="Load scene…"', page)
-        self.assertIn("Device preset blocks are never overwritten", page)
+        self.assertNotIn("device library", page)
         loader = _function("_load_scene_clicked")
         self.assertIn("io24_scene.plan", loader)
         self.assertIn("io24_scene.apply_transactional", loader)
@@ -157,7 +158,7 @@ class PresetsPageShapeTests(unittest.TestCase):
     def test_every_loadable_row_has_a_visible_load_button(self):
         self.assertEqual(
             _function("_populate_user_presets").count(
-                "self._preset_load_button("), 2)
+                "self._preset_load_button("), 3)
         self.assertEqual(
             _function("_populate_factory_presets").count(
                 "self._preset_load_button("), 1)
@@ -173,6 +174,24 @@ class PresetsPageShapeTests(unittest.TestCase):
             "Double-click to load", (ROOT / "io24gtk.py").read_text())
         self.assertIn(
             'button.connect("clicked"', _function("_preset_load_button"))
+
+    def test_preset_summaries_are_plain_component_labels(self):
+        record = {
+            "gate": {"on": 1},
+            "comp": {"on": 1, "compmodel": "standard"},
+            "eq": {"eqallon": 1, "class": "vintage"},
+            "limit": {"limiteron": 1},
+            "voicefx": {"on": 1},
+        }
+        with mock.patch.object(io24_presets, "compressor_model",
+                               return_value="standard"), \
+             mock.patch.object(io24_presets, "eq_model",
+                               return_value="vintage"):
+            summary = io24_presets.describe(record)
+
+        self.assertEqual(
+            summary, "Gate, Standard Comp, Vintage EQ, Limiter, Voice FX")
+        self.assertNotIn("device-slot", summary)
 
 
 class LoadingTests(unittest.TestCase):
@@ -331,7 +350,7 @@ class PlayingMarkerTests(unittest.TestCase):
                      "_mark_playing_unit_blocks")
         host._mark_playing_unit_blocks([1, 2])
         self.assertEqual(rows[1][0].subtitle,
-                         "Host-written candidate · Channel 1, block 2 · playing")
+                         "Host-written candidate · Channel 1, block 2 · Playing")
         self.assertEqual(rows[0][0].subtitle,
                          "Host-written candidate · Channel 1, block 1")
 

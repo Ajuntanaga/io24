@@ -190,10 +190,7 @@ class PresetRecallPresentationTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add",
                                side_effect=lambda fn, *args: fn(*args)):
             window._slot_changed(2, 2)
-        self.assertEqual(window.messages, [
-            "Selected Block 1 on Channel 2; selection does not reapply the "
-            "unreadable stored body"
-        ])
+        self.assertEqual(window.messages, ["Selected Block 1 on Input 2"])
 
 class HostRecallWiringTests(unittest.TestCase):
     def test_selecting_a_block_recalls_rather_than_only_selecting(self):
@@ -254,7 +251,7 @@ class HostRecallWiringTests(unittest.TestCase):
             "host_applied": True,
         })
 
-        self.assertTrue(any("Fat Channel and VoiceFX" in message
+        self.assertTrue(any("Loaded MAIN on Input 1" in message
                             for message in window.messages))
 
     def test_recalling_a_host_preset_uses_its_own_slot_and_channel(self):
@@ -289,8 +286,9 @@ class HostRecallWiringTests(unittest.TestCase):
         self.assertEqual(calls, [(1, 1)])
         self.assertEqual(applied, [("B A S E", 1, True)])
         self.assertTrue(any("B A S E" in message for message in window.messages))
-        # A bypassed channel that had to be enabled must say so.
-        self.assertTrue(any("bypassed" in message for message in window.messages))
+        # A bypassed channel that had to be enabled must still say so concisely.
+        self.assertTrue(any("Processing enabled" in message
+                            for message in window.messages))
 
     def test_a_failed_recall_reports_the_failure(self):
         class Device:
@@ -418,8 +416,8 @@ class PresetSavingTests(unittest.TestCase):
         self.assertEqual(saved, [(1, "current:channel1;base:Broadcast")])
         self.assertEqual(recalled, [])
         joined = " ".join(window.messages)
-        self.assertIn("Sent MY VOCAL Fat Channel candidate", joined)
-        self.assertIn("the load failed", joined)
+        self.assertIn("Sent MY VOCAL to Input 1", joined)
+        self.assertIn("Load failed", joined)
 
     def test_a_saved_preset_is_listed_without_restarting_the_host(self):
         window = _window()

@@ -797,13 +797,12 @@ class PresetPersistenceTests(unittest.TestCase):
         gtk_source = (root / "io24gtk.py").read_text()
         web_source = (root / "io24web.py").read_text()
 
-        self.assertIn("Saved %d host-file settings to %s", gtk_source)
+        self.assertIn('menu.append("Save snapshot…"', gtk_source)
         # 2026-09-11: presets on the unit are listed among User Presets,
         # tagged by where they live, rather than in a section of their own.
-        self.assertIn('"Legacy front-panel block receipt · Channel %d, "',
-                      gtk_source)
-        self.assertIn('"Device Presets · Channel %d, preset %d · %s; body readback "',
-                      gtk_source)
+        self.assertIn('"Input %d · Preset button %d"', gtk_source)
+        self.assertIn('"Input %d · Device preset %d"', gtk_source)
+        self.assertNotIn("WRITE_SENT_UNVERIFIED", gtk_source)
         self.assertNotIn("selected device slot", gtk_source)
         self.assertIn('"scope": "host-file"', web_source)
 

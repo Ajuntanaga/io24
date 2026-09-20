@@ -67,7 +67,8 @@ class GlobalFxTests(unittest.TestCase):
         self.assertIn('title=parameter["name"]', rendered)
         self.assertIn('self.fx_power[key]', rendered)
         self.assertIn('VoiceFxRack(self)', rendered)
-        self.assertIn('title="FX Model"', rendered)
+        self.assertIn('title="Model"', rendered)
+        self.assertIn('title="Voice FX"', rendered)
         self.assertNotIn('title="FX active"', rendered)
         self.assertNotIn('title="Target input"', rendered)
         self.assertNotIn('title="Device activation"', rendered)
@@ -367,7 +368,7 @@ class GlobalFxTests(unittest.TestCase):
 
         self.assertEqual(adopted, [{"fx_channel": 1}])
         self.assertEqual(messages, [
-            "Loaded Saved on Channel 1; Voice FX state sent",
+            "Loaded Saved on Channel 1 · Voice FX updated",
         ])
 
     def test_automatic_resume_neither_recalls_a_slot_nor_replays_old_owner(self):

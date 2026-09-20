@@ -583,25 +583,23 @@ def describe(p):
     """A one-line summary, for a UI list."""
     bits = []
     if p.get("gate", {}).get("on"):
-        bits.append("gate")
+        bits.append("Gate")
     if p.get("comp", {}).get("on"):
         try:
-            bits.append("%s comp" % compressor_model(p["comp"]).title())
+            bits.append("%s Comp" % compressor_model(p["comp"]).title())
         except ValueError:
-            bits.append("unknown comp")
+            bits.append("Compressor")
     if p.get("eq", {}).get("eqallon"):
         try:
             model = eq_model(p["eq"])
-            bits.append("%s EQ%s" %
-                        (model.title(), " (device-slot only)"
-                         if model in ("passive", "vintage") else ""))
+            bits.append("%s EQ" % model.title())
         except ValueError:
-            bits.append("unknown EQ")
+            bits.append("EQ")
     if p.get("limit", {}).get("limiteron"):
-        bits.append("limiter")
+        bits.append("Limiter")
     if p.get("voicefx", {}).get("on"):
-        bits.append("Voice FX (device-slot)")
-    return ", ".join(bits) or "flat"
+        bits.append("Voice FX")
+    return ", ".join(bits) or "Flat"
 
 
 def apply_preset(dev, preset, channel=1, with_fx=False,

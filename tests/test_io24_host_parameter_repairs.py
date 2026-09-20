@@ -914,8 +914,8 @@ class HostRefinementTests(unittest.TestCase):
         columns = getattr(io24gtk, "bus_meter_columns", lambda: ())
         self.assertEqual(columns(), (
             ("main", "Main", "Main output"),
-            ("mixa", "Mix A", "USB capture channels 3–4"),
-            ("mixb", "Mix B", "USB capture channels 5–6"),
+            ("mixa", "Mix A", "USB capture 3–4"),
+            ("mixb", "Mix B", "USB capture 5–6"),
         ))
 
     def test_mixer_removes_input_and_bus_pan_controls(self):

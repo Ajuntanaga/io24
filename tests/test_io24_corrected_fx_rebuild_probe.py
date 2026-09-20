@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -173,6 +175,24 @@ class SequenceTests(unittest.TestCase):
 
 
 class BoundaryTests(unittest.TestCase):
+    def test_live_report_does_not_present_unobserved_audio_timing_as_configured(self):
+        with tempfile.TemporaryDirectory() as output_dir, \
+                mock.patch.object(PROBE.prior, "restore_fx_from_shadow",
+                                  return_value={}), \
+                mock.patch.object(PROBE.prior, "restore_gate_from_shadow",
+                                  return_value={}), \
+                mock.patch.object(PROBE.foundation, "_battery", return_value=10):
+            report = PROBE.run_live(output_dir, "battery", "shadow")
+
+        self.assertNotIn("host_configured_sample_rate_hz", report)
+        self.assertNotIn("host_configured_quantum_frames", report)
+        self.assertEqual(report["audio_stream_timing"], {
+            "observed": False,
+            "sample_rate_hz": None,
+            "quantum_frames": None,
+            "source": "NO_ALSA_STREAM_OPENED_BY_METER_ONLY_PROBE",
+        })
+
     def test_default_is_hardware_free(self):
         self.assertEqual(0, PROBE.main([]))
 

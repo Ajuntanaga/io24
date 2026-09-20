@@ -1,0 +1,22 @@
+effects path: channel 1 scalar 1.000, fxreturn/ch1 -> Main +6.79 dB
+reverb held OFF for the whole sweep — anything you hear is block 201
+
+Keep tapping the cable end for about 74 seconds. Say the moment you hear ANY change.
+
+  1/6  delay       ON  — expect a repeat about 450 ms after each tap
+       delay       off
+  2/6  transformer ON  — expect much heavier low end, wider
+       transformer off
+  3/6  detuner     ON  — expect a second voice pitched eight semitones down
+       detuner     off
+  4/6  ringmod     ON  — expect a hard 60 Hz buzz/tremolo on everything
+       ringmod     off
+  5/6  vocoder     ON  — expect a robotic sawtooth taking over the sound
+       vocoder     off
+  6/6  filters     ON  — expect a ringing comb/resonator pitch
+       filters     off
+  CONTROL  reverb ON — proves the return carried sound
+restored: Host-known Voice FX state resent; Host-known reverb state resent; Host-known fxreturn/ch1 -> Mix A level -60.0 dB resent; fxreturn/ch1 -> Main +6.79 dB and channel scalar 1.000 resent
+main 0.550  headphones 0.470  ch1 gain 49.0 dB
+
+[exited with code 0]

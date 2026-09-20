@@ -1,65 +1,50 @@
 #!/usr/bin/env python3
-"""The Presets menu must not offer a unit write the driver refuses.
+"""The Presets menu exposes the repaired firmware-native slot writer."""
 
-On 2026-09-14 a known body written to an inactive block produced no recall
-effect, and `Io24.save_known_device_slot` now refuses a tagged body before
-transport: firmware 1.28 loads only native version-2 records. The menu used to
-promise "This replaces X ... then loads it there" and fail only after the user
-confirmed. These contracts keep the menu and the driver saying the same thing.
-
-Nothing here opens USB, audio or a display.
-"""
-
-import ast
 from pathlib import Path
+from types import SimpleNamespace
+import tempfile
 import unittest
 
 import io24
 import io24gtk
+from io24_preset_record import DeviceSlotRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _function(name):
-    source = (ROOT / "io24gtk.py").read_text()
-    node = next(n for n in ast.walk(ast.parse(source))
-                if isinstance(n, ast.FunctionDef) and n.name == name)
-    return ast.get_source_segment(source, node)
-
-
 class PutOnUnitDisclosureTests(unittest.TestCase):
-    @staticmethod
-    def _driver_refuses():
-        """Whether the driver refuses a saved JSON body, without any device."""
+    def test_the_menu_does_not_disable_put_on_unit(self):
+        self.assertIsNone(io24gtk.PUT_ON_UNIT_UNAVAILABLE)
+
+    def test_known_slot_write_sends_native_bytes_then_commits_the_receipt(self):
+        scene = NativeScene.standard()
+        sent = []
         device = object.__new__(io24.Io24)
-        try:
-            device.save_known_device_slot(
-                1, {"preset_name": "probe"}, {}, "test")
-        except io24.HostActionError:
-            return True
-        except Exception:
-            return False          # some other failure is not a refusal
-        return False
+        device.dev = SimpleNamespace(
+            serial_number="TEST-IO24-001", idVendor=0x194f,
+            idProduct=0x0422, bcdDevice=0x0128)
+        device.save_device_slot = lambda slot, body: (
+            sent.append((slot, body)) or {
+                "slot": slot, "fragments_sent": 1, "replies_received": 1,
+            })
+        with tempfile.TemporaryDirectory() as directory:
+            registry = DeviceSlotRegistry(Path(directory) / "slots.json")
 
-    def test_the_driver_refuses_a_saved_preset_body_before_transport(self):
-        self.assertTrue(self._driver_refuses())
+            result = device.save_known_device_slot(
+                1, scene, registry, "user:Test",
+                sample_rate_hz=96000.0)
 
-    def test_the_menu_and_the_driver_agree(self):
-        if self._driver_refuses():
-            self.assertTrue(
-                io24gtk.PUT_ON_UNIT_UNAVAILABLE,
-                "the driver refuses saved bodies, so the menu must say so")
-        else:
-            self.assertFalse(
-                io24gtk.PUT_ON_UNIT_UNAVAILABLE,
-                "the driver takes saved bodies again: clear "
-                "PUT_ON_UNIT_UNAVAILABLE so the menu offers the write")
+            saved = registry.get(1, device_identity=device._device_slot_identity())
+        self.assertEqual(sent[0][0], 1)
+        self.assertEqual(sent[0][1][:4], b"\x02\x00\x00\x00")
+        self.assertEqual(result["registry"], saved)
+        self.assertEqual(saved["body_format"], "firmware-native-v2")
+        self.assertEqual(saved["native_sha256"], result["native_sha256"])
 
-    def test_the_menu_disables_the_item_and_gives_the_reason(self):
-        source = _function("_preset_menu")
-        self.assertIn("if PUT_ON_UNIT_UNAVAILABLE:", source)
-        self.assertIn("button.set_sensitive(False)", source)
-        self.assertIn("set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE)", source)
 
-    def test_the_reason_is_the_native_record(self):
-        self.assertIn("native record", io24gtk.PUT_ON_UNIT_UNAVAILABLE)
+class NativeScene:
+    @staticmethod
+    def standard():
+        from tests.test_io24_native_stat import NativeStatTests
+        return NativeStatTests._standard_scene()

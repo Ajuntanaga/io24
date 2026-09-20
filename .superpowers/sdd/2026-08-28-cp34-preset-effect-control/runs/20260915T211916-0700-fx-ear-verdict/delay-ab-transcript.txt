@@ -1,0 +1,17 @@
+effects path: channel 1 scalar 1.000, fxreturn/ch1 -> Main +6.79 dB
+reverb held OFF for the whole block-201 test, so anything you hear in the return is block 201
+block 201 delay — 450 ms, feedback 0.55, 100% wet
+
+Keep tapping or rubbing the far end of the cable for the next 63 seconds.
+  reverb OFF
+  FX ON  — taps should echo, about 450 ms apart
+  FX OFF — taps should be dry
+  FX ON  — taps should echo, about 450 ms apart
+  FX OFF — taps should be dry
+  FX ON  — taps should echo, about 450 ms apart
+  FX OFF — taps should be dry
+  CONTROL: reverb ON — if you hear this, the return was live the whole time
+restored: Host-known Voice FX state resent; Host-known reverb state resent; Host-known fxreturn/ch1 -> Mix A level -60.0 dB resent; Host-known fxreturn/ch1 -> Main +6.79 dB resent; Host-known channel 1 processing scalar 1.000 resent
+main 0.550  headphones 0.470  ch1 gain 49.0 dB
+
+[exited with code 0]

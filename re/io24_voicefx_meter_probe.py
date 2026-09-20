@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""No-cable Voice FX A/B probe using simultaneous JaSt input/Main meters.
+"""No-cable Voice FX activation A/B using simultaneous input/Main meters.
 
-The probe uses Input 1 preamp self-noise as a broadband source.  It never
-changes mixer routing, preset content, DSP Amount, or processingChannel.  The
-current Host shadow supplies the complete write-only Voice FX intent that is
-resent during restoration.
+The probe uses Input 1 preamp self-noise as a broadband source. It never
+changes mixer routing, preset content, or processingChannel. The current Host
+shadow supplies the complete write-only Voice FX intent that is resent during
+restoration. An optional discriminator temporarily sets Channel-2 DSP Amount
+to zero only when an exact positive restore value is supplied.
 """
 
 import argparse
@@ -27,7 +28,7 @@ import io24_fx  # noqa: E402
 import io24_loopback_foundation as foundation  # noqa: E402
 
 
-SCHEMA = "io24-voicefx-meter-probe-v1"
+SCHEMA = "io24-voicefx-activation-meter-probe-v2"
 RATE_HZ = 96000
 SAFE_OUTPUT_VOLUME = 0.01
 PROBE_INPUT_GAIN_DB = 60.0
@@ -36,8 +37,23 @@ SAMPLE_INTERVAL_SECONDS = 0.05
 SETTLE_SECONDS = 0.5
 EFFECT_DELTA_MIN_DB = 0.5
 OFF_DRIFT_MAX_DB = 0.5
-CONTROL_INPUT_DELTA_MIN_DB = 20.0
-CONTROL_MAIN_DELTA_MIN_DB = 10.0
+CONTROL_SOURCE_DRIFT_MAX_DB = 3.0
+CONTROL_GATE_DELTA_MIN_DB = 10.0
+PREFLIGHT_INPUT1_MAX = 0.01
+PREFLIGHT_DRIFT_MAX_DB = 1.0
+CONTROL_GATE = {
+    "channel": 1,
+    "on": True,
+    "threshold_db": -40.0,
+    "range_db": -84.0,
+    "attack_s": 0.005,
+    "release_s": 0.05,
+    "keyfilter_hz": 20.0,
+    "expander": True,
+    "keylisten": False,
+    "instance": None,
+    "fs": 48000.0,
+}
 
 MODEL_PROFILES = (
     ("transformer", {"lows": 1.0, "width": 1.0, "mix": 1.0,
@@ -84,6 +100,7 @@ def _readable_state(params):
         "input1_phantom": bool(params["input1PhantomPower"]),
         "input2_phantom": bool(params["input2PhantomPower"]),
         "input1_processing_enabled": _enabled(params, 1),
+        "input2_processing_enabled": _enabled(params, 2),
         "channel_linked": bool(int(params["flags"]) >> 12 & 1),
     }
 
@@ -204,20 +221,39 @@ def _window_bus(window, bus):
     }
 
 
-def classify_measurements(control_low, control_high, trials):
-    source_delta = _db(control_high["median_input1"] /
-                       control_low["median_input1"])
-    available_buses = ("main",) if "buses" not in control_low else \
+def classify_quiet_preflight(first, second):
+    """Require a stable Input-1 self-noise floor before any state write."""
+    first_level = float(first["median_input1"])
+    second_level = float(second["median_input1"])
+    drift_db = _db(second_level / max(first_level, 1e-15))
+    maximum = max(first_level, second_level)
+    return {
+        "valid": (maximum <= PREFLIGHT_INPUT1_MAX and
+                  abs(drift_db) <= PREFLIGHT_DRIFT_MAX_DB),
+        "maximum_median_input1": maximum,
+        "median_input1_drift_db": drift_db,
+        "maximum_allowed_median_input1": PREFLIGHT_INPUT1_MAX,
+        "maximum_allowed_drift_db": PREFLIGHT_DRIFT_MAX_DB,
+        "windows": [first, second],
+    }
+
+
+def classify_measurements(control_closed, control_open, trials,
+                          require_repeatable_model=False):
+    source_drift = _db(control_open["median_input1"] /
+                       control_closed["median_input1"])
+    available_buses = ("main",) if "buses" not in control_closed else \
         ("main", "mixa", "mixb")
-    output_deltas = {
-        bus: _db(_window_bus(control_high, bus)["median_output"] /
-                 _window_bus(control_low, bus)["median_output"])
+    gate_deltas = {
+        bus: (_window_bus(control_open, bus)["median_to_input1_db"] -
+              _window_bus(control_closed, bus)["median_to_input1_db"])
         for bus in available_buses
     }
-    selected_bus = max(output_deltas, key=output_deltas.get)
-    selected_delta = output_deltas[selected_bus]
-    control_valid = (source_delta >= CONTROL_INPUT_DELTA_MIN_DB and
-                     selected_delta >= CONTROL_MAIN_DELTA_MIN_DB)
+    selected_bus = max(gate_deltas, key=gate_deltas.get)
+    selected_delta = gate_deltas[selected_bus]
+    control_valid = (
+        abs(source_drift) <= CONTROL_SOURCE_DRIFT_MAX_DB and
+        selected_delta >= CONTROL_GATE_DELTA_MIN_DB)
     models = []
     for trial in trials:
         before = _window_bus(trial["off_before"], selected_bus)
@@ -249,24 +285,62 @@ def classify_measurements(control_low, control_high, trials):
         classification = "DIRECT_BLOCK201_METER_EFFECT_DETECTED"
     else:
         classification = "NO_DIRECT_BLOCK201_METER_EFFECT_DETECTED"
-    return {
+    result = {
         "classification": classification,
         "scope": "DIRECT_MODEL_SELECT_AND_PARAMETER_WRITES_ONLY",
         "control": {
             "valid": control_valid,
-            "input1_gain_response_db": source_delta,
+            "input1_source_drift_db": source_drift,
             "selected_bus": selected_bus,
-            "selected_bus_gain_response_db": selected_delta,
-            "bus_gain_responses_db": output_deltas,
+            "selected_bus_gate_response_db": selected_delta,
+            "bus_gate_responses_db": gate_deltas,
         },
         "models": models,
     }
+    if require_repeatable_model:
+        deltas = [row["active_delta_db"] for row in models]
+        same_sign = bool(deltas) and (
+            all(value > 0.0 for value in deltas) or
+            all(value < 0.0 for value in deltas))
+        repeatable = (
+            len(models) >= 2 and same_sign and
+            all(row["stable"] and row["meter_effect_detected"]
+                for row in models))
+        result["repeatability"] = {
+            "required": True,
+            "valid": repeatable,
+            "same_sign": same_sign,
+            "cycles": len(models),
+        }
+        if control_valid:
+            if repeatable:
+                result["classification"] = \
+                    "DIRECT_BLOCK201_METER_EFFECT_DETECTED"
+            elif all(row["stable"] and
+                     not row["meter_effect_detected"] for row in models):
+                result["classification"] = \
+                    "NO_DIRECT_BLOCK201_METER_EFFECT_DETECTED"
+            else:
+                result["classification"] = \
+                    "INCONCLUSIVE_MODEL_EFFECT_NOT_REPEATABLE"
+    return result
 
 
 def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep,
-                 progress=lambda _message: None):
+                 progress=lambda _message: None, model_profiles=MODEL_PROFILES,
+                 channel2_zero_discriminator=False,
+                 channel2_restore_amount=None,
+                 require_repeatable_model=False):
     before = _readable_state(device.read_params())
     _assert_guards(before)
+    if channel2_zero_discriminator:
+        if not before["input2_processing_enabled"]:
+            raise VoiceFxProbeError(
+                "Channel 2 must begin processing for the zero discriminator")
+        if channel2_restore_amount is None or not (
+                0.0 < float(channel2_restore_amount) <= 1.0):
+            raise VoiceFxProbeError(
+                "an exact positive Channel-2 DSP Amount restore is required")
     result = {
         "status": "MEASUREMENT_FAILED_RESTORATION_PENDING",
         "started": _now(),
@@ -276,13 +350,15 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
         "trials": [],
     }
     failure = None
+    channel2_changed = False
     try:
         device.set_main_volume(SAFE_OUTPUT_VOLUME)
         device.set_hp_volume(SAFE_OUTPUT_VOLUME)
-        device.gate_off(1)
-        settle(SETTLE_SECONDS)
-        low = sample_one("gain_control_low")
         device.set_gain(1, PROBE_INPUT_GAIN_DB)
+        device.gate_off(1)
+        if channel2_zero_discriminator:
+            channel2_changed = True
+            device.set_fx_mix(2, 0.0)
         settle(SETTLE_SECONDS)
         guarded = _readable_state(device.read_params())
         _assert_guards(guarded)
@@ -293,11 +369,18 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
                 not math.isclose(guarded["input1_gain_db"],
                                  PROBE_INPUT_GAIN_DB, abs_tol=1e-6):
             raise VoiceFxProbeError("readable safety controls did not latch")
+        if channel2_zero_discriminator and guarded[
+                "input2_processing_enabled"]:
+            raise VoiceFxProbeError("Channel-2 DSP Amount zero did not latch")
         result["readable_guarded"] = guarded
-        high = sample_one("gain_control_high")
-        result["gain_control"] = {"low": low, "high": high}
+        if channel2_zero_discriminator:
+            result["channel2_discriminator"] = {
+                "test_amount": 0.0,
+                "restore_amount": float(channel2_restore_amount),
+                "readable_bypassed": True,
+            }
 
-        for model, parameters in MODEL_PROFILES:
+        for model, parameters in model_profiles:
             progress("measuring %s" % model)
             off = dict(parameters, on=False)
             on = dict(parameters, on=True)
@@ -317,8 +400,27 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
                 "on": active,
                 "off_after": off_after,
             })
+
+        # Validate the observation path after the target trials. The retained
+        # Transformer positive bypassed the existing gate but did not cycle a
+        # configured gate before its FX measurement. Keeping the control last
+        # prevents the control itself from perturbing write-only chain state.
+        progress("measuring Channel-1 gate positive control")
+        device.set_gate(**CONTROL_GATE)
+        settle(SETTLE_SECONDS)
+        control_closed = sample_one("gate_control_closed")
+        device.gate_off(1)
+        settle(SETTLE_SECONDS)
+        control_open = sample_one("gate_control_open")
+        result["gate_control"] = {
+            "closed": control_closed,
+            "open": control_open,
+            "parameters": CONTROL_GATE,
+            "order": "AFTER_FX_TRIALS",
+        }
         result["analysis"] = classify_measurements(
-            low, high, result["trials"])
+            control_closed, control_open, result["trials"],
+            require_repeatable_model=require_repeatable_model)
         result["status"] = "MEASURED_RESTORATION_PENDING"
     except BaseException as error:
         failure = error
@@ -326,10 +428,17 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
                            "message": str(error)}
     finally:
         restoration_errors = []
-        actions = (
+        actions = [
             (lambda: device.set_fx(restore_fx["model"],
                                    **restore_fx["kwargs"]),
              "voicefx_host_known_intent"),
+        ]
+        if channel2_changed:
+            actions.append((
+                lambda: device.set_fx_mix(
+                    2, float(channel2_restore_amount)),
+                "channel2_dsp_amount"))
+        actions.extend((
             (lambda: device.set_gate(**restore_gate),
              "channel1_gate_host_known_intent"),
             (lambda: device.set_gain(1, before["input1_gain_db"]),
@@ -338,7 +447,7 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
              "main_volume"),
             (lambda: device.set_hp_volume(before["headphone_volume"]),
              "headphone_volume"),
-        )
+        ))
         restored_controls = []
         for action, control in actions:
             try:
@@ -375,9 +484,13 @@ def run_sequence(device, restore_fx, restore_gate, sample_one, settle=time.sleep
             "mixer_routes": "UNTOUCHED",
             "preset_slots": "UNTOUCHED",
             "dsp_amount": "UNTOUCHED",
-            "processing_channel": "UNTOUCHED",
+            "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
             "errors": restoration_errors,
         }
+        if channel2_changed:
+            result["restoration"]["dsp_amount"] = \
+                "CHANNEL2_SUPPLIED_%.6f_RESENT_ZERO_NONZERO_READBACK_RESTORED" % \
+                float(channel2_restore_amount)
         if restoration_errors or not readable_exact:
             result["status"] = "RESTORATION_FAILED"
         elif failure is not None:
@@ -394,7 +507,10 @@ def _write_json(path, value):
         handle.write("\n")
 
 
-def run_live(output_dir, battery_path, shadow_path):
+def run_live(output_dir, battery_path, shadow_path,
+             channel2_zero_discriminator=False,
+             channel2_restore_amount=None,
+             transformer_repeatability=False):
     output_dir = Path(output_dir)
     if not output_dir.is_dir() or any(output_dir.iterdir()):
         raise VoiceFxProbeError("output directory must exist and be empty")
@@ -408,14 +524,22 @@ def run_live(output_dir, battery_path, shadow_path):
             "serial": foundation.EXPECTED_SERIAL,
             "bcd_device": "%04x" % foundation.EXPECTED_BCD_DEVICE,
         },
-        "sample_rate_hz": RATE_HZ,
+        "fx_builder_sample_rate_hz": RATE_HZ,
+        "audio_stream_timing": {
+            "observed": False,
+            "sample_rate_hz": None,
+            "quantum_frames": None,
+            "source": "NO_ALSA_STREAM_OPENED_BY_METER_ONLY_PROBE",
+        },
         "stimulus": "INPUT1_PREAMP_SELF_NOISE",
         "observation": "SIMULTANEOUS_JAST_INPUT1_AND_MAIN_LR_METERS",
         "playback": "NONE",
         "mixer_routes": "UNTOUCHED",
         "preset_slots": "UNTOUCHED",
-        "dsp_amount": "UNTOUCHED",
-        "processing_channel": "UNTOUCHED",
+        "dsp_amount": (
+            "CHANNEL2_TEMPORARILY_ZERO_WITH_SUPPLIED_RESTORE" if
+            channel2_zero_discriminator else "UNTOUCHED"),
+        "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
     }
     device = None
     try:
@@ -425,10 +549,27 @@ def run_live(output_dir, battery_path, shadow_path):
             report["status"] = "BLOCKED_BATTERY"
             return report
         device = foundation._open_checked()
+        quiet_preflight = classify_quiet_preflight(
+            summarize_window(device, "quiet_preflight_1"),
+            summarize_window(device, "quiet_preflight_2"))
+        report["quiet_preflight"] = quiet_preflight
+        if not quiet_preflight["valid"]:
+            report["status"] = "BLOCKED_INPUT1_NOT_QUIET"
+            return report
+        if channel2_zero_discriminator:
+            model_profiles = MODEL_PROFILES[:1]
+        elif transformer_repeatability:
+            model_profiles = MODEL_PROFILES[:1] * 2
+        else:
+            model_profiles = MODEL_PROFILES
         sequence = run_sequence(
             device, restore_fx, restore_gate,
             lambda label: summarize_window(device, label),
-            progress=lambda message: print(message, flush=True))
+            progress=lambda message: print(message, flush=True),
+            model_profiles=model_profiles,
+            channel2_zero_discriminator=channel2_zero_discriminator,
+            channel2_restore_amount=channel2_restore_amount,
+            require_repeatable_model=transformer_repeatability)
         report["sequence"] = sequence
         report["transport"] = list(device.transport_log)
         report["status"] = sequence["status"]
@@ -460,26 +601,50 @@ def main(argv=None):
                         default="/sys/class/power_supply/BAT0/capacity")
     parser.add_argument("--shadow-path",
                         default=str(Path.home() / ".cache/io24/shadow.json"))
+    parser.add_argument("--channel2-zero-discriminator", action="store_true")
+    parser.add_argument("--restore-channel2-amount", type=float)
+    parser.add_argument("--transformer-repeatability", action="store_true")
     args = parser.parse_args(argv)
+    if args.channel2_zero_discriminator and args.transformer_repeatability:
+        parser.error("choose only one discriminator")
     if not args.execute:
+        if args.channel2_zero_discriminator:
+            model_profiles = MODEL_PROFILES[:1]
+        elif args.transformer_repeatability:
+            model_profiles = MODEL_PROFILES[:1] * 2
+        else:
+            model_profiles = MODEL_PROFILES
         print(json.dumps({
             "schema": SCHEMA,
             "status": "DRY_RUN_ONLY",
-            "models": [model for model, _parameters in MODEL_PROFILES],
+            "models": [model for model, _parameters in model_profiles],
+            "repeatability_required": args.transformer_repeatability,
             "samples_per_window": SAMPLES_PER_WINDOW,
             "sample_interval_seconds": SAMPLE_INTERVAL_SECONDS,
             "writes": ["Main volume", "Headphone volume", "Input 1 gain",
                        "Channel 1 gate bypass/restore",
-                       "Voice FX block 201 model/parameters"],
+                       "Voice FX block 201 model/parameters"] +
+                      (["Channel 2 DSP Amount zero/supplied restore"] if
+                       args.channel2_zero_discriminator else []),
             "mixer_routes": "UNTOUCHED",
             "preset_slots": "UNTOUCHED",
-            "dsp_amount": "UNTOUCHED",
-            "processing_channel": "UNTOUCHED",
+            "dsp_amount": (
+                "CHANNEL2_TEMPORARILY_ZERO_WITH_SUPPLIED_RESTORE" if
+                args.channel2_zero_discriminator else "UNTOUCHED"),
+            "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
         }, indent=2, sort_keys=True))
         return 0
     if not args.output_dir:
         parser.error("--execute requires --output-dir")
-    report = run_live(args.output_dir, args.battery_path, args.shadow_path)
+    if args.channel2_zero_discriminator and \
+            args.restore_channel2_amount is None:
+        parser.error("--channel2-zero-discriminator requires "
+                     "--restore-channel2-amount")
+    report = run_live(
+        args.output_dir, args.battery_path, args.shadow_path,
+        channel2_zero_discriminator=args.channel2_zero_discriminator,
+        channel2_restore_amount=args.restore_channel2_amount,
+        transformer_repeatability=args.transformer_repeatability)
     _write_json(Path(args.output_dir) / "live-report.json", report)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["status"] == "MEASURED_AND_RESTORED" else 3

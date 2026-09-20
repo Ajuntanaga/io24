@@ -142,6 +142,15 @@ def _finite_in_range(component, field, low, high, label):
         raise ValueError("%s %s must be a finite number" % (label, field))
     if not math.isfinite(number):
         raise ValueError("%s %s must be finite" % (label, field))
+    # UC serializes descriptor values as float32 and then writes their full
+    # decimal expansion to JSON. A value selected at the exact 0.0002 lower
+    # bound therefore appears as 0.00019999999494757503. Treat a float32-sized
+    # boundary error as that boundary; rejecting UC's own saved scene is not a
+    # stricter interpretation of the descriptor, just a precision bug.
+    if number < low and math.isclose(number, low, rel_tol=1e-6, abs_tol=1e-12):
+        number = float(low)
+    if number > high and math.isclose(number, high, rel_tol=1e-6, abs_tol=1e-12):
+        number = float(high)
     if not low <= number <= high:
         raise ValueError("%s %s must be in [%s, %s]" %
                          (label, field, low, high))

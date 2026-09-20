@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 import unittest
 
+import io24_fx
 from io24_native_stat import (
     CHANNEL_COMPONENT_SIZES,
     NativeChunk,
@@ -34,7 +35,8 @@ def _record(slot_index=1):
         struct.pack("<II", 6, 5) +
         encode_chunk_group([(
             b"\x00\x00\x00\x05",
-            struct.pack("<I", 16) + bytes(range(16)),
+            struct.pack("<I", 16) +
+            io24_fx.fx_delay(False, 0.125, 0.5, 0.5)[12:],
         )])
     )
     base = encode_native_stat_record(NativeStatRecord(2, (

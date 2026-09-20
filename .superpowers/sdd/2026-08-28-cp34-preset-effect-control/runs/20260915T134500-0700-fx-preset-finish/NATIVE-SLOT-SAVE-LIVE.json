@@ -1,0 +1,31 @@
+{
+  "schema": "cp34-native-slot-save-live-v1",
+  "timestamp": "2026-09-15T21:02:11.744204+00:00",
+  "status": "HOST_NATIVE_WRITE_SENT_REGISTRY_COMMITTED",
+  "device": {
+    "serial": "AB7C22200355",
+    "vid": 6479,
+    "pid": 1058,
+    "firmware": "0128"
+  },
+  "preset": {
+    "name": "MAIN",
+    "source": "user:MAIN;native-repair",
+    "physical_channel": 1,
+    "relative_block": 2,
+    "global_slot": 1,
+    "body_format": "firmware-native-v2",
+    "native_sha256": "71d59077628129ef991464c9486d8372cbad9fe4eb9f9e46aae558a0d36630cd"
+  },
+  "transport": {
+    "frames_sent": 1,
+    "replies_received": 0
+  },
+  "active_slots_before": [0, 2],
+  "active_slots_after": [0, 2],
+  "registry": {
+    "status": "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE",
+    "path": "/home/ajuntanaga/.local/state/io24/device-slots.json"
+  },
+  "proof_boundary": "The Host built and transmitted the exact native body and committed its local receipt. Firmware exposes no slot-body readback, so this action alone does not prove cold-boot persistence or audible recall."
+}

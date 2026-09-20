@@ -190,7 +190,10 @@ class PresetRecallPresentationTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add",
                                side_effect=lambda fn, *args: fn(*args)):
             window._slot_changed(2, 2)
-        self.assertEqual(window.messages, ["Recalled Block 1 on Channel 2"])
+        self.assertEqual(window.messages, [
+            "Selected Block 1 on Channel 2; selection does not reapply the "
+            "unreadable stored body"
+        ])
 
 class HostRecallWiringTests(unittest.TestCase):
     def test_selecting_a_block_recalls_rather_than_only_selecting(self):
@@ -216,20 +219,47 @@ class HostRecallWiringTests(unittest.TestCase):
         self.assertEqual(calls, [(1, 0)])
         self.assertEqual(window.preset_rows[1][1].selected, 0)
 
-    def test_known_recalled_record_sends_its_global_fx_state_once(self):
+    def test_known_block_is_directly_loaded_with_fat_channel_and_voicefx(self):
         window = _window(entries=[_entry(0, 1, "MAIN", True)])
-        sent = []
+        applied = []
+
+        class PR:
+            @staticmethod
+            def apply_preset(dev, record, channel, with_fx=False, fs=48000.0):
+                applied.append((dev, record["preset_name"], channel,
+                                with_fx, fs))
+                return ["fat-channel", "voicefx"]
+
+        class Device:
+            def recall_device_slot(self, channel, slot):
+                return {"relative_slot": 0, "enable_asserted": False}
+
+        window.PR = PR
+        window._fs = 96000.0
+
+        report = window._select_and_load_slot(Device(), 1, 0)
+
+        self.assertTrue(report["host_applied"])
+        self.assertEqual(report["host_parts"], ["fat-channel", "voicefx"])
+        self.assertEqual(applied[0][1:], ("MAIN", 1, True, 96000.0))
+
+    def test_completed_host_load_is_not_sent_a_second_time_from_the_ui(self):
+        window = _window(entries=[_entry(0, 1, "MAIN", True)])
         window._adopt_recalled_slot = lambda channel, slot: True
         window._follow_recall_processing = lambda channel, report: None
-        window._push_fx = lambda: sent.append("fx")
+        window._push_fx = lambda: self.fail("VoiceFX must not be sent twice")
 
-        window._slot_recalled(
-            1, 0, {"relative_slot": 0, "enable_asserted": False})
+        window._slot_recalled(1, 0, {
+            "relative_slot": 0, "enable_asserted": False,
+            "host_applied": True,
+        })
 
-        self.assertEqual(sent, ["fx"])
+        self.assertTrue(any("Fat Channel and VoiceFX" in message
+                            for message in window.messages))
 
     def test_recalling_a_host_preset_uses_its_own_slot_and_channel(self):
         calls = []
+        applied = []
 
         class Device:
             def recall_device_slot(self, channel, slot):
@@ -245,11 +275,19 @@ class HostRecallWiringTests(unittest.TestCase):
         entry = _entry(1, 1, "B A S E", False)
         window = _window(entries=[entry])
         window.ctl = Ctl()
+        window.PR = type("PR", (), {
+            "apply_preset": staticmethod(
+                lambda dev, record, channel, with_fx=False, fs=48000.0:
+                applied.append((record["preset_name"], channel, with_fx)))
+        })
+        window._adopt_recalled_slot = lambda channel, slot: True
+        window._follow_recall_processing = lambda channel, report: None
         with mock.patch.object(io24gtk.GLib, "idle_add",
                                side_effect=lambda fn, *args: fn(*args)):
             window._recall_host_preset(None, entry)
 
         self.assertEqual(calls, [(1, 1)])
+        self.assertEqual(applied, [("B A S E", 1, True)])
         self.assertTrue(any("B A S E" in message for message in window.messages))
         # A bypassed channel that had to be enabled must say so.
         self.assertTrue(any("bypassed" in message for message in window.messages))
@@ -338,7 +376,8 @@ class PresetSavingTests(unittest.TestCase):
         saved, recalled = [], []
 
         class Device:
-            def save_known_device_slot(self, slot, record, registry, source):
+            def save_known_device_slot(self, slot, record, registry, source,
+                                       sample_rate_hz):
                 saved.append((slot, source))
                 return {"transport": {"fragments_sent": 1,
                                       "replies_received": 1},
@@ -367,7 +406,7 @@ class PresetSavingTests(unittest.TestCase):
         window, saved, recalled = self._run(activate=False)
         self.assertEqual(saved, [(1, "current:channel1;base:Broadcast")])
         self.assertEqual(recalled, [])
-        self.assertTrue(any("Not loaded" in m for m in window.messages))
+        self.assertTrue(any("Use Load" in m for m in window.messages))
 
     def test_save_and_activate_writes_then_recalls(self):
         window, saved, recalled = self._run(activate=True)
@@ -379,8 +418,8 @@ class PresetSavingTests(unittest.TestCase):
         self.assertEqual(saved, [(1, "current:channel1;base:Broadcast")])
         self.assertEqual(recalled, [])
         joined = " ".join(window.messages)
-        self.assertIn("Saved MY VOCAL", joined)
-        self.assertIn("the recall failed", joined)
+        self.assertIn("Sent MY VOCAL Fat Channel candidate", joined)
+        self.assertIn("the load failed", joined)
 
     def test_a_saved_preset_is_listed_without_restarting_the_host(self):
         window = _window()

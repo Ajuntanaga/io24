@@ -32,9 +32,7 @@ import io24_loopback_foundation as foundation  # noqa: E402
 import io24_voicefx_meter_probe as prior  # noqa: E402
 
 
-SCHEMA = "io24-corrected-ringmod-probe-v1"
-RATE_HZ = 96000.0
-QUANTUM_FRAMES = 512
+SCHEMA = "io24-corrected-ringmod-probe-v2"
 SESSION_STREAM_FLAG_MASK = 1 << 9
 RINGMOD_PARAMETERS = {
     "carrier_hz": 1000.0,
@@ -233,8 +231,7 @@ def run_live(output_dir, battery_path, shadow_path):
         "schema": SCHEMA,
         "status": "LIVE_FAILED",
         "started": common._now(),
-        "host_configured_sample_rate_hz": int(RATE_HZ),
-        "host_configured_quantum_frames": QUANTUM_FRAMES,
+        "audio_stream_timing": common.meter_only_audio_stream_timing(),
         "stimulus": "INPUT1_PREAMP_SELF_NOISE",
         "observation": "SIMULTANEOUS_JAST_INPUT1_AND_MAIN_LR_METERS",
         "playback": "NONE",

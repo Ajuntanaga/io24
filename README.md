@@ -52,7 +52,7 @@ separately rather than implied to be independently measured.
 | Headphone / main volume, monitor blend, channel processing/effects mix | live 0/25/50/75/100 meter test confirms one linear dry-to-full-chain blend; exact positive value remains write-only |
 | Input, bus and gain-reduction metering | |
 | Mixer: per-source level into main / Mix A / Mix B | gain law exact to **0.03 dB over a 106 dB range** on all three buses |
-| Aux sends: assign, bus master, mirror-main | master exact to **0.00 dB**, no crosstalk between buses |
+| Aux sends: assign, source/output mute, bus master, mirror-main | mute retains faders/assigns; master exact to **0.00 dB**, no crosstalk between buses |
 | GTK Mix A/B capture | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; both published successfully in the live 96 kHz / 512 smoke |
 | CLI pan / balance for a stereo pair | send-level balance using Universal Control's recovered law; centre −3.00 dB, measured within ±1 dB on hardware |
 | Standard 4-band EQ | exact UC 4.7.2 controls: independent global and four band-power switches, parametric middle bands, outer shelf/parametric selectors, 36 Hz–18 kHz; frequency accuracy and band indexing measured |
@@ -64,9 +64,9 @@ separately rather than implied to be independently measured.
 | Processing-channel select | which input feeds a channel's DSP chain |
 | Channel-name read-back (`names`) | the device's own `'CHNP'` table |
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
-| Device-slot `MemP/Stat` save | exact transport primitive only, not a working save: tagged and native Standard-EQ/native-gate A/B/A bodies all failed to become active DSP state despite selector readback, including native gate writes made while the target slot was active. Source-bound firmware data flow joins the `Stat` adapter to the physical compare/program/wait path, with no separate commit command, but `SetP` exposes no live storage result. The preset menu remains disabled; next investigation is UC's distinct `PrsM` Store route. |
+| Device-block `MemP/Stat` store | exact firmware-native v2 transport and identity-bound Host receipt. The device cannot read a body back, so the UI calls it a **Fat Channel candidate** and reports `WRITE_SENT_UNVERIFIED`; Fat Channel works standalone when the device applies it, while VoiceFX is sent by Host-assisted **Load**. |
 | Voice FX control model and UC transaction | exact XML-ordered controls and builders for all six models, a six-unit visual rack, one global settings object over two structural lanes, and a separate **On** state per model component. A UC 4.7.2 USB capture controls model selection, state-only edits, Transformer `MBdf` tables and pacing. All six models are objectively verified through physical Input 1 in two on/off cycles each: exact Delay timing, Detuner pitch targets, Ring Modulator sidebands, and repeatable Transformer/Vocoder/Filters spectral changes, with same-path reverb controls and stable off states. |
-| **Universal Control scene import** (`io24_scene.py`) | applies a real UC `.scene` file — 35 settings from one of the author's own scenes |
+| **Universal Control scene import** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`: 94–97 operations in the three retained scenes, including routing, output/source mutes, both Fat Channels, exact alternate EQ, VoiceFX, reverb and global settings; device blocks are untouched |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
 | Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
 | UCNET shim | lets UCNET-speaking clients talk to the device |
@@ -240,7 +240,8 @@ with UC's independent global/band switches, exact outer shelf controls, a
 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
 the Presets page holds your presets and the factory presets in two drop-downs,
-loads one with the row's **Load** button, and can put one on the unit's Preset button.
+loads one with the row's **Load** button, stores a firmware-native Fat Channel
+candidate in either device block, and loads complete UC `.scene` files.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is
@@ -580,12 +581,10 @@ so several clients can share it.
 
 ### Loading a Universal Control scene
 
-If you have ever run Universal Control on Windows or macOS, it saved the whole
-device state as JSON in `Documents/PreSonus/Revelator IO/Scene/*.scene`. Those
-files can be applied here directly. The direct scene importer replays ordinary
-setters without overwriting device slots. The same scene-shaped slot object can
-also be encoded as UC's tagged settled-state fixture, but it is not a native
-firmware slot body and these commands do not send it:
+Universal Control saves the whole device state as JSON under
+`Documents/PreSonus/Revelator IO/Scene/*.scene`. Those files can be applied
+directly from the Linux Host's Presets page or the command line. Scene load
+never overwrites device-resident blocks:
 
 ```bash
 python3 io24_scene.py --dry-run "B A S E.scene"
@@ -595,15 +594,18 @@ python3 io24_scene.py --dry-run "B A S E.scene"
 python3 io24_scene.py "B A S E.scene"
 ```
 
-The dry run lists every setting it will send and, just as importantly, every one
-it will not. Applied: preamp gain, phantom, mute, stereo link, processing
-channel, the main/aux sends with their assigns, high-pass, gate, compressor,
-limiter, Standard/Passive/Vintage EQ, and the output delay. Reported but skipped by this
-direct-setter importer: `voicefx`, because successful standalone parameter
-writes did not produce audible block-201 processing and the remaining stored-
-slot cold-boot path is a separate hardware test; UC's
-*simplified* EQ form where band frequencies are indices rather than Hz; and
-`pan`/`stereopan`/`FXA`/`solo`, which the driver does not implement yet.
+The dry run validates the complete scene before the first device write and lists
+every planned operation and every typed omission. It restores global delay,
+headphones source, Channel Mute Sync, preset-button mode, both Fat Channels,
+DSP amount, the full Main/Mix A/Mix B matrix, source and output mutes, Host solo,
+bus masters, one-shot mirror-main, shared VoiceFX, and shared reverb. Standard,
+Passive, and Vintage EQ each use their exact model route. The three retained UC
+scenes produce 94–97 operations apiece.
+
+Genuinely unrepresentable fields remain explicit: block 100 has no independent
+mono-source pan or stereo-width control; exact `FXA`, `dawpostdsp`, output mono
+fold-down, names, and UC's persistent mirror latch have no proven io24 mapping.
+The Host never substitutes its stereo-pair balance for a scene's mono pan.
 
 A channel saved with UC's **Passive Program** or **Vintage 1970s** EQ now loads
 directly into the Linux Host. The model selector, power switch, amount controls,
@@ -622,14 +624,16 @@ supplies an authentic Passive state, and validated native records can also
 receive exact Passive or Vintage replacements without changing other
 components.
 
-Two things the importer gets right that are easy to get wrong. The two channels
+Three things the importer gets right that are easy to get wrong. The two channels
 can be running **different compressor models** — UC tags each block with a class
 GUID, and Standard (`threshold`/`ratio`/`gain`) and FET (`input`/`output` plus a
 ratio *index*) do not share a parameter set, so the GUID is honoured rather than
 assumed. And a channel's EQ may be stored in either the full parametric form
 (real Hz and Q, the same representation the firmware's factory presets use) or
-UC's simplified index form; only the former can be applied faithfully, and the
-latter is skipped rather than guessed at.
+UC's alternate index form; both are applied faithfully through their own model.
+And VoiceFX is one shared processor: one saved component is applied once, while
+conflicting per-channel VoiceFX records are refused before transport instead of
+silently making the later channel win.
 
 
 Firmware contains **sixteen tagged factory/library presets**, in two banks of
@@ -646,22 +650,18 @@ buttons**, there are **6 more factory presets**, and **6 user slots per channel*
 — with the buttons acting as assignable pointers into that library. 2 + 6 = 8
 factory per channel matches the 16 records found in firmware exactly.
 
-The old complete-tagged-record writer is now refused before transport because
-the live inactive-slot test showed that it changed selection without applying
-the saved body. The GTK **Put on the unit** action consequently reports that no
-native body is available instead of creating another misleading receipt.
-Existing entries in `$XDG_STATE_HOME/io24/device-slots.json` (default
-`~/.local/state/io24/device-slots.json`) record serial, VID/PID, firmware,
-canonical body hash, and transport counts as `WRITE_SENT_UNVERIFIED`, not as
-device readback or durable commit; they are historical tagged-transport
-receipts, not known installed bodies.
+The GTK preset menu can send a complete firmware-native version-2 Fat Channel
+candidate to either block. It records serial, VID/PID, firmware, canonical body
+hash and transport counts in `$XDG_STATE_HOME/io24/device-slots.json` (default
+`~/.local/state/io24/device-slots.json`) with status
+`WRITE_SENT_UNVERIFIED`. That is deliberately not called device readback or a
+durable commit: the io24 cannot return the stored body.
 
-`io24.py` can frame and send a caller-supplied, fully validated firmware-native
-version-2 record with `save_device_slot()`. That path is hardware-free only.
-The device cannot return its current slot body, so a live native trial would
-overwrite unreadable state and can restore only a pinned firmware default. It
-therefore remains a separately bounded acceptance action. A power-cycle test
-cannot establish persistence before an effective save/recall exists.
+Selecting a block alone does not replay its unreadable body in the retained live
+test. Therefore **Load** for a Host-known block selects it and directly sends the
+receipt's Fat Channel plus VoiceFX state. An unknown block can only be selected,
+and the UI says so. Fat Channel is established as audible without the Host after
+the device applies it; VoiceFX remains Host-assisted rather than standalone.
 
 ## Making settings stick
 

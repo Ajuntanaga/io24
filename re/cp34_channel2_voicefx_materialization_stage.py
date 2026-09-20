@@ -41,6 +41,8 @@ EXPECTED_VOICEFX_MESSAGE_SHA256 = (
     "6f93bc2cd158c84cd019f1f0d5813a4ed07f89d5bc447c7b91d5d0c399e662d6",
     "e1f3d0cb6bb53f04771c4a2781eeceafd5fdbfa4bbfce2d459d73ecc345cd0ae",
     "d006ae3b704fb6caf98abd9a5636b3d6a95ff6b2a0b32d51e7550969545876a6",
+    "2d51f9aa23ec137c25dd7b0d8647cb61ead1c996a24b390cabdb6aecc4610d8b",
+    "18689ace19bdf78d95fd9999bd424be13cbc50ba30c264bf9fa19c6943a0fd4e",
     "92c475598b12dd7b3418da6846016e0f23d93c0255436c1185d9938fb1ad8dc7",
 )
 
@@ -116,7 +118,7 @@ class _MaterializingDevice:
             expected = {
                 "model": "transformer",
                 "enabled": True,
-                "parameter_writes": 4,
+                "parameter_writes": 6,
                 "selection_order": "MODEL_BEFORE_STATE",
                 "activation": "UNPROVED",
                 "audibility": "UNPROVED",

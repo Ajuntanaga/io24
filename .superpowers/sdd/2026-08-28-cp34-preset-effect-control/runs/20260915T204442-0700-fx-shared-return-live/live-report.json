@@ -1,0 +1,235 @@
+{
+  "battery_after": 72,
+  "battery_before": 72,
+  "capture_endpoint": "hw:CARD=R24,DEV=0",
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "error": {
+    "message": "aplay failed: aplay: main:850: audio open error: Device or resource busy",
+    "type": "FxReturnProbeError"
+  },
+  "finished": "2026-09-15T20:46:30.417-07:00",
+  "plan": {
+    "allowed_blocks": [
+      100,
+      201,
+      202
+    ],
+    "allowed_mixer_bus_index": 1,
+    "capture_seconds": 10,
+    "never_written": [
+      "any 'Appl' parameter: gain, main/headphone volume, the per-channel processing scalar, slot index, phantom, link",
+      "any send into main or mixb",
+      "processingChannel",
+      "preset slot bodies or selection"
+    ],
+    "schema": "io24-fx-shared-return-probe-v2",
+    "stages": 14,
+    "stimulus": {
+      "burst_s": 0.5,
+      "cycles": 5,
+      "gap_s": 1.0,
+      "noise_below_db": 12.0,
+      "playback_channel": 0,
+      "rms_dbfs": -30.0,
+      "shape": "GATED_BURSTS",
+      "tones_hz": [
+        800.0,
+        1234.0
+      ],
+      "why": "only an effect's own tail can put energy in a silent gap"
+    },
+    "writes": [
+      "set_send_db('fxreturn/ch1', 'mixa', 0.0)",
+      "set_send_assigned('fxreturn/ch1', 'mixa', True)",
+      "set_reverb(on=True, **{'size': 0.95, 'mix': 1.0, 'predelay': 0.02, 'hp_freq': 200.0}) then reverb_off()",
+      "set_fx('ringmod', carrier_hz in (146.85, 313.7)) on then off",
+      "set_fx('detuner', detune=0) on then off",
+      "set_fx('delay', time_s=0.25, feedback=0.5, mix=1.0) on then off",
+      "set_fx('transformer', lows=1.0, width=1.0, mix=1.0) on then off"
+    ]
+  },
+  "playback_endpoint": "hw:CARD=R24,DEV=0",
+  "preset_slots": "UNTOUCHED",
+  "prior_host_known_state": {
+    "available": true,
+    "fx": {
+      "kwargs": {
+        "feedback": 1.0,
+        "mix": 1.0,
+        "on": true,
+        "time_s": 0.25
+      },
+      "model": "delay"
+    },
+    "return_send": {
+      "bus": "mixa",
+      "gain_db": -60.0,
+      "source": "fxreturn/ch1"
+    },
+    "reverb": {
+      "fs": 96000.0,
+      "hp_freq": 200.0,
+      "mix": 1.0,
+      "on": true,
+      "predelay": 0.0031979338842975207,
+      "size": 0.9601208273097012
+    },
+    "source": "/home/ajuntanaga/.cache/io24/shadow.json"
+  },
+  "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
+  "readable_state_after": {
+    "channel_linked": false,
+    "flags": 897,
+    "headphone_volume": 0.22000069916248322,
+    "input1_gain_db": 23.200000762939453,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "main_volume": 0.4500003457069397
+  },
+  "readable_state_before": {
+    "channel_linked": false,
+    "flags": 385,
+    "headphone_volume": 0.22000069916248322,
+    "input1_gain_db": 23.200000762939453,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "main_volume": 0.4500003457069397
+  },
+  "readable_state_matches": false,
+  "restoration_notes": [
+    "Host-known Voice FX state resent",
+    "Host-known reverb state resent",
+    "Host-known fxreturn/ch1 -> Mix A level -60.0 dB resent"
+  ],
+  "rig": {
+    "cable": "MAIN_OUT_L_TO_INPUT_1",
+    "feedback_loop": "USER_ESTABLISHED_DELIBERATE_MILD",
+    "headphones": "NOT_CONNECTED",
+    "input1_gain_db_reported_by_user": 23.0,
+    "monitors": "MEDIUM_MUTE_OFF",
+    "observation": "NATIVE_6CH_CAPTURE_OF_MIX_A_RETURN",
+    "stimulus": "GATED_BURSTS_FROM_USB_PLAYBACK_THROUGH_MAIN"
+  },
+  "schema": "io24-fx-shared-return-probe-v2",
+  "serialisation": "NO_CONTROL_WRITE_WHILE_ARECORD_OR_APLAY_RUNS",
+  "started": "2026-09-15T20:46:08.040-07:00",
+  "status": "RESTORATION_FAILED",
+  "transport": [
+    {
+      "blob_tag": 1348563553,
+      "block": 100,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "1fbef492cbf0ef7e283af9307c269b8b49ae0b6464d68d9e5016c4cc5da5bb6d",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "4b31b48cc0a2a91b68e53c1a5243aa6111be2e0c619a5e6ac65f7d8cdeadc056",
+      "timestamp": "2026-09-15T20:46:19.337-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 2
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 100,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "00361c98107b5d480f71b21f3af51dfcf19de2da59fd058309b1769d0d955cdd",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-15T20:46:19.337-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1450133112,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 36,
+      "frame_sha256": "f2c92c6749edb07a17ee0ed1d7cef29061e93fd821e2f50df53f559d9707a5f7",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-15T20:46:30.374-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1986356072,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 48,
+      "frame_sha256": "77bec02e526e6f6029a36a1fdeb285311a0836e0acb477ac3b0d71ae7b54ab2d",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "5437a5efdd249dba6f09c0e77fb9d80a90dcf5366b104ee2e98123fefd463dc7",
+      "timestamp": "2026-09-15T20:46:30.394-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 5
+    },
+    {
+      "blob_tag": 1987212898,
+      "block": 202,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 76,
+      "frame_sha256": "ceea4860b739917fb32064f9395ac2d587d649a7b5e7bee440e1cdcbbe93ba75",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c48b805b2853084a0419d31d542e84beda9af9626926721a41d94d4936fc9cf9",
+      "timestamp": "2026-09-15T20:46:30.416-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 6
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 100,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "d2cd70d32e36fe5dcccb1e83569097d253e6a3e630bb631b04922352909b48af",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7fb7f0f64b9c4c3bc8c9d5f654bcc6c12f84c06c069bc8ff17add4d61bbb6f91",
+      "timestamp": "2026-09-15T20:46:30.416-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 7
+    }
+  ],
+  "transport_validation": {
+    "allowed_blocks": [
+      100,
+      201,
+      202
+    ],
+    "allowed_mixer_bus_index": 1,
+    "blocks": [
+      100,
+      201,
+      202
+    ],
+    "main_path_untouched": true,
+    "mixer_bus_indexes": [
+      1
+    ],
+    "offending_frames": [],
+    "setp_frames": 6
+  }
+}

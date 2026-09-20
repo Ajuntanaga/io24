@@ -141,6 +141,15 @@ class PresetsPageShapeTests(unittest.TestCase):
         self.assertIn('"Preset blocks on the unit"',
                       _function("_preset_button_group"))
 
+    def test_uc_scenes_have_a_visible_validated_load_action(self):
+        page = _function("_presets_page")
+        self.assertIn('title="Scenes"', page)
+        self.assertIn('label="Load scene…"', page)
+        self.assertIn("Device preset blocks are never overwritten", page)
+        loader = _function("_load_scene_clicked")
+        self.assertIn("io24_scene.plan", loader)
+        self.assertIn("io24_scene.apply", loader)
+
     def test_every_loadable_row_has_a_visible_load_button(self):
         self.assertEqual(
             _function("_populate_user_presets").count(
@@ -281,7 +290,7 @@ class PutOnUnitTests(unittest.TestCase):
         self.assertNotIn("Channel 2 blocks do not load", body)
         self.assertNotIn("effect will not play", body)
 
-    def test_the_chosen_block_is_written_and_then_loaded(self):
+    def test_the_chosen_block_is_written_without_a_fake_host_recall(self):
         host = SimpleNamespace(
             ctl=SimpleNamespace(dev=object(),
                                 snap={"alive": True, "preset_slot": [0, 2]}),
@@ -295,7 +304,7 @@ class PutOnUnitTests(unittest.TestCase):
                 "Warm", _record("old"), relative_slot=1, source="user:Warm")
         self.assertEqual((plan["target"], plan["slot"], plan["relative_slot"]),
                          (1, 1, 1))
-        self.assertTrue(plan["activate"])
+        self.assertFalse(plan["activate"])
         self.assertEqual(plan["record"]["preset_name"], "Warm")
         self.assertEqual(plan["source"], "user:Warm")
 
@@ -312,15 +321,15 @@ class PutOnUnitTests(unittest.TestCase):
 
 class PlayingMarkerTests(unittest.TestCase):
     def test_the_selected_unit_block_is_marked_playing(self):
-        rows = {0: (_Row(), "On the unit · Channel 1, block 1"),
-                1: (_Row(), "On the unit · Channel 1, block 2")}
+        rows = {0: (_Row(), "Host-written candidate · Channel 1, block 1"),
+                1: (_Row(), "Host-written candidate · Channel 1, block 2")}
         host = _bind(SimpleNamespace(_unit_preset_rows=rows),
                      "_mark_playing_unit_blocks")
         host._mark_playing_unit_blocks([1, 2])
         self.assertEqual(rows[1][0].subtitle,
-                         "On the unit · Channel 1, block 2 · playing")
+                         "Host-written candidate · Channel 1, block 2 · playing")
         self.assertEqual(rows[0][0].subtitle,
-                         "On the unit · Channel 1, block 1")
+                         "Host-written candidate · Channel 1, block 1")
 
 
 if __name__ == "__main__":

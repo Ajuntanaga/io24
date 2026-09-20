@@ -1,0 +1,399 @@
+{
+  "battery_after": 59,
+  "battery_before": 60,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "finished": "2026-09-15T21:01:25.858-07:00",
+  "mixer_routes": "UNTOUCHED",
+  "preset_slots": "UNTOUCHED",
+  "prior_host_known_state": {
+    "available": true,
+    "fx": {
+      "kwargs": {
+        "feedback": 1.0,
+        "mix": 1.0,
+        "on": true,
+        "time_s": 0.25
+      },
+      "model": "delay"
+    },
+    "return_send": {
+      "bus": "mixa",
+      "gain_db": -60.0,
+      "source": "fxreturn/ch1"
+    },
+    "reverb": {
+      "fs": 96000.0,
+      "hp_freq": 200.0,
+      "mix": 1.0,
+      "on": true,
+      "predelay": 0.0031979338842975207,
+      "size": 0.9601208273097012
+    },
+    "source": "/home/ajuntanaga/.cache/io24/shadow.json"
+  },
+  "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
+  "readable_state_after": {
+    "channel_linked": false,
+    "flags": 897,
+    "headphone_volume": 0.22000069916248322,
+    "input1_gain_db": 23.200000762939453,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "main_volume": 0.46000033617019653
+  },
+  "readable_state_before": {
+    "channel_linked": false,
+    "flags": 897,
+    "headphone_volume": 0.22000069916248322,
+    "input1_gain_db": 23.200000762939453,
+    "input1_phantom": false,
+    "input1_processing_channel": 0,
+    "input1_processing_enabled": true,
+    "input2_gain_db": 24.287769317626953,
+    "input2_phantom": false,
+    "input2_processing_channel": 1,
+    "input2_processing_enabled": true,
+    "main_volume": 0.46000033617019653
+  },
+  "readable_state_matches": true,
+  "restoration_notes": [
+    "Host-known Voice FX state resent",
+    "Host-known reverb state resent",
+    "Host-known fxreturn/ch1 -> Mix A level -60.0 dB resent"
+  ],
+  "rig": {
+    "cable": "MAIN_OUT_L_TO_INPUT_1",
+    "loop": "REGENERATIVE_VIA_LINE_CH1_TO_MAIN_USER_ESTABLISHED",
+    "observation": "NATIVE_6CH_CAPTURE_OF_EVERY_BUS",
+    "stimulus": "THE_LOOP_ITSELF_NO_PLAYBACK_STREAM_OPENED"
+  },
+  "schema": "io24-fx-sustained-loop-ab-v1",
+  "stages": {
+    "final": {
+      "capture": "final.wav",
+      "channel_rms_dbfs": [
+        -140.40253396252984,
+        -89.33649033723782,
+        -92.3363799874169,
+        -92.33633022973552,
+        -92.33637762022002,
+        -92.33637761561816
+      ],
+      "input1": -140.40253396252984,
+      "input2": -89.33649033723782,
+      "mixa": -92.33635622230838,
+      "mixb": -92.33637761792002
+    },
+    "fx_off": {
+      "capture": "fx_off.wav",
+      "channel_rms_dbfs": [
+        -140.62381272366585,
+        -89.43249521857797,
+        -92.4322669085154,
+        -92.43229476701313,
+        -92.43225000599018,
+        -92.43224999015324
+      ],
+      "input1": -140.62381272366585,
+      "input2": -89.43249521857797,
+      "mixa": -92.43228198612458,
+      "mixb": -92.43224999807279
+    },
+    "fx_on": {
+      "capture": "fx_on.wav",
+      "channel_rms_dbfs": [
+        -140.80576664966952,
+        -89.33695416185947,
+        -92.3366363340981,
+        -92.33661498096545,
+        -92.33663541512472,
+        -92.33663540595364
+      ],
+      "input1": -140.80576664966952,
+      "input2": -89.33695416185947,
+      "mixa": -92.33662679312671,
+      "mixb": -92.33663541054013
+    },
+    "initial": {
+      "capture": "initial.wav",
+      "channel_rms_dbfs": [
+        -140.43903977828504,
+        -89.26666229458583,
+        -92.26622763612161,
+        -92.26618364418648,
+        -92.2662165869333,
+        -92.26621659755146
+      ],
+      "input1": -140.43903977828504,
+      "input2": -89.26666229458583,
+      "mixa": -92.26620683823008,
+      "mixb": -92.26621659224338
+    },
+    "reverb_off": {
+      "capture": "reverb_off.wav",
+      "channel_rms_dbfs": [
+        -140.1862342023444,
+        -89.29116893192833,
+        -92.2847360050889,
+        -92.2847360050889,
+        -92.29086800082612,
+        -92.29086800082612
+      ],
+      "input1": -140.1862342023444,
+      "input2": -89.29116893192833,
+      "mixa": -92.2847360050889,
+      "mixb": -92.29086800082612
+    },
+    "reverb_on": {
+      "capture": "reverb_on.wav",
+      "channel_rms_dbfs": [
+        -140.53120345777018,
+        -89.34557246395828,
+        -92.34550580551615,
+        -92.34546246586905,
+        -92.3454957812099,
+        -92.34549576112599
+      ],
+      "input1": -140.53120345777018,
+      "input2": -89.34557246395828,
+      "mixa": -92.34548527143816,
+      "mixb": -92.34549577116897
+    }
+  },
+  "started": "2026-09-15T21:00:46.359-07:00",
+  "status": "INVALID_REVERB_CONTROL_DID_NOT_MOVE_THE_LOOP",
+  "transport": [
+    {
+      "blob_tag": 1450133112,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 36,
+      "frame_sha256": "1bdf8840f7a9e6ac4cec99c1879d67bb17505b7033c212d72d70b7e3b3e729c4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "4b31b48cc0a2a91b68e53c1a5243aa6111be2e0c619a5e6ac65f7d8cdeadc056",
+      "timestamp": "2026-09-15T21:00:53.016-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 2
+    },
+    {
+      "blob_tag": 1986356072,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 48,
+      "frame_sha256": "84a621229e5879678bf161b72221f41efdae91a31205afa38b085590949a25f4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "34f7c27c3839c41279c89b328d89baf5e8db8416af43cf7568e6140ef001e883",
+      "timestamp": "2026-09-15T21:00:53.037-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 3
+    },
+    {
+      "blob_tag": 1450133112,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 36,
+      "frame_sha256": "f2c92c6749edb07a17ee0ed1d7cef29061e93fd821e2f50df53f559d9707a5f7",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "e77cf69a14c604190405cd320800436a5984681ee68b47fe78cc0d4a44f88dbc",
+      "timestamp": "2026-09-15T21:00:59.608-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 4
+    },
+    {
+      "blob_tag": 1986356072,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 48,
+      "frame_sha256": "77bec02e526e6f6029a36a1fdeb285311a0836e0acb477ac3b0d71ae7b54ab2d",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "5437a5efdd249dba6f09c0e77fb9d80a90dcf5366b104ee2e98123fefd463dc7",
+      "timestamp": "2026-09-15T21:00:59.629-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 5
+    },
+    {
+      "blob_tag": 1987212898,
+      "block": 202,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 76,
+      "frame_sha256": "5cb67a06c65d38ebdc1f22edf17a174a9e21d1f7179112afaf619d11c31c3ee4",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "c48b805b2853084a0419d31d542e84beda9af9626926721a41d94d4936fc9cf9",
+      "timestamp": "2026-09-15T21:01:06.194-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 6
+    },
+    {
+      "blob_tag": 1987212898,
+      "block": 202,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 76,
+      "frame_sha256": "4c2f076a1583ace784a94a0d145bcec2ac91fd5c17aab2b322ece8b51748a4d5",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "7fb7f0f64b9c4c3bc8c9d5f654bcc6c12f84c06c069bc8ff17add4d61bbb6f91",
+      "timestamp": "2026-09-15T21:01:12.739-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 7
+    },
+    {
+      "blob_tag": 1450133112,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 36,
+      "frame_sha256": "e3bc183773f89bf86022e862bbd05ed80eca9c631a8f9abd7a8306d7f26e2d05",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "529d79c63ffe6ef8f8717061f39321be7801599bfaced42387131727d91770c9",
+      "timestamp": "2026-09-15T21:01:25.814-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 8
+    },
+    {
+      "blob_tag": 1986356072,
+      "block": 201,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 48,
+      "frame_sha256": "9f5eaa8f4fd3a2112139e9585cde12b830881cfae5536a26ae513590116fefef",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f7c3abcab4414193e711f83775fa791fd0d11d33dfe9d5372255ef15b8429e2a",
+      "timestamp": "2026-09-15T21:01:25.835-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 9
+    },
+    {
+      "blob_tag": 1987212898,
+      "block": 202,
+      "block_index": 0,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 76,
+      "frame_sha256": "1ec6bce405a077d287272fa6911b70b85e50564b4140ba734618589a8fa037fb",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "93a2b314ed6ff64574a6a1beb28567a33ed5611ef087c0740ec6bd94e567e11b",
+      "timestamp": "2026-09-15T21:01:25.855-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 10
+    },
+    {
+      "blob_tag": 1348563553,
+      "block": 100,
+      "block_index": 1,
+      "command": "SetP",
+      "device_readback": "WRITE_SENT_NOT_READABLE",
+      "frame_bytes": 40,
+      "frame_sha256": "ba19bc598a04c578ad93f802b5384b2cbfe31068fc14f6dd62f5b2f567c21302",
+      "response_frame_bytes": 8,
+      "response_frame_sha256": "f0bbcb0a876adbb26ca5a76fc33e05a5dfad5bcb10bc6dba45f44fd22ed6463e",
+      "timestamp": "2026-09-15T21:01:25.856-07:00",
+      "transport": "USB_WRITE_EXACT_LENGTH",
+      "uid": 11
+    }
+  ],
+  "transport_validation": {
+    "allowed_blocks": [
+      100,
+      201,
+      202
+    ],
+    "allowed_mixer_bus_index": 1,
+    "blocks": [
+      100,
+      201,
+      202
+    ],
+    "main_path_untouched": true,
+    "mixer_bus_indexes": [
+      1
+    ],
+    "offending_frames": [],
+    "setp_frames": 10
+  },
+  "verdict": {
+    "block201": {
+      "buses": {
+        "input1": {
+          "delta_db": -0.181953926003672,
+          "off_dbfs": -140.62381272366585,
+          "on_dbfs": -140.80576664966952
+        },
+        "input2": {
+          "delta_db": 0.09554105671850266,
+          "off_dbfs": -89.43249521857797,
+          "on_dbfs": -89.33695416185947
+        },
+        "mixa": {
+          "delta_db": 0.09565519299786729,
+          "off_dbfs": -92.43228198612458,
+          "on_dbfs": -92.33662679312671
+        },
+        "mixb": {
+          "delta_db": 0.0956145875326655,
+          "off_dbfs": -92.43224999807279,
+          "on_dbfs": -92.33663541054013
+        }
+      },
+      "detected": false,
+      "max_abs_delta_db": 0.181953926003672
+    },
+    "loop_drift_db": {
+      "input1": 0.036505815755191406,
+      "input2": -0.0698280426519915,
+      "mixa": -0.07014938407830584,
+      "mixb": -0.07016102567664007
+    },
+    "loop_steady": true,
+    "reverb_control": {
+      "buses": {
+        "input1": {
+          "delta_db": -0.34496925542578083,
+          "off_dbfs": -140.1862342023444,
+          "on_dbfs": -140.53120345777018
+        },
+        "input2": {
+          "delta_db": -0.05440353202995141,
+          "off_dbfs": -89.29116893192833,
+          "on_dbfs": -89.34557246395828
+        },
+        "mixa": {
+          "delta_db": -0.06074926634926214,
+          "off_dbfs": -92.2847360050889,
+          "on_dbfs": -92.34548527143816
+        },
+        "mixb": {
+          "delta_db": -0.05462777034284727,
+          "off_dbfs": -92.29086800082612,
+          "on_dbfs": -92.34549577116897
+        }
+      },
+      "detected": false,
+      "fired": false,
+      "max_abs_delta_db": 0.34496925542578083
+    },
+    "run_valid": false,
+    "status": "INVALID_REVERB_CONTROL_DID_NOT_MOVE_THE_LOOP"
+  },
+  "writes": "BLOCK_201_AND_BLOCK_202_ON_FLAGS_ONLY"
+}

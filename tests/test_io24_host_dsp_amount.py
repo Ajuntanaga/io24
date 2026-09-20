@@ -17,6 +17,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+import io24
 import io24gtk
 from io24gtk import ProcessingMix
 
@@ -49,6 +50,15 @@ class _Value:
 
 
 class _Device:
+    # The effects-return transaction lives in the driver. Borrowing the real
+    # one keeps this file asserting the exact wire writes -- in particular that
+    # enabling reverb over a bypassed channel still writes wire 4 as zero.
+    BUS_ALIASES = io24.Io24.BUS_ALIASES
+    MIXER_BUSES = io24.Io24.MIXER_BUSES
+    FX_RETURN_SOURCE = io24.Io24.FX_RETURN_SOURCE
+    _bus = io24.Io24._bus
+    establish_effects_return = io24.Io24.establish_effects_return
+
     def __init__(self):
         self.calls = []
 

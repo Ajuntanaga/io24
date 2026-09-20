@@ -287,6 +287,16 @@ def build() -> dict:
          [False, True], ("set_channel_link",)),
         ("preset_mode", "presetMode", "front_panel_write_only",
          [0, 1, 2], ("set_preset_mode",)),
+        # Owner's manual 7.1 item 5, Channel Mute Sync: with it enabled a
+        # channel Mute mutes that channel in Main, Stream Mix A and Stream
+        # Mix B rather than the selected mix alone.  Write-only like
+        # presetMode -- no state slot tracks it -- but unlike presetMode its
+        # effect is in the audio domain, so the oracle is the bus difference
+        # while a channel is muted, not a front-panel indication.  Which
+        # integer means enabled is inferred from vendor naming and is exactly
+        # what this row has to settle.
+        ("mute_mode", "muteMode", "write_only_audio_toggle",
+         [False, True], ("set_mute_mode",)),
     )
     for ident, param, profile, stimuli, api in direct:
         add("native.global." + ident, "P3", "native_control", param, profile,
@@ -379,6 +389,25 @@ def build() -> dict:
                     scope={"source": source_name, "bus": bus}, stimuli=stimuli,
                     api=api, source=("io24.py block 100",),
                     requires=("deterministic_audio_rig@batch",), blockers=blockers)
+
+    # UC exposes source and output mutes above the same write-only block-100
+    # cells. The Linux Host now preserves the underlying faders/assignments and
+    # folds those mutes into the emitted values, exactly as it already does for
+    # assignment, bus master, pan and solo.
+    for source_name in ("return/ch1", "return/ch2", "return/ch3",
+                        "fxreturn/ch1"):
+        add("mixer.%s.source_mute" % _safe_id(source_name), "P3",
+            "host_mixer_control", source_name + "/mute", "host_mapping",
+            scope={"source": source_name}, stimuli=[False, True],
+            api=("set_source_mute", "source_muted"),
+            source=("io24.py block-100 Host fold", "UC 4.7.2 Channel/mute"))
+    for bus, route in (("main", "main/ch1"), ("mixa", "aux/ch1"),
+                       ("mixb", "aux/ch2")):
+        add("mixer.%s.bus_mute" % bus, "P3", "host_mixer_control",
+            route + "/mute", "host_mapping", scope={"bus": bus},
+            stimuli=[False, True], api=("set_bus_mute", "bus_muted"),
+            source=("io24.py block-100 Host fold",
+                    "UC 4.7.2 OutputChannel/mute"))
     for bus in mixer_buses:
         add("mixer.%s.master" % bus, "P3", "mixer_master", "master trim",
             "host_mapping", scope={"bus": bus}, stimuli=[-12.0, 0.0, 6.0],
@@ -871,7 +900,7 @@ def _safe_public_api() -> set[str]:
                         "snapshot", "apply_startup", "send_fx", "apply_voicefx_snapshot",
                         "configure_voice_fx_intent", "fx_on", "fx_off", "preset_enabled",
                         "reverb_off", "eq_off", "running", "start", "stop",
-                        "soloed",
+                        "soloed", "source_muted", "bus_muted",
                     }):
                 names.add(node.name)
     return names

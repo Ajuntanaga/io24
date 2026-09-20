@@ -34,7 +34,7 @@ io24-scene = "io24_scene:main"
 [tool.setuptools]
 py-modules = [
     "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters",
-    "io24_mbc", "io24_native_stat", "io24_preset_record", "io24_presets",
+    "io24_mbc", "io24_native_stat", "io24_native_strip", "io24_preset_record", "io24_presets",
     "io24_alt_eq", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
     "io24_scene", "io24d", "io24web", "io24gtk", "ucnet_shim", "calibrate",
 ]

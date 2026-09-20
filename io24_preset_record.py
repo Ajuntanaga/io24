@@ -215,7 +215,7 @@ class DeviceSlotRegistry:
         return sorted(entries, key=lambda entry: entry["slot"])
 
     def prepare_write(self, slot_index, record, source, written_at=None, *,
-                      device_identity):
+                      device_identity, native_record=None):
         """Validate local state and one complete body before any device write."""
         slot = _device_slot_index("slot_index", slot_index)
         complete = complete_device_slot_record(record)
@@ -226,20 +226,27 @@ class DeviceSlotRegistry:
             written_at = datetime.now(timezone.utc).isoformat()
         if not isinstance(written_at, str) or not written_at:
             raise ValueError("device slot registry timestamp must be text")
-        return {
-            "document": self._read(),
-            "entry": {
-                "slot": slot,
-                "physical_channel": 1 if slot < 2 else 2,
-                "device_identity": identity,
-                "record": complete,
-                "canonical_sha256": _canonical_record_sha256(complete),
-                "source": source.strip(),
-                "written_at": written_at,
-                "provenance": DEVICE_SLOT_REGISTRY_PROVENANCE,
-                "status": "WRITE_SENT_UNVERIFIED",
-            },
+        entry = {
+            "slot": slot,
+            "physical_channel": 1 if slot < 2 else 2,
+            "device_identity": identity,
+            "record": complete,
+            "canonical_sha256": _canonical_record_sha256(complete),
+            "source": source.strip(),
+            "written_at": written_at,
+            "provenance": DEVICE_SLOT_REGISTRY_PROVENANCE,
+            "status": "WRITE_SENT_UNVERIFIED",
         }
+        if native_record is not None:
+            try:
+                native_record = bytes(native_record)
+            except (TypeError, ValueError):
+                raise TypeError("native device slot body must be bytes-like")
+            entry.update({
+                "body_format": "firmware-native-v2",
+                "native_sha256": hashlib.sha256(native_record).hexdigest(),
+            })
+        return {"document": self._read(), "entry": entry}
 
     def commit_sent(self, prepared, transport_report):
         """Persist a prepared entry after its transport call returned."""

@@ -72,7 +72,7 @@ class _FakeDevice:
         return {
             "model": "transformer",
             "enabled": True,
-            "parameter_writes": 4,
+            "parameter_writes": 6,
             "selection_order": "MODEL_BEFORE_STATE",
             "activation": "UNPROVED",
             "audibility": "UNPROVED",
@@ -109,7 +109,7 @@ class Channel2VoiceFxMaterializationStageTests(unittest.TestCase):
             "model": "transformer",
             "enabled": True,
             "selection_order": "MODEL_BEFORE_STATE",
-            "wire_messages": 4,
+            "wire_messages": 6,
             "wire_message_sha256": list(STAGE.EXPECTED_VOICEFX_MESSAGE_SHA256),
             "processing_gate": "UNPROVED",
             "audibility": "UNPROVED",
@@ -135,7 +135,7 @@ class Channel2VoiceFxMaterializationStageTests(unittest.TestCase):
         self.assertEqual(result["direct_voicefx_apply"], {
             "model": "transformer",
             "enabled": True,
-            "parameter_writes": 4,
+            "parameter_writes": 6,
             "selection_order": "MODEL_BEFORE_STATE",
             "activation": "UNPROVED",
             "audibility": "UNPROVED",

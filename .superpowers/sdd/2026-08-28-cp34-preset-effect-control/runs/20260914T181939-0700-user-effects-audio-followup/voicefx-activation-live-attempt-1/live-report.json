@@ -1,0 +1,30 @@
+{
+  "audio_stream_timing": {
+    "observed": false,
+    "quantum_frames": null,
+    "sample_rate_hz": null,
+    "source": "NO_ALSA_STREAM_OPENED_BY_METER_ONLY_PROBE"
+  },
+  "battery_after": 62,
+  "battery_before": 62,
+  "device": {
+    "bcd_device": "0128",
+    "serial": "AB7C22200355"
+  },
+  "dsp_amount": "UNTOUCHED",
+  "error": {
+    "message": "[Errno 16] Resource busy",
+    "type": "USBError"
+  },
+  "finished": "2026-09-14T18:48:18.815-07:00",
+  "fx_builder_sample_rate_hz": 96000,
+  "mixer_routes": "UNTOUCHED",
+  "observation": "SIMULTANEOUS_JAST_INPUT1_AND_MAIN_LR_METERS",
+  "playback": "NONE",
+  "preset_slots": "UNTOUCHED",
+  "processing_channel": "UNCHANGED_IDENTITY_0_1_REASSERTED_ONCE",
+  "schema": "io24-voicefx-activation-meter-probe-v2",
+  "started": "2026-09-14T18:48:18.803-07:00",
+  "status": "LIVE_FAILED",
+  "stimulus": "INPUT1_PREAMP_SELF_NOISE"
+}

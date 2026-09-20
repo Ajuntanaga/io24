@@ -140,9 +140,6 @@ class FullParameterInventoryTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def set_voicefx_channel(self, channel):
-                self.calls.append(("owner", channel))
-
             def set_fx(self, model, **kwargs):
                 self.calls.append(("state", model, kwargs))
                 return 2
@@ -207,6 +204,7 @@ class FullParameterInventoryTests(unittest.TestCase):
                 "channel": 2, "model": 2, "on": True, "input_db": -31.0,
                 "output_db": -12.0, "attack_s": 0.00023,
                 "release_s": 0.81, "ratio_index": 4}},
+            "mute_mode": {"fn": "set_mute_mode", "kwargs": {"mode": True}},
         }
         state = io24gtk.shadow_ui_state(shadow)
         self.assertNotIn("voicefx_target", state)
@@ -214,6 +212,7 @@ class FullParameterInventoryTests(unittest.TestCase):
         self.assertEqual(state["processing_mix"], {2: 0.95})
         self.assertEqual(state["reverb_return"], {"mixa": -3.0})
         self.assertEqual(state["compressor"][2]["output_db"], -12.0)
+        self.assertTrue(state["mute_mode"])
 
     def test_all_safe_public_control_entrypoints_are_inventory_backed(self):
         required = {
@@ -221,9 +220,11 @@ class FullParameterInventoryTests(unittest.TestCase):
             "set_phones_source",
             "set_output_delay", "set_output_delay_bus", "set_monitor_mix",
             "set_phantom", "set_highpass", "set_mute", "set_hp_mute",
+            "set_mute_mode",
             "set_channel_link", "set_processing_channel", "set_voicefx_channel",
             "set_limiter", "set_compressor", "set_gate", "set_highpass_freq",
             "set_send_db", "set_send_assigned", "set_bus_master",
+            "set_source_mute", "set_bus_mute",
             "set_pair_pan", "mirror_main", "set_fx", "set_preset_mode",
             "set_preset_enabled", "set_preset_slot", "set_reverb",
             "set_eq_band", "set_comp_eq_order", "save_preset", "load_preset",
@@ -269,10 +270,14 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertEqual(self.saved, self.generated)
 
     def test_matrix_is_atomic_pending_and_restoration_gated(self):
-        self.assertEqual(self.generated["coverage"]["total_rows"], 709)
-        self.assertEqual(len(self.rows), 709)
-        self.assertEqual(len({row["id"] for row in self.rows}), 709)
+        # 717 since the UC scene repair: the decoded Channel Mute Sync row plus
+        # four return-source mutes and three output-bus mutes all have concrete
+        # Host implementations and individual reconciliation rows.
+        self.assertEqual(self.generated["coverage"]["total_rows"], 717)
+        self.assertEqual(len(self.rows), 717)
+        self.assertEqual(len({row["id"] for row in self.rows}), 717)
         ids = {row["id"] for row in self.rows}
+        self.assertIn("native.global.mute_mode", ids)
         self.assertIn("native.channel1.processing_mix", ids)
         self.assertIn("native.channel2.processing_mix", ids)
         self.assertNotIn("native.channel1.reverb_send", ids)

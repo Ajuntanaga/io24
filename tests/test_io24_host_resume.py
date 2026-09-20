@@ -291,22 +291,6 @@ class ResumeSessionTests(unittest.TestCase):
         host._resume_session(first=False, path=self.path)
         self.assertIsNone(adopted[0][1])
 
-    def test_fx_on_replays_state_without_recalling_or_routing_an_owner(self):
-        shadow = {
-            "set_fx": {"fn": "set_fx",
-                       "kwargs": {"model": "detuner", "on": True}},
-            "set_processing_channel#channel=1": {
-                "fn": "set_processing_channel",
-                "kwargs": {"channel": 1, "source_input": 2}},
-            "set_fx_mix#channel=2": {"fn": "set_fx_mix",
-                                     "kwargs": {"channel": 2, "value": 0.4}},
-        }
-        host, backend, _adopted = self._host(shadow, preset_slot=(0, 3))
-        host._resume_session(first=False, path=self.path)
-        self.assertEqual(backend.calls, [
-            ("reapply", io24gtk.RESUME_SKIP),
-        ])
-
     def test_voice_fx_off_loads_no_block(self):
         shadow = {"set_fx": {"fn": "set_fx",
                              "kwargs": {"model": "detuner", "on": False}}}

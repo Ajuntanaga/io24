@@ -22,7 +22,218 @@ Host-state round trips. Stub-only GTK captures cover Passive at desktop width
 and Vintage at the constrained narrow width. No USB/audio/device action
 occurred; audible device response remains untested in this result.
 
-## 2026-09-14 controlling selector-replay and live-null evidence
+## 2026-09-17 controlling VoiceFX verdict: all six work on Host Input 1
+
+The UC 4.7.2 lifecycle repair is objectively hardware-verified across every
+VoiceFX model on serial `AB7C22200355`, firmware `0128`. The valid guarded
+Main-L -> Input-1 run at
+`runs/20260917T230349-0700-voicefx-remaining-models/` operated Transformer,
+Detuner, Vocoder, Ring Modulator, and Filters through two independent on/off
+cycles each. All five produced repeatable processing. The preceding run at
+`runs/20260917T222751-0700-voicefx-input1-waveform/` proved Delay repeats at
+250/500/750 ms twice.
+
+The five-model run had a +11.708 dB reverb positive control and only 0.0065 dB
+maximum source/off-state drift. Detuner produced both exact -8-semitone target
+frequencies twice, and Ring Modulator produced the programmed 313.7 Hz
+sidebands twice. Transformer, Vocoder, and Filters passed repeatable
+gain-normalized spectral tests. The raw report's Detuner partial was an
+over-strict analysis guard, not a packet or device failure; adjacent
+`corrected-verdict.json` detects all five from the immutable WAVs.
+
+Restoration returned Input 1 to 11 dB, restored the exact PipeWire mute and all
+readable/write-only Host-known state, and touched no slots, DSP Amount,
+`processingChannel`, firmware, reset, or DFU. The Host repair is complete for
+Input 1. Simultaneous two-lane processing and standalone device-preset
+VoiceFX remain separate unproved questions.
+
+## 2026-09-15 controlling FX verdict: block 201 inert by ear, block 202 audible
+
+Serial `AB7C22200355`, firmware `0128`, Host closed, user on headphones, Input 1
+carrying first an instrument cable held by hand and then a guitar. The path was
+established by the script itself through `Io24.establish_effects_return`:
+channel 1 processing scalar, `fxreturn/ch1 -> Main` at +6.79 dB, assigned.
+
+Block 202 reverb: audible, on cue, as the closing positive control of every run.
+Block 201 on that identical path with 202 held off: nothing — Delay at 450 ms /
+0.55 / 100 % wet over three on-off phases, all six models in sequence each fully
+wet, and a sustained guitar through Delay at 250 ms / 1.00 / 100 % wet. Three
+independent ear tests, each with a control that fired. The dry signal heard
+throughout had passed through the channel DSP chain at scalar 1.000, so the
+insert reading is covered by the same test as the send reading.
+
+Two prior claims are corrected by it: this ledger's own "wrong bus" reading of
+the CP34 nulls is withdrawn in part (the bus was wrong; correcting it does not
+make block 201 audible, and the CP34 conclusion stands), and the 2026-07-28
+"Delay ear-verified" record is reattributed to the shared reverb, which that
+record itself flags as having been left routed open.
+
+Per-module enable, checked statically against the vendor model: UC's
+`re/uc_component_model/dsp_fx_params.xml` gives each of the six Voice FX modules
+its own storable `on` toggle and declares no container-level enable, and
+`dspusb_component_model.xml` carries one mutable `voicefx` component per mic
+strip behind `voicefxopt`/`InsertFXSelector`. That `on` is the first word of each
+model's state blob and is exactly what `io24_fx.set_fx_*` and the Host's
+`FX active` switch already send; the all-six sweep sent `on=True` per model. A
+per-module UI would match UC but changes nothing on the wire.
+
+Transcripts and run record:
+`runs/20260915T211916-0700-fx-ear-verdict/` (`PROGRESS.md`,
+`delay-ab-transcript.txt`, `sweep-transcript.txt`).
+
+Untested and unreachable from the host: a cold boot with a stored Voice-FX-on
+slot and no host attached. `re/io24_native_delay_recall.py` is prepared and
+needs a power cycle plus separate exact authorization.
+
+## 2026-09-15 controlling device-save evidence
+
+The formerly disabled/refused user action now sends a complete firmware-native
+version-2 slot body. On serial `AB7C22200355`, firmware `0128`, the production
+API wrote existing user preset `MAIN` to Channel 1 Block 2/global slot 1. It
+sent one frame, returned zero replies as expected for this fire-and-forget
+transport, committed registry status
+`HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE`, and preserved active slots exactly
+as `[0, 2]`. Native body SHA-256:
+`71d59077628129ef991464c9486d8372cbad9fe4eb9f9e46aae558a0d36630cd`.
+
+This establishes Host native-body construction, transport, and local receipt;
+it does not establish device readback or cold-boot persistence because the
+firmware exposes neither a slot-body getter nor an acknowledgement payload.
+The native body also does not contain the tagged-scene chain-order field.
+Exact machine-readable receipt:
+`runs/20260915T134500-0700-fx-preset-finish/NATIVE-SLOT-SAVE-LIVE.json`.
+
+The affected save/FX-UI/inventory set passes 167 tests and 22 subtests. The full
+run reached 881 passes before the sole stale deterministic-matrix mismatch; the
+regenerated matrix's 28-test module passes and the artifact SHA-256 is
+`1d0ba2ad1fa798f8bfcd08be56fd37433ebfe510c0f38600843f165a995fd187`.
+
+Separate FX evidence remains negative: two quiet-gated Transformer trials
+measured -0.119 and -0.070 dB, while their same-path direct-gate control moved
+19.593 dB. Classification is
+`NO_DIRECT_BLOCK201_METER_EFFECT_DETECTED`; do not claim FX activation fixed.
+
+## 2026-09-14 controlling result: Channel-2 zero is negative; isolate gate-control ordering
+
+The authorized activation run on serial `AB7C22200355` invalidated the
+same-value Input-1 assignment hypothesis. Its gate control changed the selected
+bus by **27.041 dB** with **-0.131 dB** Input-1 drift; Transformer, De-Tuner,
+Vocoder, Ring Modulator, Filters, and Delay all stayed between **-0.153 and
++0.033 dB** with stable A/B/A baselines. Classification is
+`NO_DIRECT_BLOCK201_METER_EFFECT_DETECTED`. Restoration was exact and error-
+free; battery was 63/64%. Report:
+`runs/20260914T181939-0700-user-effects-audio-followup/voicefx-activation-live-attempt-3/live-report.json`.
+
+The authorized Channel-2 discriminator then recreated flags 449 by changing
+Channel-2 DSP Amount from the explicitly supplied 1.0 to zero. Transformer
+remained a stable null at **-0.097 dB** with **0.016 dB** off drift; the direct
+gate control moved the selected bus **26.614 dB** with **0.502 dB** source
+drift. Restoration resent the supplied 1.0, returned readback to nonzero,
+restored the Host-known FX/gate intents, and matched every readable prestate
+without errors. Exact positive DSP Amount is not readable. Report:
+`runs/20260914T181939-0700-user-effects-audio-followup/voicefx-channel2-zero-live-attempt-1/live-report.json`.
+
+Independent review found several remaining differences. The positive began in
+Host-known Transformer-off state; the null began Detuner-off, while the actual
+delegate is not readable. The positive used gate-off before a 30 -> 60 dB gain
+step and roughly five seconds of pre-FX dwell; the null used gain before
+gate-off and roughly 0.5 seconds. The positive's Main/Mix-A/Mix-B ratios were
+all about 6.56 dB, whereas the null's Main/Mix-A were about 11.39 dB and Mix-B
+about 6.75 dB. Thus gate order is not the sole uncontrolled variable.
+
+Moving the configured-gate control after the FX trial remains a useful
+anti-perturbation change, but the first reordered live attempt stopped before
+opening the device because `194f:0422` was absent and made no writes. A fresh
+boot/re-enumeration is valuable because firmware construction installs model 0
+(Transformer) before Host model switching is attempted.
+
+After re-enumeration, attempt 3 did run in that order but its stimulus was not
+self-noise. Input 1 changed **-12.973 dB** during the later control; the two
+Transformer-off baselines drifted **-5.112 dB** with **3.194 dB** maximum MAD.
+The apparent Transformer midpoint delta of **-2.965 dB** is therefore formally
+inconclusive. Readable restoration matched and reported no errors. Any repeat
+must use a pre-write quiet/stability gate and abort without writes when Input 1
+is active.
+
+The offline-ready `--transformer-repeatability` mode implements that boundary:
+two quiet read-only windows precede all writes, followed by two complete
+Transformer A/B/A cycles. A positive requires both stable off returns and two
+same-sign detected on deltas. Channel-2 DSP Amount is untouched and the gate
+control remains after the target cycles.
+
+Preset independence is covered separately: an FX-off named Host preset saves
+and reloads its Fat Channel without calling either activation or `set_fx`, and
+the UI commits strip replay before reporting a later optional FX failure.
+
+## 2026-09-14 superseded candidate: measured-positive FX activation prelude
+
+The user's current listening result is that all six Host FX models are
+inaudible. It does not erase the retained positive result: attempt 3 at
+`20260913T222036-0700-autonomous-host-acceptance` measured Transformer on at
+**-4.024 dB** versus the midpoint of two off baselines, with **0.045 dB** drift,
+and passed its same-path gain control at **26.248 dB**. Classification was
+`DIRECT_BLOCK201_METER_EFFECT_DETECTED`.
+
+That positive inherited an already-armed device after the older Host was
+closed. The Host version immediately preceding it sent
+`set_voicefx_channel(1)` once before the first model write. Commit `99c8e7b`
+removed that prelude; the later negative Host runs did not reproduce it. Frame
+timing therefore was not a demonstrated cause, and the prior timing diagnosis
+is withdrawn.
+
+The Host now restores the missing first-use prelude at startup, explicit preset
+FX load, and the first Effects-page edit. It is constrained to a same-value
+operation: live `processingChannel` must already read `0/1`, after which only
+Input 1 is reasserted. A swapped or unreadable mapping is refused before a
+write. The original measured-positive builder order is retained, but it is not
+labelled the activation mechanism. The six-model meter probe now includes the
+same guarded prelude; live acceptance is pending.
+
+Preset replay is separately hardened: the Fat Channel is applied before the
+FX attempt, so failed FX activation cannot cancel or falsely report a normal
+preset load. Named Host preset saving remains a local operation and works with
+FX switched off.
+
+Reverb is not currently classified defective. The user recalls needing an FX
+return above 0 dB under UC for the desired total reverb sound and approves the
+new character/movement additions. `100 %` remains an internal blend on the
+parallel return, not a wet-only Main output; the UI now makes that distinction
+explicit and labels the added characters as Host approximations.
+
+Finally, the user heard at most slight Channel-1 compression before Host launch
+and clearly heard the Fat Channel after launch. This is consistent with Host
+startup reapplying the write-only chain state and is positive contextual
+evidence for the general DSP control path, not a measurement of any one module.
+
+## 2026-09-14 controlling Host-v2 and finite-surface evidence
+
+Commit `f39f1a8` records the joint static work and Claude's five authorized live
+runs. Host v2 selector replay is negative: direct gate **-19.551 dB**, Ring Mod
+**-0.167 dB** against **1.722 dB**. With both streams genuinely open at observed
+48 kHz / period 512: gate **-19.580 dB**, Ring Mod **+0.005 dB**. Channel 2
+produced **+0.035 dB**. All runs restored cleanly.
+
+The finite `Para`/`Pari` parameter space contains no Voice FX activation and all
+unclaimed IDs were already swept. Primary handler `0x553d4` compares `VFxO` and
+`VoFx` before falling through to generic `0x5079c`. Correct three-word `VFxO`
+was negative with a valid **-19.647 dB** control: effect **-0.132 dB** against
+**2.724 dB**. Host v1/v2, idle/streaming, both channels, the known gate fields,
+delegate installation, scheduling, and reachable parameter/message candidates
+are closed.
+
+The next discriminator is a stored Voice-FX-on preset applied at genuine cold
+boot with no Host attached. It has not been authorized or executed. If audible,
+capture Universal Control; if inaudible, document firmware `0128` as insert-inert
+and publish. Evidence runs: `20260914T161824-0700-hostv2-ringmod-live`,
+`20260914T162641-0700-ringmod-streaming-live`,
+`20260914T165711-0700-finite-parameter-space-synthesis`, and
+`20260914T170843-0700-vfxo-enable-live`.
+
+Future probe schema v2 no longer reports hardcoded 96 kHz/512 constants as
+observed Host configuration. Meter-only runs explicitly record that no ALSA
+stream timing was observed; retained live reports are unchanged.
+
+## 2026-09-14 superseded selector-replay and first live-null evidence
 
 The authorized Ring-Mod run's direct-gate positive control changed the
 Main/Input-1 ratio by `-19.277711 dB` against an `11.794912 dB` threshold.

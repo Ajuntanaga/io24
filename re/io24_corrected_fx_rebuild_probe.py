@@ -31,7 +31,7 @@ import io24_loopback_foundation as foundation  # noqa: E402
 import io24_voicefx_meter_probe as prior  # noqa: E402
 
 
-SCHEMA = "io24-corrected-fx-rebuild-probe-v1"
+SCHEMA = "io24-corrected-fx-rebuild-probe-v2"
 SAFE_OUTPUT_VOLUME = 0.01
 PROBE_INPUT_GAIN_DB = 60.0
 SAMPLES_PER_WINDOW = 40
@@ -39,12 +39,21 @@ SAMPLE_INTERVAL_SECONDS = 0.05
 SETTLE_SECONDS = 0.6
 DRIFT_MAX_DB = 0.75
 EFFECT_MIN_DB = 1.0
-RATE_HZ = 96000.0
 DELAY_PARAMETERS = {
     "time_s": 0.25,
     "feedback": 1.0,
     "mix": 1.0,
 }
+
+
+def meter_only_audio_stream_timing():
+    """Describe the absence of an observed ALSA stream configuration."""
+    return {
+        "observed": False,
+        "sample_rate_hz": None,
+        "quantum_frames": None,
+        "source": "NO_ALSA_STREAM_OPENED_BY_METER_ONLY_PROBE",
+    }
 
 
 class ProbeError(RuntimeError):
@@ -305,8 +314,7 @@ def run_live(output_dir, battery_path, shadow_path):
         "schema": SCHEMA,
         "status": "LIVE_FAILED",
         "started": _now(),
-        "host_configured_sample_rate_hz": int(RATE_HZ),
-        "host_configured_quantum_frames": 512,
+        "audio_stream_timing": meter_only_audio_stream_timing(),
         "stimulus": "INPUT1_PREAMP_SELF_NOISE",
         "observation": "SIMULTANEOUS_JAST_INPUT1_AND_MAIN_LR_METERS",
         "playback": "NONE",

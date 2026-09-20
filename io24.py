@@ -1055,7 +1055,7 @@ class Io24:
     # this table had 5 and 7 the wrong way round; the setters below were always
     # right, so only these labels were wrong.
     KNOWN_PARI = {0: "phantom", 4: "presetEnable", 5: "hpf", 6: "hpOutputMute",
-                  7: "mute", 9: "link", 11: "phonesSource",
+                  7: "mute", 8: "muteMode", 9: "link", 11: "phonesSource",
                   12: "processingChannel",
                   13: "outputDelayBus",
                   15: "unknown, sets JaSt slot 42 bit 13", 16: "presetSlot",
@@ -1241,6 +1241,39 @@ class Io24:
     def set_hp_mute(self, on):
         """Headphone output mute ('Pari' wire id 6)."""
         self.set_param(6, 1 if on else 0, as_int=True)
+
+    def set_mute_mode(self, mode):
+        """Channel Mute Sync ('Pari' wire id 8 -> firmware internal id 5).
+
+        The owner's manual, section 7.1 item 5: "Channel Mute Sync. With this
+        enabled, clicking Mute on a channel mutes the channel in all outputs:
+        Main, Stream Mix A, and Stream Mix B."  So this changes what
+        :meth:`set_mute` means, from one bus to every bus.
+
+        The wire id is not a guess.  PROTOCOL.md's `'Pari'` dispatcher table
+        has wire 8 -> `muteMode`, index ignored, recovered from the firmware
+        table at fw 0x2e49a; an early probe wrote wire 8 believing it was
+        `presetButtonMode` and the correction is recorded on
+        :meth:`set_preset_mode`.
+
+        WHAT IS NOT ESTABLISHED: which integer means enabled.  UC's name and
+        the manual's wording make 1 the sync-on value, but no hardware run has
+        confirmed it, and like `presetMode` this is write-only -- no slot in
+        the 503-float state blob tracks it, so it cannot be read back.  The
+        caller passes the integer, and a boolean is accepted only as the
+        documented inference.  Do not report a value as verified from a
+        successful transport; SetP is fire-and-forget.
+        """
+        if isinstance(mode, bool):
+            mode = 1 if mode else 0
+        if not isinstance(mode, int):
+            raise TypeError("mute mode must be an integer")
+        if mode not in (0, 1):
+            raise ValueError("mute mode must be 0 or 1")
+        self.set_param(8, mode, index=0, as_int=True)
+        return {"wire_id": 8, "parameter": "muteMode", "value": mode,
+                "value_mapping": "INFERRED_FROM_VENDOR_NAMING",
+                "readback": "UNAVAILABLE"}
 
     PHONE_SOURCES = {"main": 0, "mixa": 1, "mixb": 2}
     PHONE_SOURCE_ALIASES = {
@@ -1624,7 +1657,7 @@ class Io24:
     # the alternative is losing the fader position every time a channel is
     # unassigned. What reaches the wire is:
     #
-    #     off               if not assigned
+    #     off               if not assigned, source-muted, or bus-muted
     #     send + master     otherwise, clamped to the block's -144..+10
     #
     # None of it can be read back (block 100 is write-only), so the three parts
@@ -1635,7 +1668,10 @@ class Io24:
     def _sends(self):
         """The send model, rebuilt from the shadow on first use in a process."""
         if getattr(self, "_send_state", None) is None:
-            self._send_state = {"level": {}, "assign": {}, "master": {}, "pan": {}}
+            self._send_state = {
+                "level": {}, "assign": {}, "master": {}, "pan": {},
+                "source_mute": {}, "bus_mute": {},
+            }
             for ent in (self._shadow or {}).values():
                 kw, fn = ent.get("kwargs", {}), ent.get("fn")
                 src, bus = kw.get("source"), kw.get("bus")
@@ -1649,6 +1685,12 @@ class Io24:
                     self._send_state["master"][bus] = kw.get("gain_db", 0.0)
                 elif fn == "set_pan" and src and bus:
                     self._send_state["pan"][(src, bus)] = kw.get("pan")
+                elif fn == "set_source_mute" and src:
+                    self._send_state["source_mute"][src] = bool(
+                        kw.get("on", True))
+                elif fn == "set_bus_mute" and bus:
+                    self._send_state["bus_mute"][bus] = bool(
+                        kw.get("on", True))
         return self._send_state
 
     def pan(self, source, bus):
@@ -1670,6 +1712,16 @@ class Io24:
     def bus_master(self, bus):
         """The bus master trim in dB. Defaults to 0."""
         return self._sends()["master"].get(self._bus(bus), 0.0)
+
+    def source_muted(self, source):
+        """Whether the Host has muted this source across all three buses."""
+        if source not in self.SOLO_SOURCES:
+            raise ValueError("unknown io24 mixer source %r" % source)
+        return self._sends()["source_mute"].get(source, False)
+
+    def bus_muted(self, bus):
+        """Whether the Host has muted this whole output bus."""
+        return self._sends()["bus_mute"].get(self._bus(bus), False)
 
     # Universal Control's pan law, recovered from the host binary (PROTOCOL.md
     # §9d): g(x) = K*x^2 + (1-K)*x with K = -0.831783, giving g(0.5) = 0.7079458,
@@ -1704,6 +1756,9 @@ class Io24:
     def _push_send(self, source, bus):
         """Fold level + assign + master + pan into the one number the device takes."""
         s = self._sends()
+        if s["source_mute"].get(source, False) or \
+                s["bus_mute"].get(bus, False):
+            return self._write_mix(source, bus, None)
         if not s["assign"].get((source, bus), True):
             return self._write_mix(source, bus, None)
         soloed = self._solo_state().get(bus)
@@ -1771,6 +1826,42 @@ class Io24:
         last = None
         for source in self.MIXER_SOURCES:
             if (source, bus) in self._sends()["level"]:
+                last = self._push_send(source, bus)
+        return last
+
+    def set_source_mute(self, source, on=True):
+        """Mute one UC mixer source in Main, Mix A, and Mix B.
+
+        Block 100 has no separate mute bit, so this is a Host abstraction just
+        like UC's source mute: write each send off while retaining its fader and
+        assign state. The first explicit mute action establishes the visible
+        0 dB defaults before writing them off, so releasing it has a definite
+        state to restore instead of guessing at unreadable mixer state.
+        """
+        if source not in self.SOLO_SOURCES:
+            raise ValueError("unknown io24 mixer source %r" % source)
+        sends = self._sends()
+        sends["source_mute"][source] = bool(on)
+        last = None
+        for bus in self.MIXER_BUSES:
+            if (source, bus) not in sends["level"]:
+                last = self.set_send_db(source, bus, self.DEFAULT_SEND_DB)
+            else:
+                last = self._push_send(source, bus)
+        return last
+
+    def set_bus_mute(self, bus, on=True):
+        """Mute a complete UC output bus while retaining all source levels."""
+        bus = self._bus(bus)
+        sends = self._sends()
+        sends["bus_mute"][bus] = bool(on)
+        last = None
+        # ``line/ch3`` is part of the generic component model but is not an
+        # analog input on the io24, so a whole-bus action must never invent it.
+        for source in self.SOLO_SOURCES:
+            if (source, bus) not in sends["level"]:
+                last = self.set_send_db(source, bus, self.DEFAULT_SEND_DB)
+            else:
                 last = self._push_send(source, bus)
         return last
 
@@ -2019,17 +2110,28 @@ class Io24:
         }
 
     def save_known_device_slot(self, slot_index, slot_record, registry,
-                               source, written_at=None):
-        """Refuse the legacy tagged-body registry path before transport.
+                               source, written_at=None,
+                               sample_rate_hz=96000.0):
+        """Build, send, and receipt one complete firmware-native slot body."""
+        from io24_native_stat import build_native_slot_record
 
-        Existing registry entries are historical transport receipts, not proof
-        that their tagged bodies were installed. Native records need a separate
-        byte-oriented registry before this convenience path can be restored.
-        """
-        _ = (slot_index, slot_record, registry, source, written_at)
-        raise HostActionError(
-            "the Host has no native Stat body for this JSON preset; no device "
-            "write or registry update was attempted")
+        native = build_native_slot_record(
+            slot_record, slot_index, sample_rate_hz=sample_rate_hz)
+        prepared = registry.prepare_write(
+            slot_index, slot_record, source, written_at,
+            device_identity=self._device_slot_identity(),
+            native_record=native)
+        transport = self.save_device_slot(slot_index, native)
+        try:
+            entry = registry.commit_sent(prepared, transport)
+        except Exception as error:
+            error.device_slot_transport = transport
+            raise
+        return {
+            "transport": transport,
+            "registry": entry,
+            "native_sha256": hashlib.sha256(native).hexdigest(),
+        }
 
     def save_native_model0_voicefx_slot(
             self, slot_index, base_native_record, enabled=True, lows=0.06,
@@ -2134,6 +2236,8 @@ class Io24:
             "set_bus_master": 40,
             "set_pan": 50,
             "set_send_assigned": 60,
+            "set_source_mute": 70,
+            "set_bus_mute": 70,
         }
 
         def replay_phase(entry):
@@ -2926,11 +3030,12 @@ def _quarantine_device_preset_calls(calls, include_device_preset_state=False):
 
 
 _SHADOWED = ("set_fx_mix", "set_highpass", "set_mute", "set_hp_mute",
-             "set_phones_source",
+             "set_mute_mode", "set_phones_source",
              "set_channel_link", "set_limiter", "set_compressor", "set_gate",
              "set_highpass_freq", "set_eq_band", "set_alternate_eq",
              "set_send_db",
-             "set_send_assigned", "set_bus_master", "set_comp_eq_order",
+             "set_send_assigned", "set_bus_master", "set_source_mute",
+             "set_bus_mute", "set_comp_eq_order",
              "set_reverb", "set_output_delay", "set_output_delay_bus",
              "set_processing_channel", "set_pan",
              # the "off" paths: each bypassed its setter and so vanished

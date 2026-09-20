@@ -97,6 +97,14 @@ class PageWidthTests(unittest.TestCase):
         self.assertIn("outer.set_margin_start(16)", method)
         self.assertIn("outer.set_margin_end(16)", method)
 
+    def test_routing_exposes_uc_source_and_output_mutes(self):
+        method = self.source[self.source.index("    def _routing_page(self):"):
+                             self.source.index("    def _solo_toggled(")]
+        self.assertIn("self.source_mute_widgets", method)
+        self.assertIn("self.bus_mute_widgets", method)
+        self.assertIn("_source_mute_toggled", method)
+        self.assertIn("_bus_mute_toggled", method)
+
 
 if __name__ == "__main__":
     unittest.main()

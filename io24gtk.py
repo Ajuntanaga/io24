@@ -45,6 +45,7 @@ import io24_dsp                            # noqa: E402  (exact compressor model
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
+import io24_scene                          # noqa: E402  (UC scene import)
 from io24_preset_record import (           # noqa: E402
     DeviceSlotRegistry,
     complete_device_slot_record,
@@ -91,15 +92,9 @@ RETURN_EFFECTIVELY_OFF_DB = -59.9
 COMP_MODELS = ("standard", "tube", "fet", "multiband")
 MULTIBAND_MODEL = 3
 
-# Why a saved preset cannot be written to a block of the unit, or None when it
-# can. The 2026-09-14 live test wrote a known body to an inactive block and
-# measured no recall effect, and `Io24.save_known_device_slot` now refuses a
-# tagged body before transport: firmware 1.28 loads only native version-2
-# records. Until the Host can build one, the menu says so rather than offering
-# a write that always fails after the user confirms it.
-PUT_ON_UNIT_UNAVAILABLE = (
-    "The unit loads only native records, and this Host cannot build one from "
-    "a saved preset yet (2026-09-14 live negative)")
+# The menu routes through the firmware-native builder in
+# ``Io24.save_known_device_slot``. ``None`` means the action is available.
+PUT_ON_UNIT_UNAVAILABLE = None
 
 
 # How wide a page's content may get. Adw.PreferencesPage clamps itself at
@@ -273,7 +268,7 @@ def shadow_ui_state(shadow):
         "hpf_toggle": {}, "hpf_freq": {}, "eq": {1: {}, 2: {}},
         "gate": {}, "compressor": {}, "limiter": {}, "order": {},
         "reverb": None, "processing_mix": {}, "reverb_return": {},
-        "voicefx": None, "preset_mode": None,
+        "voicefx": None, "preset_mode": None, "mute_mode": None,
         "preset_slot": {}, "output_delay": None,
         "output_delay_bus": None, "phones_source": None,
         "link": None, "balance": None,
@@ -325,6 +320,8 @@ def shadow_ui_state(shadow):
             state["voicefx"] = dict(kw)
         elif name == "set_preset_mode":
             state["preset_mode"] = int(kw.get("mode", 1))
+        elif name == "set_mute_mode":
+            state["mute_mode"] = bool(kw.get("mode", False))
         elif name == "set_preset_slot" and ch in (1, 2):
             state["preset_slot"][ch] = int(kw.get("slot", 0))
         elif name == "set_output_delay":
@@ -3105,8 +3102,8 @@ class Win(Adw.ApplicationWindow):
         tv.add_top_bar(self.offline_banner)
         self._was_offline = self.ctl.dev is None
         # Reconnect recovery is intentionally not presented as a standing
-        # question. Host snapshots are the explicit save/load path; the
-        # write-only cache is never replayed automatically by the GTK Host.
+        # question. The durable write-only shadow is replayed once per attach;
+        # Host snapshots remain the explicit named save/load path.
         tv.set_content(self.toasts)
         self.set_content(tv)
         # The spectrum is the only part of this app that opens an audio stream,
@@ -4619,8 +4616,10 @@ class Win(Adw.ApplicationWindow):
         # implying the unit has a spring tank in it. Wet mix stays independent so
         # switching character does not change how much you hear.
         self.rev_type = Adw.ComboRow(
-            title="Character",
+            title="Host approximation",
             model=Gtk.StringList.new([n for n, _ in self.REVERB_TYPES]))
+        self.rev_type.set_subtitle(
+            "Parameter combinations over one reverb; not separate device algorithms")
         self.rev_type.set_subtitle_lines(2)     # wrap, do not crowd out the value
         self.rev_type.connect("notify::selected", self._reverb_type_changed)
         g.add(self.rev_type)
@@ -4633,7 +4632,7 @@ class Win(Adw.ApplicationWindow):
         # the mixer sustains.
         self.rev_mod = Adw.SwitchRow(
             title="Movement",
-            subtitle="Slow drift in room size")
+            subtitle="Host-driven room-size drift, not a device reverb mode")
         self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
         g.add(self.rev_mod)
         r, self.s_rmoddep = self._srow(
@@ -4649,11 +4648,12 @@ class Win(Adw.ApplicationWindow):
         # 100 %, as every Universal Control scene of the user's keeps it: the
         # FX return is a send return, so a dry share doubles the input that
         # is already in the bus. The return level sets how much reverb.
-        r, self.s_rmix = self._srow("Wet mix", 0, 1, 0.005, 1.0,
+        r, self.s_rmix = self._srow("Reverb return blend", 0, 1, 0.005, 1.0,
                                     lambda v: "%.0f %%" % (v * 100),
                                     lambda v: (self._reverb_touched(), self._push_reverb(),
                                               self._repaint_reverb()),
-                                    "100 % puts only reverb on the FX return")
+                                    "100 % makes the FX return wet; it does not mute "
+                                    "the channel's direct signal in Main")
         g.add(r)
         r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
                                    lambda v: ("off" if v < 1 else "%.0f Hz" % v),
@@ -4670,13 +4670,15 @@ class Win(Adw.ApplicationWindow):
         page.add(g)          # added ONCE — adding it twice raised a GTK critical
 
         sg = Adw.PreferencesGroup(
-            title="Shared reverb returns",)
+            title="Shared effects returns",)
         self.rev_return_controls = {}
         for bus, bname in (("main", "Main out"), ("mixa", "Mix A"), ("mixb", "Mix B")):
             r, sc = self._srow("FX return → %s" % bname, -60, 10, 0.1, 0.0,
                                lambda v: "%.1f dB" % v,
                                lambda v, b=bus: self.ctl.submit(
-                                   lambda dev: dev.set_mix_db("fxreturn/ch1", v, bus=b)))
+                                   lambda dev: dev.set_mix_db("fxreturn/ch1", v, bus=b)),
+                               "Carries the reverb and the FX engine; both are "
+                               "inaudible in a bus this return does not reach")
             self.rev_return_controls[bus] = sc
             sg.add(r)
         page.add(sg)
@@ -5200,6 +5202,8 @@ class Win(Adw.ApplicationWindow):
         """
         self.mix_widgets = {}
         self.bus_master_widgets = {}
+        self.bus_mute_widgets = {}
+        self.source_mute_widgets = {}
         self.solo_widgets = {}
         self._mix_mute = False
 
@@ -5247,6 +5251,15 @@ class Win(Adw.ApplicationWindow):
                     lambda dev: dev.set_bus_master(b, v)), 0.010)
             msc.connect("value-changed", lambda w, t=mthr: t(w.get_value()))
             cellbox.append(msc); cellbox.append(mlbl)
+            bus_mute = Gtk.ToggleButton(
+                icon_name="audio-volume-muted-symbolic",
+                valign=Gtk.Align.CENTER)
+            bus_mute.add_css_class("flat")
+            bus_mute.set_tooltip_text(
+                "Mute this complete output bus while retaining every source "
+                "level and assignment")
+            bus_mute.connect("toggled", self._bus_mute_toggled, bus)
+            cellbox.append(bus_mute)
             if bus != "main":
                 mir = Gtk.Button(icon_name="edit-copy-symbolic",
                                  valign=Gtk.Align.CENTER)
@@ -5264,6 +5277,7 @@ class Win(Adw.ApplicationWindow):
                 cellbox.append(mir)
             grid.attach(cellbox, 1 + col, 1, 1, 1)
             self.bus_master_widgets[bus] = msc
+            self.bus_mute_widgets[bus] = bus_mute
 
         # a hairline under the master row, so sends read as their own block
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -5271,7 +5285,22 @@ class Win(Adw.ApplicationWindow):
         grid.attach(sep, 0, 2, 4, 1)
 
         for rown, (src, sname) in enumerate(self.SOURCES):
-            grid.attach(cell_label(sname, ()), 0, 3 + rown, 1, 1)
+            source_head = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            source_head.append(cell_label(sname, ()))
+            if src.startswith("return/") or src.startswith("fxreturn/"):
+                source_mute = Gtk.ToggleButton(
+                    icon_name="audio-volume-muted-symbolic",
+                    valign=Gtk.Align.CENTER)
+                source_mute.add_css_class("flat")
+                source_mute.set_tooltip_text(
+                    "Mute this UC source in Main, Mix A, and Mix B while "
+                    "retaining its faders")
+                source_mute.connect(
+                    "toggled", self._source_mute_toggled, src)
+                source_head.append(source_mute)
+                self.source_mute_widgets[src] = source_mute
+            grid.attach(source_head, 0, 3 + rown, 1, 1)
             for col, (bus, bname) in enumerate(self.BUSES):
                 cellbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
                                   spacing=4)
@@ -5331,6 +5360,20 @@ class Win(Adw.ApplicationWindow):
         sc.set_vexpand(True)
         return sc
 
+    def _source_mute_toggled(self, button, source):
+        if self._mix_mute:
+            return
+        self.ctl.submit(
+            lambda dev: dev.set_source_mute(source, button.get_active()))
+        GLib.timeout_add(140, self._sync_mix_widgets)
+
+    def _bus_mute_toggled(self, button, bus):
+        if self._mix_mute:
+            return
+        self.ctl.submit(
+            lambda dev: dev.set_bus_mute(bus, button.get_active()))
+        GLib.timeout_add(140, self._sync_mix_widgets)
+
     def _solo_toggled(self, button, src, bus):
         if self._mix_mute:
             return
@@ -5370,6 +5413,11 @@ class Win(Adw.ApplicationWindow):
                         "unmute to create a 0 dB send")
             for bus, msc in self.bus_master_widgets.items():
                 msc.set_value(max(-40.0, min(10.0, dev.bus_master(bus))))
+            for source, mute in getattr(
+                    self, "source_mute_widgets", {}).items():
+                mute.set_active(dev.source_muted(source))
+            for bus, mute in getattr(self, "bus_mute_widgets", {}).items():
+                mute.set_active(dev.bus_muted(bus))
             for (src, bus), solo in getattr(self, "solo_widgets", {}).items():
                 solo.set_active(dev.soloed(src, bus))
         finally:
@@ -5406,23 +5454,28 @@ class Win(Adw.ApplicationWindow):
         mode = row.get_selected()
         self.ctl.submit(lambda dev: dev.set_preset_mode(mode))
 
+    def _mute_mode_changed(self, row, _p):
+        if getattr(self, "_adopt_mute", False):
+            return
+        self.ctl.submit(lambda dev: dev.set_mute_mode(row.get_active()))
+
     PRESET_BASE = {1: 0, 2: 2}           # each channel's first global slot
 
     def _slot_changed(self, ch, slot):
-        """Select a slot on the device, and enable a bypassed channel.
+        """Select a block and Host-load its known body when one is available.
 
-        This is not a recall in the sense of reprogramming the chain. Measured
-        on 2026-09-14: selecting a slot does not make the firmware reload the
-        stored body, though the unit does apply it at power-on. Sending the
-        index alone still left a bypassed channel pointing at a preset it was
-        not processing, which is why the enable is asserted here.
+        Measured on 2026-09-14: the selector alone does not make the firmware
+        replay the stored body. For a block this Host wrote, Load therefore
+        selects it and directly sends the registry's Fat Channel plus VoiceFX
+        state. An unknown block can only be selected and is reported as such.
         """
         def work(dev):
             try:
-                report = dev.recall_device_slot(ch, slot)
+                report = self._select_and_load_slot(dev, ch, slot)
             except Exception as error:
                 GLib.idle_add(self.say,
-                              "Channel %d slot recall failed: %s" % (ch, error))
+                              "Channel %d block selection failed: %s" %
+                              (ch, error))
                 return
             GLib.idle_add(self._slot_recalled, ch, slot, report, None)
 
@@ -5465,36 +5518,67 @@ class Win(Adw.ApplicationWindow):
         base = self.PRESET_BASE[1 if slot < 2 else 2]
         return {"name": "Block %d" % (slot - base + 1), "on": None}
 
+    def _host_apply_slot_record(self, dev, channel, record, report):
+        """Directly apply one Host-known block after physical selection."""
+        report = dict(report)
+        apply_preset = getattr(getattr(self, "PR", None), "apply_preset", None)
+        if not callable(apply_preset):
+            report["host_applied"] = False
+            return report
+        try:
+            report["host_parts"] = apply_preset(
+                dev, record, channel, with_fx=True,
+                fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
+        except Exception as error:
+            report["host_applied"] = False
+            report["host_apply_error"] = str(error)
+        else:
+            report["host_applied"] = True
+        return report
+
+    def _select_and_load_slot(self, dev, channel, slot):
+        """Select a physical block, then replay its Host receipt if known."""
+        report = dev.recall_device_slot(channel, slot)
+        entry = self._host_slot_entry(slot)
+        if entry is None:
+            report = dict(report)
+            report["host_applied"] = False
+            return report
+        return self._host_apply_slot_record(
+            dev, channel, entry["record"], report)
+
     def _slot_recalled(self, ch, slot, report, name=None):
-        """Follow a completed physical preset selection in the UI."""
+        """Follow a completed selection/Host-assisted load in the UI."""
         intent = self._slot_voicefx_intent(slot)
         pair = getattr(self, "preset_rows", {}).get(ch)
         if pair is not None:
             local = slot - self.PRESET_BASE[ch]
             pair[1].set_selected(local if 0 <= local < 2 else -1)
-        adopted = self._adopt_recalled_slot(ch, slot)
-        entry = self._host_slot_entry(slot)
-        if adopted and entry is not None and entry["record"].get("voicefx"):
-            # A device-slot recall is physical Fat Channel selection, not a
-            # proven block-201 activation path. Apply the Host-known global FX
-            # intent explicitly and report any send failure independently.
-            self._push_fx()
+        if report.get("host_applied"):
+            self._adopt_recalled_slot(ch, slot)
         self._follow_recall_processing(ch, report)
         label = name or intent["name"]
-        if report.get("enable_asserted"):
-            self.say("Recalled %s on Channel %d; the channel was bypassed, so "
-                     "processing was enabled" % (label, ch))
+        enabled = ("; the channel was bypassed, so processing was enabled"
+                   if report.get("enable_asserted") else "")
+        if report.get("host_applied"):
+            self.say("Loaded %s on Channel %d from the Host-known device "
+                     "block; Fat Channel and VoiceFX state were sent by the "
+                     "Host%s" % (label, ch, enabled))
+        elif report.get("host_apply_error"):
+            self.say("Selected %s on Channel %d%s, but the Host-assisted load "
+                     "failed: %s" %
+                     (label, ch, enabled, report["host_apply_error"]))
         else:
-            self.say("Recalled %s on Channel %d" % (label, ch))
+            self.say("Selected %s on Channel %d%s; selection does not reapply "
+                     "the unreadable stored body" % (label, ch, enabled))
         return False
 
     def _adopt_recalled_slot(self, ch, slot):
-        """Show a recalled body on the controls, when the Host knows it.
+        """Show a Host-applied known body on the controls.
 
-        The device has just replaced that channel's whole chain. Leaving the
-        previous values on screen would have every page describing a sound the
-        io24 is no longer making. A body the Host never wrote cannot be shown,
-        because slots have no readback.
+        The physical selector does not replace the live chain. This method is
+        called only after direct Host replay succeeded; a body the Host never
+        wrote cannot be shown because device blocks have no readback.
         """
         entry = self._host_slot_entry(slot)
         if entry is None or getattr(self, "PR", None) is None:
@@ -5694,16 +5778,16 @@ class Win(Adw.ApplicationWindow):
         return tuple(c for c in chans if c not in mismatched)
 
     def _recall_host_preset(self, _button, entry):
-        """Select one Host-known slot on the device and follow it in the UI."""
+        """Select one Host-known block and directly load its complete record."""
         slot = entry["slot"]
         channel = entry["physical_channel"]
         name = entry["record"].get("preset_name", "that slot")
 
         def work(dev):
             try:
-                report = dev.recall_device_slot(channel, slot)
+                report = self._select_and_load_slot(dev, channel, slot)
             except Exception as error:
-                GLib.idle_add(self.say, "%s recall failed: %s" % (name, error))
+                GLib.idle_add(self.say, "%s load failed: %s" % (name, error))
                 return
             GLib.idle_add(self._slot_recalled, channel, slot, report, name)
 
@@ -5804,6 +5888,18 @@ class Win(Adw.ApplicationWindow):
 
         page.add(self._processing_group())
         page.add(self._preset_button_group())
+
+        mute_group = Adw.PreferencesGroup(title="Mute behavior")
+        self.mute_sync_row = Adw.SwitchRow(
+            title="Channel Mute Sync",
+            subtitle="UC setting: channel Mute follows Main, Mix A, and Mix B. "
+                     "Write-only; this switch shows the Host setting, not "
+                     "device readback")
+        self.mute_sync_row.set_subtitle_lines(2)
+        self.mute_sync_row.connect(
+            "notify::active", self._mute_mode_changed)
+        mute_group.add(self.mute_sync_row)
+        page.add(mute_group)
 
         lv = Adw.PreferencesGroup(title="Live stream")
         self.live_rows = {}
@@ -6115,8 +6211,8 @@ class Win(Adw.ApplicationWindow):
         One list per origin and one way to load: click Load and the preset's
         Fat Channel and Voice FX go to the channel chosen in Load into, or to
         both while the channels are linked. Presets the user saves live on this
-        computer; putting one on the unit's Preset button is an action on the
-        preset, not a section of its own.
+        computer; storing a Fat Channel candidate in a device block is an
+        action on the preset, not a section of its own.
         """
         page = wide_preferences_page()
         g = Adw.PreferencesGroup(title="Presets")
@@ -6155,6 +6251,17 @@ class Win(Adw.ApplicationWindow):
         g.add(self.factory_presets_row)
         page.add(g)
 
+        scenes = Adw.PreferencesGroup(title="Scenes")
+        scene_row = Adw.ActionRow(
+            title="Universal Control scene",
+            subtitle="Validated first. Device preset blocks are never overwritten")
+        scene_load = Gtk.Button(label="Load scene…", valign=Gtk.Align.CENTER)
+        scene_load.add_css_class("flat")
+        scene_load.connect("clicked", self._load_scene_clicked)
+        scene_row.add_suffix(scene_load)
+        scenes.add(scene_row)
+        page.add(scenes)
+
         # The module always serves the user's own presets; only the factory
         # list depends on the recovered installer data being present.
         self.PR = io24_presets
@@ -6173,6 +6280,73 @@ class Win(Adw.ApplicationWindow):
         self._populate_factory_presets()
         return page
 
+    def _load_scene_clicked(self, _button):
+        if self.ctl.dev is None:
+            self.say("Scene not loaded: io24 is not connected")
+            return
+        dialog = Gtk.FileDialog(title="Load Universal Control scene")
+
+        def selected(picker, result):
+            try:
+                chosen = picker.open_finish(result)
+            except GLib.Error:
+                return
+            path = chosen.get_path()
+            try:
+                scene = io24_scene.load(path)
+                calls, skips = io24_scene.plan(
+                    scene, sample_rate_hz=self._fs)
+            except Exception as error:
+                self.say("Scene was not loaded: %s" % error)
+                return
+
+            def work(dev, source=scene, plan=calls, omitted=skips):
+                try:
+                    done, failed = io24_scene.apply(dev, plan)
+                except Exception as error:
+                    GLib.idle_add(
+                        self.say, "Scene was not loaded: %s" % error)
+                    return
+                if failed:
+                    GLib.idle_add(
+                        self.say,
+                        "Scene load stopped after %d setting%s; later settings "
+                        "were not sent" % (done, "" if done == 1 else "s"))
+                    return
+                mirror = json.loads(json.dumps(
+                    getattr(dev, "_shadow", None) or {}))
+                message = (
+                    "Loaded %s: %d settings applied; %d UC field%s reported "
+                    "as metadata or not representable; device preset blocks "
+                    "were untouched" %
+                    (os.path.basename(path), done, len(omitted),
+                     "" if len(omitted) == 1 else "s"))
+                GLib.idle_add(
+                    self._after_scene_load, source, mirror, message)
+
+            self.ctl.submit(work)
+
+        dialog.open(self, None, selected)
+
+    def _after_scene_load(self, scene, mirror, message):
+        """Adopt exact semantic scene controls after all writes succeeded."""
+        self._after_load(mirror)
+        line = scene.get("line") or {}
+        fx_owner = next((ch for ch in (1, 2)
+                         if (line.get("ch%d" % ch) or {}).get("voicefx")), None)
+        for ch in (1, 2):
+            record = line.get("ch%d" % ch)
+            if not isinstance(record, dict):
+                continue
+            try:
+                self._adopt_preset_record(
+                    record, (ch,), fx_channel=ch if ch == fx_owner else None)
+            except Exception as error:
+                self.say("Scene was applied, but Channel %d controls could not "
+                         "be adopted: %s" % (ch, error))
+        self.say(message)
+        return False
+
     def _populate_user_presets(self):
         """Fill User Presets: the unit's known blocks, then presets saved here."""
         expander = getattr(self, "user_presets_row", None)
@@ -6187,7 +6361,8 @@ class Win(Adw.ApplicationWindow):
         for entry in getattr(self, "_host_slot_entries", []):
             channel = entry["physical_channel"]
             block = entry["slot"] - self.PRESET_BASE[channel] + 1
-            subtitle = "On the unit · Channel %d, block %d" % (channel, block)
+            subtitle = ("Host-written candidate · Channel %d, block %d · "
+                        "device body readback unavailable" % (channel, block))
             row = Adw.ActionRow(title=entry["record"]["preset_name"],
                                 subtitle=subtitle)
             load = lambda e=entry: self._load_device_entry(e)
@@ -6265,7 +6440,7 @@ class Win(Adw.ApplicationWindow):
         return button
 
     def _preset_menu(self, name, record, source, deletable=False):
-        """One preset's actions: put it on the unit's button, or delete it."""
+        """One preset's actions: store its Fat Channel candidate, or delete."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         popover = Gtk.Popover(child=box)
 
@@ -6283,7 +6458,7 @@ class Win(Adw.ApplicationWindow):
 
         for block in (1, 2):
             button = item(
-                "Put on the unit's button, block %d" % block,
+                "Store Fat Channel on device, block %d" % block,
                 lambda b=block: self._put_on_unit(name, record, b - 1, source))
             if PUT_ON_UNIT_UNAVAILABLE:
                 button.set_sensitive(False)
@@ -6294,7 +6469,8 @@ class Win(Adw.ApplicationWindow):
                               valign=Gtk.Align.CENTER)
         menu.add_css_class("flat")
         menu.set_tooltip_text(
-            PUT_ON_UNIT_UNAVAILABLE or "Put on the unit, or delete")
+            PUT_ON_UNIT_UNAVAILABLE or
+            "Store a Fat Channel candidate on the device, or delete")
         return menu
 
     def _filter_presets(self):
@@ -6325,9 +6501,10 @@ class Win(Adw.ApplicationWindow):
     def _load_device_entry(self, entry):
         """Load a preset that lives on the unit.
 
-        On its own channel the unit recalls the physical Fat Channel block and
-        the Host then sends the known global FX state once. Anywhere else the
-        Host applies the same record directly, as it does a factory preset.
+        On its own channel the Host selects the physical block, then directly
+        sends the retained Fat Channel and VoiceFX record. Selection alone did
+        not reapply the unreadable body in the retained live test. Anywhere
+        else the Host applies the same record directly, as a factory preset.
         """
         channel = entry["physical_channel"]
         name = entry["record"].get("preset_name", "that preset")
@@ -6403,7 +6580,7 @@ class Win(Adw.ApplicationWindow):
         self._confirm(
             "Delete %s?" % name,
             "It is removed from your presets on this computer. A copy you put "
-            "on the unit's button stays there.",
+            "on the device stays there.",
             "Delete", lambda: self._delete_user_preset(name))
 
     def _delete_user_preset(self, name):
@@ -6416,34 +6593,34 @@ class Win(Adw.ApplicationWindow):
         self.say("Deleted %s" % name)
 
     def _prepare_record_slot_store(self, name, record, relative_slot, source):
-        """Plan writing one preset into a block of the Load into channel, then
-        loading it there so it is heard."""
+        """Plan writing one preset into a block of the Load into channel."""
         plan = self._prepare_slot_store_target(relative_slot=relative_slot)
         body = complete_device_slot_record(record)
         body["preset_name"] = name
         plan.update({"name": name, "record": body, "source": source,
-                     "activate": True})
+                     "activate": False})
         return plan
 
     def _put_on_unit(self, name, record, relative_slot, source):
-        """Confirm, then write the preset to the unit's button and load it."""
+        """Confirm, then send one firmware-native Fat Channel candidate."""
         try:
             plan = self._prepare_record_slot_store(
                 name, record, relative_slot, source)
         except Exception as error:
-            self.say("%s was not put on the unit: %s" % (name, error))
+            self.say("%s was not saved to the device: %s" % (name, error))
             return
         replaced = next((entry["record"]["preset_name"]
                          for entry in getattr(self, "_host_slot_entries", [])
                          if entry["slot"] == plan["slot"]), None)
         where = "Channel %d block %d" % (plan["target"],
                                          plan["relative_slot"] + 1)
-        body = ("This replaces %s in %s on the unit, then loads it there."
+        body = ("This replaces %s in %s on the unit."
                 % (replaced, where) if replaced else
-                "This replaces whatever %s on the unit holds, then loads it "
-                "there." % where)
-        self._confirm("Put %s on the unit's button?" % name, body,
-                      "Replace and load",
+                "This replaces whatever %s on the unit holds." % where)
+        body += (" Device-body readback is unavailable. VoiceFX is retained "
+                 "in the Host receipt and is sent by Host-assisted Load.")
+        self._confirm("Store %s Fat Channel on the device?" % name, body,
+                      "Replace",
                       lambda: self._queue_factory_slot_store(plan))
 
     def _preset_button_group(self):
@@ -6487,6 +6664,7 @@ class Win(Adw.ApplicationWindow):
             "record": record,
             "source": "factory:%s" % name,
             "activate": False,
+            "sample_rate_hz": target_plan["sample_rate_hz"],
         }
 
     def _current_slot_name(self):
@@ -6528,6 +6706,8 @@ class Win(Adw.ApplicationWindow):
             "target": target,
             "relative_slot": relative_slot,
             "slot": slot,
+            "sample_rate_hz": getattr(
+                self, "_selected_rate", DEFAULT_SAMPLE_RATE),
         }
 
     def _record_voicefx(self, target, strict=True):
@@ -6598,10 +6778,14 @@ class Win(Adw.ApplicationWindow):
             try:
                 result = dev.save_known_device_slot(
                     prepared["slot"], prepared["record"],
-                    self.device_slot_registry, prepared["source"])
+                    self.device_slot_registry, prepared["source"],
+                    sample_rate_hz=prepared.get(
+                        "sample_rate_hz", DEFAULT_SAMPLE_RATE))
                 transport = result["transport"]
-                msg = ("Saved %s to Channel %d block %d "
-                       "(%d frame%s, %d repl%s); registry status %s." %
+                msg = ("Sent %s Fat Channel candidate to Channel %d block %d "
+                       "(%d frame%s, %d repl%s); status %s; device body "
+                       "readback unavailable. VoiceFX remains in the Host "
+                       "receipt for Host-assisted Load." %
                        (prepared["name"], prepared["target"],
                         prepared["relative_slot"] + 1,
                         transport["fragments_sent"],
@@ -6621,14 +6805,17 @@ class Win(Adw.ApplicationWindow):
 
             if not prepared.get("activate"):
                 GLib.idle_add(self._slot_saved, prepared,
-                              msg + " Not loaded — use Recall on device.")
+                              msg + " Use Load to send Fat Channel and VoiceFX "
+                                    "now.")
                 return
             try:
                 recall = dev.recall_device_slot(
                     prepared["target"], prepared["slot"])
+                recall = self._host_apply_slot_record(
+                    dev, prepared["target"], prepared["record"], recall)
             except Exception as error:
                 GLib.idle_add(self._slot_saved, prepared,
-                              msg + " The body was saved, but the recall "
+                              msg + " The candidate was sent, but the load "
                                     "failed: %s" % error)
                 return
             GLib.idle_add(self._slot_saved, prepared, msg, recall)
@@ -6673,9 +6860,9 @@ class Win(Adw.ApplicationWindow):
     def _adopt_preset_record(self, pr, chans, fx_channel=None):
         """Show one complete preset record on the visible controls.
 
-        Shared by the factory strip load and by a recall of a Host-known slot.
-        After the device loads a record, leaving the previous values on screen
-        would have the Host describing a sound the device is no longer making.
+        Shared by the factory strip load and by a Host-assisted known-slot
+        load. After direct Host replay, leaving the previous values on screen
+        would describe a sound the Host is no longer sending.
         ``fx_channel`` additionally adopts the record's stored Voice FX, which
         only the recall path wants: an ordinary strip load must leave the
         singleton engine alone.
@@ -7910,6 +8097,9 @@ class Win(Adw.ApplicationWindow):
             mode = state["preset_mode"]
             if mode in (0, 1, 2):
                 self.preset_mode_row.set_selected(mode)
+            if state["mute_mode"] is not None and \
+                    getattr(self, "mute_sync_row", None) is not None:
+                self.mute_sync_row.set_active(state["mute_mode"])
             for ch, slot in state["preset_slot"].items():
                 row = self.preset_rows.get(ch)
                 if row is not None:

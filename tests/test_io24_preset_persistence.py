@@ -1,4 +1,5 @@
 import ast
+import copy
 import contextlib
 import io
 import json
@@ -126,6 +127,26 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertEqual(record["voicefx"]["time"], .173)
         self.assertEqual(record["voicefx"]["on"], 1)
         self.assertNotIn("_offset", record)
+
+    def test_user_preset_with_fx_off_saves_and_replays_the_strip_independently(self):
+        record = json.loads(json.dumps(io24_presets.load()["Broadcast"]))
+        record["preset_name"] = "Dry vocal"
+        record["voicefx"]["on"] = 0
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "user-presets.json"
+            io24_presets.save_user_preset("Dry vocal", record, path)
+            loaded = io24_presets.load_user_presets(path)["Dry vocal"]
+
+        device = mock.Mock()
+        applied = io24_presets.apply_preset(
+            device, loaded, channel=1, with_fx=False)
+
+        self.assertEqual(loaded["voicefx"]["on"], 0)
+        self.assertTrue(applied)
+        device.set_voicefx_channel.assert_not_called()
+        device.set_fx.assert_not_called()
+        self.assertTrue(device.set_comp_eq_order.called)
 
     @staticmethod
     def _device_identity():
@@ -311,32 +332,34 @@ class PresetPersistenceTests(unittest.TestCase):
                 })
             self.assertFalse(Path(registry.path).exists())
 
-    def test_save_known_tagged_slot_is_refused_without_registry_mutation(self):
+    def test_save_known_scene_writes_a_native_body_and_commits_registry(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
             device = _HardwareFreeIo24()
+            record = copy.deepcopy(io24_presets.load()["Broadcast"])
 
-            with self.assertRaisesRegex(
-                    io24.HostActionError, "no native Stat body"):
-                device.save_known_device_slot(
-                    2, self._complete_slot_record(), registry,
-                    source="factory:Reverb",
-                    written_at="2026-09-08T07:31:00+00:00")
+            result = device.save_known_device_slot(
+                2, record, registry, source="factory:Broadcast",
+                written_at="2026-09-08T07:31:00+00:00")
 
-            self.assertFalse(Path(registry.path).exists())
-        self.assertEqual(device.protocol_writes, [])
+            self.assertTrue(Path(registry.path).exists())
+            self.assertEqual(result["registry"]["body_format"],
+                             "firmware-native-v2")
+            self.assertEqual(result["registry"]["native_sha256"],
+                             result["native_sha256"])
+        self.assertEqual(device.protocol_writes[0][0], "exec")
 
-    def test_save_known_slot_refuses_before_identity_or_transport(self):
+    def test_save_known_slot_requires_identity_before_transport(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
             device = _HardwareFreeIo24()
             device.dev.serial_number = ""
+            record = copy.deepcopy(io24_presets.load()["Broadcast"])
 
             with self.assertRaisesRegex(
-                    io24.HostActionError, "no native Stat body"):
+                    ValueError, "serial is unavailable"):
                 device.save_known_device_slot(
-                    0, self._complete_slot_record(), registry,
-                    source="factory:Reverb")
+                    0, record, registry, source="factory:Broadcast")
 
         self.assertEqual(device.protocol_writes, [])
 
@@ -543,8 +566,6 @@ class PresetPersistenceTests(unittest.TestCase):
         device = Device()
         window = io24gtk.Win.__new__(io24gtk.Win)
         window._fx_mute = False
-        window._fx_last_sent_device = None
-        window._fx_last_sent_target = None
         window.ctl = Ctl(device)
         window.fx_arm = Value(True)
         window.fx_model = Value(0)
@@ -604,8 +625,6 @@ class PresetPersistenceTests(unittest.TestCase):
         second = Device()
         window = io24gtk.Win.__new__(io24gtk.Win)
         window._fx_mute = False
-        window._fx_last_sent_device = None
-        window._fx_last_sent_target = None
         window.ctl = Ctl(first)
         window.fx_arm = Value(True)
         window.fx_model = Value(0)
@@ -667,8 +686,10 @@ class PresetPersistenceTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def save_known_device_slot(self, slot, record, registry, source):
-                self.calls.append((slot, record, registry, source))
+            def save_known_device_slot(self, slot, record, registry, source,
+                                       sample_rate_hz):
+                self.calls.append((slot, record, registry, source,
+                                   sample_rate_hz))
                 return {
                     "transport": {"slot": slot, "fragments_sent": 1,
                                   "replies_received": 0},
@@ -703,11 +724,12 @@ class PresetPersistenceTests(unittest.TestCase):
             window._queue_factory_slot_store(plan)
 
         self.assertEqual(len(device.calls), 1)
-        slot, sent_record, used_registry, source = device.calls[0]
+        slot, sent_record, used_registry, source, sample_rate_hz = device.calls[0]
         self.assertEqual(slot, 1)
         self.assertEqual(sent_record, record)
         self.assertIs(used_registry, registry)
         self.assertEqual(source, "factory:Reverb")
+        self.assertEqual(sample_rate_hz, io24gtk.DEFAULT_SAMPLE_RATE)
         self.assertNotIn("selected", messages[-1].lower())
         self.assertNotIn("enabled", messages[-1].lower())
 
@@ -778,7 +800,9 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertIn("Saved %d host-file settings to %s", gtk_source)
         # 2026-09-11: presets on the unit are listed among User Presets,
         # tagged by where they live, rather than in a section of their own.
-        self.assertIn('"On the unit · Channel %d, block %d"', gtk_source)
+        self.assertIn('"Host-written candidate · Channel %d, block %d · "',
+                      gtk_source)
+        self.assertIn('"device body readback unavailable"', gtk_source)
         self.assertNotIn("selected device slot", gtk_source)
         self.assertIn('"scope": "host-file"', web_source)
 

@@ -92,6 +92,71 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertTrue(dev.has_send_level("fxreturn/ch1", "main"))
         self.assertIsNone(dev.send_db("fxreturn/ch1", "main"))
 
+    def test_source_mute_preserves_and_restores_every_bus_level(self):
+        dev = _MixerOnlyIo24()
+        levels = {"main": -3.0, "mixa": -12.0, "mixb": -24.0}
+        for bus, level in levels.items():
+            dev.set_send_db("return/ch1", bus, level)
+        dev.writes.clear()
+
+        dev.set_source_mute("return/ch1", True)
+
+        self.assertTrue(dev.source_muted("return/ch1"))
+        self.assertEqual(dev.writes, [
+            ("return/ch1", "main", None),
+            ("return/ch1", "mixa", None),
+            ("return/ch1", "mixb", None),
+        ])
+        self.assertEqual(
+            {bus: dev.send_db("return/ch1", bus) for bus in levels}, levels)
+
+        dev.writes.clear()
+        dev.set_source_mute("return/ch1", False)
+        self.assertFalse(dev.source_muted("return/ch1"))
+        self.assertEqual(dev.writes, [
+            ("return/ch1", "main", -3.0),
+            ("return/ch1", "mixa", -12.0),
+            ("return/ch1", "mixb", -24.0),
+        ])
+
+    def test_bus_mute_preserves_levels_and_never_materialises_line_three(self):
+        dev = _MixerOnlyIo24()
+
+        dev.set_bus_mute("mixa", True)
+
+        self.assertTrue(dev.bus_muted("mixa"))
+        self.assertNotIn(("line/ch3", "mixa"), dev._sends()["level"])
+        self.assertTrue(dev.writes)
+        self.assertTrue(all(bus == "mixa" and value is None
+                            for _source, bus, value in dev.writes))
+        self.assertIn("set_bus_mute#bus=mixa", dev._shadow)
+
+    def test_source_and_bus_mutes_rebuild_from_shadow(self):
+        dev = _MixerOnlyIo24({
+            "set_source_mute#source=return/ch1": {
+                "fn": "set_source_mute",
+                "kwargs": {"source": "return/ch1", "on": True},
+            },
+            "set_bus_mute#bus=mixb": {
+                "fn": "set_bus_mute",
+                "kwargs": {"bus": "mixb", "on": True},
+            },
+        })
+
+        self.assertTrue(dev.source_muted("return/ch1"))
+        self.assertTrue(dev.bus_muted("mixb"))
+
+    def test_mute_mode_is_saved_in_host_shadow(self):
+        dev = _MixerOnlyIo24()
+        writes = []
+        dev.set_param = lambda *args, **kwargs: writes.append((args, kwargs))
+
+        report = dev.set_mute_mode(True)
+
+        self.assertEqual(report["readback"], "UNAVAILABLE")
+        self.assertEqual(writes, [((8, 1), {"index": 0, "as_int": True})])
+        self.assertEqual(dev._shadow["set_mute_mode"]["kwargs"], {"mode": True})
+
     def test_shadow_normalisation_discards_old_one_leg_pan(self):
         shadow = {
             "set_pan#source=line/ch2,bus=main": {
@@ -391,7 +456,9 @@ class HostStateRepairTests(unittest.TestCase):
 
         self.assertIn('title="Shared reverb"', rendered)
         self.assertIn('title="Shared reverb engine"', rendered)
-        self.assertIn('title="Shared reverb returns"', rendered)
+        # The return carries the FX engine too, so it is named for both; the
+        # two reverbs are still distinguished by the rows above it.
+        self.assertIn('title="Shared effects returns"', rendered)
         # DSP amount and Bypass moved to the Device page
         self.assertNotIn("processing_mix_controls", rendered)
         self.assertNotIn('"0% bypasses EQ, compression, limiting and effects; "',
@@ -411,6 +478,23 @@ class HostStateRepairTests(unittest.TestCase):
         self.assertNotIn("_preset_enable_changed", methods)
         self.assertNotIn("_arm_channel2_delay", methods)
         self.assertNotIn("_load_channel2_factory_slap_echo", methods)
+
+    def test_effects_page_states_current_audio_limits_without_overclaiming(self):
+        source = (ROOT / "io24gtk.py").read_text()
+        tree = ast.parse(source)
+        fx_page = next(
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_fx_page"
+        )
+        rendered = ast.get_source_segment(source, fx_page)
+
+        self.assertNotIn('title="FX activation unresolved"', rendered)
+        self.assertNotIn("currently meter-negative", rendered)
+        self.assertIn('title="Host approximation"', rendered)
+        self.assertIn("not separate device algorithms", rendered)
+        self.assertIn('self._srow("Reverb return blend"', rendered)
+        self.assertIn("direct signal in Main", rendered)
+        self.assertNotIn("100 % puts only reverb on the FX return", rendered)
 
     def test_processing_mix_uses_the_slider_as_the_only_establish_action(self):
         source = (ROOT / "io24gtk.py").read_text()

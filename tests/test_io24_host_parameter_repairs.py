@@ -432,7 +432,7 @@ class FactoryPresetDispatchTests(unittest.TestCase):
         self.assertEqual(io24_scene.VINTAGE_HIMID_HZ, (3200.0, 4800.0, 7200.0))
         self.assertEqual(io24_scene.VINTAGE_HIGH_HZ, 12000.0)
 
-    def test_scene_vintage_opt_in_cannot_emit_standard_biquad_calls(self):
+    def test_scene_vintage_uses_exact_alternate_eq_not_standard_biquads(self):
         scene = {"line": {"ch1": {"eq": {
             "__classid": io24_scene.EQ_VINTAGE,
             "eqallon": 1,
@@ -445,7 +445,11 @@ class FactoryPresetDispatchTests(unittest.TestCase):
         calls, skips = io24_scene.plan(scene, vintage=True)
 
         self.assertFalse(any(call[0] == "set_eq_band" for call in calls))
-        self.assertTrue(any("exact coefficient builder" in skip for skip in skips))
+        alternate = [call for call in calls if call[0] == "set_alternate_eq"]
+        self.assertEqual(len(alternate), 1)
+        self.assertEqual(alternate[0][1][0], 1)
+        self.assertEqual(alternate[0][1][1]["__classid"], io24_scene.EQ_VINTAGE)
+        self.assertEqual(skips, [])
 
 
 class ArtifactAndResourceTests(unittest.TestCase):
@@ -1518,6 +1522,55 @@ class HostRefinementTests(unittest.TestCase):
 
         self.assertEqual(mixa.stops, 1)
         self.assertEqual(mixb.stops, 1)
+
+
+class ChannelMuteSyncTests(unittest.TestCase):
+    """Owner's manual 7.1 item 5, 'Pari' wire 8 -> firmware internal 5."""
+
+    def test_public_setter_emits_exact_pari_8(self):
+        dev = ProtocolDevice()
+
+        result = dev.set_mute_mode(1)
+
+        self.assertEqual(len(dev.payloads), 1)
+        payload = dev.payloads[0]
+        self.assertEqual(len(payload), 32)
+        self.assertEqual(struct.unpack_from("<III", payload),
+                         (io24.SETP, io24.APPL, 0))
+        self.assertEqual(struct.unpack_from("<IIIII", payload, 12),
+                         (io24.PARI, 0x14, 0, 8, 1))
+        self.assertEqual(io24.Io24.KNOWN_PARI[8], "muteMode")
+        self.assertEqual(result["value_mapping"],
+                         "INFERRED_FROM_VENDOR_NAMING")
+        self.assertEqual(result["readback"], "UNAVAILABLE")
+
+    def test_wire_8_is_no_longer_an_unmapped_id_needing_unsafe(self):
+        dev = ProtocolDevice()
+
+        dev.set_param(8, 0, as_int=True)
+
+        self.assertEqual(struct.unpack_from("<i", dev.payloads[0], 28)[0], 0)
+
+    def test_booleans_are_accepted_and_other_values_write_nothing(self):
+        for mode, expected in ((True, 1), (False, 0), (0, 0), (1, 1)):
+            with self.subTest(mode=mode):
+                dev = ProtocolDevice()
+                dev.set_mute_mode(mode)
+                self.assertEqual(
+                    struct.unpack_from("<i", dev.payloads[0], 28)[0], expected)
+        for mode in (2, -1):
+            with self.subTest(mode=mode):
+                dev = ProtocolDevice()
+                with self.assertRaises(ValueError):
+                    dev.set_mute_mode(mode)
+                self.assertEqual(dev.payloads, [])
+        for mode in (0.0, "1", None):
+            with self.subTest(mode=mode):
+                dev = ProtocolDevice()
+                with self.assertRaises(TypeError):
+                    dev.set_mute_mode(mode)
+                self.assertEqual(dev.payloads, [])
+
 
 
 if __name__ == "__main__":

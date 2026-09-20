@@ -355,6 +355,14 @@ active solo when it closes. A route the Host had never set is given the 0 dB it
 displays the first time its bus is soloed, so releasing has a real level to
 return to.
 
+The mute button beside each **Return** and **FX Return** source silences that
+source in Main, Mix A, and Mix B while retaining its three faders and assigns.
+The mute button beside each **Bus master** silences that whole output while
+retaining every source level and assign in it. These are UC scene semantics
+implemented by the Host over the device's individual sends; releasing either
+mute restores the exact retained mix. Physical input mute remains on the Mixer
+page.
+
 **Bus master** offsets every send in a bus at once. The hardware has no such
 control — block 100 holds one level per source and nothing above them — so it is
 applied by rewriting each send. Measured exact to 0.00 dB, with no crosstalk.
@@ -380,10 +388,12 @@ only Inputs 1 and 2, which every profile with a stereo pair carries.
 
 > The mixer has **no read-back**. The device accepts a level and will not report
 > one, so these sliders show what this app last sent, not what the hardware
-> holds. USB reconnect never silently replays the cache, and the GTK header no
-> longer presents a standing cache-reapply question. Explicit Host snapshot
-> save/load is the normal recovery path. Use `io24.py shadow clear` when cached
-> bookkeeping is unwanted; clearing it does not alter the device.
+> holds. The Host deliberately replays that durable shadow on reconnect so its
+> last mix, source/output mutes, Fat Channel, Voice FX and reverb return rather
+> than disappearing after a USB or power cycle. Device-readable controls are
+> adopted from the unit instead, and device block selection is quarantined from
+> ordinary replay. Use `io24.py shadow clear` when cached bookkeeping is
+> unwanted; clearing it does not alter the device.
 
 ---
 
@@ -412,6 +422,13 @@ tighter but works the CPU harder and risks dropouts.
 **Output delay** holds one output back so it lines up with a delayed remote
 signal — a co-host on a call, or a stream's video path. 0–500 ms in 2 ms steps.
 It is one global delay plus a bus selector, not an independent delay per bus.
+
+**Channel Mute Sync** matches UC's mute-behavior setting: when enabled, a
+channel Mute follows Main, Mix A, and Mix B. It is write-only, so the switch and
+scene loader show what this Host last sent, not device readback. UC names the
+enabled value and the owner's manual defines the behavior; the `1 = enabled`
+value remains a protocol inference because the io24 exposes no readable slot
+for it.
 
 **Channel processing** gives each input Universal Control's **DSP amount** and
 **Bypass**. Behind both is the one processing value the device keeps per
@@ -464,14 +481,14 @@ Click the preset's **Load** button to load it into the channel chosen in
 linked, the Fat Channel goes to both. FX has one global state, so the same
 action also adopts and sends the preset's recorded FX intent.
 
-A preset that lives on the unit loads from the unit itself when it belongs to
-that channel: the device runs its own `Stat` load for that block, then the Host
-sends the FX state recorded for that known block once. The physical recall is
-not treated as proof that FX was armed. Loaded into the other channel, the Host
-applies the same record instead. Because a bypassed channel never reaches the
-device's load, the Host turns processing on when, and only when, the device
-reports the channel bypassed; a channel that is already processing keeps its
-exact amount.
+A preset in a **Host-known device block** first selects that physical block,
+then the Host directly sends the complete receipt it retained: Fat Channel and
+Voice FX. This is intentional because the retained live test established that
+selection alone does not reapply the unreadable stored body. A block the Host
+did not write can only be selected, and the UI says that its body is unknown
+instead of pretending to load it. Loaded into the other channel, a known record
+is applied directly there. If the target channel is bypassed, Load enables
+processing; a channel already processing keeps its exact DSP amount.
 
 A loaded preset is shown on the controls, so the pages stop describing the
 previous sound. A recalled Passive/Vintage EQ selects its own exact editable
@@ -487,7 +504,7 @@ test found that the tagged body did not take effect.
 
 Then come the presets you saved on this computer.
 
-### Saving, and putting a preset on the unit
+### Saving, and storing a Fat Channel candidate on the unit
 
 Type a name and press **Save**: the **Load into** channel's current sound,
 Voice FX included, joins your presets on this computer, in
@@ -495,21 +512,38 @@ Voice FX included, joins your presets on this computer, in
 existing name asks first. FX is one global settings object, so either channel's
 preset carries the same current FX state.
 
-Each preset's **⋯** menu still shows **Put on the unit's button, block 1** and
-**block 2**, but the Host now refuses that action before transport: a tagged
-JSON preset cannot be converted losslessly into the firmware-native slot body
-yet. Loading the preset into the Host and direct-live replay still work.
-Your own presets also have **Delete**, which removes them from this computer
-only.
+Each preset's **⋯** menu offers **Store Fat Channel on device, block 1/2**. The
+destination must be the unselected block, and the confirmation names exactly
+what will be replaced. The Host validates and sends a complete firmware-native
+version-2 Fat Channel body, then retains an identity-bound receipt with status
+`WRITE_SENT_UNVERIFIED`. The io24 cannot return that body, so the status is not
+called device readback or a durable commit.
 
-A native unit write was expected to be a complete-record `MemP/Stat` operation:
-global slots 0/1 are channel 1's two blocks and 2/3 are channel 2's. The
-byte-level primitive validates the leading version-2 container the firmware
-recall parser requires, but two bounded device tests showed that its stored
-Standard-EQ and independent gate bodies do not become active DSP state even
-when slot selection reads back. It remains unexposed by the preset menu. The
-missing piece is a distinct commit/apply edge, not another record-body variant;
-slot contents also cannot be read back.
+The established boundary is precise: Fat Channel can be audible without the
+Host after the device applies it; Voice FX stored beside it is not established
+as standalone and remained dry on device-only recall. The receipt therefore
+keeps Voice FX for the **Host-assisted Load** described above. Selection by
+itself did not reapply the candidate body in the retained live test. Your own
+presets also have **Delete**, which removes them from this computer only.
+
+### Scenes
+
+**Load scene…** applies a complete Universal Control `.scene` from the Presets
+page. The Host parses and validates the entire file before the first device
+write. It covers the global delay and headphone source, Channel Mute Sync,
+preset-button mode, both Fat Channels and DSP amounts, Standard/Passive/Vintage
+EQ, the complete Main/Mix A/Mix B matrix, source and output mutes, Host solos,
+bus masters, one-shot mirror-main, shared Voice FX and shared reverb. The three
+retained UC scenes plan 94–97 real Host operations each. Their device-resident
+preset libraries are reported but never overwritten.
+
+The io24 has no faithful mapping for mono-source pan, stereo width, exact `FXA`
+reverb sends, `dawpostdsp`, output mono fold-down, text names, or UC's persistent
+mirror latch. The loader reports those fields explicitly instead of mapping
+them to a nearby control. Because Voice FX is one shared processor, two
+conflicting per-channel Voice FX records make validation fail before transport.
+Once a valid plan starts, writes are sequential: a USB/runtime failure stops on
+that setting and later settings are not sent; there is no device rollback.
 
 ### Factory presets
 
@@ -579,14 +613,14 @@ inputs have Auto gain on) are saved to
 `~/.config/io24/last-session.json` every few seconds and on exit.
 
 Each time the io24 connects, the Host re-sends the settings the unit cannot
-keep through a power cycle (EQ, dynamics, mixer, reverb, Voice FX, DSP amount
-and Bypass) and shows them on the controls. What the unit reports itself (gains,
-phantom power, mute, headphone mute, stereo link, volumes, the selected block)
-comes from the unit, so a change made on the hardware while the Host was closed
-stands. The selected block is never moved. If the last session had Voice FX on,
-the owning channel's selected block is loaded first, because the unit plays
-Voice FX only after loading a block, and that channel's saved DSP amount is
-then sent again. Host-only features come back once per launch, not on every
+keep through a power cycle (EQ, dynamics, mixer, source/output mutes, reverb,
+Voice FX, DSP amount and Bypass) and shows them on the controls. What the unit
+reports itself (gains, phantom power, input/headphone mute, stereo link,
+volumes, the selected block) comes from the unit, so a change made on the
+hardware while the Host was closed stands. The selected block is never moved.
+Voice FX is restored with its exact model transaction and model-local On state;
+the Host does not claim a device block activated it and does not mutate
+`processingChannel`. Host-only features come back once per launch, not on every
 reconnect.
 
 Two consequences: settings changed from Universal Control on another computer in
@@ -597,7 +631,6 @@ off, comes back on for the inputs that had it.
 `io24.py startup save` and `systemd/io24-startup.service` remain for applying
 settings without the Host window — see
 [README.md](README.md#making-settings-stick). For a sound that plays with no
-computer at all, the unit's own preset storage is the intended path, but this
-Host's current store-plus-selector route has failed recall acceptance with two
-independent native bodies. Keep the computer preset until the missing device
-commit/apply operation is recovered.
+computer at all, the unit's own preset storage is the intended path. Fat
+Channel is established standalone; Voice FX is not, so keep the Host available
+when that effect is part of the sound.

@@ -1,100 +1,50 @@
 #!/usr/bin/env python3
-"""Apply a Universal Control `.scene` file to the io24 from Linux.
+"""Apply a Universal Control `.scene` file with the native Linux Host.
 
-Universal Control saves the whole device state as JSON, in
-`Documents/PreSonus/Revelator IO/Scene/*.scene`. The field names are PreSonus's
-own, and nearly all of them map straight onto setters this driver already has --
-so a scene authored in UC on Windows or macOS can be applied here without
-using the device-slot transaction.
+The importer follows UC 4.7.2's component model rather than treating a scene
+as a channel preset. It restores global settings, both Fat Channels, the full
+mixer matrix, output masters and mutes, shared reverb, and the one shared
+VoiceFX processor. Passive and Vintage EQ use the exact retained UC 4.7.2
+coefficient designers already used by the Host.
 
     python3 io24_scene.py "B A S E.scene"
-    python3 io24_scene.py --dry-run Main.scene
+    python3 io24_scene.py --dry-run --sample-rate 96000 Main.scene
 
-What a scene contains, and what happens to each part:
-
-  global      outputDelay, outputDelayBus, phonesSrc    -> applied
-              aux1_mirror_main, auxMuteMode,
-              presetButtonMode                          -> host-side action or
-                                                           separate device path
-  line/chN    preampgain, 48v, mute, link,
-              processingChannel, volume, aux1, aux2,
-              assign_aux1, assign_aux2                  -> applied
-              filter.hpf, gate, comp, limit             -> applied
-              eq                                        -> SKIPPED, see below
-              voicefx                                   -> SKIPPED, see below
-  presets     slots 0..3, userpresets                   -> read and reported;
-                                                           slots are complete
-                                                           channel/effect records
-
-UC 4.7.2's slot-save representation is now decoded: scene slots 0/1 are the two
-records for channel 1, slots 2/3 are the two for channel 2, and the same JSON
-object serializes into a ``SetP/Appl(0)/MemP/Stat`` record. The serializer,
-frame builder, and explicit device-slot save method live in
-``io24_preset_record.py`` and ``io24.py``. This scene-import script deliberately
-does not overwrite device slots as a side effect of applying a scene.
-
-A channel's EQ comes in one of two forms and they are treated differently:
-
-  * the **Standard** model stores real Hz, Q and gain per band (`eqfreq1..4`
-    etc.), tagged with the same class GUID the firmware's factory presets use.
-    That is the device's native representation and it is applied as-is.
-  * the **Vintage 1970s** model stores `lowgain/lowfreq`, `lowmidgain/
-    lowmidfreq`, `himidgain/himidfreq`, `higain`, where the `*freq` values are
-    small integers selecting switch positions, not Hz. UC 4.7.2's own
-    `fatchannelxt.xml` gives their exact display frequencies. The direct device
-    switch table and UC 4.7.2 coefficient designers are recovered in the
-    2026-09-14 native-slot-builder evidence. The executable transcription
-    still depends on the user's retained UC DLL and is not a self-contained
-    runtime Host dependency, so this direct-live path remains SKIPPED. The
-    former `--vintage-eq` Standard-biquad approximation stays disabled.
-
-**voicefx** is skipped only by this script's direct-live apply path. Its JSON is
-preserved in a complete slot object and is valid input to the pure
-``MemP/Stat`` serializer. UC restores the selected model/class before applying
-that model's fields. A slot object for either channel can carry its own
-VoiceFX choice, but every recall configures the same singleton block-201 model
-and state; different slot values do not create independent processors.
-Transformer/Doubler has two structural private-reverb lanes with one shared
-parameter set, but stock simultaneous routing of those lanes remains unproved.
-It does not store block-202 reverb/send fields.
-
-Everything skipped is reported rather than silently dropped.
+Device-resident preset blocks are listed but never overwritten by scene load.
+Fields that the io24 protocol cannot faithfully represent are reported with a
+specific reason: mono-source pan/stereo width, FXA, DAW post-DSP capture tap,
+output mono fold-down, text labels, and UC's live mirror latch. A true mirror
+request is restored as the Host's documented one-shot copy.
 """
+import argparse
 import json
+import math
 import os
-import sys
+
+import io24_alt_eq
+import io24_dsp
+import io24_fx
+import io24_presets
+
 
 SOURCE = {1: "line/ch1", 2: "line/ch2"}
 
-# UC tags each processing block with a class GUID, and the compressor GUID says
-# which MODEL is in use. The two channels can differ, and the models do not share
-# a parameter set -- Standard has threshold/ratio/gain, FET has input/output and
-# a ratio index -- so the GUID has to be honoured or the values land in the wrong
-# maths. Observed in the recovered scenes; the Tube id has not been seen yet.
+# Public compatibility constants used by protocol tests and by people
+# inspecting scene files. Model dispatch itself is centralized in
+# ``io24_presets`` so the importer cannot drift from the preset loader.
 COMP_MODELS = {
-    "{870D04F7-212E-4F9C-ADBB-39A97216433F}": 0,     # Standard
-    "{7F8A4262-D377-48E3-9D48-15D82C400A71}": 1,     # Tube
-    "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}": 2,     # FET (input/output/ratio index)
+    "{870D04F7-212E-4F9C-ADBB-39A97216433F}": 0,
+    "{7F8A4262-D377-48E3-9D48-15D82C400A71}": 1,
+    "{1F831EC1-B8AC-4EE9-AD53-54227AF53D58}": 2,
 }
-# The full parametric EQ carries this class; it is the same GUID the firmware's
-# own factory presets use, i.e. the device's native EQ representation.
 EQ_PARAMETRIC = "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}"
 EQ_PASSIVE = "{C0730CBB-5135-4558-9222-C40BDBA036ED}"
 EQ_VINTAGE = "{E1C5E024-C5CD-473C-B08A-6EC177812E01}"
 
-# ---------------------------------------------------------------------------
-# UC 4.7.2 names these exact switch positions, and its four proprietary band
-# designers are executable offline through `re/uc472_vintage_eq.py`. That
-# analysis requires the retained pinned DLL; feeding the labels to the Standard
-# biquad path remains an approximation and is never executable as a live call.
 VINTAGE_LOW_HZ = (35.0, 60.0, 110.0, 220.0)
 VINTAGE_LOWMID_HZ = (360.0, 700.0, 1600.0)
 VINTAGE_HIMID_HZ = (3200.0, 4800.0, 7200.0)
 VINTAGE_HIGH_HZ = 12000.0
-
-# UC's Passive Program enum order. Its first low-frequency label literally
-# reuses the string ``20kHz`` from the attenuation selector; the designer's
-# circuit branch and the EQP-1A control identify that position as 20 Hz.
 PASSIVE_LOW_HZ = (20.0, 30.0, 60.0, 100.0)
 PASSIVE_HIGH_BOOST_HZ = (3000.0, 4000.0, 5000.0, 8000.0,
                          10000.0, 12000.0, 16000.0)
@@ -102,288 +52,511 @@ PASSIVE_HIGH_ATTEN_HZ = (5000.0, 10000.0, 20000.0)
 
 
 def load(path):
-    # UC writes these with a BOM on some systems.
-    with open(path, encoding="utf-8-sig") as f:
-        return json.load(f)
+    """Read one UC scene, accepting the BOM emitted by some UC versions."""
+    with open(path, encoding="utf-8-sig") as handle:
+        scene = json.load(handle)
+    if not isinstance(scene, dict):
+        raise ValueError("scene root must be an object")
+    return scene
 
 
-def _num(d, key, default=None):
-    v = d.get(key, default)
-    return None if v is None else float(v)
+def _object(value, label):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("%s must be an object" % label)
+    return value
 
 
-def plan(scene, vintage=False):
-    """Work out every call, without touching the device. Returns (calls, skips).
+def _number(value, label, low=None, high=None):
+    if isinstance(value, bool):
+        raise ValueError("%s must be a finite number" % label)
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("%s must be a finite number" % label)
+    if not math.isfinite(value):
+        raise ValueError("%s must be finite" % label)
+    if (low is not None and value < low) or \
+            (high is not None and value > high):
+        raise ValueError("%s must be in [%s, %s]" % (label, low, high))
+    return value
 
-    A call is (method_name, args, kwargs, human description).
+
+def _integer(value, label, low=None, high=None):
+    number = _number(value, label, low, high)
+    if not number.is_integer():
+        raise ValueError("%s must be an integer" % label)
+    return int(number)
+
+
+def _toggle(value, label):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and \
+            math.isfinite(float(value)) and float(value) in (0.0, 1.0):
+        return bool(value)
+    raise ValueError("%s must be boolean or 0/1" % label)
+
+
+def _call(calls, method, args, kwargs, description):
+    calls.append((method, tuple(args), dict(kwargs), description))
+
+
+def _unknown_fields(component, known, prefix, skips):
+    for field in sorted(set(component) - set(known)):
+        skips.append("%s.%s is not in the UC 4.7.2 io24 component model" %
+                     (prefix, field))
+
+
+def _routing_calls(component, source, prefix, calls):
+    for field, bus, assign in (
+            ("volume", "main", "lr"),
+            ("aux1", "mixa", "assign_aux1"),
+            ("aux2", "mixb", "assign_aux2")):
+        if field in component:
+            level = _number(component[field], "%s.%s" % (prefix, field),
+                            -145.0, 10.0)
+            _call(calls, "set_send_db", (source, bus, level), {},
+                  "%s -> %s = %.1f dB" % (prefix, bus, level))
+        if assign in component:
+            on = _toggle(component[assign], "%s.%s" % (prefix, assign))
+            _call(calls, "set_send_assigned", (source, bus, on), {},
+                  "%s -> %s assigned = %s" % (prefix, bus, on))
+
+
+def _plan_standard_eq(channel, eq, prefix, fs, calls):
+    bands = io24_presets._standard_eq_bands(eq)
+    for index, values in enumerate(bands):
+        kwargs = {
+            "shape": values["shape"], "freq_hz": values["freq"],
+            "gain_db": values["gain"], "q": values["q"], "fs": fs,
+        }
+        _call(calls, "set_eq_band", (channel, index), kwargs,
+              "%s Standard EQ band %d %s %.0f Hz %+.1f dB Q%.2f" %
+              (prefix, index + 1, values["shape"], values["freq"],
+               values["gain"], values["q"]))
+
+
+def _plan_processing(channel, component, prefix, fs, calls, voicefx, skips):
+    opt = _object(component.get("opt"), "%s.opt" % prefix)
+    if "swapcompeq" in opt:
+        eq_first = _toggle(opt["swapcompeq"], "%s.opt.swapcompeq" % prefix)
+        _call(calls, "set_comp_eq_order", (channel, eq_first), {},
+              "%s order = %s" %
+              (prefix, "EQ then compressor" if eq_first
+               else "compressor then EQ"))
+    _unknown_fields(opt, {"swapcompeq"}, "%s.opt" % prefix, skips)
+
+    filt = _object(component.get("filter"), "%s.filter" % prefix)
+    if "hpf" in filt:
+        hpf = _number(filt["hpf"], "%s.filter.hpf" % prefix, 24.0, 1000.0)
+        _call(calls, "set_highpass_freq", (channel, hpf), {"fs": fs},
+              "%s Fat Channel HPF = %.0f Hz" % (prefix, hpf))
+    _unknown_fields(filt, {"hpf"}, "%s.filter" % prefix, skips)
+
+    gate = _object(component.get("gate"), "%s.gate" % prefix)
+    if gate:
+        kwargs = {
+            "on": _toggle(gate.get("on", 1), "%s.gate.on" % prefix),
+            "threshold_db": _number(gate.get("threshold", -40.0),
+                                    "%s.gate.threshold" % prefix),
+            "range_db": _number(gate.get("range", -60.0),
+                                "%s.gate.range" % prefix),
+            "attack_s": _number(gate.get("attack", 0.01),
+                                "%s.gate.attack" % prefix, 0.0),
+            "release_s": _number(gate.get("release", 0.3),
+                                 "%s.gate.release" % prefix, 0.0),
+            "keyfilter_hz": _number(gate.get("keyfilter", 0.0),
+                                    "%s.gate.keyfilter" % prefix, 0.0),
+            "expander": _toggle(gate.get("expander", 1),
+                                "%s.gate.expander" % prefix),
+            "keylisten": _toggle(gate.get("keylisten", 0),
+                                 "%s.gate.keylisten" % prefix),
+            "fs": fs,
+        }
+        io24_dsp.gate_blob(
+            0, kwargs["on"], kwargs["threshold_db"], kwargs["range_db"],
+            kwargs["attack_s"], kwargs["release_s"], kwargs["keyfilter_hz"],
+            kwargs["expander"], kwargs["keylisten"], fs)
+        _call(calls, "set_gate", (channel,), kwargs,
+              "%s gate on=%s threshold=%.1f dB" %
+              (prefix, kwargs["on"], kwargs["threshold_db"]))
+    _unknown_fields(gate, {
+        "on", "threshold", "range", "attack", "release", "keyfilter",
+        "expander", "keylisten",
+    }, "%s.gate" % prefix, skips)
+
+    comp = _object(component.get("comp"), "%s.comp" % prefix)
+    if comp:
+        decoded = io24_presets._compressor_call(comp)
+        if decoded is not None:
+            model, kwargs = decoded
+            kwargs = dict(kwargs, model=model, fs=fs)
+            _call(calls, "set_compressor", (channel,), kwargs,
+                  "%s %s compressor on=%s" %
+                  (prefix, io24_presets.compressor_model(comp).title(),
+                   kwargs["on"]))
+
+    limiter = _object(component.get("limit"), "%s.limit" % prefix)
+    if limiter:
+        on = _toggle(limiter.get("limiteron", 0),
+                     "%s.limit.limiteron" % prefix)
+        threshold = _number(limiter.get("threshold", -28.0),
+                            "%s.limit.threshold" % prefix, -56.0, 0.0)
+        _call(calls, "set_limiter", (channel, on, threshold), {"fs": fs},
+              "%s limiter on=%s threshold=%.1f dBFS" %
+              (prefix, on, threshold))
+    _unknown_fields(limiter, {"limiteron", "threshold"},
+                    "%s.limit" % prefix, skips)
+
+    eq = _object(component.get("eq"), "%s.eq" % prefix)
+    if eq:
+        model = io24_presets.eq_model(eq)
+        if model == "standard":
+            _plan_standard_eq(channel, eq, prefix, fs, calls)
+        elif model in ("passive", "vintage"):
+            normalized = io24_alt_eq.validate_eq(eq)
+            # Missing retained source material or invalid coefficients fail
+            # here, before the first device call can be made.
+            io24_alt_eq.design_live_sections(normalized, rate_hz=fs)
+            _call(calls, "set_alternate_eq", (channel, normalized), {"fs": fs},
+                  "%s exact %s EQ on=%s" %
+                  (prefix, model.title(), bool(normalized["eqallon"])))
+        else:
+            raise ValueError("%s EQ has no selected model" % prefix)
+
+    fx = _object(component.get("voicefx"), "%s.voicefx" % prefix)
+    if fx:
+        model, kwargs = io24_fx.voicefx_preset_call(fx)
+        kwargs = dict(kwargs)
+        if model in ("transformer", "detuner", "vocoder"):
+            kwargs["fs"] = fs
+        # Materialize the exact model transaction offline, including its own On.
+        getattr(io24_fx, "set_fx_" + model)(**kwargs)
+        voicefx.append((prefix, model, kwargs))
+
+
+def plan(scene, vintage=False, sample_rate_hz=48000.0):
+    """Return ``(calls, skips)`` without touching USB or the device.
+
+    ``vintage`` is accepted for source compatibility. Alternate EQ no longer
+    needs an opt-in: exact Passive and Vintage replay is the normal path.
     """
-    calls, skips = [], []
-    g = scene.get("global", {})
+    _ = vintage
+    scene = _object(scene, "scene")
+    fs = _number(sample_rate_hz, "sample rate", 8000.0, 192000.0)
+    calls, skips, mirrors, solos, mutes, voicefx = [], [], [], [], [], []
 
-    od, odb = _num(g, "outputDelay"), g.get("outputDelayBus")
-    if od is not None:
-        if odb is not None:
-            calls.append(("set_output_delay_bus", (int(odb),), {},
-                          "output delay bus = %d" % int(odb)))
-        calls.append(("set_output_delay", (od,), {},
-                      "output delay = %.0f ms" % (od * 1000.0)))
-    if "phonesSrc" in g:
-        calls.append(("set_phones_source", (g["phonesSrc"],), {},
-                      "headphones source = %s" % g["phonesSrc"]))
-    for k in ("aux1_mirror_main", "aux2_mirror_main",
-              "auxMuteMode", "presetButtonMode"):
-        if k in g:
-            skips.append("global.%s = %s (host-side in UC; no device parameter)"
-                         % (k, g[k]))
+    global_state = _object(scene.get("global"), "global")
+    if "outputDelayBus" in global_state:
+        bus = _integer(global_state["outputDelayBus"],
+                       "global.outputDelayBus", -1, 4)
+        _call(calls, "set_output_delay_bus", (bus,), {},
+              "output delay bus = %d" % bus)
+    if "outputDelay" in global_state:
+        seconds = _number(global_state["outputDelay"],
+                          "global.outputDelay", 0.0, 0.5)
+        _call(calls, "set_output_delay", (seconds,), {},
+              "output delay = %.0f ms" % (seconds * 1000.0))
+    if "phonesSrc" in global_state:
+        source = _integer(global_state["phonesSrc"], "global.phonesSrc", 0, 2)
+        _call(calls, "set_phones_source", (source,), {},
+              "headphones source = %d" % source)
+    if "auxMuteMode" in global_state:
+        mode = _toggle(global_state["auxMuteMode"], "global.auxMuteMode")
+        _call(calls, "set_mute_mode", (mode,), {},
+              "Channel Mute Sync = %s (UC value mapping)" % mode)
+    if "presetButtonMode" in global_state:
+        mode = _integer(global_state["presetButtonMode"],
+                        "global.presetButtonMode", 0, 2)
+        _call(calls, "set_preset_mode", (mode,), {},
+              "preset button mode = %d" % mode)
+    for field, bus in (("aux1_mirror_main", "mixa"),
+                       ("aux2_mirror_main", "mixb")):
+        if field in global_state and _toggle(
+                global_state[field], "global.%s" % field):
+            mirrors.append(("mirror_main", (bus,), {},
+                            "%s one-shot copy from Main" % bus))
+    _unknown_fields(global_state, {
+        "phonesSrc", "aux1_mirror_main", "aux2_mirror_main",
+        "outputDelay", "outputDelayBus", "presetButtonMode", "auxMuteMode",
+    }, "global", skips)
 
-    line = scene.get("line", {})
-    # link is one device-wide setting; take it from channel 1
-    if "link" in line.get("ch1", {}):
-        on = bool(line["ch1"]["link"])
-        calls.append(("set_channel_link", (on,), {}, "stereo link = %s" % on))
-
-    for ch in (1, 2):
-        c = line.get("ch%d" % ch)
-        if not c:
+    line = _object(scene.get("line"), "line")
+    ch1 = _object(line.get("ch1"), "line.ch1")
+    if "link" in ch1:
+        linked = _toggle(ch1["link"], "line.ch1.link")
+        _call(calls, "set_channel_link", (linked,), {},
+              "input stereo link = %s" % linked)
+    for channel in (1, 2):
+        key = "ch%d" % channel
+        component = _object(line.get(key), "line.%s" % key)
+        if not component:
             continue
-        pre = "ch%d" % ch
-        if "preampgain" in c:
-            calls.append(("set_gain", (ch, float(c["preampgain"])), {},
-                          "%s preamp gain = %.1f dB" % (pre, c["preampgain"])))
-        if "48v" in c:
-            calls.append(("set_phantom", (ch, bool(c["48v"])), {},
-                          "%s phantom = %s" % (pre, bool(c["48v"]))))
-        if "mute" in c:
-            calls.append(("set_mute", (ch, bool(c["mute"])), {},
-                          "%s mute = %s" % (pre, bool(c["mute"]))))
-        if "processingChannel" in c:
-            src = int(c["processingChannel"]) + 1
-            calls.append(("set_processing_channel", (ch, src), {},
-                          "%s DSP fed by input %d" % (pre, src)))
+        prefix, source = "line.%s" % key, SOURCE[channel]
+        if "preampgain" in component:
+            gain = _number(component["preampgain"],
+                           "%s.preampgain" % prefix, 0.0, 60.0)
+            _call(calls, "set_gain", (channel, gain), {},
+                  "%s preamp gain = %.1f dB" % (prefix, gain))
+        if "48v" in component:
+            phantom = _toggle(component["48v"], "%s.48v" % prefix)
+            _call(calls, "set_phantom", (channel, phantom), {},
+                  "%s phantom = %s" % (prefix, phantom))
+        if "mute" in component:
+            muted = _toggle(component["mute"], "%s.mute" % prefix)
+            _call(calls, "set_mute", (channel, muted), {},
+                  "%s input mute = %s" % (prefix, muted))
+        if "processingChannel" in component:
+            processing = _integer(component["processingChannel"],
+                                  "%s.processingChannel" % prefix, 0, 1) + 1
+            _call(calls, "set_processing_channel", (channel, processing), {},
+                  "%s DSP source = input %d" % (prefix, processing))
+        _routing_calls(component, source, prefix, calls)
+        if "dspAmount" in component:
+            amount = _number(component["dspAmount"],
+                             "%s.dspAmount" % prefix, 0.0, 1.0)
+            _call(calls, "set_fx_mix", (channel, amount), {},
+                  "%s DSP amount = %.3f" % (prefix, amount))
+        if "solo" in component:
+            on = _toggle(component["solo"], "%s.solo" % prefix)
+            for bus in ("main", "mixa", "mixb"):
+                solos.append(("set_solo", (source, bus, on), {},
+                              "%s solo in %s = %s" % (prefix, bus, on)))
+        _plan_processing(channel, component, prefix, fs, calls, voicefx, skips)
+        for field, reason in (
+                ("pan", "mono-source pan is not representable by block 100"),
+                ("stereopan", "stereo width/mono collapse is not representable"),
+                ("FXA", "no exact io24 wire mapping exists"),
+                ("dawpostdsp", "DAW capture-tap selection is Host-bound"),
+                ("username", "text label is not writable on this protocol"),
+                ("preset_name", "display metadata is not a live parameter"),
+                ("linkmaster", "UC component-tree metadata")):
+            if field in component:
+                skips.append("%s.%s = %r (%s)" %
+                             (prefix, field, component[field], reason))
+        known = {
+            "username", "mute", "volume", "link", "linkmaster",
+            "preset_name", "solo", "lr", "assign_aux1", "assign_aux2",
+            "aux1", "aux2", "preampgain", "pan", "stereopan", "FXA",
+            "dawpostdsp", "dspAmount", "processingChannel", "48v", "opt",
+            "filter", "gate", "comp", "eq", "limit", "voicefx",
+        }
+        _unknown_fields(component, known, prefix, skips)
 
-        # Sends. UC keeps a level and a separate assign flag per bus, which is
-        # exactly the send model this driver grew for the aux buses.
-        for key, bus, assign in (("volume", "main", "lr"),
-                                 ("aux1", "mixa", "assign_aux1"),
-                                 ("aux2", "mixb", "assign_aux2")):
-            if key in c:
-                calls.append(("set_send_db", (SOURCE[ch], bus, float(c[key])), {},
-                              "%s -> %s = %.1f dB" % (pre, bus, c[key])))
-            if assign in c:
-                calls.append(("set_send_assigned",
-                              (SOURCE[ch], bus, bool(c[assign])), {},
-                              "%s -> %s assigned = %s" % (pre, bus, bool(c[assign]))))
+    if len(voicefx) > 1:
+        first = voicefx[0][1:]
+        if any(item[1:] != first for item in voicefx[1:]):
+            raise ValueError(
+                "scene contains conflicting per-channel VoiceFX records, but "
+                "the io24 has one shared VoiceFX processor")
+    if voicefx:
+        prefix, model, kwargs = voicefx[0]
+        _call(calls, "set_fx", (model,), kwargs,
+              "shared VoiceFX from %s = %s, on=%s" %
+              (prefix, model, kwargs["on"]))
 
-        f = c.get("filter", {})
-        if "hpf" in f:
-            calls.append(("set_highpass_freq", (ch, float(f["hpf"])), {},
-                          "%s high-pass = %.0f Hz" % (pre, f["hpf"])))
+    for section in ("return", "fxreturn"):
+        group = _object(scene.get(section), section)
+        for key, component in group.items():
+            component = _object(component, "%s.%s" % (section, key))
+            source = "%s/%s" % (section, key)
+            prefix = "%s.%s" % (section, key)
+            if source not in ("return/ch1", "return/ch2", "return/ch3",
+                              "fxreturn/ch1"):
+                skips.append("%s has no io24 mixer source" % prefix)
+                continue
+            _routing_calls(component, source, prefix, calls)
+            if "mute" in component:
+                on = _toggle(component["mute"], "%s.mute" % prefix)
+                mutes.append(("set_source_mute", (source, on), {},
+                              "%s source mute = %s" % (prefix, on)))
+            if "solo" in component:
+                on = _toggle(component["solo"], "%s.solo" % prefix)
+                for bus in ("main", "mixa", "mixb"):
+                    solos.append(("set_solo", (source, bus, on), {},
+                                  "%s solo in %s = %s" %
+                                  (prefix, bus, on)))
+            for field, reason in (
+                    ("username", "text label is not writable"),
+                    ("preset_name", "display metadata is not live state"),
+                    ("link", "USB-return stereo linking has no exact wire"),
+                    ("linkmaster", "UC component-tree metadata")):
+                if field in component:
+                    skips.append("%s.%s = %r (%s)" %
+                                 (prefix, field, component[field], reason))
+            _unknown_fields(component, {
+                "username", "mute", "volume", "link", "linkmaster",
+                "preset_name", "solo", "lr", "assign_aux1", "assign_aux2",
+                "aux1", "aux2",
+            }, prefix, skips)
 
-        gt = c.get("gate")
-        if gt:
-            calls.append(("set_gate", (ch,), dict(
-                on=bool(gt.get("on", 1)),
-                threshold_db=float(gt.get("threshold", -40.0)),
-                range_db=float(gt.get("range", -60.0)),
-                attack_s=float(gt.get("attack", 0.01)),
-                release_s=float(gt.get("release", 0.3)),
-                keyfilter_hz=float(gt.get("keyfilter", 0.0)),
-                expander=bool(gt.get("expander", 1)),
-                keylisten=bool(gt.get("keylisten", 0))),
-                "%s gate on=%s thr=%.1f dB" % (pre, bool(gt.get("on", 1)),
-                                               gt.get("threshold", -40.0))))
+    output_map = {("aux", "ch1"): "mixa", ("aux", "ch2"): "mixb",
+                  ("main", "ch1"): "main"}
+    for section in ("aux", "main"):
+        group = _object(scene.get(section), section)
+        for key, component in group.items():
+            prefix = "%s.%s" % (section, key)
+            component = _object(component, prefix)
+            bus = output_map.get((section, key))
+            if bus is None:
+                skips.append("%s has no io24 output bus" % prefix)
+                continue
+            if "volume" in component:
+                gain = _number(component["volume"], "%s.volume" % prefix,
+                               -96.0, 10.0)
+                _call(calls, "set_bus_master", (bus, gain), {},
+                      "%s master = %.1f dB" % (prefix, gain))
+            if "mute" in component:
+                on = _toggle(component["mute"], "%s.mute" % prefix)
+                mutes.append(("set_bus_mute", (bus, on), {},
+                              "%s output mute = %s" % (prefix, on)))
+            for field, reason in (
+                    ("mono", "output mono fold-down is not representable"),
+                    ("username", "text label is not writable"),
+                    ("preset_name", "display metadata is not live state"),
+                    ("link", "output link is component-tree metadata"),
+                    ("linkmaster", "UC component-tree metadata")):
+                if field in component:
+                    skips.append("%s.%s = %r (%s)" %
+                                 (prefix, field, component[field], reason))
+            _unknown_fields(component, {
+                "username", "mute", "volume", "link", "linkmaster",
+                "preset_name", "mono",
+            }, prefix, skips)
 
-        cp = c.get("comp")
-        if cp:
-            # The channels can be running DIFFERENT compressor models, and the
-            # __classid says which. They do not share a parameter set: Standard
-            # has threshold/ratio/gain, FET has input/output and a ratio INDEX.
-            # Feeding FET's `ratio: 0` to the Standard maths as a ratio would be
-            # nonsense, so dispatch on the class.
-            class_id = cp.get("__classid")
-            model = COMP_MODELS.get(class_id)
-            if model is None:
-                skips.append("%s compressor class %s is unknown; skipped before "
-                             "any model-specific write" %
-                             (pre, class_id or "<missing>"))
-            elif model == 2:
-                kw = dict(on=bool(cp.get("on", 1)),
-                          input_db=float(cp.get("input", 0.0)),
-                          output_db=float(cp.get("output", 0.0)),
-                          attack_s=float(cp.get("attack", 0.02)),
-                          release_s=float(cp.get("release", 0.15)),
-                          ratio_index=int(cp.get("ratio", 0)),
-                          keyfilter_hz=float(cp.get("keyfilter", 0.0)),
-                          keylisten=bool(cp.get("keylisten", 0)))
-                desc = "%s comp FET on=%s in=%.1f out=%.1f ratio_idx=%d" % (
-                    pre, bool(cp.get("on", 1)), cp.get("input", 0.0),
-                    cp.get("output", 0.0), int(cp.get("ratio", 0)))
-                kw["model"] = model
-                calls.append(("set_compressor", (ch,), kw, desc))
-            elif model == 1:
-                kw = dict(on=bool(cp.get("on", 1)),
-                          peak=float(cp.get("peak", 0.0)),
-                          gain=float(cp.get("gain", 40.0)),
-                          limit_mode=bool(cp.get("mode", 0)),
-                          keyfilter_hz=float(cp.get("keyfilter", 0.0)),
-                          keylisten=bool(cp.get("keylisten", 0)),
-                          model=model)
-                desc = "%s comp Tube on=%s peak=%.1f gain=%.1f mode=%s" % (
-                    pre, bool(cp.get("on", 1)), cp.get("peak", 0.0),
-                    cp.get("gain", 40.0),
-                    "limit" if cp.get("mode", 0) else "compress")
-                calls.append(("set_compressor", (ch,), kw, desc))
-            else:
-                kw = dict(on=bool(cp.get("on", 1)),
-                          threshold_db=float(cp.get("threshold", -24.0)),
-                          ratio=max(1.0, float(cp.get("ratio", 3.0))),
-                          attack_s=float(cp.get("attack", 0.02)),
-                          release_s=float(cp.get("release", 0.15)),
-                          gain_db=float(cp.get("gain", 0.0)),
-                          softknee=bool(cp.get("softknee", 0)),
-                          automode=bool(cp.get("automode", 0)),
-                          keyfilter_hz=float(cp.get("keyfilter", 0.0)),
-                          keylisten=bool(cp.get("keylisten", 0)))
-                desc = "%s comp Standard on=%s thr=%.1f ratio=%.1f" % (
-                    pre, bool(cp.get("on", 1)), cp.get("threshold", -24.0),
-                    kw["ratio"])
-                kw["model"] = model
-                calls.append(("set_compressor", (ch,), kw, desc))
+    fx_group = _object(scene.get("fx"), "fx")
+    fx_ch1 = _object(fx_group.get("ch1"), "fx.ch1")
+    reverb = _object(fx_ch1.get("reverb"), "fx.ch1.reverb")
+    if reverb:
+        on = _toggle(reverb.get("on", 1), "fx.ch1.reverb.on")
+        size = _number(reverb.get("size", 0.5),
+                       "fx.ch1.reverb.size", 0.0, 1.0)
+        mix = _number(reverb.get("mix", 0.3),
+                      "fx.ch1.reverb.mix", 0.0, 1.0)
+        hp = _number(reverb.get("hp_freq", 200.0),
+                     "fx.ch1.reverb.hp_freq", 0.0, 500.0)
+        predelay = _number(reverb.get("predelay", 0.02),
+                           "fx.ch1.reverb.predelay", 0.0001, 0.25)
+        _call(calls, "set_reverb", (), {
+            "on": on, "size": size, "mix": mix, "hp_freq": hp,
+            "predelay": predelay, "fs": fs,
+        }, "shared reverb on=%s size=%.3f mix=%.3f" % (on, size, mix))
+    _unknown_fields(reverb, {"on", "size", "mix", "hp_freq", "predelay"},
+                    "fx.ch1.reverb", skips)
+    _unknown_fields(fx_ch1, {"reverb"}, "fx.ch1", skips)
+    _unknown_fields(fx_group, {"ch1"}, "fx", skips)
 
-        lm = c.get("limit")
-        if lm:
-            calls.append(("set_limiter", (ch, bool(lm.get("limiteron", 0)),
-                                          float(lm.get("threshold", -28.0))), {},
-                          "%s limiter on=%s thr=%.1f dBFS" % (
-                              pre, bool(lm.get("limiteron", 0)),
-                              lm.get("threshold", -28.0))))
+    if "presets" in scene:
+        slots, users = describe_presets(scene)
+        skips.append(
+            "presets library retained and reported (%d device block%s, %d user "
+            "preset%s); scene load never overwrites device-resident blocks" %
+            (len(slots), "" if len(slots) == 1 else "s", len(users),
+             "" if len(users) == 1 else "s"))
 
-        eq = c.get("eq")
-        if eq and "eqgain1" in eq and eq.get("__classid", EQ_PARAMETRIC) == EQ_PARAMETRIC:
-            # The FULL parametric form: real Hz, real Q, per band. Its class GUID
-            # is the same one the firmware's factory presets carry, so this is
-            # the device's native EQ representation and maps straight across.
-            if not eq.get("eqallon", 1):
-                calls.append(("eq_off", (ch,), {}, "%s eq bypassed" % pre))
-            else:
-                for n, band in enumerate(("low", "lowmid", "himid", "high"), 1):
-                    if not eq.get("eqbandon%d" % n, 1):
-                        calls.append(("set_eq_band", (ch, band), {"shape": "off"},
-                                      "%s eq %s off" % (pre, band)))
-                        continue
-                    # `eqbandopN` exists only for the outer bands and selects
-                    # shelf vs peaking there. Treated as shelf when set; the
-                    # middle bands have no such field and are always peaking.
-                    op = eq.get("eqbandop%d" % n)
-                    if n == 1:
-                        shape = "lowshelf" if op else "peaking"
-                    elif n == 4:
-                        shape = "highshelf" if op else "peaking"
-                    else:
-                        shape = "peaking"
-                    calls.append(("set_eq_band", (ch, band), dict(
-                        shape=shape,
-                        freq_hz=float(eq["eqfreq%d" % n]),
-                        gain_db=float(eq.get("eqgain%d" % n, 0.0)),
-                        q=float(eq.get("eqq%d" % n, 0.7))),
-                        "%s eq %s %s %.0f Hz %+.1f dB Q%.2f" % (
-                            pre, band, shape, eq["eqfreq%d" % n],
-                            eq.get("eqgain%d" % n, 0.0), eq.get("eqq%d" % n, 0.7))))
-        elif eq:
-            suffix = ("; --vintage-eq is disabled" if vintage and
-                      eq.get("__classid") == EQ_VINTAGE else "")
-            skips.append("%s eq (%s, class=%s) — alternate-model state is "
-                         "preserved but direct replay is fail-closed because its "
-                         "exact coefficient builder is not recovered%s"
-                         % (pre, "on" if eq.get("eqallon") else "off",
-                            eq.get("__classid", "unknown"), suffix))
-        vf = c.get("voicefx")
-        if vf:
-            skips.append("%s voicefx (class=%s on=%s mix=%s) — preserved for "
-                         "native Stat save/recall; omitted from direct setter replay"
-                         % (pre, vf.get("__classid", "unknown"), vf.get("on"),
-                            vf.get("mix")))
-        for k in ("pan", "stereopan", "FXA", "solo", "dawpostdsp", "dspAmount"):
-            if k in c:
-                skips.append("%s.%s = %s (no driver support yet)" % (pre, k, c[k]))
+    _unknown_fields(scene, {
+        "global", "line", "return", "fxreturn", "aux", "main", "fx",
+        "presets",
+    }, "scene", skips)
+
+    # Routing first, then a requested one-shot mirror, then solo/mute gates.
+    # This matches UC's resulting state and ensures the final gate always wins.
+    calls.extend(mirrors)
+    calls.extend(solos)
+    calls.extend(mutes)
     return calls, skips
 
 
 def describe_presets(scene):
-    pr = scene.get("presets", {})
-    out = []
-    slots = pr.get("slots", {})
-    for k in sorted(slots, key=lambda x: int(x)):
-        s = slots[k]
-        vfx = s.get("voicefx", {})
-        out.append("  slot %s (%s): %-18r voicefx.on=%s"
-                   % (k, "ch1" if int(k) < 2 else "ch2",
-                      s.get("preset_name"), vfx.get("on")))
-    up = list(pr.get("userpresets", {}))
-    return out, up
+    presets = _object(scene.get("presets"), "presets")
+    slots = _object(presets.get("slots"), "presets.slots")
+    output = []
+    for key in sorted(slots, key=lambda value: int(value)):
+        record = _object(slots[key], "presets.slots.%s" % key)
+        fx = _object(record.get("voicefx"),
+                     "presets.slots.%s.voicefx" % key)
+        output.append("  slot %s (%s): %-18r voicefx.on=%s" %
+                      (key, "ch1" if int(key) < 2 else "ch2",
+                       record.get("preset_name"), fx.get("on")))
+    users = list(_object(presets.get("userpresets"),
+                         "presets.userpresets"))
+    return output, users
 
 
 def apply(dev, calls):
-    done = failed = 0
-    for name, args, kwargs, desc in calls:
-        fn = getattr(dev, name, None)
-        if fn is None:
-            print("    ! no such setter: %s" % name)
-            failed += 1
-            continue
+    """Apply a validated plan, stopping on the first transport/runtime error."""
+    missing = sorted({name for name, _args, _kwargs, _desc in calls
+                      if not callable(getattr(dev, name, None))})
+    if missing:
+        raise AttributeError("device backend is missing setter%s: %s" %
+                             ("" if len(missing) == 1 else "s",
+                              ", ".join(missing)))
+    done = 0
+    for name, args, kwargs, description in calls:
         try:
-            fn(*args, **kwargs)
+            getattr(dev, name)(*args, **kwargs)
             done += 1
-        except Exception as e:
-            print("    ! %s: %s" % (desc, e))
-            failed += 1
-    return done, failed
+        except Exception as error:
+            print("    ! %s: %s" % (description, error))
+            return done, 1
+    return done, 0
 
 
-def main():
-    argv = sys.argv[1:]
-    dry = "--dry-run" in argv or "-n" in argv
-    vintage = "--vintage-eq" in argv
-    argv = [a for a in argv if not a.startswith("-")]
-    if not argv:
-        print(__doc__)
-        return
-    path = argv[0]
-    if not os.path.exists(path):
-        raise SystemExit("no such scene file: %s" % path)
-    scene = load(path)
-    calls, skips = plan(scene, vintage=vintage)
+def _parser():
+    parser = argparse.ArgumentParser(
+        description="Apply a Universal Control `.scene` file to the io24")
+    parser.add_argument("scene", nargs="?", help="path to the .scene JSON file")
+    parser.add_argument("-n", "--dry-run", action="store_true",
+                        help="validate and print the complete plan without USB")
+    parser.add_argument("--sample-rate", type=float, default=48000.0,
+                        help="device sample rate for DSP coefficients (default 48000)")
+    parser.add_argument("--vintage-eq", action="store_true",
+                        help=argparse.SUPPRESS)
+    return parser
 
-    print("scene: %s" % os.path.basename(path))
-    slots, up = describe_presets(scene)
+
+def main(argv=None):
+    args = _parser().parse_args(argv)
+    if not args.scene:
+        _parser().print_help()
+        return 0
+    if not os.path.exists(args.scene):
+        raise SystemExit("no such scene file: %s" % args.scene)
+    scene = load(args.scene)
+    calls, skips = plan(scene, vintage=args.vintage_eq,
+                        sample_rate_hz=args.sample_rate)
+
+    print("scene: %s" % os.path.basename(args.scene))
+    slots, users = describe_presets(scene)
     if slots:
-        print("\ndevice preset slots recorded in this scene:")
-        for s in slots:
-            print(s)
-    if up:
-        print("user presets in the library: %s" % ", ".join(up))
-
+        print("\ndevice preset blocks recorded in this scene:")
+        for description in slots:
+            print(description)
+    if users:
+        print("user presets in the library: %s" % ", ".join(users))
     print("\n%d setting(s) to apply:" % len(calls))
-    for _, _, _, desc in calls:
-        print("    %s" % desc)
+    for _name, _args, _kwargs, description in calls:
+        print("    %s" % description)
     if skips:
         print("\n%d not applied:" % len(skips))
-        for s in skips:
-            print("    - %s" % s)
-
-    if dry:
+        for skipped in skips:
+            print("    - %s" % skipped)
+    if args.dry_run:
         print("\n(dry run — nothing sent)")
-        return
+        return 0
 
     from io24 import Io24
-    dev = Io24()
+    device = Io24()
     try:
         print("\napplying...")
-        done, failed = apply(dev, calls)
+        done, failed = apply(device, calls)
         print("applied %d, failed %d" % (done, failed))
+        return 1 if failed else 0
     finally:
-        dev.close()
+        device.close()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

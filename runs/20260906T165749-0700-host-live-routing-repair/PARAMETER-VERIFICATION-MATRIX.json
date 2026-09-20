@@ -11,6 +11,11 @@
       "mixer.mixa.master",
       "mixer.mixb.master"
     ],
+    "bus_muted": [
+      "mixer.main.bus_mute",
+      "mixer.mixa.bus_mute",
+      "mixer.mixb.bus_mute"
+    ],
     "bus_summary": [
       "host.bus_shadow_queries"
     ],
@@ -290,6 +295,11 @@
       "mixer.main.master",
       "mixer.mixa.master",
       "mixer.mixb.master"
+    ],
+    "set_bus_mute": [
+      "mixer.main.bus_mute",
+      "mixer.mixa.bus_mute",
+      "mixer.mixb.bus_mute"
     ],
     "set_channel_link": [
       "native.global.channel_link"
@@ -572,6 +582,9 @@
       "native.channel1.input_mute",
       "native.channel2.input_mute"
     ],
+    "set_mute_mode": [
+      "native.global.mute_mode"
+    ],
     "set_output_delay": [
       "native.global.output_delay"
     ],
@@ -685,6 +698,12 @@
       "mixer.mixa.solo",
       "mixer.mixb.solo"
     ],
+    "set_source_mute": [
+      "mixer.fxreturn_ch1.source_mute",
+      "mixer.return_ch1.source_mute",
+      "mixer.return_ch2.source_mute",
+      "mixer.return_ch3.source_mute"
+    ],
     "set_vintage_eq": [
       "fat.channel1.eq_model",
       "fat.channel2.eq_model"
@@ -703,6 +722,12 @@
       "mixer.main.solo",
       "mixer.mixa.solo",
       "mixer.mixb.solo"
+    ],
+    "source_muted": [
+      "mixer.fxreturn_ch1.source_mute",
+      "mixer.return_ch1.source_mute",
+      "mixer.return_ch2.source_mute",
+      "mixer.return_ch3.source_mute"
     ],
     "start": [
       "multiband.enabled"
@@ -761,6 +786,7 @@
       "fat_low_cut": 2,
       "fat_order": 2,
       "host_device": 2,
+      "host_mixer_control": 7,
       "host_process": 5,
       "host_state": 16,
       "host_telemetry": 16,
@@ -769,7 +795,7 @@
       "mixer_mapping": 5,
       "mixer_master": 3,
       "multiband": 52,
-      "native_control": 24,
+      "native_control": 25,
       "serializer": 10,
       "serializer_order": 1,
       "serializer_targeting": 6,
@@ -783,7 +809,7 @@
     "by_phase": {
       "P0": 5,
       "P1": 348,
-      "P3": 88,
+      "P3": 96,
       "P4": 142,
       "P5": 39,
       "P6": 23,
@@ -796,7 +822,7 @@
       "dsp_audio_scalar": 107,
       "dsp_audio_toggle": 30,
       "front_panel_write_only": 1,
-      "host_mapping": 81,
+      "host_mapping": 88,
       "host_process": 10,
       "mixer_assignment": 21,
       "mixer_level": 21,
@@ -807,13 +833,13 @@
       "serializer": 20,
       "telemetry": 17,
       "write_only_audio_scalar": 5,
-      "write_only_audio_toggle": 2
+      "write_only_audio_toggle": 3
     },
     "component_route_rows": 211,
     "fat_channel_parameter_rows": 142,
     "mixer_cell_rows": 42,
     "multiband_parameter_rows": 52,
-    "total_rows": 709,
+    "total_rows": 717,
     "vendor_descriptor_rows": 117,
     "voicefx_parameter_rows": 30
   },
@@ -17254,6 +17280,37 @@
     },
     {
       "api": [
+        "set_source_mute",
+        "source_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.fxreturn_ch1.source_mute",
+      "parameter": "fxreturn/ch1/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "source": "fxreturn/ch1"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 Channel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
+      ]
+    },
+    {
+      "api": [
         "set_send_assigned"
       ],
       "blockers": [],
@@ -18028,6 +18085,37 @@
     },
     {
       "api": [
+        "set_bus_mute",
+        "bus_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.main.bus_mute",
+      "parameter": "main/ch1/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "main"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 OutputChannel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
+      ]
+    },
+    {
+      "api": [
         "set_bus_master",
         "bus_master"
       ],
@@ -18094,6 +18182,37 @@
         "two_sources",
         "release",
         "clear_all"
+      ]
+    },
+    {
+      "api": [
+        "set_bus_mute",
+        "bus_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.mixa.bus_mute",
+      "parameter": "aux/ch1/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "mixa"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 OutputChannel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
       ]
     },
     {
@@ -18195,6 +18314,37 @@
         "two_sources",
         "release",
         "clear_all"
+      ]
+    },
+    {
+      "api": [
+        "set_bus_mute",
+        "bus_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.mixb.bus_mute",
+      "parameter": "aux/ch2/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "bus": "mixb"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 OutputChannel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
       ]
     },
     {
@@ -18512,6 +18662,37 @@
         6.0,
         -200.0,
         20.0
+      ]
+    },
+    {
+      "api": [
+        "set_source_mute",
+        "source_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.return_ch1.source_mute",
+      "parameter": "return/ch1/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "source": "return/ch1"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 Channel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
       ]
     },
     {
@@ -18846,6 +19027,37 @@
     },
     {
       "api": [
+        "set_source_mute",
+        "source_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.return_ch2.source_mute",
+      "parameter": "return/ch2/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "source": "return/ch2"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 Channel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
+      ]
+    },
+    {
+      "api": [
         "set_send_assigned"
       ],
       "blockers": [],
@@ -19058,6 +19270,37 @@
         6.0,
         -200.0,
         20.0
+      ]
+    },
+    {
+      "api": [
+        "set_source_mute",
+        "source_muted"
+      ],
+      "blockers": [],
+      "family": "host_mixer_control",
+      "id": "mixer.return_ch3.source_mute",
+      "parameter": "return/ch3/mute",
+      "phase": "P3",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "source": "return/ch3"
+      },
+      "source": [
+        "io24.py block-100 Host fold",
+        "UC 4.7.2 Channel/mute"
+      ],
+      "stimuli": [
+        false,
+        true
       ]
     },
     {
@@ -21438,6 +21681,37 @@
         1.0,
         -1.1,
         1.1
+      ]
+    },
+    {
+      "api": [
+        "set_mute_mode"
+      ],
+      "blockers": [],
+      "family": "native_control",
+      "id": "native.global.mute_mode",
+      "parameter": "muteMode",
+      "phase": "P3",
+      "profile": "write_only_audio_toggle",
+      "requires": [
+        "exclusive_usb",
+        "battery_above_10"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {},
+      "source": [
+        "io24.py",
+        "firmware JaSt/dispatcher"
+      ],
+      "stimuli": [
+        false,
+        true
       ]
     },
     {
@@ -24043,14 +24317,14 @@
   ],
   "schema": "io24-atomic-parameter-verification-matrix-v1",
   "source_sha256": {
-    "io24.py": "0a200e1efbb121b16ba02084881e5940c32ac034eea471292549811e0c5b4954",
+    "io24.py": "913f8bef725075d464abc10588b9443787ff148415c9e5b9ca710417931573f0",
     "io24_dsp.py": "3a2b810257b7957ec3246893ce3f0f7e2280c53734987a07d772ef92a26e2407",
     "io24_fx.py": "86eb6e8a45b2e972b7e681d6118c5f5cbe4b64328c044c38c88e19d13cc712ca",
     "io24_mbc.py": "50b1b142492cf432de855ecb3b2fd299b5efdbc5e43eebe81a43b8f0c4f629d7",
-    "io24_presets.py": "34c9db44ced94a45680e9b0433df4bffee7ddd7b1f9614e144e15ff5ac54cc0d",
-    "io24_scene.py": "f8de44334a64dd886e0f35f477f93b7ea60832a3d9056a73e67d92a90d023e4a",
+    "io24_presets.py": "0de3f7afd0b29cf3d6150f5ff51234c7e08ee146ddb4463d6b6d92e97554ba3b",
+    "io24_scene.py": "59ef61d759c469fe8f3baf76c4c3e0ac63f296d7d4aebf82417599994ea788fb",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "f3e990edcdd4b0241a9545822fb554d431182cb87153307c7cf17b37c9419fef",
+    "io24gtk.py": "456514a392b22d21ded21ce3431e2bdc633f656a51e48f806f5b08b5f20d2e6d",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

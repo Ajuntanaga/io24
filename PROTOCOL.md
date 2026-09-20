@@ -2,6 +2,52 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-19 controlling result: UC scene and settings parity repair
+
+The Linux Host now treats a Universal Control `.scene` as a whole-device state
+document rather than a pair of channel presets. `io24_scene.py` prevalidates the
+complete JSON object and plans every supported top-level section: `global`,
+`line`, `return`, `fxreturn`, `aux`, `main`, `fx`, and `presets`. The three
+retained UC 4.7.2 scenes produce 94–97 real Host operations each. Those plans
+include input state, routing and assigns, DSP amount, complete Fat Channels,
+exact Standard/Passive/Vintage EQ, the singleton VoiceFX component, shared
+reverb, return-source mute/solo, bus master/output mute, output delay,
+headphones source, preset-button mode, Channel Mute Sync, and a requested
+mirror-main as the Host's documented one-shot copy. Device-resident preset
+libraries are reported and never overwritten.
+
+The importer materializes exact alternate-EQ coefficients and VoiceFX frames
+during planning, before the first device call. It refuses conflicting
+per-channel VoiceFX records because firmware block 201 is one shared settings
+object. All backend setters are also checked before apply begins. Transport is
+necessarily sequential and has no device rollback: the first runtime/USB
+failure stops the plan and prevents later writes.
+
+UC fields without a proven io24 representation stay typed omissions, not
+approximations: mono-source `pan`, `stereopan` width, exact `FXA`,
+`dawpostdsp`, output `mono`, writable names, and the persistent mirror latch.
+In particular, the Host does not substitute its stereo-pair balance for UC's
+mono-source pan.
+
+The GTK Host now exposes scene loading on Presets, Channel Mute Sync on Device,
+and UC-style source/output mutes on Routing. Source and bus mutes retain every
+individual level and assign while writing the affected sends off; unmute
+restores the exact shadowed mix. These write-only settings participate in
+reconnect replay. `auxMuteMode`'s wire route is decoded, but `1 = sync enabled`
+remains explicitly an inference from UC's field name and the owner's-manual
+behavior because the device has no readable state slot for it.
+
+Device-block language was corrected at the same boundary. A store sends a
+firmware-native Fat Channel candidate and records `WRITE_SENT_UNVERIFIED`; it
+is not body readback or durable-commit proof. A known-block **Load** selects the
+block and directly replays the retained Fat Channel plus VoiceFX record from the
+Host, because selection alone did not reapply the unreadable body in the
+retained live test. An unknown block is selected only. Standalone Fat Channel
+audibility and Host-assisted VoiceFX are not conflated.
+
+This repair and its regression tests were hardware-free. No USB, device,
+firmware, preset, or audio operation occurred.
+
 ## 2026-09-18 controlling result: Passive and Vintage EQ have exact Host routes
 
 Passive Program and Vintage 1970s EQ are now first-class Linux Host models.

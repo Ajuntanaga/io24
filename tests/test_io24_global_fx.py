@@ -156,6 +156,76 @@ class GlobalFxTests(unittest.TestCase):
                          ["parameters"][2]["choices"],
                          ("Noise", "Sawtooth", "Rect"))
 
+    def test_every_editable_parameter_changes_the_shared_visual_profile(self):
+        for model, component in io24_fx.VOICEFX_XML_SCHEMA.items():
+            defaults = {
+                parameter["builder"]: parameter.get("default", 0)
+                for parameter in component["parameters"]
+                if parameter.get("builder") not in (None, "on")
+            }
+            baseline = io24gtk.voicefx_visual_profile(
+                model, defaults, phase=0.37, points=67)
+            for parameter in component["parameters"]:
+                builder = parameter.get("builder")
+                if builder in (None, "on"):
+                    continue
+                changed = dict(defaults)
+                if parameter["type"] == "toggle":
+                    changed[builder] = not bool(defaults[builder])
+                elif parameter["type"] == "list":
+                    changed[builder] = (
+                        int(defaults[builder]) + 1) % len(parameter["choices"])
+                else:
+                    alternative = parameter["min"]
+                    if alternative == defaults[builder]:
+                        alternative = parameter["max"]
+                    changed[builder] = alternative
+                with self.subTest(model=model, parameter=builder):
+                    self.assertNotEqual(
+                        baseline,
+                        io24gtk.voicefx_visual_profile(
+                            model, changed, phase=0.37, points=67))
+
+    def test_large_editor_and_rack_share_the_same_visual_profile(self):
+        self.assertIn("voicefx_visual_profile", inspect.getsource(
+            io24gtk.FXVisual.paint))
+        self.assertIn("voicefx_visual_profile", inspect.getsource(
+            io24gtk.VoiceFxRack._mini))
+
+    def test_readonly_vocoder_telemetry_is_not_a_dead_host_control(self):
+        source = (ROOT / "io24gtk.py").read_text()
+        tree = ast.parse(source)
+        page = next(node for node in ast.walk(tree)
+                    if isinstance(node, ast.FunctionDef)
+                    and node.name == "_fx_page")
+        rendered = ast.get_source_segment(source, page)
+
+        readonly = [parameter["name"]
+                    for component in io24_fx.VOICEFX_XML_SCHEMA.values()
+                    for parameter in component["parameters"]
+                    if parameter.get("builder") is None]
+        self.assertEqual(readonly, ["Voiced"])
+        self.assertIn("elif builder is None:", rendered)
+        self.assertNotIn('Gtk.Label(label="—")', rendered)
+        self.assertNotIn("row.set_sensitive(False)", rendered)
+
+    def test_effects_stack_and_wheel_avoid_false_page_offsets(self):
+        source = (ROOT / "io24gtk.py").read_text()
+        tree = ast.parse(source)
+        page = next(node for node in ast.walk(tree)
+                    if isinstance(node, ast.FunctionDef)
+                    and node.name == "_fx_page")
+        rendered = ast.get_source_segment(source, page)
+
+        self.assertIn("keep_page_wheel_scrolling(page)", rendered)
+        self.assertIn("self.fx_param_stack.set_vhomogeneous(False)", rendered)
+        self.assertEqual(io24gtk.wheel_scroll_value(
+            100, 0, 1000, 400, 1, 56), 156)
+        self.assertEqual(io24gtk.wheel_scroll_value(
+            590, 0, 1000, 400, 1, 56), 600)
+        self.assertEqual(io24gtk.wheel_scroll_value(
+            10, 0, 1000, 400, -1, 56), 0)
+
     def test_skew_adapter_hits_xml_midpoint_and_round_trips(self):
         scale = _Value(0.5)
         control = io24gtk._SkewValue(scale, 50.0, 500.0, 100.0)

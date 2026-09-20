@@ -17,6 +17,7 @@ the traceback to stderr, so cycling every page and watching stderr is a real
 regression test for that whole class of bug.
 """
 import os
+import json
 import struct
 import sys
 import threading
@@ -197,7 +198,8 @@ def main():
 
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
              "scroll_settled": False, "eq_model_set": False,
-             "comp_model_set": False}
+             "comp_model_set": False, "fx_model_set": False,
+             "wheel_tested": False}
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
         capture_dir = Path(capture_dir)
@@ -241,9 +243,50 @@ def main():
                 win.show_module(1, "COMP")
                 print("COMP MODEL -> %s" % model_name, flush=True)
             state["comp_model_set"] = True
+        if not state["fx_model_set"]:
+            model_name = os.environ.get("IO24_PAINT_FX_MODEL", "").lower()
+            if model_name:
+                try:
+                    model_index = G.Win.FX_ORDER.index(model_name)
+                except ValueError:
+                    raise RuntimeError(
+                        "IO24_PAINT_FX_MODEL must be transformer, detuner, "
+                        "vocoder, ringmod, filters, or delay")
+                win.fx_model.set_selected(model_index)
+                win.fx_power[model_name].set_value(True)
+                values = json.loads(os.environ.get(
+                    "IO24_PAINT_FX_PARAMS", "{}"))
+                unknown = set(values) - set(win.fx_params[model_name])
+                if unknown:
+                    raise RuntimeError(
+                        "unknown %s parameter(s): %s" % (
+                            model_name, ", ".join(sorted(unknown))))
+                for name, value in values.items():
+                    win.fx_params[model_name][name].set_value(value)
+                print("FX MODEL -> %s %s" % (model_name, values), flush=True)
+            state["fx_model_set"] = True
         pending = state["capture_pending"]
         if pending is not None:
             page_number, page_name = pending
+            if os.environ.get("IO24_PAINT_WHEEL_TEST") == "1" and \
+                    not state["wheel_tested"]:
+                scroller = G.first_descendant(
+                    st.get_visible_child(), Gtk.ScrolledWindow)
+                if scroller is None:
+                    raise RuntimeError("visible page has no vertical scroller")
+                adjustment = scroller.get_vadjustment()
+                adjustment.set_value(adjustment.get_lower())
+                before = adjustment.get_value()
+                handled = win.fx_scroll_controller.emit(
+                    "scroll", 0.0, 1.0)
+                after = adjustment.get_value()
+                if not handled or after <= before:
+                    raise RuntimeError(
+                        "Effects wheel capture did not advance the page")
+                print("WHEEL SCROLL -> %.1f to %.1f" % (before, after),
+                      flush=True)
+                state["wheel_tested"] = True
+                return True
             if state["scroll_settled"] is False and \
                     os.environ.get("IO24_PAINT_MBC_BAND") is not None:
                 band = int(os.environ["IO24_PAINT_MBC_BAND"])

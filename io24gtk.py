@@ -149,6 +149,62 @@ def wide_preferences_page():
     return page
 
 
+def wheel_scroll_value(value, lower, upper, page_size, delta, step=56.0):
+    """Clamp one page-wheel movement without letting a child fader consume it."""
+    end = max(float(lower), float(upper) - float(page_size))
+    return max(float(lower), min(end, float(value) + float(delta) * float(step)))
+
+
+def first_descendant(root, widget_type):
+    """Find the first descendant of ``widget_type`` in a GTK widget tree."""
+    pending = [root]
+    while pending:
+        widget = pending.pop()
+        if isinstance(widget, widget_type):
+            return widget
+        child = (widget.get_first_child()
+                 if hasattr(widget, "get_first_child") else None)
+        while child is not None:
+            pending.append(child)
+            child = child.get_next_sibling()
+    return None
+
+
+def keep_page_wheel_scrolling(page):
+    """Make vertical wheel/trackpad input scroll the page, even over faders.
+
+    Gtk.Scale handles wheel input itself.  On a long Effects page that meant a
+    pointer resting over any parameter moved that parameter and left the page
+    stranded at its old offset.  Capturing at the page is intentional here:
+    drag and keyboard adjustment still belong to the fader, while vertical
+    wheel input consistently belongs to the document under it.
+    """
+    controller = Gtk.EventControllerScroll(
+        flags=Gtk.EventControllerScrollFlags.VERTICAL)
+    controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+    def scroll(_controller, _dx, dy):
+        if abs(float(dy)) < 1e-9:
+            return False
+        scroller = first_descendant(page, Gtk.ScrolledWindow)
+        if scroller is None:
+            return False
+        adjustment = scroller.get_vadjustment()
+        page_increment = float(adjustment.get_page_increment())
+        step = max(42.0, min(92.0, page_increment * 0.12)) \
+            if page_increment > 0.0 else 56.0
+        adjustment.set_value(wheel_scroll_value(
+            adjustment.get_value(), adjustment.get_lower(),
+            adjustment.get_upper(), adjustment.get_page_size(), dy, step))
+        # Claim at the bounds too; otherwise the fader underneath receives the
+        # same wheel event exactly when the page reaches its top or bottom.
+        return True
+
+    controller.connect("scroll", scroll)
+    page.add_controller(controller)
+    return controller
+
+
 def load_last_session(path=None):
     """The last session's Host-only state, or None when there is none."""
     try:
@@ -1341,6 +1397,163 @@ class _SelectedFxPower:
 # ---------------------------------------------------------------------------
 
 
+def voicefx_visual_profile(model, params, phase=0.0, points=161):
+    """Return the normalized geometry drawn for one Voice FX component.
+
+    This is deliberately separate from GTK painting.  Both the large editor
+    and the six-module rack consume the same profile, so a parameter cannot be
+    wired to the device while silently being omitted from one of its displays.
+    Values are illustrative response geometry, not live device telemetry.
+    """
+    P = params or {}
+
+    def value(name, default):
+        try:
+            return float(P.get(name, default))
+        except (TypeError, ValueError):
+            return float(default)
+
+    def clamp(v, lo=0.0, hi=1.0):
+        return max(lo, min(hi, float(v)))
+
+    count = max(9, int(points))
+    positions = tuple(i / float(count - 1) for i in range(count))
+    mix = clamp(value("mix", 0.5))
+
+    if model == "transformer":
+        lows = clamp(value("lows", 0.5))
+        width = clamp(value("width", 0.5))
+        curve = []
+        for t in positions:
+            frequency = 20.0 * (1000.0 ** t)
+            shelf = 1.0 / (1.0 + (frequency / 575.0) ** 2.0)
+            wet = 0.10 + shelf * (0.10 + lows * 0.78)
+            curve.append((1.0 - mix) * 0.16 + mix * wet)
+        return {
+            "curve": tuple(curve),
+            "spread": (0.02 + width * 0.22) * (0.18 + mix * 0.82),
+        }
+
+    if model == "detuner":
+        semitones = int(round(value("detune", 4.0))) - 8
+        ratio = 2.0 ** (semitones / 12.0)
+        dry_gain = 0.22 + (1.0 - mix) * 0.70
+        wet_gain = 0.06 + mix * 0.86
+        return {
+            "dry": tuple(math.sin(t * 22.0 + phase) * dry_gain
+                         for t in positions),
+            "wet": tuple(math.sin(t * 22.0 * ratio + phase * ratio) * wet_gain
+                         for t in positions),
+            "semitones": semitones,
+        }
+
+    if model == "vocoder":
+        carrier = max(0, min(2, int(round(value("carrier_type", 1.0)))))
+        frequency = clamp(value("carrier_freq", 80.0), 50.0, 500.0)
+        frequency_position = (frequency - 50.0) / 450.0
+        volume = clamp(value("vol", 1.0))
+        bars = []
+        for index in range(22):
+            harmonic = index + 1
+            if carrier == 0:
+                amplitude = 0.50 + 0.22 * math.sin(
+                    index * 2.3 + frequency_position * math.tau)
+            elif carrier == 1:
+                amplitude = 1.0 / (
+                    1.0 + index * (0.34 + frequency_position * 0.34))
+            else:
+                amplitude = (1.0 / (1.0 + index * 0.42)
+                             if harmonic % 2 else 0.055)
+                amplitude *= 0.88 + frequency_position * 0.24
+            bars.append(clamp(amplitude * volume * mix))
+        return {
+            "bars": tuple(bars),
+            "dry": tuple(math.sin(t * 18.0 + phase * 0.25)
+                         * (1.0 - mix) * 0.30 for t in positions),
+        }
+
+    if model == "ringmod":
+        frequency = clamp(value("carrier_hz", 30.0), 0.1, 2000.0)
+        sub_frequency = clamp(value("carrier2_hz", 50.0), 0.1, 2000.0)
+        sub_on = value("carrier2", 0.0) >= 0.5
+        distortion = clamp(value("dist", 0.5))
+        volume = clamp(value("vol", 1.0))
+        frequency_position = math.log(frequency / 0.1) / math.log(20000.0)
+        sub_position = math.log(sub_frequency / 0.1) / math.log(20000.0)
+        carrier_cycles = 1.5 + frequency_position * 12.0
+        sub_cycles = 1.5 + sub_position * 12.0
+        dry, output = [], []
+        drive = 1.0 + distortion * 6.0
+        drive_scale = math.tanh(drive)
+        for t in positions:
+            source = math.sin(t * math.tau * 3.0 + phase * 0.3)
+            wet = source * math.sin(
+                t * math.tau * carrier_cycles + phase * 2.0)
+            if sub_on:
+                sub = source * math.sin(
+                    t * math.tau * sub_cycles + phase)
+                wet = wet * 0.72 + sub * 0.28
+            wet = math.tanh(wet * drive) / drive_scale
+            dry.append(source * 0.82)
+            output.append(volume * ((1.0 - mix) * source + mix * wet))
+        return {
+            "dry": tuple(dry),
+            "curve": tuple(output),
+            # The marker shows the configured sub frequency even while that
+            # carrier is off; its intensity communicates whether it is active.
+            "sub_marker": sub_position,
+            "sub_on": sub_on,
+        }
+
+    if model == "filters":
+        pitch = clamp(value("pitch", 0.5))
+        regeneration = clamp(value("regeneration", 0.5))
+        damping = clamp(value("damping", 0.5))
+        distortion = clamp(value("distortion", 0.5))
+        volume = clamp(value("volume", 1.0))
+        samples = int(pitch * 1300.0 + 250.5)
+        feedback = regeneration * 0.35 + 0.5
+        damp = damping * 0.6 + 0.3
+        comb_frequency = 48000.0 / max(1, samples)
+        sharpness = 2.0 + feedback * 12.0
+        curve = []
+        for t in positions:
+            frequency = 20.0 * (1000.0 ** t)
+            wet = abs(math.cos(
+                math.pi * frequency / comb_frequency)) ** sharpness
+            wet *= 1.0 / (
+                1.0 + (frequency / (20000.0 * (1.06 - damp))) ** 2.0)
+            if distortion > 0.0001:
+                drive = 1.0 + distortion * 7.0
+                wet = 0.5 + 0.5 * (
+                    math.tanh((wet * 2.0 - 1.0) * drive) / math.tanh(drive))
+            curve.append(volume * ((1.0 - mix) * 0.52 + mix * wet))
+        return {
+            "curve": tuple(curve),
+            "samples": samples,
+            "feedback": feedback,
+            "damp": damp,
+        }
+
+    # Delay uses a fixed 2.75 s window.  A dynamic window made Time mostly
+    # cancel itself out: moving the control changed the legend while the echo
+    # bars stayed in almost the same places.
+    delay_time = clamp(value("time_s", 0.125), 0.0001, 0.25)
+    feedback = clamp(value("feedback", 0.5))
+    repeats = max(2, min(10, int(2 + feedback * 9)))
+    span_s = 2.75
+    events = [(0.0, max(0.08, 1.0 - mix), 0.0)]
+    for index in range(1, repeats + 1):
+        seconds = delay_time * index
+        level = mix * (0.25 + feedback * 0.72) ** index
+        events.append((min(1.0, seconds / span_s), level, seconds))
+    return {
+        "events": tuple(events),
+        "span_s": span_s,
+        "playhead": (phase * 0.05) % 1.0,
+    }
+
+
 class FXVisual(Canvas):
     """A drawn signature for each Voice FX model, in two dimensions.
 
@@ -1413,17 +1626,21 @@ class FXVisual(Canvas):
         m = self.model
         pad = 16.0
         base = h - pad
+        profile = voicefx_visual_profile(m, P, self.phase, 321)
+
+        def sample(values, position):
+            index = max(0, min(len(values) - 1,
+                               int(round(position * (len(values) - 1)))))
+            return values[index]
 
         if m == "transformer":
             lows, width_, mix = q("lows", 0.5), q("width", 0.5), q("mix", 0.5)
-            # the low shelf itself: 600/550 Hz, gain = Lows x 12 dB, on log f
-            def shelf(t):
-                f = 20.0 * (1000.0 ** t)
-                g = 1.0 / (1.0 + (f / 575.0) ** 2.0) * lows
-                return base - (0.10 + g * 0.82) * (h - 2 * pad)
-            self._curve(sn, w, shelf, PHOS)
-            # Width: the two sides separating around centre
-            spread = (h * 0.04) + width_ * (h * 0.20)
+            curve = profile["curve"]
+            self._curve(
+                sn, w,
+                lambda t: base - sample(curve, t) * (h - 2 * pad), PHOS)
+            # Width and Wet/Dry both determine how far the two sides separate.
+            spread = h * profile["spread"]
             for sgn, tone in ((-1, PHOS), (1, THERM)):
                 y = h * 0.30 + sgn * spread
                 glow(sn, lambda y=y, tone=tone: polyline(
@@ -1433,127 +1650,115 @@ class FXVisual(Canvas):
                   pal(INK, 0.45), 8)
 
         elif m == "detuner":
-            # two voices, a whole number of semitones apart. This is the one that
-            # reads immediately: you can see the second trace running slower.
-            semis = int(q("detune", 4)) - 8
-            ratio = 2.0 ** (semis / 12.0)
+            # Two voices, a whole number of semitones apart. Wet/Dry crossfades
+            # their heights, so it is visible instead of merely printed below.
+            semis = profile["semitones"]
             mix = q("mix", 0.5)
             amp = (h * 0.5 - pad)
-            ph = self.phase
-            self._curve(sn, w, lambda t: h * 0.5 + math.sin(t * 22 + ph) * amp * 0.9,
+            dry, wet = profile["dry"], profile["wet"]
+            self._curve(sn, w, lambda t: h * 0.5 + sample(dry, t) * amp,
                         PHOS, 2.0, n=320)
-            self._curve(sn, w,
-                        lambda t: h * 0.5 + math.sin(t * 22 * ratio + ph * ratio)
-                        * amp * (0.35 + 0.55 * mix),
+            self._curve(sn, w, lambda t: h * 0.5 + sample(wet, t) * amp,
                         THERM, 1.8, n=320)
             label(self, sn, "%s  ·  wet %.0f%%"
                   % ("no shift" if semis == 0 else "%d semitones" % semis, mix * 100),
                   10, h - 15, pal(INK, 0.45), 8)
 
         elif m == "vocoder":
-            kind = int(q("carrier_type", 1))
+            kind = max(0, min(2, int(q("carrier_type", 1))))
             fr = q("carrier_freq", 80.0)
-            n = 22
-            for i in range(n):
-                if kind == 0:
-                    a = 0.45 + 0.22 * math.sin(i * 2.3)
-                elif kind == 1:
-                    a = 0.95 / (1 + i * 0.5)
-                else:
-                    a = 0.95 / (1 + i * 0.5) if i % 2 == 0 else 0.09
-                a *= 0.40 + fr / 640.0
-                bh = max(2.0, (h - 2 * pad) * min(1.0, a))
+            vol, mix = q("vol", 1.0), q("mix", 0.5)
+            dry, bars = profile["dry"], profile["bars"]
+            amp = h * 0.5 - pad
+            self._curve(sn, w, lambda t: h * 0.5 + sample(dry, t) * amp,
+                        GRID, 1.2, n=240, glow_r=0.0)
+            n = len(bars)
+            for i, amount in enumerate(bars):
+                bh = max(1.0, (h - 2 * pad) * amount)
                 x = 12 + i * (w - 26) / n
                 bw = max(3.0, (w - 26) / n - 5)
-                glow(sn, lambda x=x, bh=bh, bw=bw, a=a:
-                     box(sn, x, base - bh, bw, bh, duo(min(1.0, a), 0.9)), radius=5.0)
-            label(self, sn, "%s carrier  ·  %.0f Hz"
-                  % (["Noise", "Sawtooth", "Rect"][kind], fr), 10, h - 15,
+                glow(sn, lambda x=x, bh=bh, bw=bw, a=amount:
+                     box(sn, x, base - bh, bw, bh, duo(min(1.0, a), 0.9)),
+                     radius=5.0)
+            label(self, sn, "%s  ·  %.0f Hz  ·  vol %.0f%%  ·  wet %.0f%%"
+                  % (["Noise", "Sawtooth", "Rect"][kind], fr,
+                     vol * 100, mix * 100), 10, h - 15,
                   pal(INK, 0.45), 8)
 
         elif m == "ringmod":
             fr, dist = q("carrier_hz", 30.0), q("dist", 0.5)
             sub = q("carrier2", 0) >= 0.5
-            k = 4.0 + fr / 90.0
+            vol, mix = q("vol", 1.0), q("mix", 0.5)
             amp = h * 0.5 - pad
-            self._curve(sn, w, lambda t: h * 0.5 + math.sin(t * 6) * amp * 0.85,
+            dry, curve = profile["dry"], profile["curve"]
+            self._curve(sn, w, lambda t: h * 0.5 + sample(dry, t) * amp,
                         GRID, 1.2, n=200, glow_r=0.0)
-            ph = self.phase
-            def rm(t):
-                v = math.sin(t * k * 6 + ph * 2) * math.sin(t * 6 + ph * 0.3)
-                if sub:
-                    v = 0.72 * v + 0.28 * math.sin(t * (q("carrier2_hz", 50.0) / 22.0) + ph)
-                if dist > 0.01:
-                    v = math.tanh(v * (1 + dist * 6)) / math.tanh(1 + dist * 6)
-                return h * 0.5 + v * amp * 0.92
-            self._curve(sn, w, rm, PHOS, 2.0, n=380)
-            label(self, sn, "%.0f Hz%s  ·  dist %.0f%%"
+            self._curve(sn, w, lambda t: h * 0.5 + sample(curve, t) * amp,
+                        PHOS, 2.0, n=380)
+            marker_x = 12 + (w - 24) * profile["sub_marker"]
+            polyline(sn, [(marker_x, pad), (marker_x, base)],
+                     pal(THERM, 0.52 if sub else 0.16), 1.2)
+            label(self, sn, "%.0f Hz%s  ·  dist %.0f%%  ·  vol %.0f%%  ·  wet %.0f%%"
                   % (fr, "  + sub %.0f Hz" % q("carrier2_hz", 50.0) if sub else "",
-                     dist * 100), 10, h - 15, pal(INK, 0.45), 8)
+                     dist * 100, vol * 100, mix * 100),
+                  10, h - 15, pal(INK, 0.45), 8)
 
         elif m == "filters":
-            samples = int(q("pitch", 0.5) * 1300 + 250.5)
-            fb = q("regeneration", 0.5) * 0.35 + 0.5
-            damp = q("damping", 0.5) * 0.6 + 0.3
-            f_comb = 48000.0 / max(1, samples)
-            sharp = 2.0 + fb * 12.0
-            def comb(t):
-                f = 20.0 * (1000.0 ** t)
-                v = abs(math.cos(math.pi * f / f_comb)) ** sharp
-                v *= 1.0 / (1.0 + (f / (20000.0 * (1.06 - damp))) ** 2)
-                return base - v * (h - 2 * pad) * 0.92
-            self._curve(sn, w, comb, PHOS, 2.0, n=420)
-            label(self, sn, "%d samples  ·  fb %.2f  ·  damp %.2f"
-                  % (samples, fb, damp), 10, h - 15, pal(INK, 0.45), 8)
+            curve = profile["curve"]
+            self._curve(
+                sn, w,
+                lambda t: base - sample(curve, t) * (h - 2 * pad) * 0.92,
+                PHOS, 2.0, n=420)
+            label(self, sn,
+                  "%d samples  ·  fb %.2f  ·  damp %.2f  ·  dist %.0f%%  ·  vol %.0f%%  ·  wet %.0f%%"
+                  % (profile["samples"], profile["feedback"], profile["damp"],
+                     q("distortion", 0.5) * 100, q("volume", 1.0) * 100,
+                     q("mix", 0.5) * 100),
+                  10, h - 15, pal(INK, 0.45), 8)
 
         else:                                       # delay
             t_s, fb = q("time_s", 0.125), q("feedback", 0.5)
             mix = q("mix", 0.5)
-            n = max(2, min(10, int(2 + fb * 9)))
-            span_s = max(0.25, t_s * (n + 0.5))     # the visible time window
-            x_of = lambda sec: 14 + (w - 28) * (sec / span_s)
+            events, span_s = profile["events"], profile["span_s"]
+            x_of = lambda position: 14 + (w - 28) * position
             # time axis with real millisecond ticks
             polyline(sn, [(12, base), (w - 12, base)], pal(GRID, 0.35), 1.0)
-            tick_ms = 100 if span_s < 1.2 else 250
-            sec = 0.0
+            tick_ms = 500
+            sec = tick_ms / 1000.0
             while sec <= span_s:
-                x = x_of(sec)
+                x = x_of(sec / span_s)
                 polyline(sn, [(x, base), (x, base + 4)], pal(GRID, 0.45), 1.0)
-                if sec > 0:
-                    label(self, sn, "%d" % round(sec * 1000), x - 8, base + 4,
-                          pal(INK, 0.30), 6)
+                label(self, sn, "%d" % round(sec * 1000), x - 8, base + 4,
+                      pal(INK, 0.30), 6)
                 sec += tick_ms / 1000.0
-            # the dry hit, then each echo at its true time and level, with the
-            # feedback path drawn as an arc from each echo to the next
-            events = [(0.0, 1.0)] + [(t_s * (i + 1), (0.25 + fb * 0.72) ** (i + 1))
-                                     for i in range(n)]
-            for i, (sec, lvl) in enumerate(events):
-                x = x_of(sec)
-                bh = (h - 2 * pad - 10) * lvl * (0.35 + 0.65 * mix if i else 1.0)
-                colour = IVORY if i == 0 else None
+            for i, (position, level, _seconds) in enumerate(events):
+                x = x_of(position)
+                bh = max(1.0, (h - 2 * pad - 10) * level)
                 glow(sn, lambda x=x, bh=bh, i=i:
                      box(sn, x - 1.5, base - bh, 3.0, bh,
                          rgba(*IVORY, 0.9) if i == 0 else duo(i / len(events), 0.85)),
                      radius=5.0)
                 if i + 1 < len(events):
                     nx = x_of(events[i + 1][0])
-                    mid_x, top = (x + nx) / 2.0, base - bh - 10
+                    top = base - bh - 10
                     arc = [(x + (nx - x) * t2 / 14.0,
                             top + 8 - math.sin(math.pi * t2 / 14.0) * 7)
                            for t2 in range(15)]
                     polyline(sn, arc, pal(THERM, 0.30), 1.0)
             # the playhead: one pulse travelling the tail, wrapping each pass
-            cyc = (self.phase * 0.05) % 1.0
-            px = x_of(cyc * span_s)
+            px = x_of(profile["playhead"])
             glow(sn, lambda: polyline(sn, [(px, pad), (px, base)],
                                       rgba(*GOLD, 0.35), 1.2), radius=4.0)
-            label(self, sn, "%.0f ms  ·  feedback %.0f%%  ·  %d repeats"
-                  % (t_s * 1000, fb * 100, n), 10, h - 15, pal(INK, 0.45), 8)
+            label(self, sn, "%.0f ms  ·  feedback %.0f%%  ·  wet %.0f%%  ·  %d repeats"
+                  % (t_s * 1000, fb * 100, mix * 100, len(events) - 1),
+                  10, h - 15, pal(INK, 0.45), 8)
 
         if q("on", 1.0) < 0.5:
             # On is part of each model component, so its visual should say
             # when that model is bypassed instead of animating as if active.
-            box(sn, 0, 0, w, h, pal(GROUND, 0.72))
+            # Keep the configured shape legible while bypassed; the explicit
+            # OFF label and rack lamp carry the state without hiding edits.
+            box(sn, 0, 0, w, h, pal(GROUND, 0.30))
             label(self, sn, "%s  ·  OFF" % MODEL_LABELS.get(m, m),
                   10, 7, pal(INK, 0.62), 8)
         else:
@@ -1607,63 +1812,57 @@ class VoiceFxRack(Canvas):
     @staticmethod
     def _mini(sn, model, state, x, y, w, h, colour):
         """Compact forms of the six parameter-driven FXVisual signatures."""
-        def value(name, default):
-            try:
-                return float(state.get(name, default))
-            except (TypeError, ValueError):
-                return default
-
         active = bool(state.get("on"))
         tone = colour if active else INK
         acc = pal(tone, 0.9 if active else 0.28)
         mid = y + h * 0.5
+        profile = voicefx_visual_profile(model, state, points=49)
+
+        def trace(values, amplitude=0.42, colour_=None, alpha=None):
+            pts = [(x + i / float(len(values) - 1) * w,
+                    mid + value * h * amplitude)
+                   for i, value in enumerate(values)]
+            ink = (pal(colour_ or tone,
+                       alpha if alpha is not None else (0.9 if active else 0.28)))
+            polyline(sn, pts, ink, 1.3)
+
         if model == "transformer":
-            lows = value("lows", 0.5)
-            pts = []
-            for i in range(25):
-                t = i / 24.0
-                pts.append((x + t * w,
-                            y + h * (0.82 - lows * 0.58 / (1 + (t * 3) ** 2))))
+            values = profile["curve"]
+            pts = [(x + i / float(len(values) - 1) * w,
+                    y + h - amount * h * 0.86)
+                   for i, amount in enumerate(values)]
             polyline(sn, pts, acc, 1.6)
+            spread = profile["spread"] * h
+            for direction, line_tone in ((-1, tone), (1, THERM)):
+                yy = mid + direction * spread
+                polyline(sn, [(x + w * 0.58, yy), (x + w, yy)],
+                         pal(line_tone, 0.68 if active else 0.22), 1.0)
         elif model == "detuner":
-            shift = (int(value("detune", 4)) - 8) / 8.0
-            for phase, alpha in ((0.0, 1.0), (shift * 2.4, 0.55)):
-                pts = [(x + i / 30.0 * w,
-                        mid + math.sin(i / 30.0 * 10 + phase) * h * 0.25)
-                       for i in range(31)]
-                polyline(sn, pts, pal(tone, alpha if active else 0.25), 1.2)
+            trace(profile["dry"], 0.42, tone, 0.82 if active else 0.24)
+            trace(profile["wet"], 0.42, THERM, 0.72 if active else 0.22)
         elif model == "vocoder":
-            carrier = int(value("carrier_type", 1))
-            for i in range(8):
-                amplitude = (0.35 + 0.6 / (1 + i * 0.45))
-                if carrier == 2 and i % 2:
-                    amplitude *= 0.22
-                bh = h * amplitude
-                bw = max(2.0, w / 11.0)
-                box(sn, x + i * w / 8.0, y + h - bh, bw, bh, acc)
+            trace(profile["dry"], 0.42, GRID, 0.42 if active else 0.18)
+            bars = profile["bars"]
+            for i, amount in enumerate(bars):
+                bh = max(1.0, h * amount)
+                step = w / len(bars)
+                box(sn, x + i * step, y + h - bh,
+                    max(1.0, step - 1.5), bh, acc)
         elif model == "ringmod":
-            sub = value("carrier2", 0) >= 0.5
-            pts = []
-            for i in range(41):
-                t = i / 40.0
-                wave = math.sin(t * 18) * math.sin(t * 7)
-                if sub:
-                    wave = wave * 0.72 + math.sin(t * 4) * 0.28
-                pts.append((x + t * w, mid + wave * h * 0.34))
-            polyline(sn, pts, acc, 1.4)
+            trace(profile["dry"], 0.34, GRID, 0.38 if active else 0.16)
+            trace(profile["curve"], 0.42)
+            marker_x = x + w * profile["sub_marker"]
+            polyline(sn, [(marker_x, y), (marker_x, y + h)],
+                     pal(THERM, 0.48 if profile["sub_on"] else 0.14), 0.9)
         elif model == "filters":
-            regeneration = value("regeneration", 0.5)
-            pts = []
-            for i in range(49):
-                t = i / 48.0
-                teeth = abs(math.cos(t * math.pi * (5 + regeneration * 5)))
-                pts.append((x + t * w, y + h - teeth * h * 0.78))
+            values = profile["curve"]
+            pts = [(x + i / float(len(values) - 1) * w,
+                    y + h - amount * h * 0.88)
+                   for i, amount in enumerate(values)]
             polyline(sn, pts, acc, 1.4)
         else:
-            feedback = value("feedback", 0.5)
-            for i in range(5):
-                level = (0.35 + feedback * 0.55) ** i
-                xx = x + i * w / 5.0
+            for i, (position, level, _seconds) in enumerate(profile["events"]):
+                xx = x + position * w
                 polyline(sn, [(xx, y + h), (xx, y + h - h * level)], acc, 1.5)
 
     def paint(self, sn, w, h):
@@ -4674,6 +4873,7 @@ class Win(Adw.ApplicationWindow):
         """Reverb, plus the send/return it needs, plus an honest note on the
         insert-FX models."""
         page = wide_preferences_page()
+        self.fx_scroll_controller = keep_page_wheel_scrolling(page)
 
         g = Adw.PreferencesGroup(
             title="Shared reverb",)
@@ -4817,6 +5017,10 @@ class Win(Adw.ApplicationWindow):
         self.fx_power = {}
         self.fx_param_stack = Gtk.Stack()
         self.fx_param_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        # Short models must not reserve the height of Ring Mod or Filters.  The
+        # homogeneous default created a blank scroll region and shifted every
+        # model change to an apparently unrelated page offset.
+        self.fx_param_stack.set_vhomogeneous(False)
         for key, component in io24_fx.VOICEFX_XML_SCHEMA.items():
             grp = Adw.PreferencesGroup()
             self.fx_params[key] = {}
@@ -4830,12 +5034,11 @@ class Win(Adw.ApplicationWindow):
                     self.fx_power[key] = _SwitchValue(power)
                     grp.add(power)
                 elif builder is None:
-                    row = Adw.ActionRow(title=parameter["name"])
-                    value = Gtk.Label(label="—")
-                    value.add_css_class("dim-label")
-                    row.add_suffix(value)
-                    row.set_sensitive(False)
-                    grp.add(row)
+                    # UC declares Vocoder ``avoiced`` read-only, but the io24
+                    # exposes no readable block-201 state to populate it.  A
+                    # permanently disabled pseudo-control was misleading, so
+                    # retain it in the exact schema and omit it from the Host.
+                    continue
                 elif parameter["type"] == "toggle":
                     control = Adw.SwitchRow(title=parameter["name"])
                     control.set_active(bool(parameter.get("default", False)))
@@ -4919,6 +5122,12 @@ class Win(Adw.ApplicationWindow):
 
     def _queue_fx_push(self):
         """Coalesce an expensive multi-packet VoiceFX slider gesture."""
+        rack = getattr(self, "fx_rack", None)
+        if rack is not None:
+            rack.queue_draw()
+        visual = getattr(self, "fx_visual", None)
+        if visual is not None:
+            visual.queue_draw()
         if self._fx_mute:
             return
         if self._fx_push_id is not None:

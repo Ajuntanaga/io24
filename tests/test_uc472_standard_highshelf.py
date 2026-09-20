@@ -265,8 +265,9 @@ class StandardHighShelfIntegrationTests(unittest.TestCase):
 
     def test_only_standard_shape_rows_drop_the_recovery_blocker(self):
         matrix = json.loads(MATRIX.read_text())
-        # 710 since 2026-09-16: native.global.mute_mode (Channel Mute Sync).
-        self.assertEqual(matrix["coverage"]["total_rows"], 710)
+        # 717 since the complete UC scene/settings repair: Channel Mute Sync,
+        # four return-source mutes, and three output-bus mutes are inventoried.
+        self.assertEqual(matrix["coverage"]["total_rows"], 717)
         standard_shape_rows = [
             row for row in matrix["rows"]
             if row["family"] == "fat_eq" and row["parameter"] == "shape"

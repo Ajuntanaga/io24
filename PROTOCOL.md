@@ -2,7 +2,7 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
-## 2026-09-19 controlling result: UC scene and settings parity repair
+## 2026-09-19 controlling result: UC scene save/load and settings parity
 
 The Linux Host now treats a Universal Control `.scene` as a whole-device state
 document rather than a pair of channel presets. `io24_scene.py` prevalidates the
@@ -16,12 +16,26 @@ headphones source, preset-button mode, Channel Mute Sync, and a requested
 mirror-main as the Host's documented one-shot copy. Device-resident preset
 libraries are reported and never overwritten.
 
+The Host also exports readable plus exactly shadowed state using UC's recognized
+`global`, `line`, `return`, `fxreturn`, `aux`, `main`, and `fx` vocabulary. The
+write is atomic and is accepted only after the generated object passes the same
+planner as import. Device-slot bodies and slot selection are excluded. Missing
+write-only state, enabled DSP Amount without an exact retained scalar, monitor
+values with no supported scene field, and Host-only extensions are reported as
+omissions rather than assigned guessed defaults. This proves Linux Host
+round-trip, not acceptance by Universal Control's own scene importer.
+
 The importer materializes exact alternate-EQ coefficients and VoiceFX frames
 during planning, before the first device call. It refuses conflicting
 per-channel VoiceFX records because firmware block 201 is one shared settings
-object. All backend setters are also checked before apply begins. Transport is
-necessarily sequential and has no device rollback: the first runtime/USB
-failure stops the plan and prevents later writes.
+object. All backend setters are also checked before apply begins. Before the
+first write, load captures readable state, the Host's exact write mirror, and
+solo state. The first runtime/USB failure stops the plan, prevents later writes,
+and replays that checkpoint without selecting a device preset slot. Because the
+protocol has no transaction primitive, the result is called complete only when
+all attempted controls had exact prestate and every compensating write
+succeeded; otherwise the caller receives the specific unknown values and
+restore errors as a partial rollback.
 
 UC fields without a proven io24 representation stay typed omissions, not
 approximations: mono-source `pan`, `stereopan` width, exact `FXA`,
@@ -29,7 +43,7 @@ approximations: mono-source `pan`, `stereopan` width, exact `FXA`,
 In particular, the Host does not substitute its stereo-pair balance for UC's
 mono-source pan.
 
-The GTK Host now exposes scene loading on Presets, Channel Mute Sync on Device,
+The GTK Host now exposes scene saving and loading on Presets, Channel Mute Sync on Device,
 and UC-style source/output mutes on Routing. Source and bus mutes retain every
 individual level and assign while writing the affected sends off; unmute
 restores the exact shadowed mix. These write-only settings participate in

@@ -123,7 +123,9 @@ class ReleasePackageTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(scene_result.returncode, 0, scene_result.stdout)
-            self.assertIn("Apply a Universal Control `.scene` file", scene_result.stdout)
+            self.assertIn(
+                "Save or apply a Universal Control `.scene`",
+                scene_result.stdout)
 
 
 if __name__ == "__main__":

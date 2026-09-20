@@ -1,5 +1,8 @@
-"""Hardware-free contracts for complete UC scene import."""
+"""Hardware-free contracts for UC scene import, export, and recovery."""
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import io24_fx
 import io24_scene
@@ -144,6 +147,264 @@ class ScenePlanTests(unittest.TestCase):
         ])
         self.assertEqual((done, failed), (0, 1))
         self.assertEqual(invoked, ["first"])
+
+
+class SceneExportTests(unittest.TestCase):
+    def test_host_snapshot_exports_vendor_fields_and_round_trips_to_a_plan(self):
+        standard_eq = {
+            "version": 1,
+            "channels": {
+                "1": {"on": True, "bands": [
+                    {"shape": "lowshelf", "mode": "lowshelf", "on": True,
+                     "freq": 130.0, "gain": 2.0, "q": 0.6},
+                    {"shape": "peaking", "mode": "peaking", "on": True,
+                     "freq": 320.0, "gain": -1.0, "q": 0.7},
+                    {"shape": "peaking", "mode": "peaking", "on": False,
+                     "freq": 1400.0, "gain": 0.0, "q": 0.8},
+                    {"shape": "highshelf", "mode": "highshelf", "on": True,
+                     "freq": 5000.0, "gain": 3.0, "q": 0.6},
+                ]},
+            },
+        }
+        snapshot = {
+            "version": 1,
+            "live": {
+                "input1Gain": 11.0,
+                "input2Gain": 22.0,
+                "input1PhantomPower": False,
+                "input2PhantomPower": True,
+                "mainVolume": 0.7,
+            },
+            "calls": {
+                "mute-mode": {"fn": "set_mute_mode",
+                              "kwargs": {"mode": True}},
+                "phones": {"fn": "set_phones_source",
+                           "kwargs": {"source": 2}},
+                "link": {"fn": "set_channel_link",
+                         "kwargs": {"on": False}},
+                "input-mute": {"fn": "set_mute",
+                               "kwargs": {"channel": 1, "on": True}},
+                "mix": {"fn": "set_fx_mix",
+                        "kwargs": {"channel": 1, "value": 0.75}},
+                "hpf": {"fn": "set_highpass_freq",
+                        "kwargs": {"channel": 1, "freq_hz": 80.0,
+                                   "fs": 96000.0}},
+                "order": {"fn": "set_comp_eq_order",
+                          "kwargs": {"channel": 1, "eq_first": True}},
+                "gate": {"fn": "set_gate", "kwargs": {
+                    "channel": 1, "on": True, "threshold_db": -36.0,
+                    "range_db": -48.0, "attack_s": 0.01,
+                    "release_s": 0.3, "keyfilter_hz": 0.0,
+                    "expander": True, "keylisten": False,
+                    "instance": None, "fs": 96000.0,
+                }},
+                "comp": {"fn": "set_compressor", "kwargs": {
+                    "channel": 1, "model": 0, "on": True,
+                    "threshold_db": -24.0, "ratio": 3.0,
+                    "attack_s": 0.02, "release_s": 0.15,
+                    "gain_db": 1.0, "softknee": False,
+                    "automode": False, "keyfilter_hz": 40.0,
+                    "keylisten": False, "instance": None,
+                    "fs": 96000.0,
+                }},
+                "limiter": {"fn": "set_limiter", "kwargs": {
+                    "channel": 1, "on": True, "threshold_db": -1.0,
+                    "fs": 96000.0,
+                }},
+                "send-main": {"fn": "set_send_db", "kwargs": {
+                    "source": "line/ch1", "bus": "main", "gain_db": -3.0,
+                }},
+                "send-a": {"fn": "set_send_db", "kwargs": {
+                    "source": "line/ch1", "bus": "mixa", "gain_db": -12.0,
+                }},
+                "assign-a": {"fn": "set_send_assigned", "kwargs": {
+                    "source": "line/ch1", "bus": "mixa", "on": True,
+                }},
+                "return-mute": {"fn": "set_source_mute", "kwargs": {
+                    "source": "return/ch1", "on": True,
+                }},
+                "master-a": {"fn": "set_bus_master", "kwargs": {
+                    "bus": "mixa", "gain_db": -2.0,
+                }},
+                "mute-b": {"fn": "set_bus_mute", "kwargs": {
+                    "bus": "mixb", "on": True,
+                }},
+                "voicefx": {"fn": "set_fx", "kwargs": {
+                    "model": "delay", "on": True, "time_s": 0.125,
+                    "feedback": 0.25, "mix": 0.5,
+                }},
+                "reverb": {"fn": "set_reverb", "kwargs": {
+                    "on": True, "size": 0.5, "mix": 0.3,
+                    "hp_freq": 200.0, "predelay": 0.02,
+                    "fs": 96000.0,
+                }},
+            },
+        }
+
+        scene, omissions = io24_scene.export_snapshot(
+            snapshot, host_features={"standard_eq": standard_eq},
+            solo={"main": [], "mixa": [], "mixb": []})
+
+        self.assertEqual(scene["global"]["auxMuteMode"], 1)
+        self.assertEqual(scene["global"]["phonesSrc"], 2)
+        self.assertEqual(scene["line"]["ch1"]["preampgain"], 11.0)
+        self.assertEqual(scene["line"]["ch2"]["48v"], 1)
+        self.assertEqual(scene["line"]["ch1"]["eq"]["eqallon"], 1)
+        self.assertEqual(scene["line"]["ch1"]["eq"]["eqbandon3"], 0)
+        self.assertEqual(scene["line"]["ch1"]["voicefx"]["on"], 1)
+        self.assertEqual(scene["return"]["ch1"]["mute"], 1)
+        self.assertEqual(scene["aux"]["ch1"]["volume"], -2.0)
+        self.assertEqual(scene["aux"]["ch2"]["mute"], 1)
+        self.assertEqual(scene["fx"]["ch1"]["reverb"]["mix"], 0.3)
+        self.assertNotIn("presets", scene)
+        self.assertTrue(any("mainVolume" in item for item in omissions))
+
+        calls, skips = io24_scene.plan(scene, sample_rate_hz=96000.0)
+        names = [call[0] for call in calls]
+        self.assertIn("set_fx", names)
+        self.assertIn("set_reverb", names)
+        self.assertIn("set_source_mute", names)
+        self.assertIn("set_bus_mute", names)
+        self.assertFalse(any("not in the UC 4.7.2" in skip for skip in skips))
+
+    def test_scene_save_validates_before_atomically_replacing_the_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "saved.scene"
+            path.write_text("original")
+            invalid = _scene()
+            invalid["global"]["auxMuteMode"] = "on"
+
+            with self.assertRaisesRegex(ValueError, "boolean or 0/1"):
+                io24_scene.save(path, invalid)
+            self.assertEqual(path.read_text(), "original")
+
+            scene = _scene()
+            io24_scene.save(path, scene, sample_rate_hz=96000.0)
+            self.assertEqual(json.loads(path.read_text()), scene)
+
+    def test_readable_mute_link_processing_and_bypass_override_stale_shadow(self):
+        snapshot = {
+            "live": {
+                "flags": (1 << 3) | (1 << 6) | (1 << 12),
+                "input1ProcessingChannel": 2,
+                "input2ProcessingChannel": 1,
+            },
+            "calls": {
+                "mute": {"fn": "set_mute",
+                         "kwargs": {"channel": 1, "on": False}},
+                "link": {"fn": "set_channel_link",
+                         "kwargs": {"on": False}},
+                "mix": {"fn": "set_fx_mix",
+                        "kwargs": {"channel": 2, "value": 0.8}},
+            },
+        }
+
+        scene, omissions = io24_scene.export_snapshot(snapshot)
+
+        self.assertEqual(scene["line"]["ch1"]["mute"], 1)
+        self.assertEqual(scene["line"]["ch1"]["link"], 1)
+        self.assertEqual(scene["line"]["ch1"]["processingChannel"], 1)
+        self.assertEqual(scene["line"]["ch2"]["processingChannel"], 0)
+        self.assertEqual(scene["line"]["ch2"]["dspAmount"], 0.0)
+        self.assertTrue(any("line.ch1.dspAmount" in item
+                            for item in omissions))
+
+
+class TransactionalApplyTests(unittest.TestCase):
+    class Device:
+        def __init__(self, with_checkpoint=True):
+            self._shadow = {}
+            if with_checkpoint:
+                self._shadow = {
+                    "set_fx_mix#channel=1": {
+                        "fn": "set_fx_mix",
+                        "kwargs": {"channel": 1, "value": 0.25},
+                    },
+                    "set_reverb": {
+                        "fn": "set_reverb",
+                        "kwargs": {"on": True, "size": 0.4, "mix": 0.3,
+                                   "hp_freq": 200.0, "predelay": 0.02,
+                                   "fs": 48000.0},
+                    },
+                }
+            self._solo = {}
+            self.events = []
+
+        def read_params(self):
+            return {}
+
+        def set_fx_mix(self, channel, value):
+            self.events.append(("mix", channel, value))
+
+        def set_reverb(self, on=True, size=0.5, mix=0.3, hp_freq=200.0,
+                       predelay=0.02, fs=48000.0):
+            self.events.append(("reverb", mix))
+            if mix == 0.9:
+                raise RuntimeError("transport stopped")
+
+    def test_failure_replays_the_exact_host_checkpoint(self):
+        device = self.Device()
+        report = io24_scene.apply_transactional(device, [
+            ("set_fx_mix", (1, 0.9), {}, "new processing mix"),
+            ("set_reverb", (), {
+                "on": True, "size": 0.8, "mix": 0.9,
+                "hp_freq": 100.0, "predelay": 0.04, "fs": 48000.0,
+            }, "new reverb"),
+        ])
+
+        self.assertEqual(report["applied"], 1)
+        self.assertEqual(report["failed"], 1)
+        self.assertTrue(report["rollback"]["attempted"])
+        self.assertTrue(report["rollback"]["complete"])
+        self.assertEqual(report["rollback"]["unresolved"], [])
+        self.assertEqual(device.events[-2:], [
+            ("mix", 1, 0.25), ("reverb", 0.3),
+        ])
+
+    def test_failure_reports_a_control_whose_prior_state_was_unknown(self):
+        device = self.Device(with_checkpoint=False)
+        report = io24_scene.apply_transactional(device, [
+            ("set_fx_mix", (1, 0.9), {}, "new processing mix"),
+            ("set_reverb", (), {
+                "on": True, "size": 0.8, "mix": 0.9,
+                "hp_freq": 100.0, "predelay": 0.04, "fs": 48000.0,
+            }, "new reverb"),
+        ])
+
+        self.assertFalse(report["rollback"]["complete"])
+        self.assertIn("new processing mix", report["rollback"]["unresolved"])
+
+    def test_readable_bypass_wins_over_a_stale_positive_shadow_on_rollback(self):
+        device = self.Device()
+        device.read_params = lambda: {"flags": 1 << 5}
+
+        report = io24_scene.apply_transactional(device, [
+            ("set_fx_mix", (1, 0.9), {}, "new processing mix"),
+            ("set_reverb", (), {
+                "on": True, "size": 0.8, "mix": 0.9,
+                "hp_freq": 100.0, "predelay": 0.04, "fs": 48000.0,
+            }, "new reverb"),
+        ])
+
+        self.assertTrue(report["rollback"]["complete"])
+        self.assertEqual(device.events[-1], ("mix", 1, 0.0))
+
+    def test_readable_enabled_state_rejects_a_stale_zero_as_exact_rollback(self):
+        device = self.Device()
+        device._shadow["set_fx_mix#channel=1"]["kwargs"]["value"] = 0.0
+        device.read_params = lambda: {"flags": 0}
+
+        report = io24_scene.apply_transactional(device, [
+            ("set_fx_mix", (1, 0.9), {}, "new processing mix"),
+            ("set_reverb", (), {
+                "on": True, "size": 0.8, "mix": 0.9,
+                "hp_freq": 100.0, "predelay": 0.04, "fs": 48000.0,
+            }, "new reverb"),
+        ])
+
+        self.assertFalse(report["rollback"]["complete"])
+        self.assertIn("new processing mix", report["rollback"]["unresolved"])
+        self.assertNotIn(("mix", 1, 0.0), device.events[2:])
 
 
 if __name__ == "__main__":

@@ -528,8 +528,16 @@ presets also have **Delete**, which removes them from this computer only.
 
 ### Scenes
 
-**Load scene…** applies a complete Universal Control `.scene` from the Presets
-page. The Host parses and validates the entire file before the first device
+**Save scene…** writes the readable and Host-known device state atomically with
+Universal Control's scene field names. It includes exact semantic Standard,
+Passive, and Vintage EQ state from the editor and the selected Voice FX model's
+own On value. Unreadable device-block bodies, physical slot selection, and any
+other unknown value are reported and omitted; they are never guessed. The saved
+file is proven to round-trip through this Linux Host, not through the untested
+Universal Control import path.
+
+**Load scene…** applies a Universal Control `.scene` from the Presets page. The
+Host parses and validates the entire file before the first device
 write. It covers the global delay and headphone source, Channel Mute Sync,
 preset-button mode, both Fat Channels and DSP amounts, Standard/Passive/Vintage
 EQ, the complete Main/Mix A/Mix B matrix, source and output mutes, Host solos,
@@ -542,8 +550,12 @@ reverb sends, `dawpostdsp`, output mono fold-down, text names, or UC's persisten
 mirror latch. The loader reports those fields explicitly instead of mapping
 them to a nearby control. Because Voice FX is one shared processor, two
 conflicting per-channel Voice FX records make validation fail before transport.
-Once a valid plan starts, writes are sequential: a USB/runtime failure stops on
-that setting and later settings are not sent; there is no device rollback.
+Once a valid plan starts, writes are sequential. A USB/runtime failure stops on
+that setting, prevents later writes, and triggers compensation from the exact
+pre-load readable state, Host write mirror, and solo state. The UI says rollback
+is complete only when every attempted control had known prestate and every
+restore write succeeded. A partial result names unknown prior values or restore
+errors; the device itself has no transaction primitive.
 
 ### Factory presets
 

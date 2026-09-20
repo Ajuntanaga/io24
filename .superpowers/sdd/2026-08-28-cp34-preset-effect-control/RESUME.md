@@ -1,5 +1,28 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-19 controlling repair: scene export and failure recovery
+
+The Linux Host now has **Save scene…** beside **Load scene…**. Export combines a
+fresh readable state with the durable Host write mirror and semantic Standard/
+Passive/Vintage EQ editor state, emits UC's established scene field names, then
+validates and atomically replaces the destination. It excludes device-slot
+bodies and physical slot selection. Every unavailable value is returned as a
+typed omission; the file is proven to round-trip through this Host, not through
+an untested Universal Control import path. The CLI equivalent is
+`python3 io24_scene.py --export io24-host.scene`.
+
+Scene load now takes a pre-write checkpoint and uses compensating rollback on
+the first runtime/USB failure. Readable gain, phantom, input mute, link,
+processing assignment, and exact bypass override stale shadow state. All other
+recoverable controls replay from the pre-load Host mirror, solo is restored,
+and device slots are never selected. A report is `complete` only when every
+attempted control had exact prestate and every compensating write succeeded;
+unknown write-only state or a failed restore is explicitly `partial` because
+the device has no transaction primitive.
+
+This implementation and its tests are hardware-free. No USB/device/audio,
+firmware, Wine, VM, network, install, or publication action occurred.
+
 ## 2026-09-19 controlling repair: UC scenes, preset load, and settings
 
 The audit immediately below was repaired in the working tree without USB or

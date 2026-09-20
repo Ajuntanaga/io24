@@ -66,7 +66,7 @@ separately rather than implied to be independently measured.
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
 | Device-block `MemP/Stat` store | exact firmware-native v2 transport and identity-bound Host receipt. The device cannot read a body back, so the UI calls it a **Fat Channel candidate** and reports `WRITE_SENT_UNVERIFIED`; Fat Channel works standalone when the device applies it, while VoiceFX is sent by Host-assisted **Load**. |
 | Voice FX control model and UC transaction | exact XML-ordered controls and builders for all six models, a six-unit visual rack, one global settings object over two structural lanes, and a separate **On** state per model component. A UC 4.7.2 USB capture controls model selection, state-only edits, Transformer `MBdf` tables and pacing. All six models are objectively verified through physical Input 1 in two on/off cycles each: exact Delay timing, Detuner pitch targets, Ring Modulator sidebands, and repeatable Transformer/Vocoder/Filters spectral changes, with same-path reverb controls and stable off states. |
-| **Universal Control scene import** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`: 94–97 operations in the three retained scenes, including routing, output/source mutes, both Fat Channels, exact alternate EQ, VoiceFX, reverb and global settings; device blocks are untouched |
+| **Universal Control scene save/load** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`, and atomically saves readable plus Host-known state with UC field names. A failed load compensates from its pre-load checkpoint and reports whether rollback was complete or partial; device blocks are untouched and never exported. |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
 | Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
 | UCNET shim | lets UCNET-speaking clients talk to the device |
@@ -594,6 +594,23 @@ python3 io24_scene.py --dry-run "B A S E.scene"
 python3 io24_scene.py "B A S E.scene"
 ```
 
+The Presets page also has **Save scene…**. It writes readable input state and
+the exact write-only state retained by this Host using UC's `global`, `line`,
+`return`, `fxreturn`, `aux`, `main`, and `fx` field vocabulary. The command-line
+equivalent is:
+
+```bash
+python3 io24_scene.py --export io24-host.scene
+```
+
+The file is replaced atomically only after it validates through the same scene
+planner used for load. It round-trips through this Linux Host. Values the Host
+cannot know are listed and omitted rather than invented: device-slot bodies,
+an enabled-but-unshadowed DSP Amount scalar, physical preset selection, monitor
+knob values that have no supported scene field, and Host-only features such as
+Multiband. This is not a claim that Universal Control itself accepts a partial
+Host-known export; that application round trip has not been tested.
+
 The dry run validates the complete scene before the first device write and lists
 every planned operation and every typed omission. It restores global delay,
 headphones source, Channel Mute Sync, preset-button mode, both Fat Channels,
@@ -601,6 +618,14 @@ DSP amount, the full Main/Mix A/Mix B matrix, source and output mutes, Host solo
 bus masters, one-shot mirror-main, shared VoiceFX, and shared reverb. Standard,
 Passive, and Vintage EQ each use their exact model route. The three retained UC
 scenes produce 94–97 operations apiece.
+
+Load is compensating-transactional. Before the first write the Host captures
+readable device state, its exact write mirror, and Host solo state. If any
+setter fails, later scene settings are not sent and the checkpoint is replayed
+without moving a physical preset slot. The result says **rollback complete**
+only when every attempted control had exact prestate and every restore write
+succeeded. Otherwise it names a partial rollback; the protocol has no native
+device transaction and unknown write-only prestate cannot be reconstructed.
 
 Genuinely unrepresentable fields remain explicit: block 100 has no independent
 mono-source pan or stereo-width control; exact `FXA`, `dawpostdsp`, output mono

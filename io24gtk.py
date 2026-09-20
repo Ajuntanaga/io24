@@ -6254,7 +6254,11 @@ class Win(Adw.ApplicationWindow):
         scenes = Adw.PreferencesGroup(title="Scenes")
         scene_row = Adw.ActionRow(
             title="Universal Control scene",
-            subtitle="Validated first. Device preset blocks are never overwritten")
+            subtitle="Host-known state only. Device preset blocks are never overwritten")
+        scene_save = Gtk.Button(label="Save scene…", valign=Gtk.Align.CENTER)
+        scene_save.add_css_class("flat")
+        scene_save.connect("clicked", self._save_scene_clicked)
+        scene_row.add_suffix(scene_save)
         scene_load = Gtk.Button(label="Load scene…", valign=Gtk.Align.CENTER)
         scene_load.add_css_class("flat")
         scene_load.connect("clicked", self._load_scene_clicked)
@@ -6280,6 +6284,50 @@ class Win(Adw.ApplicationWindow):
         self._populate_factory_presets()
         return page
 
+    def _save_scene_clicked(self, _button):
+        if self.ctl.dev is None:
+            self.say("Scene not saved: io24 is not connected")
+            return
+        try:
+            host_features = snapshot_host_features(
+                self._host_features_state())
+        except Exception as error:
+            self.say("Scene was not saved: %s" % error)
+            return
+        dialog = Gtk.FileDialog(
+            title="Save Universal Control scene",
+            initial_name="io24-host.scene")
+
+        def selected(picker, result):
+            try:
+                chosen = picker.save_finish(result)
+            except GLib.Error:
+                return
+            path = chosen.get_path()
+
+            def work(dev, destination=path, features=host_features):
+                try:
+                    scene, omitted = io24_scene.capture(
+                        dev, host_features=features)
+                    io24_scene.save(
+                        destination, scene, sample_rate_hz=self._fs)
+                    calls, _skips = io24_scene.plan(
+                        scene, sample_rate_hz=self._fs)
+                except Exception as error:
+                    GLib.idle_add(
+                        self.say, "Scene was not saved: %s" % error)
+                    return
+                GLib.idle_add(
+                    self.say,
+                    "Saved %s: %d Host-known settings; %d unavailable "
+                    "value%s omitted; device preset blocks were not exported" %
+                    (os.path.basename(destination), len(calls), len(omitted),
+                     "" if len(omitted) == 1 else "s"))
+
+            self.ctl.submit(work)
+
+        dialog.save(self, None, selected)
+
     def _load_scene_clicked(self, _button):
         if self.ctl.dev is None:
             self.say("Scene not loaded: io24 is not connected")
@@ -6302,17 +6350,30 @@ class Win(Adw.ApplicationWindow):
 
             def work(dev, source=scene, plan=calls, omitted=skips):
                 try:
-                    done, failed = io24_scene.apply(dev, plan)
+                    report = io24_scene.apply_transactional(dev, plan)
                 except Exception as error:
                     GLib.idle_add(
                         self.say, "Scene was not loaded: %s" % error)
                     return
-                if failed:
+                if report["failed"]:
+                    rollback = report["rollback"]
+                    if rollback["complete"]:
+                        recovery = "Previous Host-known state was restored."
+                    else:
+                        recovery = (
+                            "Rollback was partial: %d prior value%s were "
+                            "unknown and %d restore operation%s failed." %
+                            (len(rollback["unresolved"]),
+                             "" if len(rollback["unresolved"]) == 1 else "s",
+                             len(rollback["errors"]),
+                             "" if len(rollback["errors"]) == 1 else "s"))
                     GLib.idle_add(
                         self.say,
-                        "Scene load stopped after %d setting%s; later settings "
-                        "were not sent" % (done, "" if done == 1 else "s"))
+                        "Scene load failed at %s after %d setting%s. %s" %
+                        (report["failed_setting"], report["applied"],
+                         "" if report["applied"] == 1 else "s", recovery))
                     return
+                done = report["applied"]
                 mirror = json.loads(json.dumps(
                     getattr(dev, "_shadow", None) or {}))
                 message = (

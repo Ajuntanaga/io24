@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply a Universal Control `.scene` file with the native Linux Host.
+"""Save or apply a Universal Control `.scene` with the native Linux Host.
 
 The importer follows UC 4.7.2's component model rather than treating a scene
 as a channel preset. It restores global settings, both Fat Channels, the full
@@ -9,17 +9,23 @@ coefficient designers already used by the Host.
 
     python3 io24_scene.py "B A S E.scene"
     python3 io24_scene.py --dry-run --sample-rate 96000 Main.scene
+    python3 io24_scene.py --export io24-host.scene
 
 Device-resident preset blocks are listed but never overwritten by scene load.
+Export writes only readable and exact Host-known state, never device-slot
+bodies. A failed load compensates from a pre-write checkpoint and reports when
+unknown prior state prevents a complete rollback.
 Fields that the io24 protocol cannot faithfully represent are reported with a
 specific reason: mono-source pan/stereo width, FXA, DAW post-DSP capture tap,
 output mono fold-down, text labels, and UC's live mirror latch. A true mirror
 request is restored as the Host's documented one-shot copy.
 """
 import argparse
+import copy
 import json
 import math
 import os
+import tempfile
 
 import io24_alt_eq
 import io24_dsp
@@ -485,14 +491,787 @@ def describe_presets(scene):
     return output, users
 
 
-def apply(dev, calls):
-    """Apply a validated plan, stopping on the first transport/runtime error."""
+_BUS_TO_SCENE = {
+    "main": ("volume", "lr"),
+    "mixa": ("aux1", "assign_aux1"),
+    "mixb": ("aux2", "assign_aux2"),
+}
+_BUS_ALIASES = {"aux1": "mixa", "aux2": "mixb",
+                "mix1": "mixa", "mix2": "mixb"}
+_OUTPUT_TO_SCENE = {
+    "main": ("main", "ch1"),
+    "mixa": ("aux", "ch1"),
+    "mixb": ("aux", "ch2"),
+}
+_SOURCE_TO_SCENE = {
+    "line/ch1": ("line", "ch1"),
+    "line/ch2": ("line", "ch2"),
+    "return/ch1": ("return", "ch1"),
+    "return/ch2": ("return", "ch2"),
+    "return/ch3": ("return", "ch3"),
+    "fxreturn/ch1": ("fxreturn", "ch1"),
+}
+
+
+def _scene_bus(value):
+    value = str(value).lower()
+    return _BUS_ALIASES.get(value, value)
+
+
+def _export_component(scene, source):
+    section, key = _SOURCE_TO_SCENE[source]
+    return scene[section].setdefault(key, {})
+
+
+def _export_compressor(kwargs):
+    """Invert ``Io24.set_compressor`` into UC's selected model object."""
+    try:
+        model = int(kwargs["model"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("compressor shadow is missing model 0, 1, or 2")
+    if model not in (0, 1, 2):
+        raise ValueError("compressor shadow model must be 0, 1, or 2")
+    if kwargs.get("instance") is not None:
+        raise ValueError("one compressor sub-instance is not a UC scene model")
+    record = {
+        "__classid": next(key for key, value in COMP_MODELS.items()
+                          if value == model),
+        "on": int(bool(kwargs["on"])),
+        "keyfilter": float(kwargs["keyfilter_hz"]),
+        "keylisten": int(bool(kwargs["keylisten"])),
+    }
+    if model == 0:
+        record.update({
+            "threshold": float(kwargs["threshold_db"]),
+            "ratio": float(kwargs["ratio"]),
+            "attack": float(kwargs["attack_s"]),
+            "release": float(kwargs["release_s"]),
+            "gain": float(kwargs["gain_db"]),
+            "softknee": int(bool(kwargs["softknee"])),
+            "automode": int(bool(kwargs["automode"])),
+        })
+    elif model == 1:
+        record.update({
+            "peak": float(kwargs["peak"]),
+            "gain": float(kwargs["gain"]),
+            "mode": int(bool(kwargs["limit_mode"])),
+        })
+    else:
+        record.update({
+            "input": float(kwargs["input_db"]),
+            "output": float(kwargs["output_db"]),
+            "attack": float(kwargs["attack_s"]),
+            "release": float(kwargs["release_s"]),
+            "ratio": int(kwargs["ratio_index"]),
+        })
+    # Reuse the import validator so export cannot manufacture an invalid model.
+    io24_presets._compressor_call(record)
+    return record
+
+
+def _export_standard_eq(calls, channel, omissions):
+    bands = {}
+    for call in calls:
+        if call.get("fn") != "set_eq_band":
+            continue
+        kwargs = call.get("kwargs") or {}
+        if kwargs.get("channel") != channel:
+            continue
+        try:
+            band = int(kwargs["band"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if band not in range(4):
+            continue
+        shape = str(kwargs.get("shape", "off")).lower()
+        bands[band] = {
+            "shape": shape,
+            "mode": None if shape == "off" else shape,
+            "on": shape != "off",
+            "freq": kwargs.get("freq_hz", 1000.0),
+            "gain": kwargs.get("gain_db", 0.0),
+            "q": kwargs.get("q", 0.7),
+        }
+    if not bands:
+        return None
+    if set(bands) != set(range(4)):
+        omissions.append(
+            "line.ch%d.eq was omitted because only %d of 4 Standard bands "
+            "are Host-known" % (channel, len(bands)))
+        return None
+    # An identity coefficient does not retain the hidden shelf/peak selector.
+    # The vendor defaults are the only non-invented reconstruction available.
+    defaults = io24_presets.default_standard_eq_bands()
+    ordered = []
+    for index in range(4):
+        band = bands[index]
+        if band["mode"] is None:
+            band["mode"] = defaults[index]["mode"]
+        ordered.append(band)
+    return io24_presets._standard_slot_eq(
+        ordered, eq_on=any(band["on"] for band in ordered))
+
+
+def export_snapshot(snapshot, host_features=None, solo=None):
+    """Build a UC-vocabulary scene from exact Host-known state.
+
+    This is deliberately not device readback. Readable input gain/phantom
+    values come from ``snapshot.live``; DSP, mixer and global values come from
+    the Host's durable write mirror. Anything not known exactly is omitted and
+    returned in ``omissions`` rather than filled with a guessed UC default.
+    Device-resident preset blocks are never exported because their bodies are
+    unreadable.
+    """
+    snapshot = _object(snapshot, "snapshot")
+    live = _object(snapshot.get("live"), "snapshot.live")
+    call_map = _object(snapshot.get("calls"), "snapshot.calls")
+    calls = []
+    for key, raw in call_map.items():
+        raw = _object(raw, "snapshot.calls.%s" % key)
+        name = raw.get("fn") or str(key).split("#", 1)[0]
+        kwargs = _object(raw.get("kwargs"),
+                         "snapshot.calls.%s.kwargs" % key)
+        calls.append({"fn": name, "kwargs": dict(kwargs)})
+
+    scene = {
+        "global": {},
+        "line": {"ch1": {}, "ch2": {}},
+        "return": {},
+        "fxreturn": {},
+        "aux": {"ch1": {}, "ch2": {}},
+        "main": {"ch1": {}},
+        "fx": {"ch1": {}},
+    }
+    omissions = [
+        "presets device-slot bodies were not exported because device readback "
+        "is unavailable",
+    ]
+
+    for channel in (1, 2):
+        component = scene["line"]["ch%d" % channel]
+        gain_key = "input%dGain" % channel
+        phantom_key = "input%dPhantomPower" % channel
+        if gain_key in live:
+            component["preampgain"] = _number(
+                live[gain_key], "snapshot.live.%s" % gain_key, 0.0, 60.0)
+        if phantom_key in live:
+            component["48v"] = int(_toggle(
+                live[phantom_key], "snapshot.live.%s" % phantom_key))
+    for key in sorted(set(live) - {
+            "input1Gain", "input2Gain", "input1PhantomPower",
+            "input2PhantomPower", "input1ProcessingChannel",
+            "input2ProcessingChannel", "input1SlotIndex", "input2SlotIndex",
+            "input1Level", "input2Level", "flags"}):
+        omissions.append(
+            "snapshot.live.%s has no supported UC scene export field" % key)
+
+    alternate_from_shadow = {}
+    standard_calls = []
+    for call in calls:
+        name, kwargs = call["fn"], call["kwargs"]
+        channel = kwargs.get("channel")
+        component = scene["line"].get("ch%d" % channel) \
+            if channel in (1, 2) else None
+        try:
+            if name == "set_mute_mode":
+                scene["global"]["auxMuteMode"] = int(bool(kwargs["mode"]))
+            elif name == "set_phones_source":
+                source = kwargs["source"]
+                if isinstance(source, str):
+                    aliases = {"main": 0, "mixa": 1, "aux1": 1,
+                               "mix a": 1, "mixb": 2, "aux2": 2,
+                               "mix b": 2}
+                    source = aliases.get(source.strip().lower(), source)
+                scene["global"]["phonesSrc"] = _integer(
+                    source, "set_phones_source.source", 0, 2)
+            elif name == "set_output_delay":
+                scene["global"]["outputDelay"] = _number(
+                    kwargs["seconds"], "set_output_delay.seconds", 0.0, 0.5)
+            elif name == "set_output_delay_bus":
+                bus = kwargs["bus"]
+                if isinstance(bus, str):
+                    bus = {"off": -1, "none": 0, "mixa": 1, "aux1": 1,
+                           "mixb": 2, "aux2": 2}.get(
+                               bus.strip().lower(), bus)
+                scene["global"]["outputDelayBus"] = _integer(
+                    bus, "set_output_delay_bus.bus", -1, 4)
+            elif name == "output_delay_off":
+                scene["global"]["outputDelay"] = 0.0
+                scene["global"]["outputDelayBus"] = 0
+            elif name == "set_preset_mode":
+                scene["global"]["presetButtonMode"] = _integer(
+                    kwargs["mode"], "set_preset_mode.mode", 0, 2)
+            elif name == "set_channel_link":
+                scene["line"]["ch1"]["link"] = int(bool(kwargs["on"]))
+            elif name == "set_mute" and component is not None:
+                component["mute"] = int(bool(kwargs["on"]))
+            elif name == "set_processing_channel" and component is not None:
+                component["processingChannel"] = _integer(
+                    kwargs["source_input"], "processing source", 1, 2) - 1
+            elif name == "set_fx_mix" and component is not None:
+                component["dspAmount"] = _number(
+                    kwargs["value"], "DSP amount", 0.0, 1.0)
+            elif name == "set_comp_eq_order" and component is not None:
+                component.setdefault("opt", {})["swapcompeq"] = int(
+                    bool(kwargs["eq_first"]))
+            elif name == "set_highpass_freq" and component is not None:
+                component.setdefault("filter", {})["hpf"] = _number(
+                    kwargs["freq_hz"], "high-pass frequency", 24.0, 1000.0)
+            elif name == "set_gate" and component is not None:
+                if kwargs.get("instance") is not None:
+                    raise ValueError(
+                        "one gate sub-instance is not a UC scene model")
+                component["gate"] = {
+                    "on": int(bool(kwargs["on"])),
+                    "threshold": float(kwargs["threshold_db"]),
+                    "range": float(kwargs["range_db"]),
+                    "attack": float(kwargs["attack_s"]),
+                    "release": float(kwargs["release_s"]),
+                    "keyfilter": float(kwargs["keyfilter_hz"]),
+                    "expander": int(bool(kwargs["expander"])),
+                    "keylisten": int(bool(kwargs["keylisten"])),
+                }
+            elif name == "gate_off" and component is not None:
+                component["gate"] = {
+                    "on": 0, "threshold": -40.0, "range": -60.0,
+                    "attack": 0.01, "release": 0.3, "keyfilter": 0.0,
+                    "expander": 1, "keylisten": 0,
+                }
+            elif name == "set_compressor" and component is not None:
+                component["comp"] = _export_compressor(kwargs)
+            elif name == "compressor_off" and component is not None:
+                omissions.append(
+                    "line.ch%d.comp was omitted because compressor_off does "
+                    "not retain a selected UC model" % channel)
+            elif name == "set_limiter" and component is not None:
+                if kwargs.get("instance") is not None:
+                    raise ValueError(
+                        "one limiter sub-instance is not a UC scene model")
+                component["limit"] = {
+                    "limiteron": int(bool(kwargs["on"])),
+                    "threshold": float(kwargs["threshold_db"]),
+                }
+            elif name == "set_eq_band":
+                standard_calls.append(call)
+            elif name == "set_alternate_eq" and component is not None:
+                alternate_from_shadow[channel] = \
+                    io24_alt_eq.validate_eq(kwargs["eq"])
+            elif name == "set_fx":
+                model = kwargs.get("model")
+                state_args = {key: value for key, value in kwargs.items()
+                              if key not in ("model", "fs")}
+                state = io24_fx.voicefx_preset_state(model, **state_args)
+                # Block 201 is shared. UC repeats the same component under both
+                # lines; one canonical copy is sufficient for this Host.
+                scene["line"]["ch1"]["voicefx"] = state
+            elif name == "set_reverb":
+                scene["fx"]["ch1"]["reverb"] = {
+                    key: kwargs[key]
+                    for key in ("on", "size", "mix", "hp_freq", "predelay")
+                }
+            elif name in ("set_send_db", "set_send_assigned"):
+                source = kwargs.get("source")
+                bus = _scene_bus(kwargs.get("bus"))
+                if source not in _SOURCE_TO_SCENE or bus not in _BUS_TO_SCENE:
+                    raise ValueError("unknown mixer source or bus")
+                field, assign = _BUS_TO_SCENE[bus]
+                target = _export_component(scene, source)
+                if name == "set_send_db":
+                    value = kwargs.get("gain_db")
+                    target[field] = -145.0 if value is None else float(value)
+                else:
+                    target[assign] = int(bool(kwargs.get("on", True)))
+            elif name == "set_source_mute":
+                source = kwargs.get("source")
+                if source not in _SOURCE_TO_SCENE:
+                    raise ValueError("unknown mixer source")
+                _export_component(scene, source)["mute"] = int(
+                    bool(kwargs.get("on", True)))
+            elif name in ("set_bus_master", "set_bus_mute"):
+                bus = _scene_bus(kwargs.get("bus"))
+                if bus not in _OUTPUT_TO_SCENE:
+                    raise ValueError("unknown output bus")
+                section, key = _OUTPUT_TO_SCENE[bus]
+                target = scene[section][key]
+                if name == "set_bus_master":
+                    target["volume"] = float(kwargs.get("gain_db", 0.0))
+                else:
+                    target["mute"] = int(bool(kwargs.get("on", True)))
+            elif name == "set_pan":
+                omissions.append(
+                    "set_pan was not exported because Host stereo-pair balance "
+                    "is not UC mono-source pan")
+            elif name == "set_preset_slot":
+                omissions.append(
+                    "device preset selection was not exported")
+            elif name in ("set_highpass", "set_hp_mute"):
+                omissions.append(
+                    "%s has no supported UC scene export field" % name)
+            else:
+                omissions.append(
+                    "%s has no supported UC scene export mapping" % name)
+        except (KeyError, TypeError, ValueError) as error:
+            omissions.append("%s was not exported: %s" % (name, error))
+
+    features = _object(host_features, "host_features")
+    standard = features.get("standard_eq")
+    alternate = features.get("alternate_eq")
+    if standard is not None:
+        standard = io24_presets.validate_standard_eq_host_state(standard)
+    if alternate is not None:
+        alternate = io24_presets.validate_alternate_eq_host_state(alternate)
+    for name in sorted(set(features) - {"standard_eq", "alternate_eq"}):
+        omissions.append(
+            "host_features.%s has no UC scene representation" % name)
+    alternate_channels = (alternate or {}).get("channels", {})
+    standard_channels = (standard or {}).get("channels", {})
+    for channel in (1, 2):
+        key = str(channel)
+        if key in alternate_channels:
+            scene["line"]["ch%d" % channel]["eq"] = \
+                alternate_channels[key]
+        elif channel in alternate_from_shadow:
+            scene["line"]["ch%d" % channel]["eq"] = \
+                alternate_from_shadow[channel]
+        elif key in standard_channels:
+            body = standard_channels[key]
+            scene["line"]["ch%d" % channel]["eq"] = \
+                io24_presets._standard_slot_eq(
+                    body["bands"], eq_on=body["on"])
+        else:
+            eq = _export_standard_eq(standard_calls, channel, omissions)
+            if eq is not None:
+                scene["line"]["ch%d" % channel]["eq"] = eq
+
+    # Readable state wins over the write mirror: physical mute/link changes can
+    # happen while the Host is closed, and processingChannel is device state.
+    if "flags" in live:
+        flags = _integer(live["flags"], "snapshot.live.flags", 0)
+        scene["line"].setdefault("ch1", {})["link"] = int(
+            bool(flags >> 12 & 1))
+        for channel, mute_bit, bypass_bit in ((1, 3, 5), (2, 4, 6)):
+            component = scene["line"].setdefault("ch%d" % channel, {})
+            component["mute"] = int(bool(flags >> mute_bit & 1))
+            if flags >> bypass_bit & 1:
+                component["dspAmount"] = 0.0
+            elif "dspAmount" not in component:
+                omissions.append(
+                    "line.ch%d.dspAmount was omitted because the device only "
+                    "reports nonzero, not the exact processing amount" %
+                    channel)
+    for channel in (1, 2):
+        key = "input%dProcessingChannel" % channel
+        if key in live:
+            source = _integer(live[key], "snapshot.live.%s" % key, 1, 2)
+            scene["line"].setdefault("ch%d" % channel, {})[
+                "processingChannel"] = source - 1
+    if "input1SlotIndex" in live or "input2SlotIndex" in live:
+        omissions.append(
+            "readable device preset selections were not exported")
+
+    if solo is not None:
+        solo = _object(solo, "solo")
+        buses = ("main", "mixa", "mixb")
+        members = {bus: set(solo.get(bus) or ()) for bus in buses}
+        for source in _SOURCE_TO_SCENE:
+            states = [source in members[bus] for bus in buses]
+            if all(state == states[0] for state in states):
+                _export_component(scene, source)["solo"] = int(states[0])
+            else:
+                omissions.append(
+                    "%s solo differs by bus and cannot be one UC scene field" %
+                    source)
+
+    # Keep recognized top-level sections but remove empty child objects. This
+    # produces stable, readable vendor-vocabulary JSON without claiming state
+    # that the Host never observed.
+    for section in ("line", "return", "fxreturn", "aux", "main", "fx"):
+        scene[section] = {key: value for key, value in scene[section].items()
+                          if value}
+    return scene, omissions
+
+
+def capture(dev, host_features=None):
+    """Capture one exportable scene from readable state and the Host mirror."""
+    live = dev.read_params() if callable(getattr(dev, "read_params", None)) \
+        else {}
+    calls = copy.deepcopy(getattr(dev, "_shadow", None) or {})
+    # A scene is not a physical-button selection record.
+    calls = {key: value for key, value in calls.items()
+             if (value.get("fn") if isinstance(value, dict) else None) !=
+             "set_preset_slot"}
+    solo = copy.deepcopy(getattr(dev, "_solo", None) or {})
+    return export_snapshot(
+        {"version": 1, "live": live or {}, "calls": calls},
+        host_features=host_features, solo=solo)
+
+
+def save(path, scene, sample_rate_hz=48000.0):
+    """Validate and atomically write a Host-known UC-vocabulary scene."""
+    plan(scene, sample_rate_hz=sample_rate_hz)
+    target = os.path.abspath(os.fspath(path))
+    directory = os.path.dirname(target)
+    fd, temporary = tempfile.mkstemp(
+        prefix=".%s." % os.path.basename(target), suffix=".tmp",
+        dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(scene, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        directory_fd = os.open(
+            directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+    return scene
+
+
+_POSITIONAL = {
+    "set_gain": ("channel", "db"),
+    "set_phantom": ("channel", "on"),
+    "set_mute": ("channel", "on"),
+    "set_channel_link": ("on",),
+    "set_processing_channel": ("channel", "source_input"),
+    "set_fx_mix": ("channel", "value"),
+    "set_highpass_freq": ("channel", "freq_hz"),
+    "set_comp_eq_order": ("channel", "eq_first"),
+    "set_limiter": ("channel", "on", "threshold_db"),
+    "set_compressor": ("channel",),
+    "set_gate": ("channel",),
+    "set_eq_band": ("channel", "band"),
+    "set_alternate_eq": ("channel", "eq"),
+    "set_send_db": ("source", "bus", "gain_db"),
+    "set_send_assigned": ("source", "bus", "on"),
+    "set_bus_master": ("bus", "gain_db"),
+    "set_source_mute": ("source", "on"),
+    "set_bus_mute": ("bus", "on"),
+    "set_solo": ("source", "bus", "on"),
+    "set_fx": ("model",),
+    "set_preset_mode": ("mode",),
+    "set_output_delay": ("seconds",),
+    "set_output_delay_bus": ("bus",),
+    "set_phones_source": ("source",),
+    "set_mute_mode": ("mode",),
+    "mirror_main": ("bus",),
+}
+
+
+def _call_values(name, args=(), kwargs=None):
+    values = dict(kwargs or {})
+    for field, value in zip(_POSITIONAL.get(name, ()), args):
+        values.setdefault(field, value)
+    if "bus" in values:
+        values["bus"] = _scene_bus(values["bus"])
+    return values
+
+
+def _control_target(name, args=(), kwargs=None):
+    values = _call_values(name, args, kwargs)
+    if name in ("gate_off",):
+        name = "set_gate"
+    elif name in ("compressor_off",):
+        name = "set_compressor"
+    if name in ("set_eq_band", "set_alternate_eq"):
+        band = values.get("band")
+        if isinstance(band, str):
+            band = {"low": 0, "lowmid": 1, "himid": 2, "high": 3}.get(
+                band.strip().lower(), band)
+        return ("eq", values.get("channel"),
+                band if name == "set_eq_band" else "all")
+    identities = tuple((field, values.get(field))
+                       for field in ("channel", "band", "source", "bus",
+                                     "instance")
+                       if field in values)
+    return (name,) + identities
+
+
+def _checkpoint(dev):
+    live = {}
+    read = getattr(dev, "read_params", None)
+    if callable(read):
+        try:
+            live = read() or {}
+        except Exception as error:
+            live = {"_read_error": "%s: %s" %
+                    (type(error).__name__, error)}
+    shadow = copy.deepcopy(getattr(dev, "_shadow", None) or {})
+    # Scene apply never moves physical slots; rollback must not either.
+    shadow = {key: value for key, value in shadow.items()
+              if (value.get("fn") if isinstance(value, dict) else None) !=
+              "set_preset_slot"}
+    solo = copy.deepcopy(getattr(dev, "_solo", None) or {})
+    return {"live": live, "shadow": shadow, "solo": solo}
+
+
+def _cached_fx_mix(checkpoint, channel):
+    for raw in checkpoint["shadow"].values():
+        if not isinstance(raw, dict) or raw.get("fn") != "set_fx_mix":
+            continue
+        kwargs = raw.get("kwargs") or {}
+        if kwargs.get("channel") == channel:
+            return kwargs.get("value")
+    return None
+
+
+def _prior_targets(checkpoint):
+    targets = set()
+    eq_bands = {}
+    for key, raw in checkpoint["shadow"].items():
+        if not isinstance(raw, dict):
+            continue
+        name = raw.get("fn") or str(key).split("#", 1)[0]
+        kwargs = raw.get("kwargs") or {}
+        target = _control_target(name, kwargs=kwargs)
+        targets.add(target)
+        if target[:1] == ("eq",) and target[-1] != "all":
+            eq_bands.setdefault(target[1], set()).add(target[-1])
+    for channel, bands in eq_bands.items():
+        if bands == set(range(4)):
+            targets.add(("eq", channel, "all"))
+    live = checkpoint["live"]
+    if "flags" in live:
+        flags = int(live["flags"])
+        targets.add(("set_channel_link",))
+        targets.update(("set_mute", ("channel", channel))
+                       for channel in (1, 2))
+        for channel, bit in ((1, 5), (2, 6)):
+            target = ("set_fx_mix", ("channel", channel))
+            if flags >> bit & 1:  # exact bypass is known; nonzero mix is not
+                targets.add(target)
+                continue
+            # An enabled device contradicts a cached zero. The readable bit
+            # proves only "some positive scalar", so stale zero is not exact
+            # rollback state and must not make recovery look complete.
+            cached = _cached_fx_mix(checkpoint, channel)
+            try:
+                exact_positive = float(cached) > 0.0
+            except (TypeError, ValueError):
+                exact_positive = False
+            if not exact_positive:
+                targets.discard(target)
+    for channel in (1, 2):
+        if "input%dGain" % channel in live:
+            targets.add(("set_gain", ("channel", channel)))
+        if "input%dPhantomPower" % channel in live:
+            targets.add(("set_phantom", ("channel", channel)))
+        if "input%dProcessingChannel" % channel in live:
+            targets.add(("set_processing_channel", ("channel", channel)))
+    return targets
+
+
+def _rollback_unresolved(checkpoint, attempted):
+    prior = _prior_targets(checkpoint)
+    unresolved = []
+    for name, args, kwargs, description in attempted:
+        if name == "set_solo":
+            values = _call_values(name, args, kwargs)
+            bus = values.get("bus")
+            cells = {
+                ("set_send_db", ("source", source), ("bus", bus))
+                for source in _SOURCE_TO_SCENE
+            }
+            if not cells.issubset(prior):
+                unresolved.append(description)
+            continue
+        if name == "mirror_main":
+            unresolved.append(description)
+            continue
+        target = _control_target(name, args, kwargs)
+        if target[:1] == ("eq",):
+            full = ("eq", target[1], "all")
+            if target not in prior and full not in prior:
+                unresolved.append(description)
+        elif target not in prior:
+            unresolved.append(description)
+    return list(dict.fromkeys(unresolved))
+
+
+def _restore_checkpoint(dev, checkpoint, attempted):
+    errors = []
+    restored = 0
+    if hasattr(dev, "_shadow"):
+        # Rebuild the mirror only from successful restore calls. Preloading the
+        # old dictionary would leave a false "restored" claim behind whenever
+        # one compensating transport write itself failed.
+        dev._shadow = {}
+    if hasattr(dev, "_send_state"):
+        dev._send_state = None
+    if hasattr(dev, "_solo"):
+        dev._solo = {}
+
+    live = checkpoint["live"]
+    bypassed_channels = set()
+    enabled_without_exact_mix = set()
+    attempted_targets = {
+        _control_target(name, args, kwargs)
+        for name, args, kwargs, _description in attempted
+    }
+
+    def restore(name, *args, **kwargs):
+        nonlocal restored
+        try:
+            getattr(dev, name)(*args, **kwargs)
+            restored += 1
+        except Exception as error:
+            errors.append({"control": name,
+                           "error": "%s: %s" %
+                                    (type(error).__name__, error)})
+
+    for channel in (1, 2):
+        key = "input%dGain" % channel
+        if key in live and \
+                ("set_gain", ("channel", channel)) in attempted_targets:
+            restore("set_gain", channel, live[key])
+        key = "input%dPhantomPower" % channel
+        if key in live and \
+                ("set_phantom", ("channel", channel)) in attempted_targets:
+            restore("set_phantom", channel, bool(live[key]))
+    if "flags" in live:
+        flags = int(live["flags"])
+        for channel, bit in ((1, 3), (2, 4)):
+            if ("set_mute", ("channel", channel)) in attempted_targets:
+                restore("set_mute", channel, bool(flags >> bit & 1))
+        if ("set_channel_link",) in attempted_targets:
+            restore("set_channel_link", bool(flags >> 12 & 1))
+        for channel, bit in ((1, 5), (2, 6)):
+            if flags >> bit & 1 and \
+                    ("set_fx_mix", ("channel", channel)) in attempted_targets:
+                bypassed_channels.add(channel)
+            elif not (flags >> bit & 1):
+                cached = _cached_fx_mix(checkpoint, channel)
+                try:
+                    exact_positive = float(cached) > 0.0
+                except (TypeError, ValueError):
+                    exact_positive = False
+                if not exact_positive:
+                    enabled_without_exact_mix.add(channel)
+    for channel in (1, 2):
+        key = "input%dProcessingChannel" % channel
+        if key in live and \
+                ("set_processing_channel", ("channel", channel)) in \
+                attempted_targets:
+            restore("set_processing_channel", channel, int(live[key]))
+
+    phases = {
+        "set_preset_mode": 0,
+        "set_processing_channel": 10,
+        "set_channel_link": 10,
+        "set_send_db": 30,
+        "set_bus_master": 40,
+        "set_pan": 50,
+        "set_send_assigned": 60,
+        "set_source_mute": 70,
+        "set_bus_mute": 70,
+    }
+    skip_live = {"set_gain", "set_phantom", "set_mute",
+                 "set_channel_link", "set_processing_channel"}
+    entries = []
+    for position, (key, raw) in enumerate(checkpoint["shadow"].items()):
+        if not isinstance(raw, dict):
+            continue
+        name = raw.get("fn") or str(key).split("#", 1)[0]
+        if name == "set_preset_slot" or name in skip_live:
+            continue
+        if name == "set_fx_mix" and \
+                (raw.get("kwargs") or {}).get("channel") in \
+                (bypassed_channels | enabled_without_exact_mix):
+            continue
+        entries.append((phases.get(name, 20), position, name,
+                        raw.get("kwargs") or {}))
+    for _phase, _position, name, kwargs in sorted(entries):
+        restore(name, **kwargs)
+
+    # A readable bypass is exact zero and overrides a stale positive Host
+    # scalar. Apply it after shadow replay so rollback finishes at device truth.
+    for channel in sorted(bypassed_channels):
+        restore("set_fx_mix", channel, 0.0)
+
+    for bus, members in checkpoint["solo"].items():
+        for source in members:
+            restore("set_solo", source, bus, True)
+
+    if hasattr(dev, "_shadow_dirty"):
+        dev._shadow_dirty = True
+    flush = getattr(dev, "_flush_shadow", None)
+    if callable(flush):
+        try:
+            flush(force=True)
+        except Exception as error:
+            errors.append({"control": "shadow persistence",
+                           "error": "%s: %s" %
+                                    (type(error).__name__, error)})
+    return restored, errors
+
+
+def _check_setters(dev, calls):
     missing = sorted({name for name, _args, _kwargs, _desc in calls
                       if not callable(getattr(dev, name, None))})
     if missing:
         raise AttributeError("device backend is missing setter%s: %s" %
                              ("" if len(missing) == 1 else "s",
                               ", ".join(missing)))
+
+
+def apply_transactional(dev, calls):
+    """Apply a plan and compensate from exact prestate after a failure.
+
+    The io24 protocol has no device-side transaction. This therefore restores
+    every readable or Host-known prior value and reports any attempted control
+    whose old value was unknowable. It never moves a physical preset slot.
+    """
+    _check_setters(dev, calls)
+    checkpoint = _checkpoint(dev)
+    done = 0
+    for position, (name, args, kwargs, description) in enumerate(calls):
+        try:
+            getattr(dev, name)(*args, **kwargs)
+            done += 1
+        except Exception as error:
+            attempted = calls[:position + 1]
+            unresolved = _rollback_unresolved(checkpoint, attempted)
+            restored, rollback_errors = _restore_checkpoint(
+                dev, checkpoint, attempted)
+            return {
+                "applied": done,
+                "failed": 1,
+                "failed_setting": description,
+                "error": "%s: %s" % (type(error).__name__, error),
+                "rollback": {
+                    "attempted": True,
+                    "restored": restored,
+                    "errors": rollback_errors,
+                    "unresolved": unresolved,
+                    "complete": not rollback_errors and not unresolved,
+                },
+            }
+    return {
+        "applied": done,
+        "failed": 0,
+        "failed_setting": None,
+        "error": None,
+        "rollback": {
+            "attempted": False,
+            "restored": 0,
+            "errors": [],
+            "unresolved": [],
+            "complete": True,
+        },
+    }
+
+
+def apply(dev, calls):
+    """Apply a validated plan, stopping on the first transport/runtime error."""
+    _check_setters(dev, calls)
     done = 0
     for name, args, kwargs, description in calls:
         try:
@@ -506,8 +1285,10 @@ def apply(dev, calls):
 
 def _parser():
     parser = argparse.ArgumentParser(
-        description="Apply a Universal Control `.scene` file to the io24")
+        description="Save or apply a Universal Control `.scene` with the io24")
     parser.add_argument("scene", nargs="?", help="path to the .scene JSON file")
+    parser.add_argument("--export", metavar="PATH",
+                        help="save readable and Host-known state as a .scene")
     parser.add_argument("-n", "--dry-run", action="store_true",
                         help="validate and print the complete plan without USB")
     parser.add_argument("--sample-rate", type=float, default=48000.0,
@@ -519,6 +1300,24 @@ def _parser():
 
 def main(argv=None):
     args = _parser().parse_args(argv)
+    if args.export and args.scene:
+        raise SystemExit("choose either a scene to load or --export, not both")
+    if args.export and args.dry_run:
+        raise SystemExit("--dry-run applies to loading; --export writes PATH")
+    if args.export:
+        from io24 import Io24
+        device = Io24()
+        try:
+            scene, omissions = capture(device)
+            save(args.export, scene, sample_rate_hz=args.sample_rate)
+            calls, skips = plan(scene, sample_rate_hz=args.sample_rate)
+            print("saved %s (%d Host-known settings)" %
+                  (os.path.basename(args.export), len(calls)))
+            for omitted in omissions + skips:
+                print("    - %s" % omitted)
+            return 0
+        finally:
+            device.close()
     if not args.scene:
         _parser().print_help()
         return 0
@@ -551,9 +1350,22 @@ def main(argv=None):
     device = Io24()
     try:
         print("\napplying...")
-        done, failed = apply(device, calls)
-        print("applied %d, failed %d" % (done, failed))
-        return 1 if failed else 0
+        report = apply_transactional(device, calls)
+        print("applied %d, failed %d" %
+              (report["applied"], report["failed"]))
+        if report["failed"]:
+            rollback = report["rollback"]
+            print("failure: %s (%s)" %
+                  (report["failed_setting"], report["error"]))
+            if rollback["complete"]:
+                print("rollback: complete (%d setting(s) restored)" %
+                      rollback["restored"])
+            else:
+                print("rollback: partial (%d unknown prior value(s), %d "
+                      "restore error(s))" %
+                      (len(rollback["unresolved"]),
+                       len(rollback["errors"])))
+        return 1 if report["failed"] else 0
     finally:
         device.close()
 

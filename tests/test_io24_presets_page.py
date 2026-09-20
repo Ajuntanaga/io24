@@ -141,14 +141,18 @@ class PresetsPageShapeTests(unittest.TestCase):
         self.assertIn('"Preset blocks on the unit"',
                       _function("_preset_button_group"))
 
-    def test_uc_scenes_have_a_visible_validated_load_action(self):
+    def test_uc_scenes_have_visible_validated_save_and_load_actions(self):
         page = _function("_presets_page")
         self.assertIn('title="Scenes"', page)
+        self.assertIn('label="Save scene…"', page)
         self.assertIn('label="Load scene…"', page)
         self.assertIn("Device preset blocks are never overwritten", page)
         loader = _function("_load_scene_clicked")
         self.assertIn("io24_scene.plan", loader)
-        self.assertIn("io24_scene.apply", loader)
+        self.assertIn("io24_scene.apply_transactional", loader)
+        saver = _function("_save_scene_clicked")
+        self.assertIn("io24_scene.capture", saver)
+        self.assertIn("io24_scene.save", saver)
 
     def test_every_loadable_row_has_a_visible_load_button(self):
         self.assertEqual(

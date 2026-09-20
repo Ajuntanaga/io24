@@ -2,6 +2,24 @@
 
 Timestamp: 2026-09-06T14:54:07-07:00
 
+## 2026-09-19 scene export and compensating rollback
+
+`io24_scene.export_snapshot` maps readable and Host-known state back into the
+UC 4.7.2 scene vocabulary, while `capture` excludes physical slot selection and
+unreadable device-slot bodies. `save` validates through the importer and uses a
+temporary file, fsync, and rename. Semantic Standard/Passive/Vintage EQ state
+and the selected VoiceFX model's independent On value survive the Host
+round-trip; missing write-only values are omissions, never defaults presented as
+device state.
+
+`apply_transactional` checkpoints readable state, the write mirror, and solo
+before transport. On the first failure it stops the plan and rebuilds the mirror
+only from successful compensating writes. Device-readable mute, link,
+processing assignment and exact bypass override stale cache; physical preset
+slots are excluded. Complete versus partial recovery is machine-reported. The
+focused scene/Presets regressions and compilation are hardware-free; no live
+operation occurred.
+
 ## 2026-09-18 exact Passive/Vintage Host EQ route
 
 UC 4.7.2 source binding is complete for both alternate EQ classes. Passive

@@ -44,9 +44,11 @@ import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage 
 import io24_dsp                            # noqa: E402  (exact compressor models)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
+import io24_spring                         # noqa: E402  (host spring reverb)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 import io24_scene                          # noqa: E402  (UC scene import)
 from io24_preset_record import (           # noqa: E402
+    DevicePresetLibraryRegistry,
     DeviceSlotRegistry,
     complete_device_slot_record,
 )
@@ -70,6 +72,9 @@ HPF_BASIC_HZ = (24.0, 40.0, 80.0, 160.0)
 DEVICE_SLOT_REGISTRY_PATH = os.path.join(
     os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
     "io24", "device-slots.json")
+DEVICE_PRESET_LIBRARY_REGISTRY_PATH = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "io24", "device-presets.json")
 
 # What the Host last had open, restored at launch. Added 2026-09-11 at the
 # user's request: pick up where the last session left off, as Universal Control
@@ -92,8 +97,9 @@ RETURN_EFFECTIVELY_OFF_DB = -59.9
 COMP_MODELS = ("standard", "tube", "fet", "multiband")
 MULTIBAND_MODEL = 3
 
-# The menu routes through the firmware-native builder in
-# ``Io24.save_known_device_slot``. ``None`` means the action is available.
+# The preset menu routes through UC's Device Presets path
+# (``Io24.save_known_device_library_preset``, MemP/PrsM 16..27). ``None``
+# means the action is available.
 PUT_ON_UNIT_UNAVAILABLE = None
 
 
@@ -271,7 +277,7 @@ def shadow_ui_state(shadow):
         "voicefx": None, "preset_mode": None, "mute_mode": None,
         "preset_slot": {}, "output_delay": None,
         "output_delay_bus": None, "phones_source": None,
-        "link": None, "balance": None,
+        "link": None, "balance": None, "component_names": {},
     }
     for call in (shadow or {}).values():
         if not isinstance(call, dict):
@@ -348,6 +354,11 @@ def shadow_ui_state(shadow):
                 pass
         elif name == "set_channel_link":
             state["link"] = bool(kw.get("on"))
+        elif name == "set_component_name":
+            component = kw.get("component")
+            if component in io24.Io24.COMPONENT_PATHS:
+                state["component_names"][component] = str(
+                    kw.get("name", ""))
         elif name == "set_pan" and kw.get("source") in \
                 ("line/ch1", "line/ch2") and kw.get("bus") == "main":
             state["balance"] = kw.get("pan")
@@ -2559,20 +2570,54 @@ class Rack(ChannelBound, Canvas):
             polyline(sn, [(x, y + h / 2), (x + w, y + h / 2)], pal(GRID, 0.18), 1.0)
             polyline(sn, pts, acc, 1.6)
         elif mod == "COMP":
-            thr = self.wid("cth").get_value()
-            ratio = max(1.0, self.wid("rat").get_value())
-            X = lambda d: x + (d + 60) / 60.0 * w
-            Y = lambda d: y + h - (d + 60) / 60.0 * h
-            polyline(sn, [(X(-60), Y(-60)), (X(0), Y(0))], pal(GRID, 0.18), 1.0)
-            pts = []
-            for i in range(0, int(w) + 1, 3):
-                din = -60 + i / max(w, 1) * 60
-                dout = din if din <= thr else thr + (din - thr) / ratio
-                pts.append((X(din), Y(min(0.0, dout))))
-            polyline(sn, pts, acc, 1.6)
-            if lvl > -60:
-                dout = lvl if lvl <= thr else thr + (lvl - thr) / ratio
-                dot(sn, X(lvl), Y(min(0.0, dout)), 3, pal(RED))
+            if self.win._multiband_selected(self.channel):
+                # Four independent selected UC characters, not the hidden
+                # Standard controls. Each miniature is drawn from the same
+                # compiled tuple that drives its realtime band processor.
+                gap = 3.0
+                cell = (w - 3.0 * gap) / 4.0
+                short = ("L", "LM", "HM", "H")
+                for bi in range(4):
+                    bx = x + bi * (cell + gap)
+                    values = self.win._mbc_band_state(self.channel, bi)
+                    control = io24_mbc.compressor_controls(
+                        values, getattr(self.win, "_fs", 48000.0))
+                    thr = max(-60.0, min(0.0,
+                        control["Threshold level (dB)"]))
+                    slope = max(0.0, min(1.0, control["Slope"]))
+                    makeup = 20.0 * math.log10(max(
+                        control["Makeup gain (linear)"], 1e-12))
+                    X = lambda d, left=bx: left + (d + 60.0) / 60.0 * cell
+                    Y = lambda d: y + h - (d + 60.0) / 60.0 * h
+                    polyline(sn, [(X(-60), Y(-60)), (X(0), Y(0))],
+                             pal(GRID, 0.16), 1.0)
+                    points = []
+                    for step in range(0, max(2, int(cell)) + 1, 2):
+                        din = -60.0 + step / max(cell, 1.0) * 60.0
+                        dout = din - slope * max(0.0, din - thr)
+                        if on:
+                            dout = min(0.0, dout + makeup)
+                        points.append((X(din), Y(dout)))
+                    polyline(sn, points, acc, 1.3)
+                    model = values["type"][0].upper()
+                    label(self, sn, short[bi] + model, bx + 2, y + 1,
+                          pal(INK, 0.62), 6)
+            else:
+                thr = self.wid("cth").get_value()
+                ratio = max(1.0, self.wid("rat").get_value())
+                X = lambda d: x + (d + 60) / 60.0 * w
+                Y = lambda d: y + h - (d + 60) / 60.0 * h
+                polyline(sn, [(X(-60), Y(-60)), (X(0), Y(0))],
+                         pal(GRID, 0.18), 1.0)
+                pts = []
+                for i in range(0, int(w) + 1, 3):
+                    din = -60 + i / max(w, 1) * 60
+                    dout = din if din <= thr else thr + (din - thr) / ratio
+                    pts.append((X(din), Y(min(0.0, dout))))
+                polyline(sn, pts, acc, 1.6)
+                if lvl > -60:
+                    dout = lvl if lvl <= thr else thr + (lvl - thr) / ratio
+                    dot(sn, X(lvl), Y(min(0.0, dout)), 3, pal(RED))
         elif mod == "GATE":
             thr = self.wid("gth").get_value()
             box(sn, x, y + h - 6, w, 6, pal(GRID, 0.12))
@@ -3017,6 +3062,13 @@ class Win(Adw.ApplicationWindow):
         self._insert_default_input = False
         self._insert_stale = False
         self._insert_pending = 0
+        # A distinct Host spring tank: wet-only Input 1/2 capture returned on
+        # USB playback 5-6 and reserved for physical Main 1-2 while enabled.
+        # This does not replace or relabel the unit's block-202 reverb.
+        self.spring = io24_spring.SpringChain()
+        self._spring_routing = None
+        self._spring_mute = False
+        self._spring_route_pending = False
         # Widget adoption is not a user edit.  Factory loads, band selection,
         # and per-channel page changes all populate controls programmatically;
         # without one shared guard those GTK signals enqueue fresh DSP writes
@@ -3027,6 +3079,8 @@ class Win(Adw.ApplicationWindow):
         self._phones_source_mute = False
         self.device_slot_registry = DeviceSlotRegistry(
             DEVICE_SLOT_REGISTRY_PATH)
+        self.device_preset_library_registry = DevicePresetLibraryRegistry(
+            DEVICE_PRESET_LIBRARY_REGISTRY_PATH)
         self._fx_push_id = None
         # Block 201 is one settings object over two structural audio lanes.
         # Normal FX control never mutates processingChannel: that value swaps
@@ -3122,6 +3176,7 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
         GLib.timeout_add(2000, self._insert_watchdog)
+        GLib.timeout_add(2000, self._spring_watchdog)
         GLib.idle_add(self._restore_audio_clock)
         GLib.timeout_add(5000, self._autosave_session)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
@@ -3624,12 +3679,15 @@ class Win(Adw.ApplicationWindow):
         krow.append(self.blend_knob); krow.append(blbl)
         br.append(krow)
         box.append(br)
-        self.mainmute_row = Gtk.Label(label="Main out: on", xalign=0.5)
+        self.mainmute_row = Gtk.Label(
+            label="Physical Main Mute (read-only): on", xalign=0.5)
         self.mainmute_row.add_css_class("caption")
         self.mainmute_row.set_margin_top(4)
         self.mainmute_row.set_tooltip_text(
-            "Mirrors the physical MUTE button. The device reports this state but "
-            "exposes no parameter to set it, so it is read-only here.")
+            "Mirrors the physical MUTE button. "
+            "Universal Control also exposes hardwareMute as display-only; "
+            "firmware provides no writable "
+            "command for this latch. Output mute below is a separate bus mute.")
         box.append(self.mainmute_row)
         for nm, p in (("Output mute (software)", "hpmute"), ("Stereo link", "link")):
             t = Gtk.ToggleButton(label=nm)
@@ -3742,11 +3800,10 @@ class Win(Adw.ApplicationWindow):
 
         Choosing it switches the unit's single-band compressor off and
         processes the input from USB capture, where it arrives after the
-        limiter; GUIDE.md has the details. Each band carries the device
-        compressors' vocabulary: a character (Standard / Tube / FET, mapped
-        onto sc3's time constants and knee), threshold/ratio/knee, auto makeup
-        like the FET model's, a Tube limit mode, and a key filter with key
-        listen via sc3's sidechain.
+        limiter; GUIDE.md has the details. Each band carries the exact public
+        control vocabulary of UC's Standard, Tube and FET models. Their existing
+        io24_dsp builders compile those controls into one common tuple consumed
+        by the Host's realtime LADSPA processor.
         """
         ctl = self.mbc_ctl.setdefault(ch, {})
         g = Adw.PreferencesGroup()
@@ -3770,6 +3827,28 @@ class Win(Adw.ApplicationWindow):
                 parent.add(r)
             ctl[cid] = sc
 
+        def model_slider(parent, bi, cid, title, lo, hi, step, dv, fmt,
+                         subtitle=None):
+            r, sc = self._srow(
+                title, lo, hi, step, dv, fmt,
+                lambda _v, c=ch, b=bi, i=cid:
+                    self._mbc_model_edit(c, b, i), subtitle)
+            if isinstance(parent, Adw.ExpanderRow):
+                parent.add_row(r)
+            else:
+                parent.add(r)
+            ctl[(bi, cid)] = sc
+
+        def model_switch(parent, bi, cid, title, subtitle=None, active=False):
+            row = Adw.SwitchRow(title=title, subtitle=subtitle or "")
+            row.set_active(active)
+            row.connect("notify::active", self._mbc_model_notify, ch, bi, cid)
+            if isinstance(parent, Adw.ExpanderRow):
+                parent.add_row(row)
+            else:
+                parent.add(row)
+            ctl[(bi, cid)] = row
+
         # crossovers: each split drives every biquad and all-pass tuned to it
         XNODES = io24_mbc.crossover_nodes()
         for i, ttl in enumerate(("Split low / low-mid",
@@ -3784,7 +3863,7 @@ class Win(Adw.ApplicationWindow):
                 io24_mbc.BANDS, ("Low", "Low mid", "High mid", "High"))):
             d = io24_mbc.DEFAULTS[band]
             ex = Adw.ExpanderRow(title=bname)
-            comp = "c%d" % bi
+            ctl[(bi, "expander")] = ex
 
             trow = Adw.ComboRow(title="Character",
                                 model=Gtk.StringList.new(
@@ -3793,100 +3872,135 @@ class Win(Adw.ApplicationWindow):
             ex.add_row(trow)
             ctl[(bi, "type")] = trow
 
-            slider(ex, (bi, "thr"), "Threshold", -40, 0, 0.5, d["threshold"],
-                   lambda v: "%.1f dB" % v, (comp + ":Threshold level (dB)",))
-            slider(ex, (bi, "ratio"), "Ratio", 1, 20, 0.1, d["ratio"],
-                   lambda v: "%.1f:1" % v, (comp + ":Ratio (1:n)",))
-            slider(ex, (bi, "knee"), "Knee", 0, 12, 0.5, d["knee"],
-                   lambda v: "%.1f dB" % v, (comp + ":Knee radius (dB)",))
-            slider(ex, (bi, "attack"), "Attack", 1, 100, 0.5, d["attack"],
-                   lambda v: "%.1f ms" % v, (comp + ":Attack time (ms)",))
-            slider(ex, (bi, "release"), "Release", 10, 800, 5, d["release"],
-                   lambda v: "%.0f ms" % v, (comp + ":Release time (ms)",))
-            slider(ex, (bi, "makeup"), "Makeup", 0, 24, 0.5, d["makeup"],
-                   lambda v: "+%.1f dB" % v, (comp + ":Makeup gain (dB)",))
-            for cid, title, handler in (
-                    ("auto", "Auto makeup", self._mbc_auto),
-                    ("limit", "Limit mode", self._mbc_limit),
-                    ("keyon", "Key filter", self._mbc_keyon)):
-                row = Adw.SwitchRow(title=title)
-                row.connect("notify::active", handler, ch, bi)
-                ex.add_row(row)
-                ctl[(bi, cid)] = row
-            slider(ex, (bi, "keyf"), "Key frequency", 30, 16000, 5, d["key"],
-                   lambda v: "%.0f Hz" % v, ("k%d:Freq" % bi,))
-            srow = Adw.SwitchRow(title="Key listen")
-            srow.connect("notify::active", self._mbc_listen, ch, bi)
-            ex.add_row(srow)
-            ctl[(bi, "listen")] = srow
+            stack = Gtk.Stack()
+            stack.set_vhomogeneous(False)
+            ctl[(bi, "stack")] = stack
+
+            standard = Adw.PreferencesGroup()
+            model_slider(standard, bi, "s_thr", "Threshold", -56, 0, 0.01,
+                         d["threshold"], lambda v: "%.2f dB" % v)
+            model_slider(standard, bi, "s_ratio", "Ratio", 1, 20, 0.01,
+                         d["ratio"], lambda v: "%.2f:1" % v)
+            model_slider(standard, bi, "s_attack", "Attack", 0.0002, 0.15,
+                         0.0001, d["attack"] / 1000.0,
+                         lambda v: "%.2f ms" % (v * 1000.0))
+            model_slider(standard, bi, "s_release", "Release", 0.0025, 0.9,
+                         0.001, d["release"] / 1000.0,
+                         lambda v: "%.1f ms" % (v * 1000.0))
+            model_slider(standard, bi, "s_gain", "Gain", 0, 28, 0.01, 0.0,
+                         lambda v: "%+.2f dB" % v)
+            model_switch(standard, bi, "s_knee", "Soft knee", active=True)
+            model_switch(standard, bi, "s_auto", "Auto mode",
+                         "Programme-dependent timing")
+            stack.add_named(standard, "standard")
+
+            tube = Adw.PreferencesGroup()
+            model_slider(tube, bi, "t_peak", "Peak reduction", 0, 100, 0.1,
+                         0.0, lambda v: "%.1f" % v)
+            model_slider(tube, bi, "t_gain", "Gain", 0, 100, 0.1, 40.0,
+                         lambda v: "%.1f" % v)
+            model_switch(tube, bi, "t_limit", "Limit mode",
+                         "Steeper than Compress")
+            stack.add_named(tube, "tube")
+
+            fet = Adw.PreferencesGroup()
+            model_slider(fet, bi, "f_input", "Input", -56, 0, 0.01, -43.0,
+                         lambda v: "%.2f dB" % v)
+            model_slider(fet, bi, "f_output", "Output", -56, 0, 0.01, 0.0,
+                         lambda v: "%.2f dB" % v)
+            model_slider(fet, bi, "f_attack", "Attack", 0.000021, 0.0008,
+                         0.000001, 0.0001,
+                         lambda v: "%.3f ms" % (v * 1000.0))
+            model_slider(fet, bi, "f_release", "Release", 0.05, 1.1, 0.001,
+                         0.25, lambda v: "%.0f ms" % (v * 1000.0))
+            f_ratio = Adw.ComboRow(
+                title="Ratio", model=Gtk.StringList.new(io24_dsp.FET_RATIO_NAMES))
+            f_ratio.connect("notify::selected", self._mbc_model_notify,
+                            ch, bi, "f_ratio")
+            fet.add(f_ratio)
+            ctl[(bi, "f_ratio")] = f_ratio
+            stack.add_named(fet, "fet")
+            stack.set_visible_child_name("standard")
+            ex.add_row(stack)
+
+            model_switch(ex, bi, "keyon", "Key filter",
+                         "UC side-chain filter")
+            model_slider(ex, bi, "keyf", "Key frequency", 40, 16000, 1,
+                         d["key"], lambda v: "%.0f Hz" % v)
+            model_switch(ex, bi, "listen", "Key listen",
+                         "Hear the model's filtered detector signal")
             g.add(ex)
         return g
 
     def _mbc_type(self, row, _p, ch, bi):
-        """Apply a character's time constants and knee to the band's sliders —
-        visible state, not hidden state, so what you hear is what you see."""
+        """Select one exact UC model while retaining the other two states."""
         if self._mbc_mute:
             return
         self._mbc_mirror(ch, (bi, "type"))
-        vals = io24_mbc.TYPES[("standard", "tube", "fet")[row.get_selected()]]
-        for key in ("attack", "release", "knee"):
-            self.mbc_ctl[ch][(bi, key)].set_value(vals[key])  # fires the push
+        model = io24_mbc.MODEL_NAMES[row.get_selected()]
+        self.mbc_ctl[ch][(bi, "stack")].set_visible_child_name(model)
+        if self.link_both:
+            other = 2 if ch == 1 else 1
+            self.mbc_ctl[other][(bi, "stack")].set_visible_child_name(model)
+        self._mbc_push_band(ch, bi)
 
-    def _mbc_limit(self, row, _p, ch, bi):
+    def _mbc_model_notify(self, _widget, _p, ch, bi, cid):
+        self._mbc_model_edit(ch, bi, cid)
+
+    def _mbc_model_edit(self, ch, bi, cid):
         if self._mbc_mute:
             return
-        self._mbc_mirror(ch, (bi, "limit"))
+        self._mbc_mirror(ch, (bi, cid))
+        self._mbc_push_band(ch, bi)
+
+    def _mbc_band_state(self, ch, bi):
         ctl = self.mbc_ctl[ch]
-        prev = self._mbc_prev.setdefault(ch, {})
-        if row.get_active():
-            prev[bi] = (ctl[(bi, "ratio")].get_value(),
-                        ctl[(bi, "attack")].get_value())
-            ctl[(bi, "ratio")].set_value(io24_mbc.TUBE_LIMIT["ratio"])
-            ctl[(bi, "attack")].set_value(io24_mbc.TUBE_LIMIT["attack"])
-        elif prev.get(bi):
-            ratio, attack = prev.pop(bi)
-            ctl[(bi, "ratio")].set_value(ratio)
-            ctl[(bi, "attack")].set_value(attack)
+        band = io24_mbc.default_band(io24_mbc.BANDS[bi])
+        band["type"] = io24_mbc.MODEL_NAMES[
+            max(0, min(2, ctl[(bi, "type")].get_selected()))]
+        band["standard"] = {
+            "threshold_db": ctl[(bi, "s_thr")].get_value(),
+            "ratio": ctl[(bi, "s_ratio")].get_value(),
+            "attack_s": ctl[(bi, "s_attack")].get_value(),
+            "release_s": ctl[(bi, "s_release")].get_value(),
+            "gain_db": ctl[(bi, "s_gain")].get_value(),
+            "softknee": ctl[(bi, "s_knee")].get_active(),
+            "automode": ctl[(bi, "s_auto")].get_active(),
+        }
+        band["tube"] = {
+            "peak": ctl[(bi, "t_peak")].get_value(),
+            "gain": ctl[(bi, "t_gain")].get_value(),
+            "limit_mode": ctl[(bi, "t_limit")].get_active(),
+        }
+        band["fet"] = {
+            "input_db": ctl[(bi, "f_input")].get_value(),
+            "output_db": ctl[(bi, "f_output")].get_value(),
+            "attack_s": ctl[(bi, "f_attack")].get_value(),
+            "release_s": ctl[(bi, "f_release")].get_value(),
+            "ratio_index": ctl[(bi, "f_ratio")].get_selected(),
+        }
+        band["key_filter"] = ctl[(bi, "keyon")].get_active()
+        band["key"] = ctl[(bi, "keyf")].get_value()
+        band["listen"] = ctl[(bi, "listen")].get_active()
+        return band
 
-    def _mbc_auto(self, row, _p, ch, bi):
-        if self._mbc_mute:
+    def _mbc_push_band(self, ch, bi):
+        values = self._mbc_band_state(ch, bi)
+        controls = io24_mbc.compressor_controls(
+            values, getattr(self, "_fs", 48000.0))
+        insert = getattr(self, "insert", None)
+        if insert is None or not insert.running:
             return
-        self._mbc_mirror(ch, (bi, "auto"))
-        self._mbc_recompute_makeup(ch, bi)
-
-    def _mbc_recompute_makeup(self, ch, bi):
-        ctl = self.mbc_ctl[ch]
-        auto = ctl[(bi, "auto")].get_active()
-        ctl[(bi, "makeup")].set_sensitive(not auto)
-        if auto:
-            ctl[(bi, "makeup")].set_value(io24_mbc.auto_makeup(
-                ctl[(bi, "thr")].get_value(), ctl[(bi, "ratio")].get_value()))
-        return False                      # also an idle callback: run once
-
-    def _mbc_keyon(self, row, _p, ch, bi):
-        if self._mbc_mute:
-            return
-        self._mbc_mirror(ch, (bi, "keyon"))
-        self._mbc_push(ch, ("c%d:Chain balance" % bi,),
-                       1.0 if row.get_active() else 0.0)
-
-    def _mbc_listen(self, row, _p, ch, bi):
-        if self._mbc_mute:
-            return
-        self._mbc_mirror(ch, (bi, "listen"))
-        on = row.get_active()
-        self._mbc_push(ch, ("lc%d:Mult" % bi,), 0.0 if on else 1.0)
-        self._mbc_push(ch, ("lk%d:Mult" % bi,), 1.0 if on else 0.0)
+        update = {"c%d:%s" % (bi, key): value
+                  for key, value in controls.items()}
+        for target in self._mbc_targets(ch):
+            insert.set_channel_controls(target, update)
 
     def _mbc_set(self, ch, cid, keys, value):
-        """One slider move, pushed live to every graph that carries it. A move
-        while the insert is down is a no-op; auto makeup rides along with
-        threshold and ratio, exactly as the device compressors compensate."""
+        """Push one crossover move to every graph that carries it."""
         if self._mbc_mute:
             return
         self._mbc_mirror(ch, cid)
-        if isinstance(cid, tuple) and cid[1] in ("thr", "ratio"):
-            GLib.idle_add(self._mbc_recompute_makeup, ch, cid[0])
         self._mbc_push(ch, keys, value)
 
     def _mbc_targets(self, ch):
@@ -3920,9 +4034,6 @@ class Win(Adw.ApplicationWindow):
                 dst.set_value(src.get_value())
         finally:
             self._mbc_mute = prior
-        if isinstance(cid, tuple) and cid[1] == "auto":
-            self.mbc_ctl[other][(cid[0], "makeup")].set_sensitive(
-                not dst.get_active())
 
     def _mbc_snapshot_state(self, ch):
         """Capture one channel's visible Multiband controls."""
@@ -3932,25 +4043,12 @@ class Win(Adw.ApplicationWindow):
         state = io24_mbc.default_snapshot(enabled=ch in self._insert_wanted())
         state["xovers"] = [ctl["x%d" % index].get_value() for index in range(3)]
         for index, band in enumerate(io24_mbc.BANDS):
-            state["bands"][band] = {
-                "type": ("standard", "tube", "fet")[
-                    ctl[(index, "type")].get_selected()],
-                "threshold": ctl[(index, "thr")].get_value(),
-                "ratio": ctl[(index, "ratio")].get_value(),
-                "attack": ctl[(index, "attack")].get_value(),
-                "release": ctl[(index, "release")].get_value(),
-                "knee": ctl[(index, "knee")].get_value(),
-                "makeup": ctl[(index, "makeup")].get_value(),
-                "auto": ctl[(index, "auto")].get_active(),
-                "limit": ctl[(index, "limit")].get_active(),
-                "key_filter": ctl[(index, "keyon")].get_active(),
-                "key": ctl[(index, "keyf")].get_value(),
-                "listen": ctl[(index, "listen")].get_active(),
-            }
+            state["bands"][band] = self._mbc_band_state(ch, index)
         return io24_mbc.validate_snapshot(state)
 
     def _adopt_mbc_controls(self, ch, state):
         """Show one channel's saved Multiband settings without pushing them."""
+        state = io24_mbc.validate_snapshot(state)
         ctl = self.mbc_ctl[ch]
         prior, self._mbc_mute = self._mbc_mute, True
         try:
@@ -3958,18 +4056,31 @@ class Win(Adw.ApplicationWindow):
                 ctl["x%d" % index].set_value(value)
             for index, band in enumerate(io24_mbc.BANDS):
                 values = state["bands"][band]
+                model = values["type"]
                 ctl[(index, "type")].set_selected(
-                    ("standard", "tube", "fet").index(values["type"]))
-                for key, field in (("thr", "threshold"), ("ratio", "ratio"),
-                                   ("attack", "attack"),
-                                   ("release", "release"), ("knee", "knee"),
-                                   ("makeup", "makeup"), ("keyf", "key")):
-                    ctl[(index, key)].set_value(values[field])
-                for key, field in (("auto", "auto"), ("limit", "limit"),
-                                   ("keyon", "key_filter"),
-                                   ("listen", "listen")):
-                    ctl[(index, key)].set_active(values[field])
-                ctl[(index, "makeup")].set_sensitive(not values["auto"])
+                    io24_mbc.MODEL_NAMES.index(model))
+                ctl[(index, "stack")].set_visible_child_name(model)
+                standard = values["standard"]
+                for key, field in (
+                        ("s_thr", "threshold_db"), ("s_ratio", "ratio"),
+                        ("s_attack", "attack_s"), ("s_release", "release_s"),
+                        ("s_gain", "gain_db")):
+                    ctl[(index, key)].set_value(standard[field])
+                ctl[(index, "s_knee")].set_active(standard["softknee"])
+                ctl[(index, "s_auto")].set_active(standard["automode"])
+                tube = values["tube"]
+                ctl[(index, "t_peak")].set_value(tube["peak"])
+                ctl[(index, "t_gain")].set_value(tube["gain"])
+                ctl[(index, "t_limit")].set_active(tube["limit_mode"])
+                fet = values["fet"]
+                for key, field in (
+                        ("f_input", "input_db"), ("f_output", "output_db"),
+                        ("f_attack", "attack_s"), ("f_release", "release_s")):
+                    ctl[(index, key)].set_value(fet[field])
+                ctl[(index, "f_ratio")].set_selected(fet["ratio_index"])
+                ctl[(index, "keyf")].set_value(values["key"])
+                ctl[(index, "keyon")].set_active(values["key_filter"])
+                ctl[(index, "listen")].set_active(values["listen"])
         finally:
             self._mbc_mute = prior
 
@@ -4050,8 +4161,9 @@ class Win(Adw.ApplicationWindow):
         """What this computer lacks for Multiband, or None."""
         if not io24_mbc.pipewire_available():
             return "needs PipeWire (pipewire and pw-cli)"
-        if io24_mbc.sc4_available() is None:
-            return "needs swh-plugins: sudo apt install swh-plugins"
+        if io24_mbc.uc_comp_available() is None:
+            return "cannot build Host compressor: %s" % (
+                io24_mbc.uc_comp_error() or "unknown compiler error")
         return None
 
     def _multiband_selected(self, ch):
@@ -4092,7 +4204,9 @@ class Win(Adw.ApplicationWindow):
                 else:
                     states = {ch: self._mbc_snapshot_state(ch)
                               for ch in wanted}
-                    if not insert.start(states, capture, sink):
+                    if not insert.start(
+                            states, capture, sink,
+                            sample_rate=getattr(self, "_fs", 48000.0)):
                         self._insert_give_up(
                             wanted, "Multiband did not start: %s"
                             % insert.last_error)
@@ -4683,6 +4797,68 @@ class Win(Adw.ApplicationWindow):
             sg.add(r)
         page.add(sg)
 
+        # A real Host-side spring tank, not another character preset for the
+        # device's one shared digital reverb. The PipeWire graph is wet-only:
+        # Inputs 1/2 feed it after the Fat Channel, USB playback 5-6 carries
+        # the return, and that lane is reserved for physical Main 1-2 only
+        # while the switch is on.
+        spring = Adw.PreferencesGroup(title="Host spring reverb")
+        self.spring_on = Adw.SwitchRow(
+            title="Spring tank",
+            subtitle="Off · wet return is reserved for Main 1–2 only")
+        self.spring_on.set_subtitle_lines(2)
+        self.spring_on.connect("notify::active", self._spring_toggled)
+        spring.add(self.spring_on)
+
+        lane = Adw.ActionRow(
+            title="Output: Main 1–2",
+            subtitle="USB playback 5–6 is the internal wet-return lane; "
+                     "normal playback 1–2 stays untouched. Disconnect any "
+                     "Main-to-input test loopback before enabling.")
+        lane.set_subtitle_lines(3)
+        spring.add(lane)
+
+        defaults = io24_spring.default_state()
+        self.spring_controls = {}
+        for key, title, lower, upper, step, formatter, note in (
+                ("input1_db", "Input 1 send", -60.0, 0.0, 0.1,
+                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v,
+                 "Post-Fat Channel send into the spring"),
+                ("input2_db", "Input 2 send", -60.0, 0.0, 0.1,
+                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v,
+                 "Post-Fat Channel send into the spring"),
+                ("dwell", "Dwell", 0.0, 1.0, 0.005,
+                 lambda v: "%.0f %%" % (v * 100),
+                 "Tank feedback and tail length"),
+                ("tone", "Tone", 0.0, 1.0, 0.005,
+                 lambda v: "%.0f %%" % (v * 100),
+                 "Loss in the springs: dark to bright"),
+                ("drip", "Drip", 0.0, 1.0, 0.005,
+                 lambda v: "%.0f %%" % (v * 100),
+                 "Transient splash and dispersion"),
+                ("width", "Stereo width", 0.0, 1.0, 0.005,
+                 lambda v: "%.0f %%" % (v * 100),
+                 "Zero is mono; 100% keeps both tank paths"),
+                ("predelay_s", "Pre-delay", 0.0, 0.1, 0.0005,
+                 lambda v: "%.0f ms" % (v * 1000),
+                 "Delay before the tank is struck")):
+            row, control = self._srow(
+                title, lower, upper, step, defaults[key], formatter,
+                lambda _value: self._spring_controls_changed(), note)
+            self.spring_controls[key] = control
+            spring.add(row)
+
+        row, self.spring_return_control = self._srow(
+            "Spring return → Main 1–2", -60.0, 10.0, 0.1,
+            io24_spring.DEFAULT_RETURN_DB,
+            lambda v: "%.1f dB" % v,
+            self._spring_return_changed,
+            "The return is never assigned to Mix A or Mix B")
+        self.spring_return_row = row
+        self.spring_return_control.set_sensitive(False)
+        spring.add(row)
+        page.add(spring)
+
         # Block 201 is one settings object over two structural input lanes.
         # Configure it once; processingChannel is separate routing state and
         # must not be changed by an FX edit.
@@ -5064,6 +5240,211 @@ class Win(Adw.ApplicationWindow):
             self._adopt_mute = prior_adopt
         return None
 
+    # ------------------------------------------------------ Host spring tank
+    def _spring_state(self):
+        """Complete Host-only spring settings plus this session's route loan."""
+        controls = getattr(self, "spring_controls", None)
+        switch = getattr(self, "spring_on", None)
+        if not controls or switch is None:
+            return None
+        state = io24_spring.default_state(switch.get_active())
+        for name, control in controls.items():
+            state[name] = float(control.get_value())
+        state["routing"] = getattr(self, "_spring_routing", None)
+        return io24_spring.validate_state(state)
+
+    def _spring_show(self, detail=None):
+        row = getattr(self, "spring_on", None)
+        if row is None:
+            return False
+        wanted = bool(row.get_active())
+        chain = getattr(self, "spring", None)
+        if detail is not None:
+            subtitle = detail
+        elif wanted and chain is not None and chain.running and \
+                self._spring_routing is not None:
+            subtitle = ("On · wet Input 1/2 spring → physical Main 1–2 "
+                        "(USB playback 5–6 return)")
+        elif wanted:
+            subtitle = "Starting · reserving the wet return for Main 1–2"
+        else:
+            subtitle = "Off · wet return is reserved for Main 1–2 only"
+        row.set_subtitle(subtitle)
+        control = getattr(self, "spring_return_control", None)
+        if control is not None:
+            control.set_sensitive(wanted)
+        return False
+
+    def _spring_toggled(self, *_args):
+        if self._spring_mute or self._adopt_mute:
+            return
+        self._spring_show()
+        self._spring_reconcile()
+
+    def _spring_controls_changed(self):
+        if self._spring_mute or self._adopt_mute:
+            return
+        chain = getattr(self, "spring", None)
+        state = self._spring_state()
+        if chain is not None and chain.running and state is not None and \
+                not chain.set_state(state):
+            self.say("Spring control did not reach PipeWire")
+
+    def _spring_return_changed(self, value):
+        switch = getattr(self, "spring_on", None)
+        if self._spring_mute or self._adopt_mute or switch is None or \
+                not switch.get_active():
+            return
+        self.ctl.submit(lambda dev: dev.set_mix_db(
+            io24_spring.RETURN_SOURCE, float(value), bus="main"))
+
+    def _spring_route_main(self):
+        if self._spring_route_pending:
+            return
+        self._spring_route_pending = True
+
+        def work(dev):
+            try:
+                self._spring_routing = io24_spring.route_main_only(
+                    dev, self._spring_routing)
+                message = None
+            except Exception as error:
+                message = "Spring return could not reach Main: %s" % error
+            finally:
+                self._spring_route_pending = False
+            GLib.idle_add(self._sync_mix_widgets)
+            GLib.idle_add(self._spring_show)
+            if message:
+                GLib.idle_add(self.say, message)
+
+        self.ctl.submit(work)
+
+    def _spring_restore_routes(self):
+        if self._spring_route_pending or self._spring_routing is None:
+            return
+        self._spring_route_pending = True
+
+        def work(dev):
+            try:
+                self._spring_routing = io24_spring.restore_routes(
+                    dev, self._spring_routing)
+                message = None
+            except Exception as error:
+                message = "Spring return routes could not be restored: %s" % error
+            finally:
+                self._spring_route_pending = False
+            GLib.idle_add(self._sync_mix_widgets)
+            GLib.idle_add(self._spring_show)
+            if message:
+                GLib.idle_add(self.say, message)
+
+        self.ctl.submit(work)
+
+    def _spring_give_up(self, message):
+        prior, self._spring_mute = self._spring_mute, True
+        try:
+            self.spring_on.set_active(False)
+        finally:
+            self._spring_mute = prior
+        self.spring.stop()
+        self._spring_restore_routes()
+        self._spring_show("Off · %s" % message)
+        self.say(message)
+
+    def _spring_reconcile(self, restart=False):
+        """Match the PipeWire tank and borrowed Main-only route to the switch."""
+        chain = getattr(self, "spring", None)
+        switch = getattr(self, "spring_on", None)
+        if chain is None or switch is None:
+            return
+        wanted = bool(switch.get_active())
+        if not wanted:
+            chain.stop()
+            self._spring_restore_routes()
+            self._spring_show()
+            return
+        if self.ctl.dev is None:
+            chain.stop()
+            self._spring_route_pending = False
+            self._spring_show("Waiting for the io24")
+            return
+        missing = io24_spring.available()
+        if missing:
+            self._spring_give_up("Host spring %s" % missing)
+            return
+        capture = io24_mbc.find_io24_capture_source()
+        playback = io24_mbc.find_io24_sink()
+        if not capture or not playback:
+            chain.stop()
+            self._spring_show("Waiting for the io24 audio profile in PipeWire")
+            return
+        state = self._spring_state()
+        try:
+            if restart:
+                chain.stop()
+            started = chain.start(state, capture, playback)
+        except (OSError, ValueError, io24_spring.PluginBuildError) as error:
+            self._spring_give_up("Host spring did not start: %s" % error)
+            return
+        if not started:
+            self._spring_give_up(
+                "Host spring did not start: %s" %
+                (chain.last_error or "unknown PipeWire error"))
+            return
+        self._spring_route_main()
+        self._spring_show()
+
+    def _spring_watchdog(self):
+        chain = getattr(self, "spring", None)
+        switch = getattr(self, "spring_on", None)
+        if chain is None or switch is None:
+            return True
+        wanted = bool(switch.get_active())
+        if self.ctl.dev is None:
+            if chain.running:
+                chain.stop()
+            self._spring_route_pending = False
+            if wanted:
+                self._spring_show("Waiting for the io24")
+            return True
+        if (wanted and (not chain.running or self._spring_routing is None)) or \
+                (not wanted and (chain.running or
+                                 self._spring_routing is not None)):
+            self._spring_reconcile()
+        return True
+
+    def _adopt_spring_state(self, state):
+        if state is None:
+            return None
+        try:
+            state = io24_spring.validate_state(state)
+        except (TypeError, ValueError) as error:
+            return "Host spring was not restored: %s" % error
+        if not getattr(self, "spring_controls", None):
+            return "Host spring state retained; controls unavailable here"
+        if self._spring_routing is None and state["routing"] is not None:
+            self._spring_routing = state["routing"]
+        prior_adopt, prior_spring = self._adopt_mute, self._spring_mute
+        self._adopt_mute = True
+        self._spring_mute = True
+        try:
+            for name, control in self.spring_controls.items():
+                control.set_value(state[name])
+            self.spring_on.set_active(state["enabled"])
+        finally:
+            self._spring_mute = prior_spring
+            self._adopt_mute = prior_adopt
+        self._spring_reconcile()
+        return "Host spring restored%s" % (
+            " on Main 1–2" if state["enabled"] else " switched off")
+
+    def _spring_shutdown(self):
+        chain = getattr(self, "spring", None)
+        if chain is not None:
+            chain.stop()
+        self._spring_routing = release_spring_routing(
+            getattr(self, "ctl", None), self._spring_routing)
+
     def _mark_processing_mix_known(self, channel):
         self.processing_mix_rows[channel].set_subtitle(
             "Host-known exact value; device readback reports only bypass/nonzero")
@@ -5203,6 +5584,7 @@ class Win(Adw.ApplicationWindow):
         self.mix_widgets = {}
         self.bus_master_widgets = {}
         self.bus_mute_widgets = {}
+        self.mirror_widgets = {}
         self.source_mute_widgets = {}
         self.solo_widgets = {}
         self._mix_mute = False
@@ -5261,20 +5643,16 @@ class Win(Adw.ApplicationWindow):
             bus_mute.connect("toggled", self._bus_mute_toggled, bus)
             cellbox.append(bus_mute)
             if bus != "main":
-                mir = Gtk.Button(icon_name="edit-copy-symbolic",
-                                 valign=Gtk.Align.CENTER)
+                mir = Gtk.ToggleButton(icon_name="view-refresh-symbolic",
+                                       valign=Gtk.Align.CENTER)
                 mir.add_css_class("flat")
                 mir.set_tooltip_text(
-                    "Mirror main: copy the main mix's send levels into this "
-                    "bus once — it does not keep following")
-
-                def do_mirror(_b, b=bus):
-                    self.ctl.submit(lambda dev: dev.mirror_main(b))
-                    GLib.timeout_add(140, self._sync_mix_widgets)
-                    self.say("%s mirrored from the main mix"
-                             % b.replace("mix", "Mix ").title())
-                mir.connect("clicked", do_mirror)
+                    "Mirror Main: while active, this bus follows Main levels, "
+                    "assignments, and stereo-pair balance; its own mix is "
+                    "retained and returns when the latch is cleared")
+                mir.connect("toggled", self._mirror_main_toggled, bus)
                 cellbox.append(mir)
+                self.mirror_widgets[bus] = mir
             grid.attach(cellbox, 1 + col, 1, 1, 1)
             self.bus_master_widgets[bus] = msc
             self.bus_mute_widgets[bus] = bus_mute
@@ -5374,6 +5752,16 @@ class Win(Adw.ApplicationWindow):
             lambda dev: dev.set_bus_mute(bus, button.get_active()))
         GLib.timeout_add(140, self._sync_mix_widgets)
 
+    def _mirror_main_toggled(self, button, bus):
+        if self._mix_mute:
+            return
+        enabled = button.get_active()
+        self.ctl.submit(lambda dev: dev.set_mirror_main(bus, enabled))
+        GLib.timeout_add(140, self._sync_mix_widgets)
+        self.say("%s %s Main" % (
+            bus.replace("mix", "Mix ").title(),
+            "now follows" if enabled else "restored its retained mix from"))
+
     def _solo_toggled(self, button, src, bus):
         if self._mix_mute:
             return
@@ -5396,13 +5784,18 @@ class Win(Adw.ApplicationWindow):
         self._mix_mute = True
         try:
             for (src, bus), (sc, off) in self.mix_widgets.items():
-                lvl = dev.send_db(src, bus)
-                known = dev.has_send_level(src, bus)
+                mirrored = bus in ("mixa", "mixb") and \
+                    dev.mirror_main_enabled(bus)
+                display_bus = "main" if mirrored else bus
+                lvl = dev.send_db(src, display_bus)
+                known = dev.has_send_level(src, display_bus)
                 if lvl is not None:
                     sc.set_value(max(-60.0, min(10.0, lvl)))
-                assigned = dev.send_assigned(src, bus) if known else False
+                assigned = dev.send_assigned(
+                    src, display_bus) if known else False
                 off.set_active(not assigned)
-                sc.set_sensitive(assigned)
+                sc.set_sensitive(assigned and not mirrored)
+                off.set_sensitive(not mirrored)
                 if known:
                     off.set_tooltip_text(
                         "Take this source out of the bus; its fader position "
@@ -5418,19 +5811,53 @@ class Win(Adw.ApplicationWindow):
                 mute.set_active(dev.source_muted(source))
             for bus, mute in getattr(self, "bus_mute_widgets", {}).items():
                 mute.set_active(dev.bus_muted(bus))
+            for bus, mirror in getattr(self, "mirror_widgets", {}).items():
+                mirror.set_active(dev.mirror_main_enabled(bus))
             for (src, bus), solo in getattr(self, "solo_widgets", {}).items():
                 solo.set_active(dev.soloed(src, bus))
+            spring_return = getattr(self, "spring_return_control", None)
+            if spring_return is not None and dev.has_send_level(
+                    io24_spring.RETURN_SOURCE, "main"):
+                level = dev.send_db(io24_spring.RETURN_SOURCE, "main")
+                if level is not None:
+                    prior_spring, self._spring_mute = self._spring_mute, True
+                    try:
+                        spring_return.set_value(
+                            max(-60.0, min(10.0, float(level))))
+                    finally:
+                        self._spring_mute = prior_spring
         finally:
             self._mix_mute = False
         return False
 
     def _load_host_slot_entries(self):
-        """Read the identity-bound registry into the Host's own slot view."""
+        """Read both Host-known device record registries."""
+        identity = None
+        ctl = getattr(self, "ctl", None)
+        if ctl is not None and ctl.dev is not None:
+            try:
+                identity = ctl.dev.dev._device_slot_identity()
+            except (AttributeError, TypeError, ValueError):
+                pass
         try:
-            entries = self.device_slot_registry.entries()
+            entries = (
+                self.device_slot_registry.entries()
+                if ctl is None else
+                self.device_slot_registry.entries(device_identity=identity)
+                if identity is not None else [])
         except Exception:
             entries = []
         self._host_slot_entries = entries
+        try:
+            library = (
+                self.device_preset_library_registry.entries()
+                if ctl is None else
+                self.device_preset_library_registry.entries(
+                    device_identity=identity)
+                if identity is not None else [])
+        except Exception:
+            library = []
+        self._host_device_preset_entries = library
         self._slot_names_by_channel = {
             channel: [entry["record"]["preset_name"] for entry in entries
                       if entry["physical_channel"] == channel]
@@ -5928,6 +6355,32 @@ class Win(Adw.ApplicationWindow):
             idg.add(row)
         page.add(idg)
 
+        host_names = Adw.PreferencesGroup(title="Host component names")
+        host_names.set_description(
+            "Stored with Linux Host presets and UC scenes. The io24 has no "
+            "wire command for writing these labels to firmware.")
+        stored_names = {}
+        for call in io24._load_shadow().values():
+            if isinstance(call, dict) and \
+                    call.get("fn") == "set_component_name":
+                kwargs = call.get("kwargs") or {}
+                stored_names[kwargs.get("component")] = kwargs.get("name", "")
+        self.component_name_rows = {}
+        for component, title in (
+                ("line/ch1", "Input 1"), ("line/ch2", "Input 2"),
+                ("return/ch1", "USB playback 1–2"),
+                ("return/ch2", "USB playback 3–4"),
+                ("return/ch3", "USB playback 5–6"),
+                ("fxreturn/ch1", "FX return"),
+                ("aux/ch1", "Mix A"), ("aux/ch2", "Mix B"),
+                ("main/ch1", "Main")):
+            row = Adw.EntryRow(title=title, text=stored_names.get(component, ""))
+            row.set_show_apply_button(True)
+            row.connect("apply", self._component_name_applied, component)
+            host_names.add(row)
+            self.component_name_rows[component] = row
+        page.add(host_names)
+
         # Channel names, read from the device's 'CHNP' table (PROTOCOL.md §13j).
         # Read ONCE, not polled: the table is static, and this device dislikes
         # control traffic during streaming (§12G).
@@ -5938,7 +6391,8 @@ class Win(Adw.ApplicationWindow):
         # synchronous USB read on the GTK main thread would block the UI. The
         # group is created hidden and revealed only if the device answers, so a
         # device that returns nothing simply shows no section.
-        self._names_group = Adw.PreferencesGroup(title="Channel names")
+        self._names_group = Adw.PreferencesGroup(
+            title="Device-reported channel names (read-only)")
         self._names_group.set_visible(False)
         page.add(self._names_group)
         self.ctl.submit(
@@ -5948,6 +6402,11 @@ class Win(Adw.ApplicationWindow):
 
         GLib.timeout_add(1500, self._refresh_device_page)
         return page
+
+    def _component_name_applied(self, row, component):
+        name = row.get_text().strip()
+        self.ctl.submit(lambda dev: dev.set_component_name(component, name))
+        self.say("Saved %s name in the Linux Host" % row.get_title())
 
     def _fill_channel_names(self):
         """Populate the channel-name group once the worker thread has read it.
@@ -6224,6 +6683,17 @@ class Win(Adw.ApplicationWindow):
         self.factory_target.set_selected(0)
         g.add(self.factory_target)
 
+        self.device_preset_slot = Adw.ComboRow(
+            title="Device Presets destination",
+            subtitle="Six UC library entries per Load into channel; separate "
+                     "from the four front-panel button blocks",
+            model=Gtk.StringList.new([
+                "Preset 1", "Preset 2", "Preset 3",
+                "Preset 4", "Preset 5", "Preset 6",
+            ]))
+        self.device_preset_slot.set_selected(0)
+        g.add(self.device_preset_slot)
+
         search_row = Adw.ActionRow(title="Find a preset")
         self.factory_search = Gtk.SearchEntry(
             placeholder_text="Search presets…", valign=Gtk.Align.CENTER)
@@ -6254,7 +6724,8 @@ class Win(Adw.ApplicationWindow):
         scenes = Adw.PreferencesGroup(title="Scenes")
         scene_row = Adw.ActionRow(
             title="Universal Control scene",
-            subtitle="Host-known state only. Device preset blocks are never overwritten")
+            subtitle="Includes every complete preset body known to this Host; "
+                     "loading never overwrites the device library")
         scene_save = Gtk.Button(label="Save scene…", valign=Gtk.Align.CENTER)
         scene_save.add_css_class("flat")
         scene_save.connect("clicked", self._save_scene_clicked)
@@ -6284,6 +6755,25 @@ class Win(Adw.ApplicationWindow):
         self._populate_factory_presets()
         return page
 
+    def _scene_preset_state(self, dev):
+        """Return every complete device record this Host knows for this unit."""
+        identity = dev._device_slot_identity()
+        slots = {
+            str(entry["slot"]): entry["record"]
+            for entry in self.device_slot_registry.entries(
+                device_identity=identity)
+        }
+        userpresets = {
+            "%d.%s.channel" % (
+                entry["user_index"], entry["record"]["preset_name"]):
+            entry["record"]
+            for entry in self.device_preset_library_registry.entries(
+                device_identity=identity)
+        }
+        return json.loads(json.dumps({
+            "slots": slots, "userpresets": userpresets,
+        }))
+
     def _save_scene_clicked(self, _button):
         if self.ctl.dev is None:
             self.say("Scene not saved: io24 is not connected")
@@ -6307,8 +6797,9 @@ class Win(Adw.ApplicationWindow):
 
             def work(dev, destination=path, features=host_features):
                 try:
+                    preset_state = self._scene_preset_state(dev)
                     scene, omitted = io24_scene.capture(
-                        dev, host_features=features)
+                        dev, host_features=features, presets=preset_state)
                     io24_scene.save(
                         destination, scene, sample_rate_hz=self._fs)
                     calls, _skips = io24_scene.plan(
@@ -6320,9 +6811,14 @@ class Win(Adw.ApplicationWindow):
                 GLib.idle_add(
                     self.say,
                     "Saved %s: %d Host-known settings; %d unavailable "
-                    "value%s omitted; device preset blocks were not exported" %
+                    "value%s omitted; %d front-panel block bod%s and %d "
+                    "Device Preset%s retained" %
                     (os.path.basename(destination), len(calls), len(omitted),
-                     "" if len(omitted) == 1 else "s"))
+                     "" if len(omitted) == 1 else "s",
+                     len(preset_state["slots"]),
+                     "y" if len(preset_state["slots"]) == 1 else "ies",
+                     len(preset_state["userpresets"]),
+                     "" if len(preset_state["userpresets"]) == 1 else "s"))
 
             self.ctl.submit(work)
 
@@ -6422,13 +6918,25 @@ class Win(Adw.ApplicationWindow):
         for entry in getattr(self, "_host_slot_entries", []):
             channel = entry["physical_channel"]
             block = entry["slot"] - self.PRESET_BASE[channel] + 1
-            subtitle = ("Host-written candidate · Channel %d, block %d · "
-                        "device body readback unavailable" % (channel, block))
+            subtitle = ("Legacy front-panel block receipt · Channel %d, "
+                        "block %d · Host-assisted Load; UC has no Store action "
+                        "for these four selectors" % (channel, block))
             row = Adw.ActionRow(title=entry["record"]["preset_name"],
                                 subtitle=subtitle)
             load = lambda e=entry: self._load_device_entry(e)
             row.add_suffix(self._preset_load_button(load))
             self._unit_preset_rows[entry["slot"]] = (row, subtitle)
+            rows.append(row)
+        for entry in getattr(self, "_host_device_preset_entries", []):
+            subtitle = (
+                "Device Presets · Channel %d, preset %d · %s; body readback "
+                "unavailable, Load replays the retained record" %
+                (entry["physical_channel"], entry["channel_slot"] + 1,
+                 entry["status"]))
+            row = Adw.ActionRow(
+                title=entry["record"]["preset_name"], subtitle=subtitle)
+            load = lambda e=entry: self._load_device_library_entry(e)
+            row.add_suffix(self._preset_load_button(load))
             rows.append(row)
         try:
             saved = self.PR.load_user_presets()
@@ -6501,7 +7009,7 @@ class Win(Adw.ApplicationWindow):
         return button
 
     def _preset_menu(self, name, record, source, deletable=False):
-        """One preset's actions: store its Fat Channel candidate, or delete."""
+        """One preset's actions: UC Device Presets store, or local delete."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         popover = Gtk.Popover(child=box)
 
@@ -6517,13 +7025,12 @@ class Win(Adw.ApplicationWindow):
             box.append(button)
             return button
 
-        for block in (1, 2):
-            button = item(
-                "Store Fat Channel on device, block %d" % block,
-                lambda b=block: self._put_on_unit(name, record, b - 1, source))
-            if PUT_ON_UNIT_UNAVAILABLE:
-                button.set_sensitive(False)
-                button.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE)
+        button = item(
+            "Send to Device Presets",
+            lambda: self._put_in_device_library(name, record, source))
+        if PUT_ON_UNIT_UNAVAILABLE:
+            button.set_sensitive(False)
+            button.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE)
         if deletable:
             item("Delete", lambda: self._confirm_user_delete(name))
         menu = Gtk.MenuButton(icon_name="view-more-symbolic", popover=popover,
@@ -6531,7 +7038,8 @@ class Win(Adw.ApplicationWindow):
         menu.add_css_class("flat")
         menu.set_tooltip_text(
             PUT_ON_UNIT_UNAVAILABLE or
-            "Store a Fat Channel candidate on the device, or delete")
+            "Store in UC's six-entry Device Presets library for the selected "
+            "channel, or delete the Host copy")
         return menu
 
     def _filter_presets(self):
@@ -6580,6 +7088,14 @@ class Win(Adw.ApplicationWindow):
         else:
             self._load_factory(None, name, True, record=entry["record"],
                                channels=chans)
+
+    def _load_device_library_entry(self, entry):
+        """UC-equivalent RestorePreset: replay a retained library body."""
+        name = entry["record"].get("preset_name", "that preset")
+        target = self._factory_target_channel()
+        channels = (1, 2) if self.link_both else (target,)
+        self._load_factory(
+            None, name, True, record=entry["record"], channels=channels)
 
     def _slot_base_name(self):
         """The factory record that supplies fields the Host does not expose."""
@@ -6652,6 +7168,83 @@ class Win(Adw.ApplicationWindow):
             return
         self._populate_user_presets()
         self.say("Deleted %s" % name)
+
+    def _prepare_device_library_store(self, name, record, source):
+        """Resolve one of UC's six per-input ``PrsM`` destinations."""
+        if self.ctl.dev is None:
+            raise io24.HostActionError("io24 is not connected")
+        channel = self._factory_target_channel()
+        row = getattr(self, "device_preset_slot", None)
+        channel_slot = int(row.get_selected()) if row is not None else 0
+        if not 0 <= channel_slot < 6:
+            raise io24.HostActionError(
+                "Device Presets destination must be Preset 1 through 6")
+        user_index = (16 if channel == 1 else 22) + channel_slot
+        body = complete_device_slot_record(record)
+        body["preset_name"] = name
+        return {
+            "name": name, "record": body, "source": source,
+            "target": channel, "channel_slot": channel_slot,
+            "user_index": user_index,
+        }
+
+    def _put_in_device_library(self, name, record, source):
+        """Confirm and queue UC's actual Device Presets Store transaction."""
+        try:
+            plan = self._prepare_device_library_store(
+                name, record, source)
+        except Exception as error:
+            self.say("%s was not sent to Device Presets: %s" % (name, error))
+            return
+        replaced = next((
+            entry["record"]["preset_name"]
+            for entry in getattr(self, "_host_device_preset_entries", [])
+            if entry["user_index"] == plan["user_index"]), None)
+        destination = "Channel %d Device Preset %d" % (
+            plan["target"], plan["channel_slot"] + 1)
+        prior = ("The Host last sent %s there. " % replaced) if replaced else ""
+        self._confirm(
+            "Send %s to %s?" % (name, destination),
+            prior + "This uses Universal Control's MemP/PrsM Store route. "
+            "The device does not expose a readback for the stored body, so "
+            "the result remains WRITE_SENT_UNVERIFIED until independently "
+            "verified. It does not assign a front-panel button block.",
+            "Send", lambda: self._queue_device_library_store(plan))
+
+    def _queue_device_library_store(self, plan):
+        def work(dev, prepared=plan):
+            try:
+                result = dev.save_known_device_library_preset(
+                    prepared["user_index"], prepared["record"],
+                    self.device_preset_library_registry, prepared["source"])
+                transport = result["transport"]
+                message = (
+                    "Sent %s to Channel %d Device Preset %d (%d frame%s, "
+                    "%d repl%s); status %s; stored-body readback unavailable" %
+                    (prepared["name"], prepared["target"],
+                     prepared["channel_slot"] + 1,
+                     transport["fragments_sent"],
+                     "" if transport["fragments_sent"] == 1 else "s",
+                     transport["replies_received"],
+                     "y" if transport["replies_received"] == 1 else "ies",
+                     result["registry"]["status"]))
+            except Exception as error:
+                report = getattr(error, "device_preset_transport", None)
+                message = (
+                    "Device Presets body was not sent: %s" % error
+                    if report is None else
+                    "Device Presets transport returned, but the local "
+                    "receipt failed: %s" % error)
+                GLib.idle_add(self.say, message)
+                return
+            GLib.idle_add(self._device_library_saved, message)
+
+        self.ctl.submit(work)
+
+    def _device_library_saved(self, message):
+        self._refresh_host_slot_entries()
+        self.say(message)
+        return False
 
     def _prepare_record_slot_store(self, name, record, relative_slot, source):
         """Plan writing one preset into a block of the Load into channel."""
@@ -7405,6 +7998,9 @@ class Win(Adw.ApplicationWindow):
         for name in ("ckey_row", "cklisten"):
             if name in W:
                 W[name].set_visible(model != MULTIBAND_MODEL)
+        # The single transfer curve has no truthful meaning for four parallel
+        # bands; the rack miniature above represents all four instead.
+        W["comp_curve"].set_visible(model != MULTIBAND_MODEL)
         W["comp_curve"].queue_draw()
         if not self._adopt_mute:
             self._dyn_push("comp", ch)
@@ -7744,6 +8340,10 @@ class Win(Adw.ApplicationWindow):
         reverb_character = self._reverb_character_state()
         if reverb_character is not None:
             host_features["reverb_character"] = reverb_character
+        spring_state = getattr(self, "_spring_state", None)
+        spring = spring_state() if callable(spring_state) else None
+        if spring is not None:
+            host_features["spring_reverb"] = spring
         autogain = sorted(c for c, on in
                           getattr(self, "_autogain_on", {}).items() if on)
         if autogain:
@@ -7900,6 +8500,9 @@ class Win(Adw.ApplicationWindow):
         if previous is not None:
             # a new connection: the insert's streams went with the old one
             self._insert_reconcile(restart=True)
+            spring_reconcile = getattr(self, "_spring_reconcile", None)
+            if callable(spring_reconcile):
+                spring_reconcile(restart=True)
 
     def _resume_session(self, first=True, path=None):
         """Pick up where the last session left off.
@@ -8188,6 +8791,11 @@ class Win(Adw.ApplicationWindow):
                     self.link_row.set_active(state["link"])
                 finally:
                     self._link_mute = prior_link
+
+            for component, name in state["component_names"].items():
+                row = getattr(self, "component_name_rows", {}).get(component)
+                if row is not None:
+                    row.set_text(name)
         finally:
             self._phones_source_mute = prior_phones
             self._preset_sync = prior_preset
@@ -8213,13 +8821,15 @@ class Win(Adw.ApplicationWindow):
                 host_features.get("multiband_insert"))
             reverb_message = self._adopt_reverb_character(
                 host_features.get("reverb_character"))
+            spring_message = self._adopt_spring_state(
+                host_features.get("spring_reverb"))
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
             host_messages = [message for message in
                              (standard_eq_message, alternate_eq_message,
                               multiband_message,
-                              insert_message,
-                              reverb_message, autogain_message) if message]
+                              insert_message, reverb_message, spring_message,
+                              autogain_message) if message]
         self._insert_reconcile()
         if completion_message is not None:
             completion_message = append_host_migration_notices(
@@ -8333,7 +8943,9 @@ class Win(Adw.ApplicationWindow):
             if r.get_mapped():
                 r.queue_draw()
         muted = s.get("mainmute")
-        self.mainmute_row.set_text("Main out: MUTED" if muted else "Main out: on")
+        self.mainmute_row.set_text(
+            "Physical Main Mute (read-only): MUTED" if muted else
+            "Physical Main Mute (read-only): on")
         if muted:
             self.mainmute_row.add_css_class("error")
         else:
@@ -8552,6 +9164,20 @@ def release_insert_routing(ctl, routing):
     return routing if routing["moved"] or routing["return_prior"] else None
 
 
+def release_spring_routing(ctl, routing):
+    """Restore playback 5-6's three bus assignments before Host exit."""
+    if not routing:
+        return None
+    dev = getattr(ctl, "dev", None)
+    if dev is None:
+        return routing
+    try:
+        with dev.lock:
+            return io24_spring.restore_routes(dev.dev, routing)
+    except Exception:
+        return routing
+
+
 def snapshot_host_features(features):
     """Host features as a snapshot file keeps them. What the Host changed in
     the unit's mixer and in PipeWire belongs to this session, not the file."""
@@ -8560,6 +9186,9 @@ def snapshot_host_features(features):
     if insert is not None:
         features["multiband_insert"] = dict(
             insert, routing=None, quantum_before=None)
+    spring = features.get("spring_reverb")
+    if spring is not None:
+        features["spring_reverb"] = dict(spring, routing=None)
     return features
 
 
@@ -8575,6 +9204,8 @@ class App(Adw.Application):
         # input back, and no orphan process left behind
         if w is not None and getattr(w, "insert", None) is not None:
             w._insert_shutdown()
+        if w is not None and getattr(w, "spring", None) is not None:
+            w._spring_shutdown()
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()
         # Remember this session for the next launch; a window that never

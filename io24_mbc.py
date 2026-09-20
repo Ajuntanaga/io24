@@ -14,18 +14,20 @@ themselves to playback or pretend to be device DSP.
 
 Topology of one channel's graph, all standard pieces:
 
-    in -> [LR4 low     ] -> sc3 -> \\
-       -> [LR4 low-mid ] -> sc3 ->  mixer -> out
-       -> [LR4 high-mid] -> sc3 ->
-       -> [LR4 high    ] -> sc3 -> /
+    in -> [LR4 low     ] -> UC comp -> \\
+       -> [LR4 low-mid ] -> UC comp ->  mixer -> out
+       -> [LR4 high-mid] -> UC comp ->
+       -> [LR4 high    ] -> UC comp -> /
 
 * The crossover is Linkwitz-Riley 4th order, built from PipeWire's builtin
   biquads (two cascaded Butterworth 2nd-order sections per leg — that IS an
   LR4), and each band also passes the all-pass of the splits it does not
   use, so the four bands sum flat (CROSSOVER_LEGS).
-* The per-band compressor is `sc3` from swh-plugins, the LADSPA stereo
-  compressor with a sidechain input (see SC3_SO). PipeWire 1.6's filter-chain
-  hosts LADSPA and builtins only (no LV2).
+* Each band uses the project's small LADSPA processor. Its controls are the
+  common `cpxt` tuple produced by the exact UC-derived Standard, Tube and FET
+  builders, including the model's side-chain biquad. PipeWire 1.6's
+  filter-chain hosts LADSPA and builtins only (no LV2), so the Host builds this
+  self-contained C processor into its user cache without sudo.
 * The chain runs in PipeWire's own process graph (C, realtime scheduled), not
   in this Python process — enabling it costs the app nothing.
 
@@ -42,6 +44,8 @@ import shutil
 import subprocess
 import tempfile
 import time
+
+import io24_uc_comp
 
 SINK_NAME = "io24-multiband"
 SINK_DESC = "io24 Multiband"
@@ -64,14 +68,8 @@ BUS_SOURCE_DESCRIPTIONS = {
 }
 CAPTURE_POSITIONS = ("FL", "FR", "FC", "LFE", "RL", "RR")
 
-# sc3 (swh-plugins, LADSPA 1427): stereo compressor with a dedicated mono
-# SIDECHAIN input and a "Chain balance" control — 0 means the detector reads
-# the band itself, 1 means it reads the sidechain. That is what makes per-band
-# key filtering and key listen possible. Port names read from the plugin's own
-# descriptor via ctypes, not guessed.
-SC3_SO = "sc3_1427"
-
 BANDS = ("low", "lowmid", "highmid", "high")
+MODEL_NAMES = ("standard", "tube", "fet")
 
 DEFAULTS = {
     "xovers": [150.0, 800.0, 4500.0],
@@ -85,33 +83,40 @@ DEFAULTS = {
                 "release": 80.0, "knee": 6.0, "makeup": 0.0, "key": 8000.0},
 }
 
-# Per-band character presets, mapped onto what sc3 actually has (it exposes no
-# RMS/peak switch, so the three types are shaped with time constants and knee):
-#   Standard — the balanced starting point
-#   Tube     — slow, soft-kneed, LA-2A-ish; Limit mode = steep ratio + faster grab
-#   FET      — fast and hard-kneed, 1176-ish
-TYPES = {
-    "standard": {"attack": 15.0, "release": 150.0, "knee": 3.0},
-    "tube":     {"attack": 30.0, "release": 300.0, "knee": 9.0},
-    "fet":      {"attack": 1.5,  "release": 80.0,  "knee": 1.0},
-}
-TUBE_LIMIT = {"ratio": 20.0, "attack": 8.0}
-
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2
 BUS_SOURCE_KEYS = ("mixa", "mixb")
-_BAND_RANGES = {
-    "threshold": (-40.0, 0.0),
-    "ratio": (1.0, 20.0),
-    "attack": (1.0, 100.0),
-    "release": (10.0, 800.0),
-    "knee": (0.0, 12.0),
-    "makeup": (0.0, 24.0),
-    "key": (30.0, 16000.0),
+_MODEL_FIELDS = {
+    "standard": frozenset({
+        "threshold_db", "ratio", "attack_s", "release_s", "gain_db",
+        "softknee", "automode",
+    }),
+    "tube": frozenset({"peak", "gain", "limit_mode"}),
+    "fet": frozenset({
+        "input_db", "output_db", "attack_s", "release_s", "ratio_index",
+    }),
+}
+_MODEL_RANGES = {
+    "standard": {
+        "threshold_db": (-56.0, 0.0), "ratio": (1.0, 20.0),
+        "attack_s": (0.0002, 0.15), "release_s": (0.0025, 0.9),
+        "gain_db": (0.0, 28.0),
+    },
+    "tube": {"peak": (0.0, 100.0), "gain": (0.0, 100.0)},
+    "fet": {
+        "input_db": (-56.0, 0.0), "output_db": (-56.0, 0.0),
+        "attack_s": (0.000021, 0.0008), "release_s": (0.05, 1.1),
+    },
+}
+_MODEL_BOOLEANS = {
+    "standard": ("softknee", "automode"),
+    "tube": ("limit_mode",),
+    "fet": (),
 }
 _BAND_FIELDS = frozenset({
-    "type", "threshold", "ratio", "attack", "release", "knee",
-    "makeup", "auto", "limit", "key_filter", "key", "listen",
+    "type", "standard", "tube", "fet", "key_filter", "key", "listen",
 })
+
+_LAST_PLUGIN_ERROR = None
 
 
 def _finite_number(value, name, low, high):
@@ -127,30 +132,138 @@ def _finite_number(value, name, low, high):
     return number
 
 
+def default_band(band):
+    """All three exact UC model vocabularies retained for one band."""
+    values = DEFAULTS[band]
+    return {
+        "type": "standard",
+        "standard": {
+            "threshold_db": float(values["threshold"]),
+            "ratio": float(values["ratio"]),
+            "attack_s": float(values["attack"]) / 1000.0,
+            "release_s": float(values["release"]) / 1000.0,
+            "gain_db": float(values["makeup"]),
+            "softknee": True,
+            "automode": False,
+        },
+        "tube": {"peak": 0.0, "gain": 40.0, "limit_mode": False},
+        "fet": {
+            "input_db": -43.0,
+            "output_db": 0.0,
+            "attack_s": 0.0001,
+            "release_s": 0.25,
+            "ratio_index": 0,
+        },
+        "key_filter": False,
+        "key": float(values["key"]),
+        "listen": False,
+    }
+
+
 def default_snapshot(enabled=False):
     """Return the complete computer-side state shown by the GTK controls."""
     return {
         "version": SNAPSHOT_VERSION,
         "enabled": bool(enabled),
         "xovers": list(DEFAULTS["xovers"]),
-        "bands": {
-            band: {
-                "type": "standard",
-                "threshold": float(DEFAULTS[band]["threshold"]),
-                "ratio": float(DEFAULTS[band]["ratio"]),
-                "attack": float(DEFAULTS[band]["attack"]),
-                "release": float(DEFAULTS[band]["release"]),
-                "knee": float(DEFAULTS[band]["knee"]),
-                "makeup": float(DEFAULTS[band]["makeup"]),
-                "auto": False,
-                "limit": False,
-                "key_filter": False,
-                "key": float(DEFAULTS[band]["key"]),
-                "listen": False,
-            }
-            for band in BANDS
-        },
+        "bands": {band: default_band(band) for band in BANDS},
     }
+
+
+def _legacy_fet_ratio_index(ratio):
+    ratio = float(ratio)
+    if ratio >= 19.5:
+        return 4
+    if ratio < 8.0:
+        return 0
+    if ratio < 12.0:
+        return 1
+    if ratio < 18.0:
+        return 2
+    return 3
+
+
+def _migrate_legacy_snapshot(state):
+    """Version 1 used generic sc3 controls; preserve its audible intent."""
+    legacy_fields = {
+        "type", "threshold", "ratio", "attack", "release", "knee",
+        "makeup", "auto", "limit", "key_filter", "key", "listen",
+    }
+    raw_bands = state.get("bands")
+    if not isinstance(raw_bands, dict) or set(raw_bands) != set(BANDS):
+        raise ValueError("multiband bands must contain low/lowmid/highmid/high")
+    migrated = {
+        "version": SNAPSHOT_VERSION,
+        "enabled": state.get("enabled"),
+        "xovers": state.get("xovers"),
+        "bands": {},
+    }
+    for band in BANDS:
+        raw = raw_bands[band]
+        if not isinstance(raw, dict) or set(raw) != legacy_fields:
+            raise ValueError("multiband %s fields are incomplete or unknown" % band)
+        kind = raw["type"]
+        if kind not in MODEL_NAMES:
+            raise ValueError("multiband %s type is invalid" % band)
+        for key in ("auto", "limit", "key_filter", "listen"):
+            if not isinstance(raw[key], bool):
+                raise ValueError("multiband %s %s must be Boolean" % (band, key))
+        threshold = _finite_number(raw["threshold"], band + " threshold", -40.0, 0.0)
+        ratio = _finite_number(raw["ratio"], band + " ratio", 1.0, 20.0)
+        attack_ms = _finite_number(raw["attack"], band + " attack", 1.0, 100.0)
+        release_ms = _finite_number(raw["release"], band + " release", 10.0, 800.0)
+        knee = _finite_number(raw["knee"], band + " knee", 0.0, 12.0)
+        makeup = _finite_number(raw["makeup"], band + " makeup", 0.0, 24.0)
+        key = _finite_number(raw["key"], band + " key", 30.0, 16000.0)
+        new = default_band(band)
+        new["type"] = kind
+        new["key_filter"] = raw["key_filter"]
+        new["key"] = max(40.0, key)
+        new["listen"] = raw["listen"]
+        new["standard"] = {
+            "threshold_db": max(-56.0, threshold),
+            "ratio": ratio,
+            "attack_s": max(0.0002, min(0.15, attack_ms / 1000.0)),
+            "release_s": max(0.0025, min(0.9, release_ms / 1000.0)),
+            "gain_db": min(28.0, makeup),
+            "softknee": knee >= 1.5,
+            "automode": bool(raw["auto"]),
+        }
+        new["tube"] = {
+            "peak": max(0.0, min(100.0, 2.0 * (1.0 - threshold))),
+            "gain": max(0.0, min(100.0, 40.0 + 2.0 * makeup)),
+            "limit_mode": bool(raw["limit"]),
+        }
+        new["fet"] = {
+            "input_db": max(-56.0, min(0.0, threshold)),
+            "output_db": 0.0,
+            "attack_s": max(0.000021, min(0.0008, attack_ms / 1000.0)),
+            "release_s": max(0.05, min(1.1, release_ms / 1000.0)),
+            "ratio_index": _legacy_fet_ratio_index(ratio),
+        }
+        migrated["bands"][band] = new
+    return migrated
+
+
+def _validate_model(band, model, raw):
+    if not isinstance(raw, dict) or set(raw) != _MODEL_FIELDS[model]:
+        raise ValueError("multiband %s %s fields are incomplete or unknown" %
+                         (band, model))
+    normalized = {}
+    for key, limits in _MODEL_RANGES[model].items():
+        normalized[key] = _finite_number(
+            raw[key], "%s %s %s" % (band, model, key), *limits)
+    for key in _MODEL_BOOLEANS[model]:
+        if not isinstance(raw[key], bool):
+            raise ValueError("multiband %s %s %s must be Boolean" %
+                             (band, model, key))
+        normalized[key] = raw[key]
+    if model == "fet":
+        index = raw["ratio_index"]
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index <= 4:
+            raise ValueError("multiband %s fet ratio_index must be 0..4" % band)
+        normalized["ratio_index"] = index
+    return normalized
 
 
 def validate_snapshot(state):
@@ -161,8 +274,10 @@ def validate_snapshot(state):
     if set(state) != expected:
         raise ValueError("multiband state fields must be %s" %
                          ", ".join(sorted(expected)))
-    if state["version"] != SNAPSHOT_VERSION:
-        raise ValueError("multiband snapshot version must be 1")
+    if state["version"] == 1:
+        state = _migrate_legacy_snapshot(state)
+    elif state["version"] != SNAPSHOT_VERSION:
+        raise ValueError("multiband snapshot version must be 1 or 2")
     if not isinstance(state["enabled"], bool):
         raise ValueError("multiband enabled must be Boolean")
     xovers = state["xovers"]
@@ -183,13 +298,14 @@ def validate_snapshot(state):
         if not isinstance(raw, dict) or set(raw) != _BAND_FIELDS:
             raise ValueError("multiband %s fields are incomplete or unknown" % band)
         kind = raw["type"]
-        if kind not in TYPES:
+        if kind not in MODEL_NAMES:
             raise ValueError("multiband %s type is invalid" % band)
         normalized = {"type": kind}
-        for key, (low, high) in _BAND_RANGES.items():
-            normalized[key] = _finite_number(
-                raw[key], "%s %s" % (band, key), low, high)
-        for key in ("auto", "limit", "key_filter", "listen"):
+        for model in MODEL_NAMES:
+            normalized[model] = _validate_model(band, model, raw[model])
+        normalized["key"] = _finite_number(
+            raw["key"], "%s key" % band, 40.0, 16000.0)
+        for key in ("key_filter", "listen"):
             if not isinstance(raw[key], bool):
                 raise ValueError("multiband %s %s must be Boolean" % (band, key))
             normalized[key] = raw[key]
@@ -202,28 +318,20 @@ def validate_snapshot(state):
     }
 
 
-def auto_makeup(threshold, ratio):
-    """Gain compensation from the settings, like the device compressors do.
+def uc_comp_available(cache_dir=None):
+    """Built plugin path, or None with a retained user-facing build error."""
+    global _LAST_PLUGIN_ERROR
+    try:
+        path = io24_uc_comp.build_plugin(cache_dir)
+    except io24_uc_comp.PluginBuildError as error:
+        _LAST_PLUGIN_ERROR = str(error)
+        return None
+    _LAST_PLUGIN_ERROR = None
+    return str(path)
 
-    The same shape the FET model uses: the deeper the threshold and the
-    steeper the ratio, the more static gain is returned. 0.7 rather than 1.0
-    because full-theoretical makeup overshoots on programme material.
-    """
-    return max(0.0, min(24.0, -threshold * (1.0 - 1.0 / max(1.0, ratio)) * 0.7))
 
-
-def sc4_available():
-    """Path of the sc4 LADSPA library, or None.
-
-    Checked, not assumed: the UI uses this to say plainly what is missing
-    ('sudo apt install swh-plugins') instead of failing at load time.
-    """
-    for d in ("/usr/lib/ladspa", "/usr/lib/x86_64-linux-gnu/ladspa",
-              "/usr/local/lib/ladspa"):
-        p = os.path.join(d, SC3_SO + ".so")
-        if os.path.exists(p):
-            return p
-    return None
+def uc_comp_error():
+    return _LAST_PLUGIN_ERROR
 
 
 def pipewire_available():
@@ -271,18 +379,23 @@ def _bq(name, label, freq):
             "control": {"Freq": float(freq), "Q": BUTTERWORTH_Q}}
 
 
-def _sc3(name, band, values=None):
-    b = values or DEFAULTS[band]
-    return {"type": "ladspa", "name": name, "plugin": SC3_SO, "label": "sc3",
-            "control": {
-                "Attack time (ms)": b["attack"],
-                "Release time (ms)": b["release"],
-                "Threshold level (dB)": b["threshold"],
-                "Ratio (1:n)": b["ratio"],
-                "Knee radius (dB)": b["knee"],
-                "Makeup gain (dB)": b["makeup"],
-                "Chain balance": 1.0 if b.get("key_filter", False) else 0.0,
-            }}                            # filter is engaged (balance -> 1)
+def compressor_controls(values, sample_rate=48000.0):
+    """The exact common controls for one validated per-band model state."""
+    model = values["type"]
+    key = values["key"] if values["key_filter"] else 0.0
+    return io24_uc_comp.model_controls(
+        model, values[model], key, values["listen"], sample_rate)
+
+
+def _uc_comp(name, band, values=None, sample_rate=48000.0, plugin=None):
+    values = values or default_band(band)
+    return {
+        "type": "ladspa",
+        "name": name,
+        "plugin": plugin or io24_uc_comp.plugin_name(),
+        "label": io24_uc_comp.PLUGIN_LABEL,
+        "control": compressor_controls(values, sample_rate),
+    }
 
 
 def _lin(name, mult):
@@ -290,19 +403,13 @@ def _lin(name, mult):
             "control": {"Mult": float(mult), "Add": 0.0}}
 
 
-def build_graph(xovers, with_comp, state=None):
+def build_graph(xovers, with_comp, state=None, sample_rate=48000.0,
+                plugin=None):
     """One channel of the 4-band graph; the module clones it per channel.
 
-    Per band i:  band signal -> sc3 (both stereo inputs)
-                 band signal -> bq_bandpass (the KEY filter) -> sc3 sidechain
-                 sc3 out  -> linear lc_i (1 normally, 0 in key-listen)
-                 key path -> linear lk_i (0 normally, 1 in key-listen)
-                 both linears -> the master mixer (8 inputs: exactly 4 bands x 2)
-
-    Chain balance decides what the detector hears: 0 = the band, 1 = the key
-    filter. Key LISTEN swaps the audible path to the key signal itself, done
-    with the two linear gains because a filter-chain topology cannot be
-    rewired at runtime — but control values can move.
+    Per band i: band signal -> io24 UC compressor -> master mixer. The plugin
+    owns the exact model side-chain biquad and key-listen switch represented by
+    the common cpxt tuple, so no approximate external key filter is involved.
 
     with_comp=False: crossover legs straight into the mixer (transparent).
     """
@@ -338,34 +445,15 @@ def build_graph(xovers, with_comp, state=None):
     for bi, band in enumerate(BANDS):
         tail = band_tails[bi]
         if with_comp:
-            values = state["bands"][band] if state is not None else DEFAULTS[band]
-            key = "k%d" % bi
-            nodes.append({"type": "builtin", "name": key,
-                          "label": "bq_bandpass",
-                          # Q matters: at the builtin's default the passband is
-                          # so broad that a key at 150 Hz still heard a 1 kHz
-                          # tone — measured as "key filter does nothing"
-                          "control": {"Freq": values["key"],
-                                      "Q": 1.5}})
-            links.append({"output": tail + ":Out", "input": key + ":In"})
+            values = (state["bands"][band] if state is not None
+                      else default_band(band))
             comp = "c%d" % bi
-            nodes.append(_sc3(comp, band, values))
+            nodes.append(_uc_comp(comp, band, values, sample_rate, plugin))
             links.append({"output": tail + ":Out",
-                          "input": comp + ":Left input"})
-            links.append({"output": tail + ":Out",
-                          "input": comp + ":Right input"})
-            links.append({"output": key + ":Out",
-                          "input": comp + ":Sidechain"})
-            lc, lk = "lc%d" % bi, "lk%d" % bi
-            listening = bool(values.get("listen", False))
-            nodes.append(_lin(lc, 0.0 if listening else 1.0))
-            nodes.append(_lin(lk, 1.0 if listening else 0.0))
-            links.append({"output": comp + ":Left output", "input": lc + ":In"})
-            links.append({"output": key + ":Out", "input": lk + ":In"})
-            for nm in (lc, lk):
-                links.append({"output": nm + ":Out",
-                              "input": "sum:In %d" % mix_in})
-                mix_in += 1
+                          "input": comp + ":Input"})
+            links.append({"output": comp + ":Output",
+                          "input": "sum:In %d" % mix_in})
+            mix_in += 1
         else:
             links.append({"output": tail + ":Out",
                           "input": "sum:In %d" % mix_in})
@@ -375,11 +463,13 @@ def build_graph(xovers, with_comp, state=None):
             "inputs": ["split:In"], "outputs": ["sum:Out"]}
 
 
-def build_conf(target=None, xovers=None, with_comp=None, state=None):
+def build_conf(target=None, xovers=None, with_comp=None, state=None,
+               sample_rate=48000.0, plugin=None):
     """A complete pipewire.conf hosting the chain as a sink."""
     if with_comp is None:
-        with_comp = sc4_available() is not None
-    graph = build_graph(xovers or DEFAULTS["xovers"], with_comp, state=state)
+        with_comp = uc_comp_available() is not None
+    graph = build_graph(xovers or DEFAULTS["xovers"], with_comp, state=state,
+                        sample_rate=sample_rate, plugin=plugin)
     playback = {"node.passive": True}
     if target:
         playback["target.object"] = target
@@ -546,7 +636,7 @@ def build_bus_source_conf(bus, capture_target, positions=CAPTURE_POSITIONS):
 # it was in and makes USB playback 1-2 audible there; unroute_insert undoes
 # exactly that.
 # --------------------------------------------------------------------------
-INSERT_VERSION = 1
+INSERT_VERSION = 2
 INSERT_CHANNELS = (1, 2)
 INSERT_CAPTURE_INDEX = {1: 0, 2: 1}      # USB capture channel of each input
 INSERT_PROCESS_NAME = "io24-input-multiband-process"
@@ -592,7 +682,8 @@ def _insert_states(states):
     return normalized
 
 
-def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS):
+def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS,
+                       sample_rate=48000.0, plugin=None):
     """Both inputs from the capture node, each through its own 4-band graph
     when its channel has Multiband, otherwise straight through.
 
@@ -613,7 +704,9 @@ def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS):
         out = "out%d" % channel
         nodes.append({"type": "builtin", "name": out, "label": "copy"})
         if channel in states:
-            sub = _prefixed(build_graph(None, with_comp, state=states[channel]),
+            sub = _prefixed(build_graph(
+                None, with_comp, state=states[channel],
+                sample_rate=sample_rate, plugin=plugin),
                             insert_prefix(channel))
             nodes.extend(sub["nodes"])
             links.extend(sub["links"])
@@ -656,7 +749,8 @@ def build_insert_return_graph(channels):
 
 
 def build_insert_conf(states, capture_target, playback_target,
-                      with_comp=None, positions=CAPTURE_POSITIONS):
+                      with_comp=None, positions=CAPTURE_POSITIONS,
+                      sample_rate=48000.0, plugin=None):
     """PipeWire config for the insert: the processing, published as a source,
     and its return into the io24's USB playback 1-2.
 
@@ -669,11 +763,12 @@ def build_insert_conf(states, capture_target, playback_target,
         raise ValueError("the multiband insert needs the io24's capture and "
                          "playback nodes")
     if with_comp is None:
-        with_comp = sc4_available() is not None
+        with_comp = uc_comp_available() is not None
     process = {
         "node.description": INSERT_SOURCE_DESC,
         "media.name": INSERT_SOURCE_DESC,
-        "filter.graph": build_insert_graph(states, with_comp, positions),
+        "filter.graph": build_insert_graph(
+            states, with_comp, positions, sample_rate, plugin),
         "capture.props": {
             "node.name": INSERT_PROCESS_NAME,
             "media.class": "Stream/Input/Audio",
@@ -767,8 +862,8 @@ def validate_insert_state(state):
     if set(state) != expected:
         raise ValueError("multiband insert fields must be %s" %
                          ", ".join(sorted(expected)))
-    if state["version"] != INSERT_VERSION:
-        raise ValueError("multiband insert version must be 1")
+    if state["version"] not in (1, INSERT_VERSION):
+        raise ValueError("multiband insert version must be 1 or 2")
     channels = state["channels"]
     if not isinstance(channels, dict) or \
             set(channels) != {str(c) for c in INSERT_CHANNELS}:
@@ -938,12 +1033,18 @@ class Chain:
     def running(self):
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, target=None, with_comp=None, state=None):
+    def ladspa_paths(self):
+        """Plugin search roots required by this particular chain."""
+        return (io24_uc_comp.default_cache_dir(),)
+
+    def start(self, target=None, with_comp=None, state=None,
+              sample_rate=48000.0, plugin=None):
         configured = target is not None or with_comp is not None or state is not None
         # Validate and render before creating any private filesystem state.
         # Invalid saved settings must fail closed without leaving a directory.
         configuration = build_conf(
-            target=target, with_comp=with_comp, state=state)
+            target=target, with_comp=with_comp, state=state,
+            sample_rate=sample_rate, plugin=plugin)
         self.last_error = None
         if not self._launch(configuration, configured):
             self.last_error = "PipeWire process could not start"
@@ -988,6 +1089,10 @@ class Chain:
                 f.write(configuration)
             env = dict(os.environ)
             env["PIPEWIRE_CONFIG_DIR"] = self.conf_path
+            ladspa = os.pathsep.join(str(path) for path in self.ladspa_paths())
+            if env.get("LADSPA_PATH"):
+                ladspa += os.pathsep + env["LADSPA_PATH"]
+            env["LADSPA_PATH"] = ladspa
             self.proc = subprocess.Popen(
                 ["pipewire", "-c", "filter-chain.conf"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
@@ -1192,14 +1297,15 @@ class InsertChain(Chain):
         self._configuration = None
 
     def start(self, states, capture_target=None, playback_target=None,
-              with_comp=None, positions=None):
+              with_comp=None, positions=None, sample_rate=48000.0,
+              plugin=None):
         """Run the insert for exactly these channels. True once all three of
         its nodes are present; anything short of that stops it again."""
         if positions is None:
             positions = capture_positions(capture_target) or CAPTURE_POSITIONS
         configuration = build_insert_conf(
             states, capture_target, playback_target, with_comp=with_comp,
-            positions=positions)
+            positions=positions, sample_rate=sample_rate, plugin=plugin)
         channels = tuple(sorted(states))
         if self.running and configuration == self._configuration:
             return True
@@ -1239,13 +1345,14 @@ class InsertChain(Chain):
 
 if __name__ == "__main__":
     import sys
-    print("sc4:", sc4_available() or "not installed (sudo apt install swh-plugins)")
+    processor = uc_comp_available()
+    print("UC compressor:", processor or uc_comp_error())
     print("pipewire:", pipewire_available())
     print("io24 sink:", find_io24_sink() or "not present")
     if "--run" in sys.argv:
         import time
         c = Chain()
-        c.start(with_comp=sc4_available() is not None)
+        c.start(with_comp=processor is not None)
         time.sleep(2)
         print("node id:", c.node_id())
         print("running:", c.running)

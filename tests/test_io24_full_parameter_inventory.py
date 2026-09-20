@@ -270,12 +270,12 @@ class AtomicParameterMatrixTests(unittest.TestCase):
         self.assertEqual(self.saved, self.generated)
 
     def test_matrix_is_atomic_pending_and_restoration_gated(self):
-        # 717 since the UC scene repair: the decoded Channel Mute Sync row plus
-        # four return-source mutes and three output-bus mutes all have concrete
-        # Host implementations and individual reconciliation rows.
-        self.assertEqual(self.generated["coverage"]["total_rows"], 717)
-        self.assertEqual(len(self.rows), 717)
-        self.assertEqual(len({row["id"] for row in self.rows}), 717)
+        # 719 after the UC parity closure: the decoded Channel Mute Sync,
+        # return/output mutes, Device Presets Store, and Host component names
+        # all have concrete implementations and individual reconciliation rows.
+        self.assertEqual(self.generated["coverage"]["total_rows"], 719)
+        self.assertEqual(len(self.rows), 719)
+        self.assertEqual(len({row["id"] for row in self.rows}), 719)
         ids = {row["id"] for row in self.rows}
         self.assertIn("native.global.mute_mode", ids)
         self.assertIn("native.channel1.processing_mix", ids)

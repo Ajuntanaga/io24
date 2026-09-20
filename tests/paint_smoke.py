@@ -130,14 +130,15 @@ def capture_window(win, output_path):
         renderer.unrealize()
 
 
-def scroll_page_to_end(widget):
-    """Move the first page scroller to its bottom for lower-section captures."""
+def scroll_page(widget, fraction=1.0):
+    """Move the first page scroller through its range for section captures."""
     pending = [widget]
     while pending:
         current = pending.pop()
         if isinstance(current, Gtk.ScrolledWindow):
             adjustment = current.get_vadjustment()
-            adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
+            extent = adjustment.get_upper() - adjustment.get_page_size()
+            adjustment.set_value(max(0.0, min(extent, extent * fraction)))
             return True
         child = current.get_first_child()
         while child is not None:
@@ -154,6 +155,25 @@ def main():
     # A visual test must neither adopt nor overwrite the user's real session.
     G.load_last_session = lambda path=None: None
     G.Win._save_last_session = lambda self, path=None: None
+    # Keep the Device page synthetic too.  Reading sysfs or ALSA would make a
+    # paint-only run observe an attached interface even though all control and
+    # audio paths below are already stubbed.
+    G.Win._usb_serial = lambda self: "PAINT-STUB"
+    G.Win._bcd_device = lambda self: "0128 (stub)"
+    G.alsa_rates = lambda card=G.CARD: list(G.SUPPORTED_SAMPLE_RATES)
+    G.alsa_live = lambda card=G.CARD: {}
+    # Apply requested dimensions while the window is being constructed, before
+    # App.do_activate presents it. set_default_size after mapping does not
+    # resize an existing GTK4 window and made desktop/narrow captures identical.
+    original_win_init = G.Win.__init__
+
+    def paint_win_init(self, app, ctl):
+        original_win_init(self, app, ctl)
+        self.set_default_size(
+            int(os.environ.get("IO24_PAINT_WIDTH", "1040")),
+            int(os.environ.get("IO24_PAINT_HEIGHT", "800")))
+
+    G.Win.__init__ = paint_win_init
     # PipeWire is the same problem by another route: the Mixer page's watchdog
     # looks for the io24's nodes and starts the real bus-source chains, and
     # Multiband would look for its own, whenever an interface happened to be
@@ -176,7 +196,8 @@ def main():
     app.set_application_id('org.io24.PaintSmoke%d' % os.getpid())
 
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
-             "scroll_settled": False, "eq_model_set": False}
+             "scroll_settled": False, "eq_model_set": False,
+             "comp_model_set": False}
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
         capture_dir = Path(capture_dir)
@@ -188,9 +209,6 @@ def main():
             return True
         st = win.stack
         if state["pages"] is None:
-            width = int(os.environ.get("IO24_PAINT_WIDTH", "1040"))
-            height = int(os.environ.get("IO24_PAINT_HEIGHT", "800"))
-            win.set_default_size(width, height)
             state["pages"] = [c.get_name() for c in st.get_pages()] \
                 if hasattr(st, "get_pages") else None
             if not state["pages"]:
@@ -210,15 +228,49 @@ def main():
                 win.w[1]["eq_model"].set_selected(model_index)
                 print("EQ MODEL -> %s" % model_name, flush=True)
             state["eq_model_set"] = True
+        if not state["comp_model_set"]:
+            model_name = os.environ.get("IO24_PAINT_COMP_MODEL", "").lower()
+            if model_name:
+                try:
+                    model_index = G.COMP_MODELS.index(model_name)
+                except ValueError:
+                    raise RuntimeError(
+                        "IO24_PAINT_COMP_MODEL must be standard, tube, fet, "
+                        "or multiband")
+                win.w[1]["model"].set_selected(model_index)
+                win.show_module(1, "COMP")
+                print("COMP MODEL -> %s" % model_name, flush=True)
+            state["comp_model_set"] = True
         pending = state["capture_pending"]
         if pending is not None:
             page_number, page_name = pending
-            if (os.environ.get("IO24_PAINT_SCROLL_END") == "1"
-                    and not state["scroll_settled"]):
-                scroll_page_to_end(st.get_visible_child())
-                state["scroll_settled"] = True
+            if state["scroll_settled"] is False and \
+                    os.environ.get("IO24_PAINT_MBC_BAND") is not None:
+                band = int(os.environ["IO24_PAINT_MBC_BAND"])
+                if not 0 <= band < len(io24_mbc.BANDS):
+                    raise RuntimeError("IO24_PAINT_MBC_BAND must be 0..3")
+                win.mbc_ctl[1][(band, "expander")].set_expanded(True)
+                # Exercise a connected model fader too. This caught a callback
+                # arity error that a static paint alone could not expose.
+                threshold = win.mbc_ctl[1][(band, "s_thr")]
+                threshold.set_value(threshold.get_value() + 0.01)
+                state["scroll_settled"] = "expanded"
                 # Let GTK allocate and paint the newly visible children before
-                # asking WidgetPaintable for a render node.
+                # measuring its new scroll range.
+                return True
+            if state["scroll_settled"] == "expanded":
+                # Moving GTK focus from this idle callback can temporarily
+                # leave WidgetPaintable without a render node under Xvfb, so
+                # scroll explicitly after the expanded row has been allocated.
+                scroll_page(st.get_visible_child())
+                state["scroll_settled"] = True
+                return True
+            fraction = os.environ.get("IO24_PAINT_SCROLL_FRACTION")
+            if ((os.environ.get("IO24_PAINT_SCROLL_END") == "1" or fraction)
+                    and not state["scroll_settled"]):
+                scroll_page(st.get_visible_child(),
+                            float(fraction) if fraction else 1.0)
+                state["scroll_settled"] = True
                 return True
             for _ in range(3):
                 win.queue_draw()

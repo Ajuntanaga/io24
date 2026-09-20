@@ -118,6 +118,20 @@ def _build_captured_memp_frames(user_index, record):
     return _build_memp_frames(PRSM, user_index, record)
 
 
+def _build_device_library_memp_frames(user_index, preset_record):
+    """Build UC's explicit Device Presets write from one complete record.
+
+    Unlike the four ``Stat`` button-selection records, this is the twelve-entry
+    ``PrsM`` library used by UC's Store action: indexes 16..21 are input 1 and
+    22..27 are input 2.  This helper is pure and performs no device I/O.
+    """
+    from io24_preset_record import (complete_device_slot_record,
+                                    encode_preset_record)
+    record = complete_device_slot_record(preset_record)
+    return _build_captured_memp_frames(
+        user_index, encode_preset_record(record))
+
+
 def _build_uc_slot_memp_frames(slot_index, record):
     """Wrap caller-supplied bytes as ``MemP/Stat`` indexes 0..3.
 
@@ -1623,6 +1637,16 @@ class Io24:
                      "fxreturn/ch1": 5}
     MIXER_BUSES = {"main": 0, "mixa": 1, "mixb": 2}
 
+    # UC's writable ``username`` fields are component-model metadata, not an
+    # io24 wire command.  Persist them in the Host shadow so presets/scenes and
+    # the GTK surface behave like UC without pretending the labels were sent
+    # to firmware.
+    COMPONENT_PATHS = frozenset({
+        "line/ch1", "line/ch2",
+        "return/ch1", "return/ch2", "return/ch3",
+        "fxreturn/ch1", "aux/ch1", "aux/ch2", "main/ch1",
+    })
+
     # Universal Control's own vocabulary for the same three buses. Its object
     # model gives every channel a `volume`, an `aux1` and an `aux2` (descriptor
     # ids 106/124/125) — those are *host-side descriptor* ids, not wire paramIds,
@@ -1670,7 +1694,7 @@ class Io24:
         if getattr(self, "_send_state", None) is None:
             self._send_state = {
                 "level": {}, "assign": {}, "master": {}, "pan": {},
-                "source_mute": {}, "bus_mute": {},
+                "source_mute": {}, "bus_mute": {}, "mirror": {},
             }
             for ent in (self._shadow or {}).values():
                 kw, fn = ent.get("kwargs", {}), ent.get("fn")
@@ -1691,7 +1715,40 @@ class Io24:
                 elif fn == "set_bus_mute" and bus:
                     self._send_state["bus_mute"][bus] = bool(
                         kw.get("on", True))
+                elif fn == "set_mirror_main" and bus in ("mixa", "mixb"):
+                    self._send_state["mirror"][bus] = bool(
+                        kw.get("on", True))
         return self._send_state
+
+    def set_component_name(self, component, name):
+        """Persist one UC ``username`` as Host component metadata.
+
+        The io24 has no writable channel-name command.  UC stores this field in
+        its component state, so the Linux Host does the same in its durable
+        shadow and scene/preset files; this method deliberately performs no
+        USB transfer.
+        """
+        if component not in self.COMPONENT_PATHS:
+            raise ValueError("unknown named component %r" % component)
+        if not isinstance(name, str):
+            raise TypeError("component name must be text")
+        name = name.strip()
+        if len(name) > 64:
+            raise ValueError("component name must be at most 64 characters")
+        return name
+
+    def component_name(self, component, default=""):
+        """Return the last Host-stored UC component name."""
+        if component not in self.COMPONENT_PATHS:
+            raise ValueError("unknown named component %r" % component)
+        for entry in reversed(list((self._shadow or {}).values())):
+            if not isinstance(entry, dict) or \
+                    entry.get("fn") != "set_component_name":
+                continue
+            kwargs = entry.get("kwargs") or {}
+            if kwargs.get("component") == component:
+                return kwargs.get("name", default)
+        return default
 
     def pan(self, source, bus):
         """The pan position we last set for a source in a bus, or None."""
@@ -1756,31 +1813,42 @@ class Io24:
     def _push_send(self, source, bus):
         """Fold level + assign + master + pan into the one number the device takes."""
         s = self._sends()
+        state_bus = "main" if bus in ("mixa", "mixb") and \
+            s["mirror"].get(bus, False) else bus
         if s["source_mute"].get(source, False) or \
                 s["bus_mute"].get(bus, False):
             return self._write_mix(source, bus, None)
-        if not s["assign"].get((source, bus), True):
+        if not s["assign"].get((source, state_bus), True):
             return self._write_mix(source, bus, None)
         soloed = self._solo_state().get(bus)
         if soloed and source not in soloed:
             # Another source is soloed in this bus. Only the wire value goes
             # off; level, assign and pan stay put, so releasing restores them.
             return self._write_mix(source, bus, None)
-        if (source, bus) not in s["level"]:
+        if (source, state_bus) not in s["level"]:
             return None                       # never set: leave the device alone
-        lvl = s["level"][(source, bus)]
+        lvl = s["level"][(source, state_bus)]
         if lvl is None:
             # Explicitly off. This MUST reach the wire: testing `is None` alone
             # conflated "set to off" with "never set", so `set_send_db(.., None)`,
             # `mix_off()`, the CLI `send <src> <bus> off` and io24web's mix_off
             # were all silent no-ops.
             return self._write_mix(source, bus, None)
-        pan = s["pan"].get((source, bus))
+        pan = s["pan"].get((source, state_bus))
         pan_db = 0.0
         if pan is not None and source in self.STEREO_PAIRS:
             pan_db = self.pan_db(pan, self.STEREO_PAIRS[source][1])
         return self._write_mix(source, bus,
                                lvl + s["master"].get(bus, 0.0) + pan_db)
+
+    def _push_send_and_mirrors(self, source, bus):
+        """Write one cell, then every aux currently following its Main cell."""
+        result = self._push_send(source, bus)
+        if bus == "main":
+            for aux in ("mixa", "mixb"):
+                if self._sends()["mirror"].get(aux, False):
+                    result = self._push_send(source, aux)
+        return result
 
     def set_send_db(self, source, bus, gain_db):
         """Move one source's send fader in one bus. -144..+10, None = off."""
@@ -1788,7 +1856,7 @@ class Io24:
         if source not in self.MIXER_SOURCES:
             raise ValueError("unknown mixer source %r" % source)
         self._sends()["level"][(source, bus)] = gain_db
-        return self._push_send(source, bus)
+        return self._push_send_and_mirrors(source, bus)
 
     def set_send_assigned(self, source, bus, on=True):
         """Assign / unassign a source from a bus, keeping its fader position.
@@ -1811,7 +1879,7 @@ class Io24:
             # Call the public setter so the new concrete level is persisted in
             # the shadow alongside the assignment.
             return self.set_send_db(source, bus, self.DEFAULT_SEND_DB)
-        return self._push_send(source, bus)
+        return self._push_send_and_mirrors(source, bus)
 
     def set_bus_master(self, bus, gain_db=0.0):
         """A master trim for a whole bus: offsets every assigned send in it.
@@ -1822,10 +1890,13 @@ class Io24:
         driver has set, since unset ones have no known position to offset.
         """
         bus = self._bus(bus)
-        self._sends()["master"][bus] = max(-96.0, min(10.0, float(gain_db)))
+        sends = self._sends()
+        sends["master"][bus] = max(-96.0, min(10.0, float(gain_db)))
+        state_bus = "main" if bus in ("mixa", "mixb") and \
+            sends["mirror"].get(bus, False) else bus
         last = None
         for source in self.MIXER_SOURCES:
-            if (source, bus) in self._sends()["level"]:
+            if (source, state_bus) in sends["level"]:
                 last = self._push_send(source, bus)
         return last
 
@@ -1974,7 +2045,7 @@ class Io24:
             # displayed unity fader first instead of accepting the movement
             # into host bookkeeping while emitting no mixer write.
             return self.set_send_db(source, bus, self.DEFAULT_SEND_DB)
-        return self._push_send(source, bus)
+        return self._push_send_and_mirrors(source, bus)
 
     def set_pair_pan(self, source, bus, pan):
         """Pan a stereo pair together: one call, both legs, opposite sides.
@@ -1990,23 +2061,40 @@ class Io24:
         self.set_pan(source, bus, pan)
         return self.set_pan(partner, bus, pan)
 
-    def mirror_main(self, bus):
-        """Copy the main mix's send levels into an aux bus (UC's `mirror_main`).
+    def mirror_main_enabled(self, bus):
+        """Whether a Host-persisted aux bus is latched to follow Main."""
+        bus = self._bus(bus)
+        if bus not in ("mixa", "mixb"):
+            return False
+        return bool(self._sends()["mirror"].get(bus, False))
 
-        A one-shot copy, not a live link: UC's own flag latches the aux bus to
-        main until it is cleared, but that needs a read-back this block does not
-        have, so following main afterwards would mean guessing.
+    def set_mirror_main(self, bus, on=True):
+        """Persistently latch an aux mix to Main, matching UC's semantics.
+
+        The aux's own faders, assigns and balances remain stored while the
+        latch is active.  Main changes are written through immediately; when
+        the latch is cleared, the retained aux mix is restored.
         """
         bus = self._bus(bus)
-        n = 0
+        if bus not in ("mixa", "mixb"):
+            raise ValueError("Mirror Main is available only for Mix A or Mix B")
+        sends = self._sends()
+        enabled = bool(on)
+        changed = sends["mirror"].get(bus, False) != enabled
+        sends["mirror"][bus] = enabled
+        written = 0
         for source in self.MIXER_SOURCES:
-            lvl = self._sends()["level"].get((source, "main"))
-            if lvl is None:
+            state_bus = "main" if enabled else bus
+            if (source, state_bus) not in sends["level"]:
                 continue
-            self.set_send_db(source, bus, lvl)
-            self.set_send_assigned(source, bus, self.send_assigned(source, "main"))
-            n += 1
-        return n
+            self._push_send(source, bus)
+            written += 1
+        return {"bus": bus, "enabled": enabled, "changed": changed,
+                "sources_written": written}
+
+    def mirror_main(self, bus):
+        """Compatibility alias: enable UC's persistent Mirror Main latch."""
+        return self.set_mirror_main(bus, True)
 
     def set_mix_db(self, source, gain_db, bus="main"):
         """Set a source's level in a mix bus, in dB.
@@ -2133,6 +2221,40 @@ class Io24:
             "native_sha256": hashlib.sha256(native).hexdigest(),
         }
 
+    def save_device_library_preset(self, user_index, preset_record):
+        """Send one complete UC ``MemP/PrsM`` Device Presets record.
+
+        The reply proves only that the transport exchange returned.  The io24
+        offers no command that reads the stored library body back, so callers
+        must retain the returned report as ``WRITE_SENT_UNVERIFIED`` evidence.
+        """
+        frames = _build_device_library_memp_frames(user_index, preset_record)
+        replies = []
+        for frame in frames:
+            replies.append(self._exec(frame))
+            if len(frames) > 1:
+                time.sleep(0.02)
+        return {
+            "user_index": user_index,
+            "fragments_sent": len(frames),
+            "replies_received": sum(bool(reply) for reply in replies),
+        }
+
+    def save_known_device_library_preset(
+            self, user_index, preset_record, registry, source,
+            written_at=None):
+        """Send and locally receipt one UC Device Presets library entry."""
+        prepared = registry.prepare_write(
+            user_index, preset_record, source, written_at,
+            device_identity=self._device_slot_identity())
+        transport = self.save_device_library_preset(user_index, preset_record)
+        try:
+            entry = registry.commit_sent(prepared, transport)
+        except Exception as error:
+            error.device_preset_transport = transport
+            raise
+        return {"transport": transport, "registry": entry}
+
     def save_native_model0_voicefx_slot(
             self, slot_index, base_native_record, enabled=True, lows=0.06,
             width=0.405, mix=0.295):
@@ -2236,6 +2358,7 @@ class Io24:
             "set_bus_master": 40,
             "set_pan": 50,
             "set_send_assigned": 60,
+            "set_mirror_main": 65,
             "set_source_mute": 70,
             "set_bus_mute": 70,
         }
@@ -2989,7 +3112,7 @@ def cmd_watch(dev, seconds=90):
 # read_params() — gain, volumes, monitor mix, phantom — are deliberately not
 # shadowed; snapshot() captures those from the device instead.
 
-_ID_PARAMS = ("channel", "band", "source", "bus", "instance")
+_ID_PARAMS = ("channel", "band", "source", "bus", "instance", "component")
 
 # `set_mix_db` is deliberately absent: it now delegates to `set_send_db`, and
 # shadowing both would file two entries for one write. Old preset files that
@@ -3037,7 +3160,8 @@ _SHADOWED = ("set_fx_mix", "set_highpass", "set_mute", "set_hp_mute",
              "set_send_assigned", "set_bus_master", "set_source_mute",
              "set_bus_mute", "set_comp_eq_order",
              "set_reverb", "set_output_delay", "set_output_delay_bus",
-             "set_processing_channel", "set_pan",
+             "set_processing_channel", "set_pan", "set_mirror_main",
+             "set_component_name",
              # the "off" paths: each bypassed its setter and so vanished
              # from saved presets, which then replayed the stale "on".
              "gate_off", "compressor_off", "output_delay_off",
@@ -3242,7 +3366,8 @@ def _normalise_host_features(features):
     # were saved but refused here, so a snapshot with either failed to save.
     unknown = set(features) - {"multiband", "multiband_insert", "pan",
                                "reverb_character", "autogain",
-                               "standard_eq", "alternate_eq"}
+                               "standard_eq", "alternate_eq",
+                               "spring_reverb"}
     if unknown:
         raise ValueError("unknown host feature%s: %s" %
                          ("" if len(unknown) == 1 else "s",
@@ -3268,12 +3393,32 @@ def _normalise_host_features(features):
         # The retired computer-playback multiband. Still read, so its band
         # settings can seed the Multiband compressor type; never switched on.
         import io24_mbc
+        legacy = (isinstance(features["multiband"], dict) and
+                  features["multiband"].get("version") == 1)
         normalized["multiband"] = io24_mbc.validate_snapshot(
             features["multiband"])
+        if legacy:
+            migrations.append(
+                "legacy Host multiband controls migrated to UC model schema v2")
     if "multiband_insert" in features:
         import io24_mbc
+        raw_insert = features["multiband_insert"]
+        raw_channels = (raw_insert.get("channels", {})
+                        if isinstance(raw_insert, dict) else {})
+        legacy = ((isinstance(raw_insert, dict) and
+                   raw_insert.get("version") == 1) or
+                  (isinstance(raw_channels, dict) and any(
+                      isinstance(channel, dict) and channel.get("version") == 1
+                      for channel in raw_channels.values())))
         normalized["multiband_insert"] = io24_mbc.validate_insert_state(
-            features["multiband_insert"])
+            raw_insert)
+        if legacy:
+            migrations.append(
+                "legacy Host multiband insert migrated to UC model schema v2")
+    if "spring_reverb" in features:
+        import io24_spring
+        normalized["spring_reverb"] = io24_spring.validate_state(
+            features["spring_reverb"])
     if "pan" in features:
         migrations.append(
             "legacy Host bus pan was ignored; bus pan controls were removed")
@@ -3296,6 +3441,10 @@ def _shadowed(name):
             b.apply_defaults()
             bound = dict(b.arguments)
             bound.pop("self", None)
+            if name == "set_component_name":
+                # The setter returns its normalized Host metadata value; keep
+                # that exact value rather than the caller's surrounding space.
+                bound["name"] = result
             # Standard and Passive/Vintage are mutually exclusive component
             # models on one channel. Keeping both call families would make a
             # reconnect replay whichever dictionary key happened to be older,

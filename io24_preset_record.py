@@ -26,6 +26,10 @@ DEVICE_SLOT_PAIRS = {1: (0, 1), 2: (2, 3)}
 DEVICE_SLOT_REGISTRY_SCHEMA = "io24-device-slot-registry-v2"
 DEVICE_SLOT_REGISTRY_PROVENANCE = \
     "HOST_WRITTEN_DEVICE_READBACK_UNAVAILABLE"
+DEVICE_PRESET_LIBRARY_REGISTRY_SCHEMA = \
+    "io24-device-preset-library-registry-v1"
+DEVICE_PRESET_LIBRARY_REGISTRY_PROVENANCE = \
+    "HOST_SENT_UC_PRSM_DEVICE_READBACK_UNAVAILABLE"
 
 # A Stat update replaces a complete channel preset; accepting a tiny mapping
 # containing only ``voicefx`` would silently erase the rest of that preset.
@@ -66,6 +70,14 @@ def complete_device_slot_record(record):
 def _device_slot_index(name, value):
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < 4:
         raise ValueError("%s must be a device slot in the range 0..3" % name)
+    return value
+
+
+def _device_preset_library_index(name, value):
+    if isinstance(value, bool) or not isinstance(value, int) or \
+            not 16 <= value <= 27:
+        raise ValueError("%s must be a Device Presets index in the range "
+                         "16..27" % name)
     return value
 
 
@@ -289,6 +301,204 @@ class DeviceSlotRegistry:
             with handle:
                 json.dump(document, handle, allow_nan=False, ensure_ascii=False,
                           indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self.path)
+            try:
+                directory_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+            except (AttributeError, OSError):
+                directory_fd = None
+            if directory_fd is not None:
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+        except Exception:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
+
+
+class DevicePresetLibraryRegistry:
+    """Local receipts for UC's twelve-entry ``MemP/PrsM`` library.
+
+    Indexes 16..21 belong to physical input 1 and 22..27 to input 2.  The
+    device does not expose a read command for these bodies, so a successful
+    SetP exchange is recorded accurately as ``WRITE_SENT_UNVERIFIED``.  This
+    registry never turns a transport receipt into a persistence or audibility
+    claim.
+    """
+
+    def __init__(self, path):
+        try:
+            self.path = os.fspath(path)
+        except TypeError as exc:
+            raise TypeError(
+                "device preset library registry path must be path-like") from exc
+
+    @staticmethod
+    def _blank():
+        return {
+            "schema": DEVICE_PRESET_LIBRARY_REGISTRY_SCHEMA,
+            "presets": {},
+        }
+
+    @staticmethod
+    def _location(user_index):
+        user_index = _device_preset_library_index("user_index", user_index)
+        if user_index <= 21:
+            return 1, user_index - 16
+        return 2, user_index - 22
+
+    def _read(self):
+        if not os.path.exists(self.path):
+            return self._blank()
+
+        def reject_nonstandard_json(value):
+            raise ValueError(
+                "non-finite registry value %s is not allowed" % value)
+
+        with open(self.path, encoding="utf-8") as source:
+            document = json.load(source, parse_constant=reject_nonstandard_json)
+        if not isinstance(document, dict) or \
+                document.get("schema") != \
+                DEVICE_PRESET_LIBRARY_REGISTRY_SCHEMA or \
+                not isinstance(document.get("presets"), dict):
+            raise ValueError("invalid device preset library registry schema")
+        for key, entry in document["presets"].items():
+            try:
+                user_index = int(key)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "invalid device preset library registry key") from exc
+            user_index = _device_preset_library_index(
+                "registry user index", user_index)
+            if not isinstance(entry, dict) or \
+                    entry.get("user_index") != user_index:
+                raise ValueError("invalid device preset library registry entry")
+            physical_channel, channel_slot = self._location(user_index)
+            if entry.get("physical_channel") != physical_channel or \
+                    entry.get("channel_slot") != channel_slot:
+                raise ValueError("device preset library location differs")
+            record = complete_device_slot_record(entry.get("record"))
+            if entry.get("canonical_sha256") != \
+                    _canonical_record_sha256(record):
+                raise ValueError("device preset library record hash differs")
+            if entry.get("device_identity") != _validated_device_identity(
+                    entry.get("device_identity")):
+                raise ValueError("device preset library identity differs")
+            if entry.get("provenance") != \
+                    DEVICE_PRESET_LIBRARY_REGISTRY_PROVENANCE:
+                raise ValueError("device preset library provenance differs")
+            if entry.get("status") != "WRITE_SENT_UNVERIFIED":
+                raise ValueError("device preset library status differs")
+            transport = entry.get("transport")
+            if not isinstance(transport, dict) or \
+                    transport.get("user_index") != user_index:
+                raise ValueError("device preset library transport is invalid")
+            fragments = transport.get("fragments_sent")
+            replies = transport.get("replies_received")
+            if isinstance(fragments, bool) or not isinstance(fragments, int) or \
+                    fragments < 1 or isinstance(replies, bool) or \
+                    not isinstance(replies, int) or \
+                    not 0 <= replies <= fragments:
+                raise ValueError(
+                    "device preset library transport counts are invalid")
+        return document
+
+    def get(self, user_index, *, device_identity):
+        user_index = _device_preset_library_index("user_index", user_index)
+        identity = _validated_device_identity(device_identity)
+        entry = self._read()["presets"].get(str(user_index))
+        if entry is None or entry.get("device_identity") != identity:
+            return None
+        return deepcopy(entry)
+
+    def entries(self, *, device_identity=None):
+        identity = None if device_identity is None else \
+            _validated_device_identity(device_identity)
+        entries = []
+        for entry in self._read()["presets"].values():
+            if identity is None or entry.get("device_identity") == identity:
+                entries.append(deepcopy(entry))
+        return sorted(entries, key=lambda entry: entry["user_index"])
+
+    def prepare_write(self, user_index, record, source, written_at=None, *,
+                      device_identity):
+        user_index = _device_preset_library_index("user_index", user_index)
+        complete = complete_device_slot_record(record)
+        identity = _validated_device_identity(device_identity)
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError(
+                "device preset library source must be non-empty text")
+        if written_at is None:
+            written_at = datetime.now(timezone.utc).isoformat()
+        if not isinstance(written_at, str) or not written_at:
+            raise ValueError("device preset library timestamp must be text")
+        physical_channel, channel_slot = self._location(user_index)
+        entry = {
+            "user_index": user_index,
+            "physical_channel": physical_channel,
+            "channel_slot": channel_slot,
+            "device_identity": identity,
+            "record": complete,
+            "canonical_sha256": _canonical_record_sha256(complete),
+            "source": source.strip(),
+            "written_at": written_at,
+            "provenance": DEVICE_PRESET_LIBRARY_REGISTRY_PROVENANCE,
+            "status": "WRITE_SENT_UNVERIFIED",
+            "body_format": "uc-tagged-preset-record",
+        }
+        return {"document": self._read(), "entry": entry}
+
+    def commit_sent(self, prepared, transport_report):
+        if not isinstance(prepared, dict) or \
+                not isinstance(prepared.get("document"), dict) or \
+                not isinstance(prepared.get("entry"), dict):
+            raise ValueError("invalid prepared device preset library write")
+        entry = deepcopy(prepared["entry"])
+        user_index = _device_preset_library_index(
+            "prepared user index", entry.get("user_index"))
+        if not isinstance(transport_report, dict) or \
+                transport_report.get("user_index") != user_index:
+            raise ValueError(
+                "transport user index does not match prepared preset")
+        fragments = transport_report.get("fragments_sent")
+        replies = transport_report.get("replies_received")
+        if isinstance(fragments, bool) or not isinstance(fragments, int) or \
+                fragments < 1 or isinstance(replies, bool) or \
+                not isinstance(replies, int) or \
+                not 0 <= replies <= fragments:
+            raise ValueError("transport counts are invalid")
+        entry["transport"] = {
+            "user_index": user_index,
+            "fragments_sent": fragments,
+            "replies_received": replies,
+        }
+        document = deepcopy(prepared["document"])
+        if document.get("schema") != \
+                DEVICE_PRESET_LIBRARY_REGISTRY_SCHEMA or \
+                not isinstance(document.get("presets"), dict):
+            raise ValueError("invalid prepared registry document")
+        document["presets"][str(user_index)] = entry
+        self._write_atomic(document)
+        return deepcopy(entry)
+
+    def _write_atomic(self, document):
+        parent = os.path.dirname(os.path.abspath(self.path))
+        os.makedirs(parent, exist_ok=True)
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=parent,
+            prefix=".%s." % os.path.basename(self.path), suffix=".tmp",
+            delete=False)
+        temporary = handle.name
+        try:
+            with handle:
+                json.dump(document, handle, allow_nan=False,
+                          ensure_ascii=False, indent=2, sort_keys=True)
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())

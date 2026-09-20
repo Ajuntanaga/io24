@@ -423,8 +423,9 @@ def build() -> dict:
                 requires=("deterministic_stereo_audio_rig",))
     for bus in ("mixa", "mixb"):
         add("mixer.%s.mirror_main" % bus, "P3", "mixer_mapping",
-            "one-shot mirror main", "host_mapping", scope={"bus": bus},
-            stimuli=["known_sparse_main", "known_full_main"], api=("mirror_main",),
+            "persistent Mirror Main latch", "host_mapping", scope={"bus": bus},
+            stimuli=[False, True, "main_change", "restore_aux"],
+            api=("set_mirror_main", "mirror_main", "mirror_main_enabled"),
             source=("io24.py",), requires=("all_bus_sends_materialized",))
     for bus in mixer_buses:
         add("mixer.%s.solo" % bus, "P3", "mixer_mapping", "host solo",
@@ -698,6 +699,17 @@ def build() -> dict:
               "tagged writer, which is now refused before transport. The "
               "native writer is hardware-free only and cannot back up the "
               "current unreadable slot body."))
+    add("state.device_preset_library_store", "P6", "device_preset",
+        "UC Device Presets MemP/PrsM indexes 16 through 27", "persistence",
+        scope={"indexes": [16, 27], "per_channel": 6},
+        api=("save_device_library_preset",
+             "save_known_device_library_preset"),
+        source=("io24.py MemP/PrsM", "UC 4.7.2 StorePreset"),
+        requires=("battery_above_10",),
+        blockers=("device_library_body_readback_unavailable",),
+        note=("Transport completion is retained as WRITE_SENT_UNVERIFIED; "
+              "this is UC's library route, not assignment of one of the four "
+              "front-panel button slots."))
     prior_voicefx_negative = (
         "2026-08-11 fx_gate_probe: block 201 measured inaudible (-0.3 dB) "
         "with block-202 reverb as same-path positive control (+6.0 dB); two "
@@ -761,6 +773,12 @@ def build() -> dict:
         "send/pan/bus shadow query methods", "host_mapping",
         api=("send_db", "has_send_level", "send_assigned", "bus_summary"),
         source=("io24.py",))
+    add("host.component_names", "P1", "host_state",
+        "UC username component metadata", "host_mapping",
+        api=("set_component_name", "component_name"),
+        source=("io24.py Host shadow", "UC 4.7.2 component model"),
+        note=("The io24 exposes no label-write command; names persist in the "
+              "Linux Host and scene files rather than firmware."))
 
     add("multiband.enabled", "P7", "multiband", "PipeWire chain enabled",
         "host_process", stimuli=[False, True], api=("start", "stop", "running"),

@@ -11,14 +11,14 @@ coefficient designers already used by the Host.
     python3 io24_scene.py --dry-run --sample-rate 96000 Main.scene
     python3 io24_scene.py --export io24-host.scene
 
-Device-resident preset blocks are listed but never overwritten by scene load.
-Export writes only readable and exact Host-known state, never device-slot
-bodies. A failed load compensates from a pre-write checkpoint and reports when
+Device-resident preset records are retained in scene files when their complete
+bodies are known to this Host, but scene load never overwrites the device
+library. A failed load compensates from a pre-write checkpoint and reports when
 unknown prior state prevents a complete rollback.
 Fields that the io24 protocol cannot faithfully represent are reported with a
 specific reason: mono-source pan/stereo width, FXA, DAW post-DSP capture tap,
-output mono fold-down, text labels, and UC's live mirror latch. A true mirror
-request is restored as the Host's documented one-shot copy.
+and output mono fold-down. UC component names and Mirror Main are persisted as
+Host state because neither requires inventing a missing device command.
 """
 import argparse
 import copy
@@ -103,6 +103,15 @@ def _toggle(value, label):
             math.isfinite(float(value)) and float(value) in (0.0, 1.0):
         return bool(value)
     raise ValueError("%s must be boolean or 0/1" % label)
+
+
+def _text(value, label):
+    if not isinstance(value, str):
+        raise ValueError("%s must be text" % label)
+    value = value.strip()
+    if len(value) > 64:
+        raise ValueError("%s must be at most 64 characters" % label)
+    return value
 
 
 def _call(calls, method, args, kwargs, description):
@@ -280,10 +289,10 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
               "preset button mode = %d" % mode)
     for field, bus in (("aux1_mirror_main", "mixa"),
                        ("aux2_mirror_main", "mixb")):
-        if field in global_state and _toggle(
-                global_state[field], "global.%s" % field):
-            mirrors.append(("mirror_main", (bus,), {},
-                            "%s one-shot copy from Main" % bus))
+        if field in global_state:
+            enabled = _toggle(global_state[field], "global.%s" % field)
+            mirrors.append(("set_mirror_main", (bus, enabled), {},
+                            "%s follows Main = %s" % (bus, enabled)))
     _unknown_fields(global_state, {
         "phonesSrc", "aux1_mirror_main", "aux2_mirror_main",
         "outputDelay", "outputDelayBus", "presetButtonMode", "auxMuteMode",
@@ -301,6 +310,10 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
         if not component:
             continue
         prefix, source = "line.%s" % key, SOURCE[channel]
+        if "username" in component:
+            name = _text(component["username"], "%s.username" % prefix)
+            _call(calls, "set_component_name", (source, name), {},
+                  "%s name = %r" % (prefix, name))
         if "preampgain" in component:
             gain = _number(component["preampgain"],
                            "%s.preampgain" % prefix, 0.0, 60.0)
@@ -336,7 +349,6 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
                 ("stereopan", "stereo width/mono collapse is not representable"),
                 ("FXA", "no exact io24 wire mapping exists"),
                 ("dawpostdsp", "DAW capture-tap selection is Host-bound"),
-                ("username", "text label is not writable on this protocol"),
                 ("preset_name", "display metadata is not a live parameter"),
                 ("linkmaster", "UC component-tree metadata")):
             if field in component:
@@ -373,6 +385,10 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
                               "fxreturn/ch1"):
                 skips.append("%s has no io24 mixer source" % prefix)
                 continue
+            if "username" in component:
+                name = _text(component["username"], "%s.username" % prefix)
+                _call(calls, "set_component_name", (source, name), {},
+                      "%s name = %r" % (prefix, name))
             _routing_calls(component, source, prefix, calls)
             if "mute" in component:
                 on = _toggle(component["mute"], "%s.mute" % prefix)
@@ -385,7 +401,6 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
                                   "%s solo in %s = %s" %
                                   (prefix, bus, on)))
             for field, reason in (
-                    ("username", "text label is not writable"),
                     ("preset_name", "display metadata is not live state"),
                     ("link", "USB-return stereo linking has no exact wire"),
                     ("linkmaster", "UC component-tree metadata")):
@@ -409,6 +424,11 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
             if bus is None:
                 skips.append("%s has no io24 output bus" % prefix)
                 continue
+            component_path = "%s/%s" % (section, key)
+            if "username" in component:
+                name = _text(component["username"], "%s.username" % prefix)
+                _call(calls, "set_component_name", (component_path, name), {},
+                      "%s name = %r" % (prefix, name))
             if "volume" in component:
                 gain = _number(component["volume"], "%s.volume" % prefix,
                                -96.0, 10.0)
@@ -420,7 +440,6 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
                               "%s output mute = %s" % (prefix, on)))
             for field, reason in (
                     ("mono", "output mono fold-down is not representable"),
-                    ("username", "text label is not writable"),
                     ("preset_name", "display metadata is not live state"),
                     ("link", "output link is component-tree metadata"),
                     ("linkmaster", "UC component-tree metadata")):
@@ -467,7 +486,7 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
         "presets",
     }, "scene", skips)
 
-    # Routing first, then a requested one-shot mirror, then solo/mute gates.
+    # Routing first, then the persistent Mirror Main latch, then solo/mute gates.
     # This matches UC's resulting state and ensures the final gate always wins.
     calls.extend(mirrors)
     calls.extend(solos)
@@ -511,6 +530,11 @@ _SOURCE_TO_SCENE = {
     "return/ch3": ("return", "ch3"),
     "fxreturn/ch1": ("fxreturn", "ch1"),
 }
+_COMPONENT_TO_SCENE = dict(_SOURCE_TO_SCENE, **{
+    "aux/ch1": ("aux", "ch1"),
+    "aux/ch2": ("aux", "ch2"),
+    "main/ch1": ("main", "ch1"),
+})
 
 
 def _scene_bus(value):
@@ -519,7 +543,7 @@ def _scene_bus(value):
 
 
 def _export_component(scene, source):
-    section, key = _SOURCE_TO_SCENE[source]
+    section, key = _COMPONENT_TO_SCENE[source]
     return scene[section].setdefault(key, {})
 
 
@@ -612,15 +636,16 @@ def _export_standard_eq(calls, channel, omissions):
         ordered, eq_on=any(band["on"] for band in ordered))
 
 
-def export_snapshot(snapshot, host_features=None, solo=None):
+def export_snapshot(snapshot, host_features=None, solo=None, presets=None):
     """Build a UC-vocabulary scene from exact Host-known state.
 
     This is deliberately not device readback. Readable input gain/phantom
     values come from ``snapshot.live``; DSP, mixer and global values come from
     the Host's durable write mirror. Anything not known exactly is omitted and
     returned in ``omissions`` rather than filled with a guessed UC default.
-    Device-resident preset blocks are never exported because their bodies are
-    unreadable.
+    Device-library bodies are included only when supplied from the Host's
+    identity-scoped sent-record registries; nothing is inferred from a selected
+    button slot or a USB reply.
     """
     snapshot = _object(snapshot, "snapshot")
     live = _object(snapshot.get("live"), "snapshot.live")
@@ -642,10 +667,7 @@ def export_snapshot(snapshot, host_features=None, solo=None):
         "main": {"ch1": {}},
         "fx": {"ch1": {}},
     }
-    omissions = [
-        "presets device-slot bodies were not exported because device readback "
-        "is unavailable",
-    ]
+    omissions = []
 
     for channel in (1, 2):
         component = scene["line"]["ch%d" % channel]
@@ -701,6 +723,19 @@ def export_snapshot(snapshot, host_features=None, solo=None):
             elif name == "set_preset_mode":
                 scene["global"]["presetButtonMode"] = _integer(
                     kwargs["mode"], "set_preset_mode.mode", 0, 2)
+            elif name == "set_mirror_main":
+                bus = _scene_bus(kwargs["bus"])
+                field = {"mixa": "aux1_mirror_main",
+                         "mixb": "aux2_mirror_main"}.get(bus)
+                if field is None:
+                    raise ValueError("Mirror Main is only valid for aux buses")
+                scene["global"][field] = int(bool(kwargs.get("on", True)))
+            elif name == "set_component_name":
+                path = kwargs["component"]
+                if path not in _COMPONENT_TO_SCENE:
+                    raise ValueError("unknown named scene component %r" % path)
+                _export_component(scene, path)["username"] = _text(
+                    kwargs["name"], "set_component_name.name")
             elif name == "set_channel_link":
                 scene["line"]["ch1"]["link"] = int(bool(kwargs["on"]))
             elif name == "set_mute" and component is not None:
@@ -882,6 +917,19 @@ def export_snapshot(snapshot, host_features=None, solo=None):
                     "%s solo differs by bus and cannot be one UC scene field" %
                     source)
 
+    if presets is not None:
+        presets = copy.deepcopy(_object(presets, "presets"))
+        # Validate the library structure and each VoiceFX subobject before the
+        # data becomes part of an export. Scene load remains report-only.
+        from io24_preset_record import complete_device_slot_record
+        for collection in ("slots", "userpresets"):
+            records = _object(presets.get(collection),
+                              "presets.%s" % collection)
+            for key, record in records.items():
+                records[key] = complete_device_slot_record(record)
+        describe_presets({"presets": presets})
+        scene["presets"] = presets
+
     # Keep recognized top-level sections but remove empty child objects. This
     # produces stable, readable vendor-vocabulary JSON without claiming state
     # that the Host never observed.
@@ -891,7 +939,7 @@ def export_snapshot(snapshot, host_features=None, solo=None):
     return scene, omissions
 
 
-def capture(dev, host_features=None):
+def capture(dev, host_features=None, presets=None):
     """Capture one exportable scene from readable state and the Host mirror."""
     live = dev.read_params() if callable(getattr(dev, "read_params", None)) \
         else {}
@@ -903,7 +951,7 @@ def capture(dev, host_features=None):
     solo = copy.deepcopy(getattr(dev, "_solo", None) or {})
     return export_snapshot(
         {"version": 1, "live": live or {}, "calls": calls},
-        host_features=host_features, solo=solo)
+        host_features=host_features, solo=solo, presets=presets)
 
 
 def save(path, scene, sample_rate_hz=48000.0):
@@ -962,7 +1010,9 @@ _POSITIONAL = {
     "set_output_delay_bus": ("bus",),
     "set_phones_source": ("source",),
     "set_mute_mode": ("mode",),
+    "set_mirror_main": ("bus", "on"),
     "mirror_main": ("bus",),
+    "set_component_name": ("component", "name"),
 }
 
 
@@ -990,7 +1040,7 @@ def _control_target(name, args=(), kwargs=None):
                 band if name == "set_eq_band" else "all")
     identities = tuple((field, values.get(field))
                        for field in ("channel", "band", "source", "bus",
-                                     "instance")
+                                     "instance", "component")
                        if field in values)
     return (name,) + identities
 
@@ -1083,9 +1133,6 @@ def _rollback_unresolved(checkpoint, attempted):
             if not cells.issubset(prior):
                 unresolved.append(description)
             continue
-        if name == "mirror_main":
-            unresolved.append(description)
-            continue
         target = _control_target(name, args, kwargs)
         if target[:1] == ("eq",):
             full = ("eq", target[1], "all")
@@ -1170,6 +1217,7 @@ def _restore_checkpoint(dev, checkpoint, attempted):
         "set_bus_master": 40,
         "set_pan": 50,
         "set_send_assigned": 60,
+        "set_mirror_main": 65,
         "set_source_mute": 70,
         "set_bus_mute": 70,
     }

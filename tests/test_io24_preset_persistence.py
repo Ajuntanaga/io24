@@ -800,9 +800,10 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertIn("Saved %d host-file settings to %s", gtk_source)
         # 2026-09-11: presets on the unit are listed among User Presets,
         # tagged by where they live, rather than in a section of their own.
-        self.assertIn('"Host-written candidate · Channel %d, block %d · "',
+        self.assertIn('"Legacy front-panel block receipt · Channel %d, "',
                       gtk_source)
-        self.assertIn('"device body readback unavailable"', gtk_source)
+        self.assertIn('"Device Presets · Channel %d, preset %d · %s; body readback "',
+                      gtk_source)
         self.assertNotIn("selected device slot", gtk_source)
         self.assertIn('"scope": "host-file"', web_source)
 

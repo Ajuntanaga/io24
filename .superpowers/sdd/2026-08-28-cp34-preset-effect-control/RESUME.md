@@ -1,5 +1,78 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-20 controlling implementation: Mixer parity and Host spring
+
+The UC 4.7.2 Mixer comparison is closed. Linux already covers the complete
+ordinary level-routing job — source fader/send, assign, source mute, per-bus
+solo, bus mute/master, Main/Mix A/Mix B, phones source/blend, stereo link and
+the FX return — with the matrix on Routing instead of UC's bus-selected Mixer
+view. The remaining UC fields have no faithful proved io24 representation:
+mono-source `pan`, `stereopan`, independent `FXA`, `dawpostdsp`, output mono,
+writable labels and the persistent mirror latch. CLI pan remains accurately
+named as stereo-pair balance; physical Main mute remains read-only.
+
+The Effects page now has a distinct Host spring tank. `io24_spring.c` models a
+wet-only stereo spring with dispersive all-pass stages and decorrelated damped
+resonators; `io24_spring.py` owns strict state validation, content-addressed
+build, no-remix/no-fallback PipeWire graph, live controls and route restoration.
+The UI exposes independent Input 1/2 sends, Dwell, Tone, Drip, Width, pre-delay,
+On and return level. Physical output is **Main 1-2 only**. USB playback 5-6 is
+only the internal wet-return lane, chosen so ordinary playback 1-2 and the
+Multiband return are not displaced; Mix A/B are temporarily unassigned and all
+prior return routes/known levels are restored on disable or shutdown.
+
+The spring is Host-only and persists as `host_features.spring_reverb`. Named
+snapshots remove session route ownership, UC scenes report it as an omission,
+and device slots never serialize it. Profiles without six playback channels
+fail explicitly. The UI also warns that any Main-to-input loopback cable from a
+test campaign must be removed before enabling to avoid feedback.
+
+Hardware-free verification covers plugin compilation/ABI, wet-only pre-delay,
+bounded finite output, sustained decaying tail, stereo decorrelation and mono
+width, exact playback-channel selection, Main-only routing/restoration,
+reconnect, persistence, scene boundary and wheel contents. Stub-device GTK
+renders passed at desktop and 640-pixel widths. The final complete suite passes
+**1043 tests plus 288 subtests**, with one expected skip and only the existing
+PyGI deprecation warning. The deterministic 717-row parameter matrix was
+regenerated; only current source hashes changed. No USB, device, ALSA or live
+PipeWire graph operation occurred. A physical Main-output acceptance run, if
+wanted, remains separately authorized and must begin with the loopback safety
+check.
+
+## 2026-09-20 controlling result: UC-derived Host Multiband is audible
+
+The Linux Host Multiband insert is now objectively verified end to end through
+the physical Main-L -> Input-1 loop. Attempt 6 used the exact production
+PipeWire graph and bundled LADSPA processor, selected Standard, Tube and FET on
+all four bands in turn, and measured -0.8950 dB, -4.9941 dB and +1.4821 dB
+relative to the bracketing crossover-only baseline. Baseline drift was only
+0.0438 dB. No listening judgment was needed.
+
+The live report's original `INCONCLUSIVE` label was a classifier defect, not a
+DSP failure: it required every character to reduce level by at least 3 dB. A
+hardware-free replay of the same -30 dBFS stimulus through the exact graph
+measured the real model-specific signs: Standard -2.0195 dB, Tube -5.0000 dB,
+and FET **+4.3495 dB**. FET's increase follows UC's recovered fixed-threshold/
+auto-makeup mapping. The corrected classifier requires the expected sign and a
+change of at least 0.5 dB and three times baseline drift. Reanalysis of the
+immutable attempt-6 WAVs returns
+`MULTIBAND_AUDIBLE_ALL_MODELS_AND_RESTORED`.
+
+Restoration was exact: Input 1 returned from the temporary 60 dB staging gain
+to 11 dB before either feedback route reopened; all readable state, PipeWire
+sink mute/volume, clock and shadow hash matched; Host-known write-only route
+intent was resent; no temporary node remained. Firmware, device slots and
+`processingChannel` were untouched. Evidence is in
+`runs/20260920T024620-0700-uc-multiband-live/attempt-6/`,
+`attempt-6-offline-transfer/`, and `attempt-6-reanalysis/`.
+
+Fresh verification after the classifier correction passed 69 focused tests
+plus 18 subtests. The deterministic 717-row parameter matrix regenerated
+byte-identically twice at SHA-256
+`bb6b3c184edb166ad663953f8aa8792717fdca8f7c0434dd041e642e70bdbff9`;
+the final complete suite passed 1030 tests plus 283 subtests, with one expected
+skip and only the existing PyGI deprecation warning.
+
 ## 2026-09-19 controlling repair: scene export and failure recovery
 
 The Linux Host now has **Save scene…** beside **Load scene…**. Export combines a
@@ -4516,3 +4589,107 @@ the laptop sink; the real-format regression is green. The focused Host gate is
 168 tests plus 55 subtests. Solo remains hardware-free because its required
 write-only route prestate is incomplete; the Multiband smoke excluded mixer
 rerouting for the same restoration reason.
+
+### UC-derived Host Multiband repair, 2026-09-20
+
+The Linux Host Multiband compressor no longer maps Standard, Tube and FET onto
+the generic `sc3` plugin. `io24_uc_comp.py` now feeds each band's exact public
+model controls through the existing UC-derived `io24_dsp` builders, and the
+bundled `io24_uc_comp.c` LADSPA processor consumes their common 11-float
+sidechain/timing/curve representation. The plugin is content-addressed and
+built into the user's cache; `swh-plugins`, sudo, and a system-wide install are
+not required. Its LADSPA descriptor uses the required 32-bit descriptor and
+hint ABI, and its soft-knee law follows the firmware-derived half-width
+constants.
+
+Each band now preserves independent Standard, Tube, and FET controls while one
+character is selected. Host snapshot and insert schemas are version 2, with
+deterministic migration from the former generic version-1 band state. Live
+PipeWire changes address every scalar port of the correct channel/band
+processor; sample rate is carried into both the initial graph and subsequent
+control compilation. The Fat Channel UI exposes these exact model surfaces,
+hides the unrelated single-band transfer graph in Multiband mode, and draws a
+four-band rack miniature. The release wheel includes both the Python builder
+and C source.
+
+The focused offline gate passes 125 tests plus 57 subtests. It covers all three
+model mappings, plugin compilation and LADSPA ABI, measured Standard steady-
+state transfer, firmware-derived knee behavior, four-processor graph wiring,
+per-port live updates, version-1 migration, Host persistence, and wheel
+contents. Fake-device GTK renders passed at desktop and the application's
+1042-pixel minimum width; the final harness also moved a real band fader and
+showed no callback error. A broad historical suite reached 30 percent without
+a failure but was stopped because unrelated CP34 integration contracts take
+many minutes each; do not report it as a completed broad pass.
+
+No USB, ALSA, PipeWire graph, device setting, firmware, or Wine operation was
+performed for this repair even though the io24 was connected. The remaining
+acceptance step is a separately authorized guarded live loopback proving the
+new Host DSP is audible and its route restores cleanly; offline implementation
+and regression coverage are complete.
+
+### UC-derived Host Multiband live acceptance, 2026-09-20
+
+The authorized guarded acceptance is active at
+`runs/20260920T024620-0700-uc-multiband-live/`; controlling interim record is
+`PROGRESS.md`. The exact production plugin loads and both the crossover-only
+and four-compressor graphs pass the stimulus in an all-PipeWire capture at
+-21.0103 dBFS. Loader and local three-channel recorder mismatches found during
+attempts 1-2 are fixed and regression-covered. The focused gate now passes 67
+tests plus 18 subtests.
+
+Attempt 4 bypassed Multiband for a direct physical positive control after
+breaking both input-to-Main feedback routes. Neither Input 1 nor Input 2
+received Main L (-184.9581/-199.6874 dBFS). It therefore stopped as
+`BLOCKED_NO_PHYSICAL_LOOPBACK_RESTORED`; this is not a DSP null. Readable
+device state, PipeWire sink mute/volume, 48 kHz/1024 clock, both line routes,
+FX route, playback-return gain and shadow hash all restored exactly, with no
+remaining node or cleanup error. Battery was 100 percent.
+
+Next exact action: connect/reseat Main Out L to Input 1, then rerun the same
+guarded command into `attempt-5`. The runner now detects Input 1 versus Input 2
+from a direct positive control before any Multiband classification. No ears,
+VM, Wine, firmware, slot or `processingChannel` action is required.
+
+Attempt 5 ran after the user connected Main L to Input 1. Input 1's exact tone
+projection rose 27.1231 dB relative to attempt 4, while Input 2 stayed at its
+floor, but the runner's 0.10 Main attenuation plus unchanged 11 dB preamp gain
+left the positive control below its usable floor. It stopped before model
+passes and restored exactly. The prepared attempt-6 sequence now reuses the
+previously proven Input-1 staging: -30 dBFS stimulus, readable Main prestate
+bounded at <=0.50, both feedback legs off before temporary 60 dB Input-1 gain,
+then gain restored before routes reopen. Focused gate: 67 tests plus 18
+subtests. This newly disclosed gain write requires exact authorization before
+execution.
+
+### UC preset and mixer parity closure, 2026-09-20
+
+The Linux Host now separates UC 4.7.2's two preset domains. The normal preset
+menu sends complete records to UC's twelve-entry `MemP/PrsM` Device Presets
+library (Input 1 indexes 16-21, Input 2 indexes 22-27) and records an
+identity-scoped `WRITE_SENT_UNVERIFIED` receipt. The disproved tagged
+`MemP/Stat` front-panel-block writer is no longer a normal GTK action. Loading
+a known Device Preset performs UC-equivalent Host RestorePreset replay through
+the ordinary Fat Channel and VoiceFX setters. Scene export includes every
+complete `Stat` and `PrsM` body retained for the connected unit; scene load
+reports but never writes those libraries.
+
+Mirror Main is a durable Host latch for Mix A/B: Main levels, assigns, and
+stereo-pair balance continue into a mirrored aux while its prior mix stays
+retained and returns when the latch is cleared. UC component `username` fields
+now persist as Host metadata and round-trip through snapshots/scenes. The
+physical Main-mute indicator is explicitly read-only; UC also exposes
+`hardwareMute` display-only, and the writable Output mute remains a distinct
+software bus mute. Mono-input pan, stereo width/collapse, independent `FXA`,
+`dawpostdsp`, and output mono remain explicit protocol absences rather than
+guessed controls.
+
+The focused hardware-free gate passes 130 tests plus 9 subtests, the generated
+protocol matrix is current at 719 rows, and the stub-device GTK harness renders
+all six pages at desktop size plus the changed Routing, Device, and Presets
+pages at the application's minimum width. The broader historical suite reached
+11 percent with no failure before being stopped because its older CP34
+contracts take many minutes; do not report it as a completed broad pass. No
+USB, ALSA, PipeWire graph, firmware, slot, or device-setting operation occurred
+for this closure. Physical `PrsM` persistence, cold-boot recall, and standalone
+VoiceFX audibility still require a separately authorized bounded device run.

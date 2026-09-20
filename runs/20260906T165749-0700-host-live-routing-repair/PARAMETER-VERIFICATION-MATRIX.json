@@ -36,6 +36,9 @@
     "close": [
       "host.device_close"
     ],
+    "component_name": [
+      "host.component_names"
+    ],
     "compressor_off": [
       "fat.channel1.compressor.keyfilter_hz",
       "fat.channel1.compressor.keylisten",
@@ -120,6 +123,10 @@
       "state.host_preset_load"
     ],
     "mirror_main": [
+      "mixer.mixa.mirror_main",
+      "mixer.mixb.mirror_main"
+    ],
+    "mirror_main_enabled": [
       "mixer.mixa.mirror_main",
       "mixer.mixb.mirror_main"
     ],
@@ -220,8 +227,14 @@
     "running": [
       "multiband.enabled"
     ],
+    "save_device_library_preset": [
+      "state.device_preset_library_store"
+    ],
     "save_device_slot": [
       "state.channel2_slot3_write"
+    ],
+    "save_known_device_library_preset": [
+      "state.device_preset_library_store"
     ],
     "save_known_device_slot": [
       "state.channel2_slot3_write"
@@ -307,6 +320,9 @@
     "set_comp_eq_order": [
       "fat.channel1.order",
       "fat.channel2.order"
+    ],
+    "set_component_name": [
+      "host.component_names"
     ],
     "set_compressor": [
       "fat.channel1.compressor.fet.attack_s",
@@ -528,6 +544,10 @@
     ],
     "set_main_volume": [
       "native.global.main_volume"
+    ],
+    "set_mirror_main": [
+      "mixer.mixa.mirror_main",
+      "mixer.mixb.mirror_main"
     ],
     "set_mix_db": [
       "mixer.fxreturn_ch1.main.level_db",
@@ -776,7 +796,7 @@
       "component_route": 211,
       "deferred_api": 1,
       "device_persistence": 7,
-      "device_preset": 1,
+      "device_preset": 2,
       "fat_compressor": 38,
       "fat_eq": 42,
       "fat_eq_alternate": 34,
@@ -788,7 +808,7 @@
       "host_device": 2,
       "host_mixer_control": 7,
       "host_process": 5,
-      "host_state": 16,
+      "host_state": 17,
       "host_telemetry": 16,
       "mixer_balance": 6,
       "mixer_cell": 42,
@@ -808,11 +828,11 @@
     },
     "by_phase": {
       "P0": 5,
-      "P1": 348,
+      "P1": 349,
       "P3": 96,
       "P4": 142,
       "P5": 39,
-      "P6": 23,
+      "P6": 24,
       "P7": 64
     },
     "by_profile": {
@@ -822,11 +842,11 @@
       "dsp_audio_scalar": 107,
       "dsp_audio_toggle": 30,
       "front_panel_write_only": 1,
-      "host_mapping": 88,
+      "host_mapping": 89,
       "host_process": 10,
       "mixer_assignment": 21,
       "mixer_level": 21,
-      "persistence": 8,
+      "persistence": 9,
       "readback_enum": 5,
       "readback_scalar": 5,
       "readback_toggle": 6,
@@ -839,7 +859,7 @@
     "fat_channel_parameter_rows": 142,
     "mixer_cell_rows": 42,
     "multiband_parameter_rows": 52,
-    "total_rows": 717,
+    "total_rows": 719,
     "vendor_descriptor_rows": 117,
     "voicefx_parameter_rows": 30
   },
@@ -16426,6 +16446,33 @@
     },
     {
       "api": [
+        "set_component_name",
+        "component_name"
+      ],
+      "blockers": [],
+      "family": "host_state",
+      "id": "host.component_names",
+      "note": "The io24 exposes no label-write command; names persist in the Linux Host and scene files rather than firmware.",
+      "parameter": "UC username component metadata",
+      "phase": "P1",
+      "profile": "host_mapping",
+      "requires": [],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {},
+      "source": [
+        "io24.py Host shadow",
+        "UC 4.7.2 component model"
+      ],
+      "stimuli": []
+    },
+    {
+      "api": [
         "close"
       ],
       "blockers": [],
@@ -18251,12 +18298,14 @@
     },
     {
       "api": [
-        "mirror_main"
+        "set_mirror_main",
+        "mirror_main",
+        "mirror_main_enabled"
       ],
       "blockers": [],
       "family": "mixer_mapping",
       "id": "mixer.mixa.mirror_main",
-      "parameter": "one-shot mirror main",
+      "parameter": "persistent Mirror Main latch",
       "phase": "P3",
       "profile": "host_mapping",
       "requires": [
@@ -18276,8 +18325,10 @@
         "io24.py"
       ],
       "stimuli": [
-        "known_sparse_main",
-        "known_full_main"
+        false,
+        true,
+        "main_change",
+        "restore_aux"
       ]
     },
     {
@@ -18383,12 +18434,14 @@
     },
     {
       "api": [
-        "mirror_main"
+        "set_mirror_main",
+        "mirror_main",
+        "mirror_main_enabled"
       ],
       "blockers": [],
       "family": "mixer_mapping",
       "id": "mixer.mixb.mirror_main",
-      "parameter": "one-shot mirror main",
+      "parameter": "persistent Mirror Main latch",
       "phase": "P3",
       "profile": "host_mapping",
       "requires": [
@@ -18408,8 +18461,10 @@
         "io24.py"
       ],
       "stimuli": [
-        "known_sparse_main",
-        "known_full_main"
+        false,
+        true,
+        "main_change",
+        "restore_aux"
       ]
     },
     {
@@ -22494,6 +22549,43 @@
       "stimuli": []
     },
     {
+      "api": [
+        "save_device_library_preset",
+        "save_known_device_library_preset"
+      ],
+      "blockers": [
+        "device_library_body_readback_unavailable"
+      ],
+      "family": "device_preset",
+      "id": "state.device_preset_library_store",
+      "note": "Transport completion is retained as WRITE_SENT_UNVERIFIED; this is UC's library route, not assignment of one of the four front-panel button slots.",
+      "parameter": "UC Device Presets MemP/PrsM indexes 16 through 27",
+      "phase": "P6",
+      "profile": "persistence",
+      "requires": [
+        "battery_above_10"
+      ],
+      "result": {
+        "attempts": [],
+        "evidence": [],
+        "restoration_evidence": [],
+        "restored": false,
+        "status": "PENDING"
+      },
+      "scope": {
+        "indexes": [
+          16,
+          27
+        ],
+        "per_channel": 6
+      },
+      "source": [
+        "io24.py MemP/PrsM",
+        "UC 4.7.2 StorePreset"
+      ],
+      "stimuli": []
+    },
+    {
       "api": [],
       "blockers": [],
       "family": "host_state",
@@ -24317,14 +24409,14 @@
   ],
   "schema": "io24-atomic-parameter-verification-matrix-v1",
   "source_sha256": {
-    "io24.py": "913f8bef725075d464abc10588b9443787ff148415c9e5b9ca710417931573f0",
+    "io24.py": "a9b7e9896d2ba6625648b6c42fe4963b7a603175c6b9aadba43c68dd04c94027",
     "io24_dsp.py": "3a2b810257b7957ec3246893ce3f0f7e2280c53734987a07d772ef92a26e2407",
     "io24_fx.py": "86eb6e8a45b2e972b7e681d6118c5f5cbe4b64328c044c38c88e19d13cc712ca",
-    "io24_mbc.py": "50b1b142492cf432de855ecb3b2fd299b5efdbc5e43eebe81a43b8f0c4f629d7",
+    "io24_mbc.py": "75983c6e621d2dcdf6126f664c3019798c1d7ddebaecc2fbee8947f159b32d3f",
     "io24_presets.py": "0de3f7afd0b29cf3d6150f5ff51234c7e08ee146ddb4463d6b6d92e97554ba3b",
-    "io24_scene.py": "b4b611b0661edd3be846949ed852652c14bdd2fa556c946ce1b73dd2c25b674d",
+    "io24_scene.py": "06051c9cd7037143ca961ea210f43d361feff9359599294bca445fc99bb5b70d",
     "io24d.py": "0d351c37b2fa3450446a9dcd6c0922b88d76e209b74df03a1bd55d1337c1ced5",
-    "io24gtk.py": "28377def9a4f48495cecf958cb193fa5f79ee5689084d13b5b2f0f53ea758985",
+    "io24gtk.py": "0463a9899729f1eb3abdd6378ee2cb5af8b7d6c4d0109e2832077c87b0708bbb",
     "re/io24_params.json": "4e6642fbdaf6e9e9c12dd06cf53f9e9cdb7d8c82317d0ef8939bcbc39a36f1ef",
     "re/uc_component_model/dsp_fx_params.xml": "3f5f99bd6efdfd54b65adf15c82d8b9da36116b25b11e3c88a4ad441b9decd89",
     "re/uc_component_model/dspusb_component_model.xml": "55388fd3fdcf6d5b466991db886d50a2d8c787afe50390cde554e46d74ff2bfc",

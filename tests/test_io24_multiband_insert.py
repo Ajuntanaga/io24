@@ -90,6 +90,7 @@ class _Control:
         self.value, self.active, self.selected = value, active, selected
         self.sensitive = True
         self.visible = True
+        self.visible_child_name = None
         self.subtitle = None
         self.draws = 0
 
@@ -114,6 +115,9 @@ class _Control:
     def set_sensitive(self, sensitive):
         self.sensitive = sensitive
 
+    def set_visible_child_name(self, name):
+        self.visible_child_name = name
+
     def set_visible(self, visible):
         self.visible = visible
 
@@ -128,8 +132,12 @@ def _controls():
     """Every control one channel's Multiband page holds, by its key."""
     controls = {"x%d" % index: _Control() for index in range(3)}
     for index in range(len(io24_mbc.BANDS)):
-        for key in ("type", "thr", "ratio", "attack", "release", "knee",
-                    "makeup", "keyf", "auto", "limit", "keyon", "listen"):
+        for key in (
+                "type", "stack",
+                "s_thr", "s_ratio", "s_attack", "s_release", "s_gain",
+                "s_knee", "s_auto", "t_peak", "t_gain", "t_limit",
+                "f_input", "f_output", "f_attack", "f_release", "f_ratio",
+                "keyf", "keyon", "listen"):
             controls[(index, key)] = _Control()
     return controls
 
@@ -152,7 +160,7 @@ class _Insert:
     def running(self):
         return self._running
 
-    def start(self, states, capture, sink):
+    def start(self, states, capture, sink, sample_rate=48000.0):
         self.starts.append((sorted(states), capture, sink))
         if self.ok:
             self._running, self.channels = True, tuple(sorted(states))
@@ -187,7 +195,7 @@ class InsertGraphTests(unittest.TestCase):
 
     def test_each_channel_starts_from_its_own_settings(self):
         state = io24_mbc.default_snapshot()
-        state["bands"]["low"]["threshold"] = -31.0
+        state["bands"]["low"]["standard"]["threshold_db"] = -31.0
         graph = io24_mbc.build_insert_graph({2: state}, with_comp=True)
         nodes = {node["name"]: node for node in graph["nodes"]}
         self.assertEqual(
@@ -255,7 +263,7 @@ class InsertStateTests(unittest.TestCase):
     def test_bad_states_are_refused(self):
         good = io24_mbc.default_insert_state()
         cases = [
-            dict(good, version=2),
+            dict(good, version=3),
             dict(good, channels={"1": good["channels"]["1"]}),
             dict(good, quantum_before=True),
             dict(good, quantum_before=-1),
@@ -558,13 +566,13 @@ class ReconcileTests(unittest.TestCase):
         self.assertEqual(jobs, [])          # nothing was moved, nothing to undo
         self.assertEqual(self.pw, [])
 
-    def test_a_computer_without_the_plugins_is_told_so(self):
+    def test_a_computer_that_cannot_build_the_processor_is_told_so(self):
         host, _jobs, said = self._host(
             models=(3, 0), comp=(True, False),
-            missing="needs swh-plugins: sudo apt install swh-plugins")
+            missing="cannot build Host compressor: no C compiler found")
         host._insert_reconcile()
         self.assertEqual(host.insert.starts, [])
-        self.assertIn("swh-plugins", said[-1])
+        self.assertIn("no C compiler", said[-1])
         self.assertFalse(host.dyn_by_ch[1]["comp"])
 
     def test_without_the_io24s_audio_it_waits_with_each_feed_in_place(self):
@@ -644,7 +652,8 @@ class HostTests(unittest.TestCase):
             mbc_ctl={1: _controls(), 2: _controls()}, insert=_Insert(),
             _mbc_mute=False, _adopt_mute=False, _insert_routing=routing,
             _insert_quantum_before=None, _insert_stale=False)
-        return _bind(host, "_adopt_insert_state", "_adopt_mbc_controls")
+        return _bind(host, "_adopt_insert_state", "_adopt_mbc_controls",
+                     "_mbc_band_state")
 
     def _saved(self):
         state = io24_mbc.default_insert_state()

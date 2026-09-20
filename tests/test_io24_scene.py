@@ -89,7 +89,7 @@ class ScenePlanTests(unittest.TestCase):
         for expected in (
                 "set_mute_mode", "set_preset_mode", "set_comp_eq_order",
                 "set_fx_mix", "set_fx", "set_reverb", "set_source_mute",
-                "set_bus_mute", "set_bus_master", "mirror_main"):
+                "set_bus_mute", "set_bus_master", "set_mirror_main"):
             self.assertIn(expected, names)
         self.assertEqual(names.count("set_fx"), 1)
         self.assertEqual(names.count("set_eq_band"), 4)

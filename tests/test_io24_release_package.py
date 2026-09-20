@@ -19,6 +19,8 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_dsp.py",
             "io24_fx.py",
             "io24_mbc.py",
+            "io24_spring.py",
+            "io24_uc_comp.py",
             "io24_meters.py",
             "io24_mixer.py",
             "io24_native_stat.py",
@@ -39,6 +41,8 @@ class ReleasePackageTests(unittest.TestCase):
                 shutil.copy2(ROOT / name, stage / name)
             for source in ROOT.glob("*.py"):
                 shutil.copy2(source, stage / source.name)
+            shutil.copy2(ROOT / "io24_uc_comp.c", stage / "io24_uc_comp.c")
+            shutil.copy2(ROOT / "io24_spring.c", stage / "io24_spring.c")
             wheel_dir = stage / "wheel"
             result = subprocess.run(
                 [
@@ -74,9 +78,19 @@ class ReleasePackageTests(unittest.TestCase):
                     for line in archive.read(entry_name).decode("utf-8").splitlines()
                     if " = " in line
                 )
+                compressor_source = [
+                    name for name in names
+                    if name.endswith("/share/io24/io24_uc_comp.c")
+                ]
+                spring_source = [
+                    name for name in names
+                    if name.endswith("/share/io24/io24_spring.c")
+                ]
 
             self.assertEqual(missing, set())
             self.assertEqual(required_entry_points - entry_points, set())
+            self.assertEqual(len(compressor_source), 1)
+            self.assertEqual(len(spring_source), 1)
 
             isolated = stage / "isolated"
             isolated.mkdir()

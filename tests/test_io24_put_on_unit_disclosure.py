@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""The Presets menu exposes the repaired firmware-native slot writer."""
+"""Keep the low-level native ``Stat`` writer explicit and regression-covered.
+
+The normal Presets menu now uses UC's separate ``PrsM`` Device Presets route;
+these tests preserve the bounded research primitive without presenting it as
+the user-facing Store action.
+"""
 
 from pathlib import Path
 from types import SimpleNamespace

@@ -30,6 +30,9 @@ class _Control:
     def __init__(self):
         self.value, self.active, self.selected = 0.0, False, 0
         self.sensitive = True
+        self.visible = True
+        self.visible_child_name = None
+        self.draws = 0
 
     def get_value(self):
         return self.value
@@ -52,13 +55,26 @@ class _Control:
     def set_sensitive(self, sensitive):
         self.sensitive = sensitive
 
+    def set_visible_child_name(self, name):
+        self.visible_child_name = name
+
+    def set_visible(self, visible):
+        self.visible = visible
+
+    def queue_draw(self):
+        self.draws += 1
+
 
 def _multiband_controls():
     """Every control one channel's Multiband page holds, by its key."""
     controls = {"x%d" % index: _Control() for index in range(3)}
     for index in range(len(io24_mbc.BANDS)):
-        for key in ("type", "thr", "ratio", "attack", "release", "knee",
-                    "makeup", "keyf", "auto", "limit", "keyon", "listen"):
+        for key in (
+                "type", "stack",
+                "s_thr", "s_ratio", "s_attack", "s_release", "s_gain",
+                "s_knee", "s_auto", "t_peak", "t_gain", "t_limit",
+                "f_input", "f_output", "f_attack", "f_release", "f_ratio",
+                "keyf", "keyon", "listen"):
             controls[(index, key)] = _Control()
     return controls
 
@@ -505,20 +521,33 @@ class HostRefinementTests(unittest.TestCase):
         for index, name in enumerate(io24_mbc.BANDS):
             bands[name] = {
                 "type": ("standard", "tube", "fet", "standard")[index],
-                "threshold": -18.0 - index,
-                "ratio": 2.0 + index,
-                "attack": 4.0 + index,
-                "release": 90.0 + index * 10.0,
-                "knee": 2.0 + index,
-                "makeup": 1.0 + index,
-                "auto": index == 0,
-                "limit": index == 1,
+                "standard": {
+                    "threshold_db": -18.0 - index,
+                    "ratio": 2.0 + index,
+                    "attack_s": 0.004 + index * 0.001,
+                    "release_s": 0.09 + index * 0.01,
+                    "gain_db": 1.0 + index,
+                    "softknee": index % 2 == 0,
+                    "automode": index == 0,
+                },
+                "tube": {
+                    "peak": 10.0 + index,
+                    "gain": 40.0 + index,
+                    "limit_mode": index == 1,
+                },
+                "fet": {
+                    "input_db": -18.0 - index,
+                    "output_db": -4.0 - index,
+                    "attack_s": 0.0001 + index * 0.0001,
+                    "release_s": 0.09 + index * 0.01,
+                    "ratio_index": index,
+                },
                 "key_filter": index == 2,
                 "key": 120.0 * (index + 1),
                 "listen": index == 3,
             }
         return {
-            "version": 1,
+            "version": io24_mbc.SNAPSHOT_VERSION,
             "enabled": True,
             "xovers": [140.0, 900.0, 4200.0],
             "bands": bands,
@@ -719,7 +748,8 @@ class HostRefinementTests(unittest.TestCase):
             mbc_ctl={ch: _multiband_controls() for ch in (1, 2)},
             _mbc_mute=False, _insert_stale=False,
             _insert_wanted=lambda: ())
-        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state"):
+        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state",
+                     "_mbc_band_state"):
             setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
 
         status = io24gtk.Win._adopt_legacy_multiband(host, state)
@@ -744,7 +774,7 @@ class HostRefinementTests(unittest.TestCase):
                 self.applied.append((channel, db))
 
         bad = self._multiband_state()
-        bad["bands"]["low"]["ratio"] = 0.5
+        bad["bands"]["low"]["standard"]["ratio"] = 0.5
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"
             path.write_text(json.dumps({
@@ -765,14 +795,19 @@ class HostRefinementTests(unittest.TestCase):
             normalized["xovers"], True, state=normalized)
         nodes = {node["name"]: node for node in graph["nodes"]}
 
+        for index, band in enumerate(io24_mbc.BANDS):
+            node = nodes["c%d" % index]
+            self.assertEqual(node["label"], "io24_uc_comp")
+            self.assertEqual(
+                node["control"],
+                io24_mbc.compressor_controls(normalized["bands"][band]))
         low = nodes["c0"]["control"]
         self.assertEqual(low["Threshold level (dB)"], -18.0)
-        self.assertEqual(low["Ratio (1:n)"], 2.0)
-        self.assertEqual(low["Attack time (ms)"], 4.0)
-        self.assertEqual(nodes["k2"]["control"]["Freq"], 360.0)
-        self.assertEqual(nodes["c2"]["control"]["Chain balance"], 1.0)
-        self.assertEqual(nodes["lc3"]["control"]["Mult"], 0.0)
-        self.assertEqual(nodes["lk3"]["control"]["Mult"], 1.0)
+        self.assertEqual(low["Slope"], 0.5)
+        # Auto mode is an exact UC behavior: it forces 10 ms / 150 ms.
+        self.assertAlmostEqual(low["Attack time (s)"], 0.01)
+        self.assertNotEqual(nodes["c2"]["control"]["Biquad b0"], 1.0)
+        self.assertEqual(nodes["c3"]["control"]["Key listen"], 1.0)
 
     def test_spectrum_uses_overlapping_windows_and_time_based_release(self):
         frame, remainder = io24gtk.Spectrum._take_window(
@@ -1272,17 +1307,45 @@ class HostRefinementTests(unittest.TestCase):
         controls = _multiband_controls()
         host = SimpleNamespace(mbc_ctl={1: controls}, _mbc_mute=False,
                                _insert_wanted=lambda: (1,))
-        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state"):
+        for name in ("_adopt_mbc_controls", "_mbc_snapshot_state",
+                     "_mbc_band_state"):
             setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
 
         host._adopt_mbc_controls(1, state)
 
         self.assertEqual(host._mbc_snapshot_state(1), state)
-        self.assertFalse(controls[(0, "makeup")].sensitive)
-        self.assertTrue(controls[(1, "makeup")].sensitive)
+        for index, band in enumerate(io24_mbc.BANDS):
+            self.assertEqual(
+                controls[(index, "stack")].visible_child_name,
+                state["bands"][band]["type"])
         self.assertFalse(host._mbc_mute)
         host._insert_wanted = lambda: ()
         self.assertFalse(host._mbc_snapshot_state(1)["enabled"])
+
+    def test_multiband_selection_hides_single_band_only_controls(self):
+        widgets = {name: _Control() for name in (
+            "model", "comp_param_stack", "ckey_row", "cklisten",
+            "comp_curve")}
+        host = SimpleNamespace(w={1: widgets}, _adopt_mute=True)
+
+        widgets["model"].set_selected(io24gtk.MULTIBAND_MODEL)
+        io24gtk.Win._comp_model_changed(host, 1)
+
+        self.assertEqual(widgets["comp_param_stack"].visible_child_name,
+                         "multiband")
+        self.assertFalse(widgets["ckey_row"].visible)
+        self.assertFalse(widgets["cklisten"].visible)
+        self.assertFalse(widgets["comp_curve"].visible)
+
+        widgets["model"].set_selected(0)
+        io24gtk.Win._comp_model_changed(host, 1)
+
+        self.assertEqual(widgets["comp_param_stack"].visible_child_name,
+                         "standard")
+        self.assertTrue(widgets["ckey_row"].visible)
+        self.assertTrue(widgets["cklisten"].visible)
+        self.assertTrue(widgets["comp_curve"].visible)
+        self.assertEqual(widgets["comp_curve"].draws, 2)
 
     def test_host_file_worker_uses_its_serialized_device_argument(self):
         source = inspect.getsource(io24gtk.Win._pick)

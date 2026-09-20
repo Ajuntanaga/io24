@@ -2,6 +2,95 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## 2026-09-20 controlling preset result: UC Store is `PrsM`, not a button-slot write
+
+UC 4.7.2 has two separate preset concepts. The four front-panel fast-access
+blocks are `MemP/Stat` indexes 0–3; UC exposes their selected index and read-only
+titles but no command that assigns a library preset to one of those buttons.
+Its explicit **StorePreset** action instead serializes the complete selected
+channel record and sends `MemP/PrsM`: indexes 16–21 are Input 1's six Device
+Presets and 22–27 are Input 2's six. **RestorePreset** applies a retained
+library/local record through the ordinary component setters; it does not recall
+`Stat`.
+
+The Linux Host now follows that split. **Send to Device Presets** uses the exact
+tagged `PrsM` envelope and records an identity-scoped
+`WRITE_SENT_UNVERIFIED` receipt in `device-presets.json`. **Load** replays that
+complete retained record through the normal Fat Channel and VoiceFX setters.
+The older `Stat` writer is no longer a normal GTK action. A transport reply
+still cannot prove stored-body readback, cold-boot persistence, or standalone
+VoiceFX audibility because firmware exposes no library-body read command.
+
+Scene export now includes every complete `Stat` and `PrsM` body known from the
+current unit's local registries. Scene load validates and reports the libraries
+but never overwrites them.
+
+## 2026-09-20 mixer parity boundary and Host spring reverb
+
+The UC 4.7.2 component model, retained device-page capture and recovered mixer
+code now give one closed comparison for the Mixer tab. The Linux Host covers
+every ordinary io24 routing operation: source fader/send levels and assigns for
+Main, Mix A and Mix B; source mute; per-bus solo; output mute and bus master;
+phones source; monitor blend; stereo link; Channel Mute Sync; and the shared FX
+return. UC presents one selected bus as channel strips, while Linux keeps the
+same complete state visible as a matrix on **Routing**.
+
+The remaining UC fields are explicit protocol gaps rather than unfinished
+nearby controls:
+
+- `line.chN.pan`: the block-100 mixer has one level per source/bus and ignores
+  its index field, so it cannot place one mono source independently. The CLI's
+  older `pan` operation is correctly limited to a Host-side balance across a
+  stereo pair using UC's recovered -3 dB-centre law; the GTK Host does not
+  mislabel that as mono pan.
+- `stereopan`: no representable width/mono-collapse control.
+- `FXA`: UC names a per-input reverb send, but no independent io24 wire field
+  has been proved. The device exposes one unified channel processing scalar;
+  substituting it would also change EQ and dynamics.
+- `dawpostdsp`: no proved safe route. Apparent neighboring ids collide with
+  unrelated object gain/Main-volume controls.
+- output `mono` has no proved representation.
+- writable component names are UC host-model metadata, not an io24 command.
+  Linux now persists them in its shadow and scene/preset files.
+- Mirror Main is now a persistent Linux Host latch. Main level, assignment and
+  stereo-pair-balance edits continue into the selected aux; clearing the latch
+  restores that aux's retained state. This matches UC behavior while the Host
+  owns the mix without claiming a firmware-resident latch.
+- physical Main mute is readable in `JaSt` slot 42 bit 1, but no writable
+  parameter reaches it. UC itself binds `hardwareMute` as display-only. Linux's
+  output mute is the distinct software control.
+
+The Effects page now also has a **Host spring reverb**, deliberately separate
+from device block 202. `io24_spring.c` is a wet-only stereo LADSPA processor:
+short dispersive all-pass stages excite two decorrelated banks of damped
+resonators. Its public controls are Input 1/2 send gain, Dwell, Tone, Drip,
+Width and pre-delay. `io24_spring.py` validates/persists that state, builds the
+content-addressed plugin, emits a no-fallback/no-remix PipeWire graph and owns
+its lifecycle.
+
+The graph captures physical Inputs 1/2 after the Fat Channel and returns wet
+audio on USB playback 5-6 (`return/ch3`). That pair is an internal transport,
+not the destination: while enabled, the Host assigns it to **physical Main
+1-2 only**, removes it from Mix A/Mix B, and restores every prior assignment
+and known fader state on disable or clean shutdown. USB playback 1-2 remains
+available for ordinary computer audio. Profiles exposing fewer than six
+playback channels fail explicitly; there is no silent remix or fallback to
+another device.
+
+`host_features.spring_reverb` keeps the algorithm controls and On state in Host
+snapshots and last-session recovery. Named snapshots strip the temporary route
+ownership record, exactly as Multiband strips its borrowed mixer/buffer state.
+UC scene export reports the object as Host-only, and device-slot code never
+serializes it.
+
+Hardware-free contracts cover schema rejection, exact PipeWire target/channel
+selection, Main-only route restoration, LADSPA ABI, silence, bounded output,
+pre-delayed late energy, tail decay, stereo decorrelation/mono width, GTK state
+capture and wheel contents. The implementation has been visually rendered at
+desktop and narrow widths with the stub-device paint harness. No USB operation
+was performed for this change, so live Main-output audibility remains a
+separate acceptance result rather than being inferred from those tests.
+
 ## 2026-09-19 controlling result: UC scene save/load and settings parity
 
 The Linux Host now treats a Universal Control `.scene` as a whole-device state
@@ -12,14 +101,15 @@ retained UC 4.7.2 scenes produce 94–97 real Host operations each. Those plans
 include input state, routing and assigns, DSP amount, complete Fat Channels,
 exact Standard/Passive/Vintage EQ, the singleton VoiceFX component, shared
 reverb, return-source mute/solo, bus master/output mute, output delay,
-headphones source, preset-button mode, Channel Mute Sync, and a requested
-mirror-main as the Host's documented one-shot copy. Device-resident preset
-libraries are reported and never overwritten.
+headphones source, preset-button mode, Channel Mute Sync, persistent Mirror
+Main, and Host component names. Device-resident preset libraries are reported
+and never overwritten.
 
 The Host also exports readable plus exactly shadowed state using UC's recognized
 `global`, `line`, `return`, `fxreturn`, `aux`, `main`, and `fx` vocabulary. The
 write is atomic and is accepted only after the generated object passes the same
-planner as import. Device-slot bodies and slot selection are excluded. Missing
+planner as import. Complete registry-known `Stat` and `PrsM` bodies are included
+under `presets`; physical slot selection is excluded. Missing
 write-only state, enabled DSP Amount without an exact retained scalar, monitor
 values with no supported scene field, and Host-only extensions are reported as
 omissions rather than assigned guessed defaults. This proves Linux Host
@@ -39,7 +129,8 @@ restore errors as a partial rollback.
 
 UC fields without a proven io24 representation stay typed omissions, not
 approximations: mono-source `pan`, `stereopan` width, exact `FXA`,
-`dawpostdsp`, output `mono`, writable names, and the persistent mirror latch.
+`dawpostdsp`, and output `mono`. Names and Mirror Main now round-trip as exact
+Host-persisted UC component state.
 In particular, the Host does not substitute its stereo-pair balance for UC's
 mono-source pan.
 
@@ -51,13 +142,12 @@ reconnect replay. `auxMuteMode`'s wire route is decoded, but `1 = sync enabled`
 remains explicitly an inference from UC's field name and the owner's-manual
 behavior because the device has no readable state slot for it.
 
-Device-block language was corrected at the same boundary. A store sends a
-firmware-native Fat Channel candidate and records `WRITE_SENT_UNVERIFIED`; it
-is not body readback or durable-commit proof. A known-block **Load** selects the
-block and directly replays the retained Fat Channel plus VoiceFX record from the
-Host, because selection alone did not reapply the unreadable body in the
-retained live test. An unknown block is selected only. Standalone Fat Channel
-audibility and Host-assisted VoiceFX are not conflated.
+Device-preset language was corrected again after the retained UC Store/Restore
+handlers were followed. Store targets the twelve-entry `PrsM` Device Presets
+library, not the four `Stat` button blocks. A sent library record remains
+`WRITE_SENT_UNVERIFIED`; it is not body readback or durable-commit proof.
+Restore is Host-side component replay, so Linux **Load** now does the same.
+Standalone Fat Channel audibility and Host-assisted VoiceFX are not conflated.
 
 This repair and its regression tests were hardware-free. No USB, device,
 firmware, preset, or audio operation occurred.
@@ -1539,8 +1629,8 @@ hardware from Linux, with no PreSonus software involved:
 |---|---|
 | **Preamp & routing** | gain, phantom, high-pass, mutes, channel link, monitor blend, headphone & main volume |
 | **Dynamics** | gate, compressor (3 models), limiter — with measured transfer curves |
-| **Effects** | reverb, plus 3 of 6 insert-FX models verified by ear (delay, de-tuner, transformer); the other 3 decoded |
-| **Mixer** | per-source sends to main / Mix A / Mix B, gain law measured exact |
+| **Effects** | shared reverb measured audible; all six VoiceFX models objectively verified through physical Input 1. The separate Host spring passes its hardware-free DSP/route contracts; live Main-output acceptance is pending. |
+| **Mixer** | per-source sends/assigns/mute/solo and bus master/mute for Main / Mix A / Mix B, with the gain law measured exact. The UC-only fields without proved io24 representations are listed in the 2026-09-20 parity boundary above. |
 | **Metering** | levels and per-stage gain reduction, streamed at 10 Hz |
 | **Compatibility** | a UCNET shim so existing PreSonus plugins drive the device unmodified |
 
@@ -3246,6 +3336,32 @@ processor** — no second image inside.
 which is EQ-band handling. There is no evidence of any frequency-domain or
 multiband machinery in this device.
 
+**Linux Host implementation.** Multiband is therefore a computer-side input
+insert, not a decoded device block. `io24_mbc.py` splits each post-Fat-Channel
+capture into four phase-compensated LR4 bands. Each band independently selects
+Standard, Tube or FET and retains all three public parameter sets. The existing
+UC-derived `cpxt_comp`, `cpxt_tube` and `cpxt_fet` builders compile the selected
+model into the common 11-float tuple documented in §9b; `io24_uc_comp.c` consumes
+that tuple in a bundled mono LADSPA processor before the bands are summed and
+returned on USB playback 1-2. Its RMS 4:1 steady-state transfer reproduces the
+measured −7.30 dB point, and its soft-knee equation uses the firmware-derived
+`0.5/sqrt(K)` and `0.5*sqrt(K)` constants. This validates that measured
+Standard transfer point, the implemented knee equation, and the Host graph
+without inventing a firmware multiband command.
+
+**Live Host acceptance (2026-09-20).** The exact production graph was then
+measured through a guarded physical Main-L -> Input-1 loop with a -30 dBFS,
+1 kHz stimulus. Bracketing crossover-only captures drifted by 0.0438 dB;
+Standard, Tube and FET changed the tone by -0.8950, -4.9941 and +1.4821 dB.
+The initially preregistered "all models reduce by at least 3 dB" classifier was
+wrong: a hardware-free pass through the same production graph gives -2.0195,
+-5.0000 and **+4.3495 dB** respectively. The positive FET result follows the
+recovered UC fixed-threshold and auto-makeup law rather than indicating a
+reversed control. The corrected criterion requires the expected model-specific
+sign plus at least 0.5 dB and three times the observed baseline drift. The
+immutable captures therefore classify all three models audible, with exact
+device/PipeWire restoration and no listening judgment.
+
 ### C. DFU surface — download only
 
 Interface **6** is a real DFU 1.10 interface ("Revelator IO 24 DFU"), present in
@@ -3355,10 +3471,12 @@ The remaining UC controls in that model split two ways, and the split matters:
   candidate for a real device-side control, including a genuine mirror-to-main
   latch and an output delay this driver does not expose at all.
 
-So `mirror_main` as implemented here is a host-side one-shot copy. If the global
-id 3/4 parameters turn out to be reachable, the device may be able to hold the
-latch itself, which would be strictly better — it would survive without the host
-and would not need the read-back block 100 lacks.
+Later UC 4.7.2 code recovery supersedes the one-shot implementation described
+here: Linux now keeps a persistent Host latch. While enabled, subsequent Main
+level/assign/balance edits are folded into the aux cells; the aux's own hidden
+mix remains retained and is restored when the latch clears. No safe io24 wire
+command for global ids 3/4 has been proved, so this does not claim that the
+latch survives after the Host closes.
 
 The driver now models the same three layers UC shows, folding them into the one
 number the hardware takes:

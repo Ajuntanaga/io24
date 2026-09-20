@@ -52,21 +52,24 @@ separately rather than implied to be independently measured.
 | Headphone / main volume, monitor blend, channel processing/effects mix | live 0/25/50/75/100 meter test confirms one linear dry-to-full-chain blend; exact positive value remains write-only |
 | Input, bus and gain-reduction metering | |
 | Mixer: per-source level into main / Mix A / Mix B | gain law exact to **0.03 dB over a 106 dB range** on all three buses |
-| Aux sends: assign, source/output mute, bus master, mirror-main | mute retains faders/assigns; master exact to **0.00 dB**, no crosstalk between buses |
+| Aux sends: assign, source/output mute, bus master, persistent Mirror Main | mute retains faders/assigns; master exact to **0.00 dB**, no crosstalk between buses; Mirror Main retains the hidden aux mix and restores it when released |
 | GTK Mix A/B capture | independent Host-only PipeWire sources for USB capture 3–4 and USB capture 5–6; both published successfully in the live 96 kHz / 512 smoke |
 | CLI pan / balance for a stereo pair | send-level balance using Universal Control's recovered law; centre −3.00 dB, measured within ±1 dB on hardware |
 | Standard 4-band EQ | exact UC 4.7.2 controls: independent global and four band-power switches, parametric middle bands, outer shelf/parametric selectors, 36 Hz–18 kHz; frequency accuracy and band indexing measured |
 | Passive Program / Vintage 1970s EQ | exact editable UC 4.7.2 controls, designers and `Lfdf[0]` + `Bqdf[1..3]` live routes; source- and packet-verified offline, with a dedicated audible A/B still pending |
 | Gate, compressor (3 models), limiter | |
 | Reverb | measured processing; **both channels can feed it at once** |
+| Host spring reverb | a separate wet-only dispersive/resonator tank for physical Inputs 1/2, returned on USB playback 5–6 and assigned to **physical Main 1–2 only** while enabled. Settings and route restoration are hardware-free tested; a live Main-output acceptance run has not yet been performed. |
 | Output delay, 0–500 ms | one global delay plus a bus selector — not an independent delay per bus. 50 ms asked, 49.50 ms measured |
 | Sample rate 44.1 / 48 / 88.2 / 96 kHz | device clocks at 96 kHz on demand |
 | Processing-channel select | which input feeds a channel's DSP chain |
 | Channel-name read-back (`names`) | the device's own `'CHNP'` table |
+| UC component names | writable Host metadata for inputs, returns, FX return, Mix A/B and Main; saved in Host presets/scenes because the io24 has no label-write command |
 | Presets (host-side JSON) | full round-trip, 13 setting categories |
-| Device-block `MemP/Stat` store | exact firmware-native v2 transport and identity-bound Host receipt. The device cannot read a body back, so the UI calls it a **Fat Channel candidate** and reports `WRITE_SENT_UNVERIFIED`; Fat Channel works standalone when the device applies it, while VoiceFX is sent by Host-assisted **Load**. |
+| UC Device Presets store | exact `MemP/PrsM` Store route, indexes 16–21 for Input 1 and 22–27 for Input 2, with six visible destinations per channel and an identity-bound `WRITE_SENT_UNVERIFIED` receipt. **Load** replays the retained complete record, matching UC's RestorePreset behavior. |
+| Front-panel preset buttons | the four `MemP/Stat` records are firmware/front-panel selection state, not UC's explicit Store destination. The earlier writer is retained only as a low-level research primitive and is no longer exposed as a normal GTK action. |
 | Voice FX control model and UC transaction | exact XML-ordered controls and builders for all six models, a six-unit visual rack, one global settings object over two structural lanes, and a separate **On** state per model component. A UC 4.7.2 USB capture controls model selection, state-only edits, Transformer `MBdf` tables and pacing. All six models are objectively verified through physical Input 1 in two on/off cycles each: exact Delay timing, Detuner pitch targets, Ring Modulator sidebands, and repeatable Transformer/Vocoder/Filters spectral changes, with same-path reverb controls and stable off states. |
-| **Universal Control scene save/load** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`, and atomically saves readable plus Host-known state with UC field names. A failed load compensates from its pre-load checkpoint and reports whether rollback was complete or partial; device blocks are untouched and never exported. |
+| **Universal Control scene save/load** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`, and atomically saves readable plus Host-known state with UC field names. Every complete front-panel-block and Device-Presets body known to this exact unit is included; load reports those libraries but never overwrites them. A failed load compensates from its pre-load checkpoint and reports whether rollback was complete or partial. |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
 | Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
 | UCNET shim | lets UCNET-speaking clients talk to the device |
@@ -94,13 +97,13 @@ one shared block-201 settings instance.
 
 | | |
 |---|---|
-| Physical acceptance of device save/recall | Negative for the current Host writer: slot selection worked, but neither a native +15 dB shelf nor an independent native gate off/on body took effect. Stop body variants until a missing commit/apply edge is recovered; cold-boot persistence remains unresolved. |
+| Physical acceptance of UC Device Presets store | The correct UC `PrsM` Store transaction is implemented and locally receipted, but the device exposes no body readback. A USB reply is therefore still `WRITE_SENT_UNVERIFIED`, not proof of cold-boot persistence or standalone VoiceFX audibility. The negative +15 dB shelf/gate experiment targeted the different `Stat` front-panel record route. |
 | Corrected Host VoiceFX audibility | All six models process audio on physical Input 1 in two repeatable on/off cycles each. Delay timing, Detuner pitch targets, and Ring Modulator sidebands are frequency/time-specific; Transformer, Vocoder, and Filters have repeatable gain-normalized spectral signatures. The prior dry listening campaign used the superseded transaction. A separate valid Input-2 run detected no Delay, so simultaneous/two-lane operation is not implied. Saved VoiceFX data still does not establish standalone audibility. |
 | Private reverb on both inputs at once | Structurally supported, not audibly proved: block 201/model 0 has one settings instance and its private core binds lanes 0 and 1. The Host configures that state globally; simultaneous routing/gating still needs the live experiment. |
 | Independent private-reverb settings per channel | Not possible without custom firmware: both lanes share one `on/lows/width/mix` setting set. |
-| More than 2 presets per channel standalone | Four slots, firmware-clamped. |
+| Front-panel recall capacity | Two button-selectable `Stat` blocks per input. UC's separate Device Presets library has six entries per input, but storing a library record does not assign another front-panel button. |
 | Reading firmware back | The DFU interface reports `Upload Unsupported`. |
-| Multiband dynamics | None of the vocabulary exists in the firmware. |
+| Multiband dynamics | No firmware support. The Linux Host provides a four-band Linkwitz-Riley insert with per-band Standard, Tube or FET controls compiled through the recovered UC model mappings into its bundled processor. All three characters are objectively verified through the physical Main-L -> Input-1 loop; the exact offline graph and live path agree on each model's direction, including FET's expected auto-makeup increase. |
 
 For Doubler/Transformer specifically, do not involve shared reverb block 202.
 The factory preset named `Reverb` is a complete tagged library template for
@@ -354,6 +357,20 @@ longer save bus pan. An obsolete `host_features.pan` object in an older file is
 ignored and reported after a completed load. This is separate from the CLI
 pair-balance command above.
 
+Compared with UC 4.7.2, the Linux Host already covers the functional mixer
+matrix — fader/send level, assign, source mute, per-bus solo, bus mute/master,
+Main/Mix A/Mix B, phones source/blend, stereo link and FX return — but places
+the complete matrix on **Routing** instead of swapping one selected bus through
+the Mixer view. What remains unavailable is not hidden UI: the io24 has no
+faithful proven wire representation for UC's mono-source `pan`, `stereopan`
+width/mono collapse, exact per-input `FXA` reverb send, `dawpostdsp`, output
+mono, or a writable physical Main-mute latch. Writable UC component names are
+retained as Host metadata. Mirror Main is a persistent Host latch that follows
+subsequent Main edits and restores the retained aux mix when cleared; it does
+not claim a device-side latch that survives without the Host. UC also presents
+physical `hardwareMute` as display-only, while Linux's Output mute is the
+separate writable software-bus control.
+
 The device's own channel-name table reads back with:
 
 ```bash
@@ -605,17 +622,20 @@ python3 io24_scene.py --export io24-host.scene
 
 The file is replaced atomically only after it validates through the same scene
 planner used for load. It round-trips through this Linux Host. Values the Host
-cannot know are listed and omitted rather than invented: device-slot bodies,
-an enabled-but-unshadowed DSP Amount scalar, physical preset selection, monitor
-knob values that have no supported scene field, and Host-only features such as
-Multiband. This is not a claim that Universal Control itself accepts a partial
-Host-known export; that application round trip has not been tested.
+cannot know are listed and omitted rather than invented: an unknown device-slot
+body, an enabled-but-unshadowed DSP Amount scalar, physical preset selection,
+monitor knob values that have no supported scene field, and Host-only features
+such as Multiband. Complete front-panel-block and Device Presets bodies retained
+in the current unit's identity-scoped registries are exported under `presets`;
+scene load reports them but never writes them. This is not a claim that
+Universal Control itself accepts the Host-known export; that application round
+trip has not been tested.
 
 The dry run validates the complete scene before the first device write and lists
 every planned operation and every typed omission. It restores global delay,
 headphones source, Channel Mute Sync, preset-button mode, both Fat Channels,
 DSP amount, the full Main/Mix A/Mix B matrix, source and output mutes, Host solo,
-bus masters, one-shot mirror-main, shared VoiceFX, and shared reverb. Standard,
+bus masters, persistent Mirror Main, shared VoiceFX, and shared reverb. Standard,
 Passive, and Vintage EQ each use their exact model route. The three retained UC
 scenes produce 94–97 operations apiece.
 
@@ -628,8 +648,9 @@ succeeded. Otherwise it names a partial rollback; the protocol has no native
 device transaction and unknown write-only prestate cannot be reconstructed.
 
 Genuinely unrepresentable fields remain explicit: block 100 has no independent
-mono-source pan or stereo-width control; exact `FXA`, `dawpostdsp`, output mono
-fold-down, names, and UC's persistent mirror latch have no proven io24 mapping.
+mono-source pan or stereo-width control; exact `FXA`, `dawpostdsp`, and output
+mono fold-down have no proven io24 mapping. Component names and Mirror Main are
+exact Host-persisted UC state; neither is misrepresented as a firmware command.
 The Host never substitutes its stereo-pair balance for a scene's mono pan.
 
 A channel saved with UC's **Passive Program** or **Vintage 1970s** EQ now loads
@@ -745,7 +766,14 @@ cannot move or disable a selected device slot. Run `io24.py shadow clear` when
 that cached state should instead be discarded.
 Forgetting changes Host bookkeeping only; it emits no device command.
 
-GTK Host snapshot files may additionally contain `host_features.multiband`.
+GTK Host snapshot files store both inputs' current Multiband state in
+`host_features.multiband_insert`. Older `host_features.multiband` and version-1
+generic compressor controls are accepted, migrated to the Standard/Tube/FET
+schema and never written back in the old form.
+The Host spring is stored independently as `host_features.spring_reverb` with
+its On state and complete tank controls. Its temporary ownership of USB
+playback 5–6 routing belongs only to the running session, so a named snapshot
+does not overwrite another session's prior Main/Mix A/Mix B assignments.
 Obsolete `host_features.pan` data from an older Host is ignored and is never
 re-saved. Host-only objects are never
 encoded into a device slot; the GTK Host restores them once per launch from

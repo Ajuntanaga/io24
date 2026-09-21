@@ -12,6 +12,7 @@ import unittest
 from types import SimpleNamespace
 
 import io24
+import io24_alt_eq
 import io24_presets
 import io24gtk
 
@@ -31,6 +32,23 @@ PASSIVE = {
 
 FLAT = [{"shape": "off", "freq": f, "gain": 0.0, "q": 0.7}
         for f in (120.0, 600.0, 2500.0, 8000.0)]
+
+STANDARD = {
+    "__classid": "{A0A8A068-14F0-4B04-BB6F-AF8329D0E8EE}",
+    "eqallon": 1,
+}
+
+COMPLETE_BASE = {
+    "preset_name": "public-test-base",
+    "opt": {},
+    "filter": {},
+    "gate": {},
+    "limit": {},
+    "eq": STANDARD,
+    "comp": {},
+}
+
+EXACT_ALT_EQ_AVAILABLE = io24_alt_eq.designer_status()[0]
 
 
 def _slot_kwargs(**extra):
@@ -76,9 +94,8 @@ class AlternateEqViewTests(unittest.TestCase):
         ])
 
     def test_standard_and_absent_eq_have_no_alternate_view(self):
-        base = io24_presets.load()["Broadcast"]
-        self.assertEqual(io24_presets.eq_model(base["eq"]), "standard")
-        self.assertIsNone(io24_presets.alternate_eq_view(base))
+        self.assertEqual(io24_presets.eq_model(STANDARD), "standard")
+        self.assertIsNone(io24_presets.alternate_eq_view({"eq": STANDARD}))
         self.assertIsNone(io24_presets.alternate_eq_view({}))
         self.assertIsNone(io24_presets.alternate_eq_view({"eq": {}}))
 
@@ -88,18 +105,18 @@ class AlternateEqViewTests(unittest.TestCase):
                 {"eq": dict(VINTAGE, lowfreq=7)})
 
     def test_saving_carries_the_stored_vintage_eq_verbatim(self):
-        base = io24_presets.load()["Broadcast"]
         kept = io24_presets.current_slot_record(
-            base, "MAIN", **_slot_kwargs(alternate_eq=dict(VINTAGE)))
+            COMPLETE_BASE, "MAIN", **_slot_kwargs(alternate_eq=dict(VINTAGE)))
         self.assertEqual(kept["eq"], VINTAGE)
-        rebuilt = io24_presets.current_slot_record(base, "MAIN", **_slot_kwargs())
+        rebuilt = io24_presets.current_slot_record(
+            COMPLETE_BASE, "MAIN", **_slot_kwargs())
         self.assertEqual(io24_presets.eq_model(rebuilt["eq"]), "standard")
 
     def test_a_standard_section_is_refused_as_alternate_eq(self):
-        base = io24_presets.load()["Broadcast"]
         with self.assertRaises(ValueError):
             io24_presets.current_slot_record(
-                base, "MAIN", **_slot_kwargs(alternate_eq=dict(base["eq"])))
+                COMPLETE_BASE, "MAIN",
+                **_slot_kwargs(alternate_eq=dict(STANDARD)))
 
 
 class _Widget:
@@ -190,6 +207,10 @@ def _window():
 
 
 class RecalledVintageBodyHostTests(unittest.TestCase):
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a lawful local UC 4.7.2 dspusbdevice.dll",
+    )
     def test_a_recall_shows_the_rest_and_lists_the_eq(self):
         record = {"preset_name": "MAIN", "eq": dict(VINTAGE),
                   "voicefx": {"on": 0}}
@@ -210,10 +231,13 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         self.assertEqual((chans, fx_channel), ((1,), 1))
         self.assertEqual(window._alt_eq(1)["eq"], VINTAGE)
         self.assertIsNone(window._alt_eq(2))
-        self.assertIn("editable Vintage EQ",
-                      window.messages[-1])
+        self.assertEqual(window.messages[-1], "Input 1 · Vintage EQ")
         self.assertEqual(record["eq"], VINTAGE)      # the entry is untouched
 
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a lawful local UC 4.7.2 dspusbdevice.dll",
+    )
     def test_vintage_controls_are_editable_and_send_the_exact_model(self):
         window = _window()
         window.w = {1: _eq_widgets()}
@@ -315,6 +339,10 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         self.assertEqual(restored.submitted, [])
         self.assertIn("Input 1 and 2", message)
 
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a lawful local UC 4.7.2 dspusbdevice.dll",
+    )
     def test_power_changes_only_the_selected_model_on_one_input(self):
         window = _window()
         window.w = {1: _eq_widgets(), 2: _eq_widgets()}

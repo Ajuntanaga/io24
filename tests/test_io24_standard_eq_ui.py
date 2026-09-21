@@ -137,6 +137,10 @@ def _window():
 
 
 class ExactUcXmlContractTests(unittest.TestCase):
+    @unittest.skipUnless(
+        EQ_XML.is_file(),
+        "requires privately retained UC component-model XML",
+    )
     def test_retained_eqxt4_contract_has_the_independent_power_fields(self):
         root = ET.parse(EQ_XML).getroot()
         ns = {"uc": "urn:presonus-universal-control"}

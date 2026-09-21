@@ -24,8 +24,12 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_meters.py",
             "io24_mixer.py",
             "io24_native_stat.py",
+            "io24_native_strip.py",
             "io24_preset_record.py",
             "io24_presets.py",
+            "io24_alt_eq.py",
+            "io24_uc472_passive_eq.py",
+            "io24_uc472_vintage_eq.py",
             "io24_scene.py",
             "io24d.py",
             "io24gtk.py",
@@ -33,7 +37,15 @@ class ReleasePackageTests(unittest.TestCase):
             "ucnet_shim.py",
             "calibrate.py",
         }
-        required_entry_points = {"io24-scene = io24_scene:main"}
+        required_entry_points = {
+            "io24 = io24:main",
+            "io24d = io24d:main",
+            "io24-web = io24web:main",
+            "io24-mixer = io24gtk:main",
+            "io24-ucnet-shim = ucnet_shim:main",
+            "io24-calibrate = calibrate:main",
+            "io24-scene = io24_scene:main",
+        }
 
         with tempfile.TemporaryDirectory(prefix="io24-wheel-test-") as temp:
             stage = pathlib.Path(temp)
@@ -86,11 +98,24 @@ class ReleasePackageTests(unittest.TestCase):
                     name for name in names
                     if name.endswith("/share/io24/io24_spring.c")
                 ]
+                licenses = [
+                    name for name in names
+                    if name.endswith(".dist-info/licenses/LICENSE")
+                ]
+                vendor_evidence = [
+                    name for name in names
+                    if name.endswith("uc_factory_presets.json")
+                    or name.endswith("param_consumers.txt")
+                    or name.endswith("dsp_fx_params.xml")
+                    or name.endswith("dspusb_component_model.xml")
+                ]
 
             self.assertEqual(missing, set())
             self.assertEqual(required_entry_points - entry_points, set())
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(len(spring_source), 1)
+            self.assertEqual(len(licenses), 1)
+            self.assertEqual(vendor_evidence, [])
 
             isolated = stage / "isolated"
             isolated.mkdir()

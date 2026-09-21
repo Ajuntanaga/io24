@@ -39,6 +39,9 @@ Day-to-day use — what each control does, and the caveats that matter — is in
 [GUIDE.md](GUIDE.md). It used to live inside the app as paragraphs above every
 group, which cost about a third of the window.
 
+The source-publication boundary and release checks are in
+[PUBLICATION.md](PUBLICATION.md).
+
 ## What works
 
 Hardware-verified unless the row says otherwise. The two front ends and the
@@ -181,14 +184,22 @@ need just libusb. Having GNOME installed is **not** sufficient on its own: the
 desktop ships the C libraries, but the *Python* bindings and typelibs above are a
 separate package on most distributions.
 
+Install the checkout into the active Python environment. This installs PyUSB,
+the Capstone decoder used by the exact Passive/Vintage EQ paths, and every
+command-line entry point, including `io24-scene`:
+
 ```bash
-pip install pyusb
+python3 -m pip install .
 ```
 
-The checkout can be run directly. To install its command-line entry points into
-the active Python environment instead, use `python3 -m pip install .`; this also
-installs the scene importer as `io24-scene`. System GTK packages are still
-required for `io24-mixer`.
+To run directly from a checkout without installing the project, install its two
+Python dependencies explicitly:
+
+```bash
+python3 -m pip install 'pyusb>=1.2' 'capstone>=5,<6'
+```
+
+System GTK packages are still required for `io24-mixer`.
 
 Then the udev rule, so nothing here needs root:
 
@@ -243,8 +254,10 @@ with UC's independent global/band switches, exact outer shelf controls, a
 256-bin overlapping live spectrum and response curve, dynamics, and
 preset save/load. The Mixer fits all four strips in the default desktop window;
 the Presets page holds your presets and the factory presets in two drop-downs,
-loads one with the row's **Load** button, stores a firmware-native Fat Channel
-candidate in either device block, and loads complete UC `.scene` files.
+loads one with the row's **Load** button, sends a complete selected-channel
+record to any of UC's six **Device Presets** destinations per input, and loads
+complete UC `.scene` files. The older front-panel `Stat` writer is a low-level
+research primitive, not a normal Host action.
 
 It needs the GTK4 and libadwaita Python bindings from the Install section — the
 desktop having GTK is not the same as the bindings being present. Device work is
@@ -479,13 +492,13 @@ The historical stock acceptance runner derives its target from the factory Rever
 record but raises the private Wet/Dry value from 29.5% to 100% so success is
 unmistakable. It requires and reasserts the Input-2 assignment, keeps preset
 operations on physical Channel 2, and materializes the saved model before
-saving:
+saving. The runner and fixture remain in the private research workspace:
 
-```bash
-python3 re/cp34_channel2_voicefx_materialization_stage.py
+```text
+Private campaign runner and factory-derived fixture are not redistributed.
 ```
 
-That default command is hardware-free and pins Channel 2, global slot 3, the
+The retained private runner is hardware-free and pins Channel 2, global slot 3, the
 exact factory-derived maximum-wet record, its four model-before-state messages,
 the exact slot frame, and `Assign Voice FX = Ch2`. Its historical live run was
 confounded by inconsistent Host routing. A later clean listening campaign
@@ -591,8 +604,8 @@ so several clients can share it.
 | `ucnet_shim.py` | speaks UCNET, so existing clients can drive the device |
 | `io24_scene.py` | applies a Universal Control `.scene` file to the device |
 | `calibrate.py` | measurements that need a known input signal |
-| `probes/` | the investigation trail — how each finding was established |
-| `re/` | extracted parameter tables, scripts, and recovered UC scenes |
+| `probes/` | three original first-read/write probes kept as executable evidence |
+| private research workspace | extracted tables, captures, and recovered UC data that are not redistributed |
 
 ## Presets and standalone use
 
@@ -692,22 +705,26 @@ cannot be substituted for the native record on the wire.
 
 PreSonus's own documentation (the io44 manual's "Presets and Scenes" section)
 describes the design: each channel reaches **2 presets from the hardware
-buttons**, there are **6 more factory presets**, and **6 user slots per channel**
-— with the buttons acting as assignable pointers into that library. 2 + 6 = 8
-factory per channel matches the 16 records found in firmware exactly.
+buttons**, there are **6 more factory presets**, and **6 user slots per
+channel**. The 2 + 6 factory count matches the 16 tagged records found in
+firmware. The retained UC 4.7.2 Store path writes the six Device Presets slots;
+no command that assigns one of those library entries to a front-panel button was
+captured or recovered.
 
-The GTK preset menu can send a complete firmware-native version-2 Fat Channel
-candidate to either block. It records serial, VID/PID, firmware, canonical body
-hash and transport counts in `$XDG_STATE_HOME/io24/device-slots.json` (default
-`~/.local/state/io24/device-slots.json`) with status
+The GTK preset menu can send a complete selected-channel record through UC's
+actual `MemP/PrsM` Store route to one of six Device Presets destinations per
+input. It records serial, VID/PID, firmware, canonical body hash and transport
+counts in `$XDG_STATE_HOME/io24/device-presets.json` (default
+`~/.local/state/io24/device-presets.json`) with status
 `WRITE_SENT_UNVERIFIED`. That is deliberately not called device readback or a
 durable commit: the io24 cannot return the stored body.
 
-Selecting a block alone does not replay its unreadable body in the retained live
-test. Therefore **Load** for a Host-known block selects it and directly sends the
-receipt's Fat Channel plus VoiceFX state. An unknown block can only be selected,
-and the UI says so. Fat Channel is established as audible without the Host after
-the device applies it; VoiceFX remains Host-assisted rather than standalone.
+**Load** performs UC's RestorePreset behavior by replaying a Host-retained
+Device Presets record through the normal Fat Channel and VoiceFX setters; it
+does not select a front-panel block. Historical `Stat` receipts remain available
+as clearly labelled legacy records. Fat Channel is established as audible
+without the Host after the device applies it; VoiceFX remains Host-assisted
+rather than standalone.
 
 ## Making settings stick
 
@@ -844,13 +861,13 @@ values with unknown ranges, not as protection against bricking.
 
 ## License
 
-GPL-3.0 — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see [LICENSE](LICENSE).
 
 Chosen because this is a hardware driver: copyleft means anyone who ships a
 modified version has to publish their changes, so the reverse-engineering effort
-stays available to the next person who needs their io24 to work on Linux. If you
-would rather allow use in closed-source products, replace the LICENSE file with
-MIT or Apache-2.0 — nothing in the code depends on the choice.
+stays available to the next person who needs their io24 to work on Linux. The
+license applies to this project's original work; it does not relicense third-
+party material retained in the private research tree.
 
 ### What is PreSonus's, and what is in this tree
 
@@ -858,30 +875,24 @@ The driver, the GTK app and the protocol documentation are original work,
 produced for interoperability: making hardware its owner already possesses
 function on Linux. The GPL above covers that work and only that work.
 
-Two directories carry material **derived from PreSonus's software**, and it is
-worth being exact rather than waving at it:
+The private research workspace retains material **derived from PreSonus's
+software**. It is not part of this public source tree or the Python wheel, and
+its redistribution status is not asserted by this project's GPL:
 
 | path | what it is |
 |---|---|
 | `re/param_consumers.txt` | ~3,100 lines of Ghidra decompiler output for 20 functions of `dspusbdevice.dll`, kept because the parameter tables and route strings are only legible alongside the code that consumes them |
 | `re/uc_factory_presets.json` | 41 factory Fat Channel preset records, extracted verbatim from the Universal Control installer payload — names, class GUIDs and coefficients |
+| `re/uc_component_model/dsp_fx_params.xml` | component-model XML extracted from `studiolivepanel.dll` |
+| `re/uc_component_model/dspusb_component_model.xml` | io24 component-model XML extracted from `studiolivepanel.dll` |
+| `re/uc_component_model/fatchannelxt_eq_contract.xml` | a bounded transcription of the embedded Standard-EQ component contract |
+| `re/uc_component_model/fatchannelxt_alternate_eq_contract.xml` | a bounded transcription of the embedded Passive/Vintage component contract |
 
-Neither is my work and neither is under the GPL; both are included because the
-project is useless without them — the presets *are* the presets, and a
-paraphrase of a decompilation would document nothing. They are here to let
-someone verify the protocol claims and drive their own hardware, not as a
-substitute for Universal Control, which is free and runs on the platforms
-PreSonus supports.
+These files are retained privately as research evidence. Without
+`uc_factory_presets.json` the Host remains usable but shows the factory-preset
+browser as unavailable. A user may recover optional data from a lawfully
+obtained Universal Control installer for personal interoperability work.
 
-Not included: `dspusbdevice.dll` itself and the io24 firmware image, which are
-whole redistributable binaries rather than extracts. `re/README.md` explains how
-to recover both from your own copy of the installer.
-
-If you are repackaging this — a distribution, say — that table is what you need
-to look at, and you may well want to drop those two files. Everything except the
-factory-preset browser works without them.
-
-**An earlier version of this section claimed "no PreSonus code is redistributed
-here".** That was untrue of both files above, and it is corrected rather than
-quietly deleted because a reader who relied on it deserves to see that it was
-wrong.
+Also not included: `dspusbdevice.dll` itself and the io24 firmware image.
+[PUBLICATION.md](PUBLICATION.md) records the clean-source boundary, vendor-
+material policy, and reproducible release checks.

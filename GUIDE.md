@@ -266,8 +266,8 @@ two-output processor**. Firmware maps both physical inputs into its two
 processing lanes, and Doubler/Transformer binds its private reverb core to lane
 0 and lane 1. The six-unit rack is the model navigator: click a unit to select
 its XML component, or double-click it to toggle that component's own **On**
-field. The **FX Model** row beneath it provides the same selector for keyboard
-and screen-reader use. The Host presents one model at a time, and each model
+field. The separate **Model** row provides the same selector for keyboard and
+screen-reader use. The Host presents one model at a time, and each model
 page has its own **On** switch because `On` belongs to that model's component; there
 is no master enable above the six models in Universal Control's component
 tree. Those are independent stored controls, not six simultaneous processors:
@@ -370,10 +370,15 @@ available for recovery first.
 | Filters | Pitch, Regeneration, Damping, Distortion, Volume, WetDry |
 | Delay | Time, Feedback, WetDry |
 
+UC declares Vocoder's **Voiced** field read-only. Block 201 has no readable
+state that could populate it, so the Host preserves it in the recovered schema
+but does not display a permanently disabled control.
+
 These names, ranges and defaults are not guesses: they are Universal Control's
-own component model, recovered from its binary and kept in
-[re/uc_component_model/](re/uc_component_model/). It agrees with this project's
-decode on every parameter.
+own component model, recovered from its binary and retained in the private
+research workspace. The vendor-derived XML is deliberately not redistributed;
+its decoded contract agrees with this project's implementation on every
+parameter.
 
 The implementation follows the same split: [`io24_fx.py`](io24_fx.py) contains
 the six exact model packet builders, while `FXVisual` and the per-model control
@@ -548,14 +553,15 @@ Click the preset's **Load** button to load it into the channel chosen in
 linked, the Fat Channel goes to both. FX has one global state, so the same
 action also adopts and sends the preset's recorded FX intent.
 
-A preset in a **Host-known device block** first selects that physical block,
-then the Host directly sends the complete receipt it retained: Fat Channel and
-Voice FX. This is intentional because the retained live test established that
-selection alone does not reapply the unreadable stored body. A block the Host
-did not write can only be selected, and the UI says that its body is unknown
-instead of pretending to load it. Loaded into the other channel, a known record
-is applied directly there. If the target channel is bypassed, Load enables
-processing; a channel already processing keeps its exact DSP amount.
+A Host-known **Device Presets** record is replayed through the ordinary Fat
+Channel and Voice FX setters, matching UC's RestorePreset behavior. It does not
+select a front-panel block. Historical front-panel `Stat` receipts are a
+separate legacy list: on their own channel the Host selects that block and then
+replays its retained record because selection alone did not reapply the
+unreadable body in the retained live test. A block the Host did not write can
+only be selected, and the UI says that its body is unknown instead of pretending
+to load it. If the target channel is bypassed, Load enables processing; a
+channel already processing keeps its exact DSP amount.
 
 A loaded preset is shown on the controls, so the pages stop describing the
 previous sound. A recalled Passive/Vintage EQ selects its own exact editable

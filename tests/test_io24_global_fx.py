@@ -75,6 +75,10 @@ class GlobalFxTests(unittest.TestCase):
         self.assertNotIn('title="FX activation unresolved"', rendered)
         self.assertNotIn('label="Presets…"', rendered)
 
+    @unittest.skipUnless(
+        (ROOT / "re" / "uc_component_model" / "dsp_fx_params.xml").is_file(),
+        "requires privately retained UC component-model XML",
+    )
     def test_runtime_schema_is_an_exact_transcription_of_retained_uc_xml(self):
         source = (ROOT / "re" / "uc_component_model" /
                   "dsp_fx_params.xml").read_text()

@@ -12,12 +12,13 @@ decode is right rather than plausible-looking.
     python3 io24_presets.py "Vocal" 1       apply one to channel 1
     python3 io24_presets.py --voicefx "Reverb" 2
 
-The preset data itself is PreSonus's, not mine and not under this project's
-licence. It lives in re/uc_factory_presets.json, which IS committed — see the
-licence section of the README for why, and for what to strip if you are
-repackaging. If you would rather not have it, delete that file and regenerate it
-from your own copy of the installer with re/extract_presets.py; everything except
-this browser works without it.
+The preset data itself is PreSonus's, not this project's original work and not
+covered by its GPL. The private research tree retains it at
+re/uc_factory_presets.json, while the runtime wheel deliberately excludes it.
+See README.md and PUBLICATION.md before redistributing a source tree. The Host
+continues without the file and reports the factory browser as unavailable; a
+user can regenerate it from a lawfully obtained installer with
+re/extract_presets.py.
 
 A preset names seven modules. Six map onto DSP this driver drives:
 
@@ -32,8 +33,9 @@ The seventh, `voicefx`, is record-resident Voice FX state for block 201. The
 ordinary live setter replay omits it unless ``with_fx=True`` is explicitly
 requested. That opt-in configures the one shared settings object: it resolves
 UC's saved class id, selects/instantiates the model, and then applies only that
-model's state. It does not change ``processingChannel`` routing and still does
-not claim that the stock processing gate is open or that the result is audible.
+model's state. It does not change ``processingChannel`` routing. The corrected
+UC 4.7.2 transaction is audibly verified for all six models on physical Input 1;
+saved state still does not prove standalone VoiceFX recall without the Host.
 Tagged scene records remain useful for Host-side replay, but the 2026-09-14
 inactive-slot test showed that they do not install as io24 firmware 1.28 slot
 bodies. ``Io24.save_device_slot()`` now accepts only a complete firmware-native

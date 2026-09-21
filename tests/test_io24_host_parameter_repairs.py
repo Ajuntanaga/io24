@@ -257,6 +257,10 @@ class PhonesSourceTests(unittest.TestCase):
         self.assertEqual(shadowed.values["global/phonesSrc"], 0.5)
 
 
+@unittest.skipUnless(
+    Path(io24_presets.PRESET_JSON).is_file(),
+    "requires factory data recovered from the maintainer's lawful UC copy",
+)
 class FactoryPresetDispatchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -472,6 +476,10 @@ class ArtifactAndResourceTests(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[1]
     RUN = ROOT / "runs" / "20260906T165749-0700-host-live-routing-repair"
 
+    @unittest.skipUnless(
+        (RUN / "PARAMETER-VERIFICATION-MATRIX.json").is_file(),
+        "requires private live-campaign evidence",
+    )
     def test_matrix_hash_inventory_binds_all_dispatch_sources(self):
         matrix = json.loads((self.RUN / "PARAMETER-VERIFICATION-MATRIX.json")
                             .read_text())
@@ -480,6 +488,10 @@ class ArtifactAndResourceTests(unittest.TestCase):
                 expected = hashlib.sha256((self.ROOT / name).read_bytes()).hexdigest()
                 self.assertEqual(matrix["source_sha256"].get(name), expected)
 
+    @unittest.skipUnless(
+        (RUN / "PARAMETER-INVENTORY.json").is_file(),
+        "requires private live-campaign evidence",
+    )
     def test_inventory_records_implemented_exact_host_routes(self):
         inventory = json.loads((self.RUN / "PARAMETER-INVENTORY.json").read_text())
         unresolved = set(inventory["known_unimplemented_or_unresolved"])

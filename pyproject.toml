@@ -19,6 +19,15 @@ classifiers = [
     "Topic :: System :: Hardware :: Hardware Drivers",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Ajuntanaga/io24"
+Repository = "https://github.com/Ajuntanaga/io24"
+Documentation = "https://github.com/Ajuntanaga/io24#readme"
+Issues = "https://github.com/Ajuntanaga/io24/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=7,<9"]
+
 [project.scripts]
 io24 = "io24:main"
 io24d = "io24d:main"

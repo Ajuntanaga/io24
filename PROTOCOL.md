@@ -2,6 +2,21 @@
 
 Reverse-engineering notes and a working Linux implementation.
 
+## How to read this record
+
+This file preserves the investigation, including negative experiments and
+conclusions later disproved. The dated material before §1 is reverse
+chronological: the newest dated result controls. Within the older notebook,
+labels such as “controlling” describe what was known on that date, not the
+current implementation.
+
+The current boundaries are the 2026-09-20 preset/mixer sections below, the
+2026-09-19 scene section, the 2026-09-18 alternate-EQ section, and the three
+2026-09-17 VoiceFX sections. In short: UC Store is `MemP/PrsM`; all six VoiceFX
+models process audio on physical Input 1 with the corrected UC 4.7.2
+transaction; and a sent Device Presets record remains
+`WRITE_SENT_UNVERIFIED`, not body readback or cold-boot proof.
+
 ## 2026-09-20 controlling preset result: UC Store is `PrsM`, not a button-slot write
 
 UC 4.7.2 has two separate preset concepts. The four front-panel fast-access
@@ -261,7 +276,7 @@ Evidence:
 ## 2026-09-17 controlling result: captured UC 4.7.2 VoiceFX lifecycle
 
 The missing Host behavior is now captured, not inferred. Universal Control
-`4.7.2.108537` controlled serial `AB7C22200355`, firmware `0128`, inside the
+`4.7.2.108537` controlled the test unit, firmware `0128`, inside the
 isolated Windows guest while Windows audio services were stopped. USB traffic
 was recorded on the device's active control endpoint; endpoint 3/83 remained at
 zero transfers. No firmware update, reset, DFU action, preset save, playback or
@@ -323,9 +338,13 @@ without a host.
 Evidence:
 `.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260917T145627-0700-uc472-audio-suppressed-rerun/`.
 
-## 2026-09-15 controlling result: block 201 is inert by ear; block 202 is audible
+## 2026-09-15 historical negative: superseded VoiceFX transaction; block 202 audible
 
-Decided by listening, not by a meter, on serial `AB7C22200355`, firmware `0128`,
+This result accurately describes the older Linux transaction used that day; the
+corrected UC 4.7.2 transaction and the Input-1 waveform results above supersede
+its conclusion about block 201.
+
+Decided by listening, not by a meter, on the test unit, firmware `0128`,
 with the Host closed and an instrument cable — then a guitar — in Input 1.
 
     Input 1 -> channel 1 DSP -> processing scalar ('Para' wire 4, 1.000)
@@ -580,8 +599,8 @@ the detector threshold.
 
 ## 2026-09-14 superseded live correction: first paced Delay test was inconclusive
 
-The first paced state-replay sequence was tested live on serial
-`AB7C22200355`, firmware `0128`, with the Channel-1 path open. The controlling
+The first paced state-replay sequence was tested live on the test unit,
+firmware `0128`, with the Channel-1 path open. The controlling
 correction above proves it did not trigger rebuild. Fully wet Delay
 at feedback 1.0 moved the Main/Input-1 ratio by only **-0.148 dB** against a
 **1.990 dB** threshold; off-state drift was **-0.040 dB**. The same-session
@@ -646,7 +665,7 @@ Ring-Mod null tested it.
 Evidence:
 `.superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/20260914T105415-0700-block201-delegate-lifecycle/`.
 
-## 2026-09-14 controlling live result: block 201 is inert with the channel path open
+## 2026-09-14 historical negative: block 201 inert with the then-current transaction
 
 12S reproduces on a cold-booted unit with an open Channel-1 path and a decisive
 same-session positive control.
@@ -1289,8 +1308,8 @@ Evidence is under
 
 The missing-stimulus ambiguity in the first linked Channel-2 slot-3 trial is
 now resolved. One separately authorized capture kept gain, routing, output, and
-preset content unchanged while it performed this bounded sequence on serial
-`AB7C22200355`:
+preset content unchanged while it performed this bounded sequence on the test
+unit:
 
 ```text
 Channel 2 slot 3 -> 2 while unlinked
@@ -1956,7 +1975,7 @@ parameter descriptor records**, SDK-generic across PreSonus devices:
 
 Units seen: `gain`, `percent`, `time`, `freq`, `freq/off`, `pan.100`,
 `ratio/~/limit`. Tapers: `linear`, `log`, `exp`, `skew`, `linrev`, `gaterange`.
-Extraction is in [`re/io24_params.json`](re/io24_params.json) (note: that file was
+Extraction is retained privately as `re/io24_params.json` (note: that file was
 produced with an earlier, stricter parser and is known to be incomplete — it drops
 camelCase names, `kind=0` booleans and `id=0`).
 
@@ -2045,9 +2064,9 @@ upset the firmware. That remains an unresolved risk worth respecting — but the
 | [`io24web.py`](io24web.py) | The same controls over HTTP on loopback, for reaching the device from a phone |
 | [`ucnet_shim.py`](ucnet_shim.py) | **UCNET compatibility server** — speaks the protocol existing PreSonus plugins expect, and translates to native USB |
 | [`PROTOCOL.md`](PROTOCOL.md) | This document |
-| [`re/UCNET_SHIM_SPEC.md`](re/UCNET_SHIM_SPEC.md) | The derived spec the shim implements |
+| `re/UCNET_SHIM_SPEC.md` (private research evidence) | The derived spec the shim implements |
 | [`README.md`](README.md) | Install and use — the user-facing front door |
-| `probes/` | The investigation trail: the scripts that established each finding |
+| `probes/` | Three original first-read/write probes kept as executable evidence |
 | `70-presonus-io24.rules` | udev rule for non-root access |
 | `systemd/io24d.service` | user unit for the daemon (`--wait`, so plug order does not matter) |
 
@@ -2149,25 +2168,26 @@ clients** served simultaneously, and a direct CLI correctly rejected with
 
 | File | Proved |
 |------|--------|
-| [`probe_getp.py`](probe_getp.py) | first `'Rply'` — the native protocol works |
-| [`probe_setp.py`](probe_setp.py) | `'Appl'` parameter write, full-state diff + restore |
-| [`probe_limiter.py`](probe_limiter.py) | first DSP-chain write, asymmetric limiting |
+| [`probe_getp.py`](probes/probe_getp.py) | first `'Rply'` — the native protocol works |
+| [`probe_setp.py`](probes/probe_setp.py) | `'Appl'` parameter write, full-state diff + restore |
+| [`probe_limiter.py`](probes/probe_limiter.py) | first DSP-chain write, asymmetric limiting |
 
 **Reverse-engineering artefacts**
 
 | File | Contents |
 |------|----------|
-| [`re/state_map.md`](re/state_map.md) | Slot → parameter map as originally derived from hardware |
-| [`re/io24_params.json`](re/io24_params.json) | Parameter descriptors extracted from the driver (incomplete — strict early parser) |
-| [`re/param_consumers.txt`](re/param_consumers.txt) | Decompiled functions consuming the parameter tables |
+| `re/state_map.md` (private research evidence) | Slot → parameter map as originally derived from hardware |
+| `re/io24_params.json` (private research evidence) | Parameter descriptors extracted from the driver (incomplete — strict early parser) |
+| `re/param_consumers.txt` (not redistributed) | Decompiled functions consuming the parameter tables |
 | `re/*.py` | PE parsers and table extractors |
 
-The remaining `probe_*.py` files in the repo are historical experiments from the
-investigation — including the ones that failed. `probe_handshake*.py`,
+Additional `probe_*.py` files retained in the private research workspace are
+historical experiments from the investigation — including the ones that failed. `probe_handshake*.py`,
 `probe_sweep*.py`, `probe_optest.py` and `probe_batch.py` document the UCNET and
 blind-probing dead ends of §7; `oracle.py` was an attempt at an automated audio
 oracle that could not bootstrap. They are kept because a negative result that is
-reproducible is worth more than one described in prose.
+reproducible is worth more than one described in prose. They are referenced here
+for provenance but are not part of the clean public source import.
 
 Quick start:
 
@@ -2781,7 +2801,11 @@ That test also **confirmed mixer `paramId 5` on hardware** — until then only
 `paramId 3` had been verified, so the source-slot map now has two independent
 confirmations.
 
-### Insert FX (block 201) — DOES NOT REPRODUCE (2026-07-30)
+### Insert FX (block 201) — historical negative with a superseded transaction (2026-07-30)
+
+The current Input-1 result at the top of this file supersedes this section's
+block-201 conclusion. The measurements remain useful evidence for what the old
+transaction did and for block 202's independently working return path.
 
 > **This section's original claim no longer holds and is left below for the
 > record.** Re-tested on 2026-07-30 with a measurement rig that resolves
@@ -3176,11 +3200,13 @@ Transformer swung boomy → thin → boomy. Both tests were shaped to return to 
 starting point, so the result shows the parameter behaving monotonically and
 repeatably rather than merely "something changed".
 
-### Presets are host-side
+### Historical preset conclusion — superseded by UC's `PrsM` Store route
 
-The device does not store presets. It stores a preset **slot index** and nothing
-else, and it was worth proving rather than assuming, because a device-side preset
-store would have been the natural place to look for read-back of the DSP blocks.
+This section originally concluded that the device did not store preset bodies.
+That conclusion was too broad. The experiments below correctly show that moving
+`activePresetSlotIndex` does not itself replay state and that the attempted
+GetP-style queries return no body. They did not exercise UC's later-recovered
+SetP `MemP/PrsM` Store route. See the 2026-09-20 controlling result at the top.
 
 Two experiments, both negative:
 
@@ -3192,10 +3218,11 @@ Two experiments, both negative:
    `'Stor'`, `'List'`, `'Rena'`, `'Dele'`, `'PrsC'`, `'Pset'` and `'Cach'` across
    eight blocks returned nothing anywhere.
 
-So Universal Control holds preset content on the host and pushes the whole DSP
-state on recall. This driver does the same, and it has a consequence worth being
-explicit about: because every DSP block is **write-only** (§9a), a preset can only
-contain what the driver itself set. Readable `'Appl'` values — gain, volumes,
+Universal Control does hold a complete record on the host and pushes ordinary
+component setters on RestorePreset. It also sends a separate write-only `PrsM`
+Store transaction. The Linux Host follows both behaviors. Because the io24 does
+not return stored bodies or most DSP state, a Host preset can contain only what
+the driver read or itself retained. Readable `'Appl'` values — gain, volumes,
 blend, phantom — are captured live from `JaSt`; everything else comes from a
 mirror of our own writes, kept in `~/.cache/io24/shadow.json` so that it survives
 across CLI invocations. `io24.py shadow` prints it; `io24.py shadow clear` resets
@@ -3212,7 +3239,7 @@ mirror always holds the canonical primitive call.
 seven live values exactly (`io24.py savepreset` / `loadpreset`, and the same over
 the daemon socket).
 
-## 10. Open questions
+## 10. Current open questions
 
 **Resolved** since the first draft: the `SetP` paramId space (§6a); the blob
 `index` semantics and bounds-checking (§9a); the full `JaSt` slot map (§6); the
@@ -3221,51 +3248,33 @@ release formula (§9b); the mixer wire form, `fader` taper and pan law (§9c, §
 the metering datagram (§9d); the location of reverb and insert FX (§9d); and the
 UCNET shim, which is now built and hardware-verified (§9).
 
-**Remaining, in rough order of how much they cost a user:**
+**Remaining, in rough order of user impact:**
 
-0. **Device features that exist but are not exposed by this driver** — found by
-   dumping the full descriptor keyspace (§12E), and the cheapest wins left:
-   * `autogainmode` (id 141, "Automatic Preamp Gain Mode")
-   * `pan` (143) and `stereopan` (144, "Stereo Width")
-
-   ~~`aux1` / `aux2` (124/125)~~ — **resolved 2026-08-01, see §12F.** The guess
-   recorded here, that they were Mix A / Mix B *master* levels, was wrong. They
-   are the per-channel sends, and their wire route is the mixer block this driver
-   already drives.
-
-0b. ~~**The 96 kHz headroom test**~~ — the device half is **done** (§12F): the
-   io24 clocks at 96 kHz on demand. Whether any DSP block stops responding at
-   that rate is still unmeasured.
-
-1. **The mixer has no read-back.** Its gain law is now measured exact to 0.03 dB
-   over a 106 dB range (§9c) and the API exists (`set_mix_db` / `set_mix_norm` /
-   `mix_off`), but block 100 cannot be queried, so a plugin write can never be
-   confirmed. Mixer routes therefore remain shadowed in the shim rather than
-   forwarded — a deliberate choice, not a gap. The bus count is now settled at
-   three: the firmware's own resolver bounds block 100 at `index <= 2`.
-2. **Block 201 (insert FX) does not respond at all** — this is now the biggest open
-   question, and it displaced the old "three models never sent" item. All six models are
-   decoded and their wire bytes verified correct, but on 2026-07-30 a 0.008 dB-resolution
-   measurement found no response from any of them on any routing, while the reverb at
-   block 202 responded in the same session. `'Para'` id 4 is **not** the FX send. The
-   lead is `voicefxopt`/`InsertFXSelectorComponent`, registered as a per-channel
-   component (`re/param_consumers.txt:155`); its enable is not among `'opt '` ids 0–7.
-   See §9d. Also
-   undecoded: the `'MBdf'` per-sample-rate coefficient table, which models 0/1/2 emit
-   only when a flag their constructors always zero is set — so ignoring it is safe
-   today but would break if PreSonus ever enabled it.
-3. **The compressor knee semantics remain inferred.** The transfer curve itself is now
-   measured exact (§9b: 4.00:1 for a 4:1 setting), but the knee field's meaning is still
-   algebra from the firmware's `0.5/sqrt(K)` derivation rather than read from the audio
-   path, which runs on a coprocessor. This does not affect fidelity to the Windows host —
-   we reproduce its coefficients either way.
-4. **`'MemP'` / `'MRSp'` / `'IOSp'` read sweep.** A GetP-only sweep of all eleven
-   blocks found that only `'Appl'`+`'MemP'` returns any data, and it is a single
-   constant byte `0x02` at `blob+0x16` regardless of the size requested (0x4C,
-   0x100 and 0x7EC all give the same). `'MRSp'` and `'IOSp'` return nothing on
-   any block, and `'Ltcy'` reads zero everywhere. The observation remains valid;
-   the old "dead end" conclusion does not. The separately dispatched SetP
-   `MemP` path is the preset writer traced in §13o.
+1. **Device Presets persistence and body readback.** UC's exact `PrsM` Store
+   route is implemented and receives a transport reply, but the io24 exposes no
+   stored-body read command. Cold-boot persistence, a durable device commit, and
+   standalone VoiceFX recall therefore remain unproved. Linux records the honest
+   status `WRITE_SENT_UNVERIFIED` and replays known bodies on Load.
+2. **VoiceFX lane coverage.** All six models are objectively verified through
+   physical Input 1 with the corrected UC 4.7.2 transaction. A valid Input-2
+   Delay run was null. Simultaneous two-lane processing and model-0 private
+   reverb on both lanes remain open; the Host does not imply either result.
+3. **No faithful io24 command for several UC model fields.** The unresolved set
+   is mono-source `pan`, `stereopan` width/mono collapse, independent per-input
+   `FXA`, `dawpostdsp`, output mono fold-down, writable component names, and the
+   physical Main-mute latch. Names, Auto gain, and Mirror Main are explicit
+   Host state; nearby device fields are not substituted. Block 100 also has no
+   readback, so mixer writes remain shadow-backed.
+4. **Pending audible acceptance.** Passive and Vintage EQ have exact UC
+   designers and packet routes but still need a dedicated audible A/B. The Host
+   spring reverb has hardware-free graph/processor coverage but still needs its
+   live Main-output acceptance run.
+5. **96 kHz DSP coverage.** The device clocks at 96 kHz and the Host Mix A/B
+   source smoke passed there, but every device DSP block has not been swept at
+   that rate.
+6. **Compressor knee semantics.** The measured transfer curve and emitted
+   coefficients are correct; the knee field's meaning remains inferred from the
+   firmware algebra rather than directly measured in the coprocessor audio path.
 
 ---
 

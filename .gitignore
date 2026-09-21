@@ -14,6 +14,12 @@ dspusbdevice*
 
 __pycache__/
 *.pyc
+.venv/
+venv/
+.coverage
+coverage.xml
+htmlcov/
+.DS_Store
 
 # build artefacts — build/lib keeps stale copies of every module
 build/
@@ -34,6 +40,20 @@ dist/
 .context/
 .gstack/
 .pytest_cache/
+
+# Local VMs, agent work records, and hardware/audio capture runs. Some older
+# paths are already tracked in the private research history; ignore rules keep
+# new evidence from being added accidentally but do not remove that history.
+.vm/
+.superpowers/
+/runs/
+/docs/superpowers/
+/captures/
+*.wav
+*.flac
+*.pcap
+*.pcapng
+*.qcow2
 
 # Proprietary installer/package inputs
 *.exe

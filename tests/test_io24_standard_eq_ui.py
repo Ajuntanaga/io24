@@ -293,7 +293,8 @@ class SemanticPersistenceTests(unittest.TestCase):
             _shadow = {}
 
             @staticmethod
-            def reapply_shadow(skip=()):
+            def reapply_shadow(skip=(), sample_rate_hz=None):
+                self.assertEqual(sample_rate_hz, io24gtk.DEFAULT_SAMPLE_RATE)
                 return {"applied": 4}
 
         window = io24gtk.Win.__new__(io24gtk.Win)

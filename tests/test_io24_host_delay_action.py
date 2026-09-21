@@ -46,7 +46,7 @@ class HostDelayActionTests(unittest.TestCase):
         device = _HostActionDevice()
         arm = getattr(io24, "arm_channel2_delay", lambda _device: {"status": "MISSING"})
 
-        result = arm(device)
+        result = arm(device, sample_rate_hz=48000.0)
 
         self.assertEqual("HOST_DELAY_ARMED_CH2_REASSERTED", result["status"])
         self.assertEqual("UNPROVED", result["audibility"])
@@ -60,6 +60,7 @@ class HostDelayActionTests(unittest.TestCase):
                 "time_s": 0.173,
                 "feedback": 0.25,
                 "mix": 0.5,
+                "fs": 48000.0,
             }),
         ], device.calls)
 
@@ -69,7 +70,7 @@ class HostDelayActionTests(unittest.TestCase):
         arm = getattr(io24, "arm_channel2_delay", lambda _device: None)
 
         with self.assertRaisesRegex(RuntimeError, "slot 3"):
-            arm(device)
+            arm(device, sample_rate_hz=48000.0)
 
         self.assertEqual([], device.calls)
 

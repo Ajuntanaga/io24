@@ -94,18 +94,61 @@ class VoiceFxModelTransitionTests(unittest.TestCase):
 
         first = device.set_fx(
             "delay", on=False, time_s=0.0350860022,
-            feedback=1.0, mix=1.0)
+            feedback=1.0, mix=1.0, fs=48000.0)
         first_tags = [_body_tag(body) for body in device.sent]
         device.sent.clear()
         second = device.set_fx(
             "delay", on=True, time_s=0.0350860022,
-            feedback=1.0, mix=1.0)
+            feedback=1.0, mix=1.0, fs=48000.0)
 
         self.assertEqual(first, 2)
         self.assertEqual(first_tags, [io24_fx.TAG_VOFX, io24_fx.TAG_VECH])
         self.assertEqual(second, 1)
         self.assertEqual([_body_tag(body) for body in device.sent],
                          [io24_fx.TAG_VECH])
+
+    def test_delay_at_96khz_is_refused_before_any_usb_write(self):
+        device = self._device()
+
+        with self.assertRaisesRegex(RuntimeError, "96 kHz"):
+            device.set_fx(
+                "delay", on=True, time_s=0.173,
+                feedback=0.25, mix=0.5, fs=96000.0)
+
+        self.assertEqual(device.sent, [])
+        self.assertIsNone(getattr(device, "_voicefx_selected_model", None))
+
+    def test_delay_requires_the_current_rate_before_any_usb_write(self):
+        device = self._device()
+
+        with self.assertRaisesRegex(RuntimeError, "sample rate"):
+            device.set_fx(
+                "delay", on=False, time_s=0.173,
+                feedback=0.25, mix=0.5)
+
+        self.assertEqual(device.sent, [])
+
+    def test_reconnect_replay_blocks_an_old_delay_shadow_at_96khz(self):
+        device = self._device()
+        device._shadow = {
+            "set_fx": {
+                "fn": "set_fx",
+                "kwargs": {
+                    "model": "delay", "on": True, "time_s": 0.173,
+                    "feedback": 0.25, "mix": 0.5,
+                },
+            },
+        }
+        device._shadow_dirty = False
+        device._shadow_persist = False
+        device._send_state = None
+
+        report = device.reapply_shadow(sample_rate_hz=96000.0)
+
+        self.assertEqual(device.sent, [])
+        self.assertEqual(report["applied"], 0)
+        self.assertEqual(len(report["failed"]), 1)
+        self.assertIn("96 kHz", report["failed"][0]["error"])
 
     def test_same_transformer_on_or_mix_edit_sends_only_godv(self):
         device = self._device()
@@ -140,7 +183,7 @@ class VoiceFxModelTransitionTests(unittest.TestCase):
     def test_switching_models_materializes_the_new_model(self):
         device = self._device()
         device.set_fx("delay", on=False, time_s=0.125,
-                      feedback=0.5, mix=0.5)
+                      feedback=0.5, mix=0.5, fs=48000.0)
         device.sent.clear()
 
         written = device.set_fx(

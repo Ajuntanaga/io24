@@ -125,8 +125,12 @@ class FullParameterInventoryTests(unittest.TestCase):
         queued = []
         host = SimpleNamespace(
             _fx_mute=False,
+            _fs=48000.0,
+            _fx_last_sent_device=None,
+            _fx_last_sent_target=None,
             ctl=SimpleNamespace(dev=object(), submit=queued.append),
             fx_arm=Value(True), fx_model=Value(5),
+            fx_target=Value(0),
             fx_params={"delay": {
                 "time_s": Value(0.173), "feedback": Value(0.82),
                 "mix": Value(1.0)}},
@@ -140,6 +144,9 @@ class FullParameterInventoryTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
+            def set_voicefx_channel(self, channel):
+                self.calls.append(("target", channel))
+
             def set_fx(self, model, **kwargs):
                 self.calls.append(("state", model, kwargs))
                 return 2
@@ -148,8 +155,10 @@ class FullParameterInventoryTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add", return_value=1):
             queued[0](dev)
         self.assertEqual(dev.calls, [
+            ("target", 1),
             ("state", "delay", {
-                "on": True, "time_s": 0.173, "feedback": 0.82, "mix": 1.0}),
+                "on": True, "time_s": 0.173, "feedback": 0.82, "mix": 1.0,
+                "fs": 48000.0}),
         ])
 
     def test_unlinked_order_selector_targets_only_visible_channel(self):
@@ -207,7 +216,7 @@ class FullParameterInventoryTests(unittest.TestCase):
             "mute_mode": {"fn": "set_mute_mode", "kwargs": {"mode": True}},
         }
         state = io24gtk.shadow_ui_state(shadow)
-        self.assertNotIn("voicefx_target", state)
+        self.assertEqual(state["voicefx_target"], 2)
         self.assertEqual(state["voicefx"]["model"], "vocoder")
         self.assertEqual(state["processing_mix"], {2: 0.95})
         self.assertEqual(state["reverb_return"], {"mixa": -3.0})

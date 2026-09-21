@@ -18,7 +18,7 @@ class SpringStateTests(unittest.TestCase):
         state = io24_spring.default_state()
         self.assertEqual(set(state), {
             "version", "enabled", "input1_db", "input2_db", "dwell",
-            "tone", "drip", "width", "predelay_s", "routing",
+            "tone", "drip", "width", "predelay_s", "output_db", "routing",
         })
         self.assertFalse(state["enabled"])
         self.assertIsNone(state["routing"])
@@ -45,12 +45,33 @@ class SpringStateTests(unittest.TestCase):
         self.assertEqual(normalized, {"spring_reverb": state})
         self.assertEqual(migrations, [])
 
+    def test_host_feature_normalizer_migrates_v1_spring_return_gain(self):
+        state = io24_spring.default_state(enabled=True)
+        state["version"] = 1
+        state.pop("output_db", None)
+
+        normalized, migrations = io24._normalise_host_features(
+            {"spring_reverb": state})
+
+        self.assertEqual(
+            normalized["spring_reverb"]["output_db"],
+            io24_spring.DEFAULT_RETURN_DB)
+        self.assertEqual(normalized["spring_reverb"]["version"],
+                         io24_spring.VERSION)
+        self.assertEqual(migrations, [
+            "legacy Host spring return migrated to schema v2",
+        ])
+
     def test_named_snapshot_keeps_settings_but_not_session_route_ownership(self):
         state = io24_spring.default_state(enabled=True)
         state["routing"] = {
-            bus: {"assigned": bus == "mixa", "known": True,
-                  "level_db": -3.0}
-            for bus in io24_spring.RETURN_BUSES
+            "source": "return/ch3",
+            "exclusive": True,
+            "buses": {
+                bus: {"assigned": bus == "mixa", "known": True,
+                      "level_db": -3.0}
+                for bus in io24_spring.RETURN_BUSES
+            },
         }
         features = io24gtk.snapshot_host_features({"spring_reverb": state})
         self.assertTrue(features["spring_reverb"]["enabled"])
@@ -70,7 +91,7 @@ class SpringStateTests(unittest.TestCase):
             spring_on=SimpleNamespace(get_active=lambda: True),
             spring_controls={name: Value(state[name]) for name in (
                 "input1_db", "input2_db", "dwell", "tone", "drip",
-                "width", "predelay_s")},
+                "width", "predelay_s", "output_db")},
             _spring_routing=None,
         )
         self.assertEqual(io24gtk.Win._spring_state(host), state)
@@ -124,33 +145,47 @@ class SpringPipeWireTests(unittest.TestCase):
         self.assertIn('"stream.dont-remix": true', conf)
         self.assertIn('"node.dont-fallback": true', conf)
 
-    def test_config_refuses_profiles_without_usb_playback_5_6(self):
-        with self.assertRaisesRegex(ValueError, "six playback channels"):
-            io24_spring.build_conf(
-                io24_spring.default_state(), "capture", "playback",
-                capture_positions=("FL", "FR"),
-                playback_positions=("FL", "FR"), plugin="test")
+    def test_three_channel_profile_returns_on_normal_main_playback_pair(self):
+        positions = ("FL", "FR", "LFE")
+
+        lane = io24_spring.playback_lane(positions)
+        conf = io24_spring.build_conf(
+            io24_spring.default_state(), "capture", "playback",
+            capture_positions=("FL", "FR"),
+            playback_positions=positions, plugin="test")
+
+        self.assertEqual(lane["positions"], ("FL", "FR"))
+        self.assertEqual(lane["source"], "return/ch1")
+        self.assertFalse(lane["exclusive"])
+        self.assertIn('"FL",\n      "FR"', conf)
+
+    def test_six_channel_profile_keeps_the_dedicated_usb_5_6_lane(self):
+        lane = io24_spring.playback_lane(
+            ("AUX0", "AUX1", "AUX2", "AUX3", "AUX4", "AUX5"))
+
+        self.assertEqual(lane["positions"], ("AUX4", "AUX5"))
+        self.assertEqual(lane["source"], "return/ch3")
+        self.assertTrue(lane["exclusive"])
 
 
 class FakeMixer:
     DEFAULT_SEND_DB = 0.0
 
     def __init__(self):
-        self.level = {
-            ("return/ch3", "main"): None,
-            ("return/ch3", "mixa"): -4.0,
-            ("return/ch3", "mixb"): -8.0,
-        }
-        self.known = {
-            ("return/ch3", "main"): False,
-            ("return/ch3", "mixa"): True,
-            ("return/ch3", "mixb"): True,
-        }
-        self.assigned = {
-            ("return/ch3", "main"): False,
-            ("return/ch3", "mixa"): True,
-            ("return/ch3", "mixb"): False,
-        }
+        self.level = {}
+        self.known = {}
+        self.assigned = {}
+        self.writes = []
+        for source in ("return/ch1", "return/ch2", "return/ch3"):
+            for bus in io24_spring.RETURN_BUSES:
+                self.level[(source, bus)] = -6.0
+                self.known[(source, bus)] = True
+                self.assigned[(source, bus)] = bus != "mixb"
+        self.level[("return/ch3", "main")] = None
+        self.known[("return/ch3", "main")] = False
+        self.assigned[("return/ch3", "main")] = False
+        self.level[("return/ch3", "mixa")] = -4.0
+        self.level[("return/ch3", "mixb")] = -8.0
 
     def send_db(self, source, bus):
         return self.level[(source, bus)]
@@ -162,20 +197,23 @@ class FakeMixer:
         return self.assigned[(source, bus)]
 
     def set_send_db(self, source, bus, value):
+        self.writes.append(("level", source, bus, value))
         self.level[(source, bus)] = value
         self.known[(source, bus)] = True
 
     def set_send_assigned(self, source, bus, value):
+        self.writes.append(("assign", source, bus, bool(value)))
         self.assigned[(source, bus)] = bool(value)
 
 
 class SpringRoutingTests(unittest.TestCase):
     def test_enable_uses_main_only_and_disable_restores_prior_routes(self):
         dev = FakeMixer()
-        prior = io24_spring.route_main_only(dev)
+        lane = io24_spring.playback_lane(
+            ("AUX0", "AUX1", "AUX2", "AUX3", "AUX4", "AUX5"))
+        prior = io24_spring.route_main_only(dev, lane=lane)
         self.assertTrue(dev.assigned[("return/ch3", "main")])
-        self.assertEqual(dev.level[("return/ch3", "main")],
-                         io24_spring.DEFAULT_RETURN_DB)
+        self.assertEqual(dev.level[("return/ch3", "main")], 0.0)
         self.assertFalse(dev.assigned[("return/ch3", "mixa")])
         self.assertFalse(dev.assigned[("return/ch3", "mixb")])
 
@@ -185,6 +223,40 @@ class SpringRoutingTests(unittest.TestCase):
         self.assertFalse(dev.assigned[("return/ch3", "mixb")])
         self.assertEqual(dev.level[("return/ch3", "mixa")], -4.0)
         self.assertEqual(dev.level[("return/ch3", "mixb")], -8.0)
+
+    def test_shared_main_pair_does_not_rewrite_desktop_playback_routes(self):
+        dev = FakeMixer()
+        before = (dict(dev.level), dict(dev.known), dict(dev.assigned))
+        lane = io24_spring.playback_lane(("FL", "FR", "LFE"))
+
+        prior = io24_spring.route_main_only(dev, lane=lane)
+        self.assertEqual(dev.writes, [])
+        self.assertEqual((dev.level, dev.known, dev.assigned), before)
+
+        self.assertIsNone(io24_spring.restore_routes(dev, prior))
+        self.assertEqual(dev.writes, [])
+        self.assertEqual((dev.level, dev.known, dev.assigned), before)
+
+    def test_changing_to_shared_main_restores_a_dedicated_lane_once(self):
+        dev = FakeMixer()
+        dedicated = io24_spring.playback_lane(
+            ("AUX0", "AUX1", "AUX2", "AUX3", "AUX4", "AUX5"))
+        prior = io24_spring.route_main_only(dev, lane=dedicated)
+        dev.writes.clear()
+
+        shared = io24_spring.playback_lane(("FL", "FR", "LFE"))
+        routing = io24_spring.route_main_only(dev, prior, lane=shared)
+
+        self.assertEqual(routing, {
+            "source": "return/ch1", "exclusive": False, "buses": {},
+        })
+        self.assertEqual(dev.writes, [
+            ("assign", "return/ch3", "main", False),
+            ("level", "return/ch3", "mixa", -4.0),
+            ("assign", "return/ch3", "mixa", True),
+            ("level", "return/ch3", "mixb", -8.0),
+            ("assign", "return/ch3", "mixb", False),
+        ])
 
 
 class SpringNativePluginTests(unittest.TestCase):
@@ -256,7 +328,7 @@ class SpringNativePluginTests(unittest.TestCase):
         self.assertGreater(sum(v * v for v in left[2400:24000]), 1.0e-7)
         self.assertNotEqual(left[2400:12000], right[2400:12000])
         self.assertGreater(
-            sum(v * v for v in left[24000:48000]) / 24000.0, 5.0e-8)
+            sum(v * v for v in left[24000:48000]) / 24000.0, 3.0e-9)
         self.assertGreater(sum(v * v for v in left[12000:24000]),
                            sum(v * v for v in left[84000:96000]))
 
@@ -269,6 +341,15 @@ class SpringNativePluginTests(unittest.TestCase):
         result, left, right = self._process(state, frames=4096, impulse=False)
         self.assertEqual(result, 0)
         self.assertEqual(max(map(abs, left + right)), 0.0)
+
+    def test_output_gain_is_part_of_the_wet_processor(self):
+        state = io24_spring.default_state(enabled=True)
+        state["output_db"] = -60.0
+
+        result, left, right = self._process(state)
+
+        self.assertEqual(result, 0)
+        self.assertLess(max(map(abs, left + right)), 0.002)
 
 
 if __name__ == "__main__":

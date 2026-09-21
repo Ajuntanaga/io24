@@ -4,8 +4,9 @@
 This is deliberately separate from block 202, the unit's shared digital
 reverb.  It takes physical Inputs 1 and 2 from the io24 capture stream,
 produces a wet-only stereo spring model in PipeWire, and returns it through
-USB playback 5-6 (``return/ch3``).  While enabled that return is assigned to
-Main only; its previous Main/Mix A/Mix B assignments are restored on disable.
+the best stereo playback pair exposed by the active profile.  A dedicated
+USB pair is reserved for Main only while enabled; a two/three-channel profile
+uses the normal Main playback pair without rewriting its mixer routes.
 
 No function in this module opens USB or talks to the device by itself.  The
 GTK Host supplies an already-open mixer object only when the user enables or
@@ -37,9 +38,12 @@ CONTROL_PORTS = (
     "Drip",
     "Width",
     "Pre-delay (s)",
+    "Output gain (dB)",
 )
 
-VERSION = 1
+# Version 2 moves Spring return level into the wet processor. Version 1 used
+# the device mixer fader for the fixed USB 5-6 return.
+VERSION = 2
 RETURN_SOURCE = "return/ch3"
 RETURN_BUSES = ("main", "mixa", "mixb")
 DEFAULT_RETURN_DB = -12.0
@@ -62,6 +66,7 @@ def default_state(enabled=False):
         "drip": 0.42,
         "width": 0.82,
         "predelay_s": 0.008,
+        "output_db": DEFAULT_RETURN_DB,
         "routing": None,
     }
 
@@ -79,13 +84,11 @@ def _number(value, name, low, high):
     return number
 
 
-def _validate_routing(routing):
-    if routing is None:
-        return None
-    if not isinstance(routing, dict) or set(routing) != set(RETURN_BUSES):
-        raise ValueError("spring routing must hold main, mixa and mixb")
+def _validate_bus_routing(routing, buses):
+    if not isinstance(routing, dict) or set(routing) != set(buses):
+        raise ValueError("spring routing buses are invalid")
     result = {}
-    for bus in RETURN_BUSES:
+    for bus in buses:
         prior = routing[bus]
         if not isinstance(prior, dict) or set(prior) != {
                 "assigned", "known", "level_db"}:
@@ -106,9 +109,48 @@ def _validate_routing(routing):
     return result
 
 
+def _validate_routing(routing):
+    if routing is None:
+        return None
+    if not isinstance(routing, dict) or set(routing) != {
+            "source", "exclusive", "buses"}:
+        raise ValueError("spring routing must hold source, exclusive and buses")
+    source = routing["source"]
+    if source not in ("return/ch1", "return/ch2", "return/ch3"):
+        raise ValueError("spring routing has an unknown playback source")
+    if not isinstance(routing["exclusive"], bool):
+        raise ValueError("spring routing exclusive flag must be boolean")
+    buses = RETURN_BUSES if routing["exclusive"] else ()
+    return {
+        "source": source,
+        "exclusive": routing["exclusive"],
+        "buses": _validate_bus_routing(routing["buses"], buses),
+    }
+
+
+def _migrate_v1_state(state):
+    expected = {
+        "version", "enabled", "input1_db", "input2_db", "dwell", "tone",
+        "drip", "width", "predelay_s", "routing",
+    }
+    if set(state) != expected:
+        raise ValueError("spring version 1 fields are invalid")
+    routing = state["routing"]
+    if routing is not None:
+        routing = {
+            "source": RETURN_SOURCE,
+            "exclusive": True,
+            "buses": _validate_bus_routing(routing, RETURN_BUSES),
+        }
+    return dict(state, version=VERSION, output_db=DEFAULT_RETURN_DB,
+                routing=routing)
+
+
 def validate_state(state):
     if not isinstance(state, dict):
         raise ValueError("spring state must be an object")
+    if state.get("version") == 1:
+        state = _migrate_v1_state(state)
     expected = set(default_state())
     if set(state) != expected:
         raise ValueError("spring fields must be %s" %
@@ -128,6 +170,8 @@ def validate_state(state):
         "width": _number(state["width"], "width", 0.0, 1.0),
         "predelay_s": _number(
             state["predelay_s"], "predelay_s", 0.0, 0.1),
+        "output_db": _number(
+            state["output_db"], "output_db", -60.0, 10.0),
         "routing": _validate_routing(state["routing"]),
     }
 
@@ -142,6 +186,29 @@ def plugin_controls(state):
         "Drip": state["drip"],
         "Width": state["width"],
         "Pre-delay (s)": state["predelay_s"],
+        "Output gain (dB)": state["output_db"],
+    }
+
+
+def playback_lane(playback_positions):
+    """Choose a stereo return pair without demanding a six-channel profile."""
+    positions = tuple(playback_positions or ())
+    if len(positions) >= 6:
+        pair, source, exclusive = positions[4:6], "return/ch3", True
+        label = "USB 5-6"
+    elif len(positions) >= 4:
+        pair, source, exclusive = positions[2:4], "return/ch2", True
+        label = "USB 3-4"
+    elif len(positions) >= 2:
+        pair, source, exclusive = positions[:2], "return/ch1", False
+        label = "USB 1-2"
+    else:
+        raise ValueError("spring needs a stereo playback pair")
+    return {
+        "positions": tuple(pair),
+        "source": source,
+        "exclusive": exclusive,
+        "label": label,
     }
 
 
@@ -244,8 +311,7 @@ def build_conf(state, capture_target, playback_target,
                playback_positions=io24_mbc.CAPTURE_POSITIONS, plugin=None):
     if not capture_target or not playback_target:
         raise ValueError("spring needs the io24 capture and playback nodes")
-    if len(playback_positions) < 6:
-        raise ValueError("spring needs six playback channels for USB 5-6")
+    lane = playback_lane(playback_positions)
     args = {
         "node.description": NODE_DESCRIPTION,
         "media.name": NODE_DESCRIPTION,
@@ -268,7 +334,7 @@ def build_conf(state, capture_target, playback_target,
             "stream.dont-remix": True,
             "channelmix.upmix": False,
             "audio.channels": 2,
-            "audio.position": list(playback_positions[4:6]),
+            "audio.position": list(lane["positions"]),
         },
     }
     return ("context.properties = { log.level = 2 }\n"
@@ -279,24 +345,41 @@ def build_conf(state, capture_target, playback_target,
             "]\n" % json.dumps(args, indent=2))
 
 
-def route_main_only(dev, routing=None):
-    """Reserve playback 5-6 for the spring and make it audible in Main only."""
+def route_main_only(dev, routing=None, lane=None):
+    """Reserve a dedicated return, or leave shared Main playback untouched."""
+    lane = playback_lane(("0", "1", "2", "3", "4", "5")) \
+        if lane is None else dict(lane)
+    source = lane.get("source")
+    exclusive = lane.get("exclusive")
+    if source not in ("return/ch1", "return/ch2", "return/ch3") or \
+            not isinstance(exclusive, bool):
+        raise ValueError("spring playback lane is invalid")
     prior = _validate_routing(routing)
+    if prior is not None and (prior["source"] != source or
+                              prior["exclusive"] != exclusive):
+        restore_routes(dev, prior)
+        prior = None
+    if not exclusive:
+        # USB 1-2 is ordinary desktop playback. The filter stream is mixed into
+        # that PipeWire sink, so borrowing or rewriting its device routes would
+        # also move every other application using the pair.
+        return {"source": source, "exclusive": False, "buses": {}}
     if prior is None:
-        prior = {}
+        buses = {}
         for bus in RETURN_BUSES:
-            known = bool(dev.has_send_level(RETURN_SOURCE, bus))
-            prior[bus] = {
-                "assigned": bool(dev.send_assigned(RETURN_SOURCE, bus)),
+            known = bool(dev.has_send_level(source, bus))
+            buses[bus] = {
+                "assigned": bool(dev.send_assigned(source, bus)),
                 "known": known,
-                "level_db": dev.send_db(RETURN_SOURCE, bus) if known else None,
+                "level_db": dev.send_db(source, bus) if known else None,
             }
-    if not dev.has_send_level(RETURN_SOURCE, "main") or \
-            dev.send_db(RETURN_SOURCE, "main") is None:
-        dev.set_send_db(RETURN_SOURCE, "main", DEFAULT_RETURN_DB)
-    dev.set_send_assigned(RETURN_SOURCE, "main", True)
+        prior = {"source": source, "exclusive": True, "buses": buses}
+    # The wet processor owns output_db. Keep a dedicated hardware return at
+    # unity so one visible control has one meaning and can be restored exactly.
+    dev.set_send_db(source, "main", 0.0)
+    dev.set_send_assigned(source, "main", True)
     for bus in ("mixa", "mixb"):
-        dev.set_send_assigned(RETURN_SOURCE, bus, False)
+        dev.set_send_assigned(source, bus, False)
     return _validate_routing(prior)
 
 
@@ -304,11 +387,11 @@ def restore_routes(dev, routing):
     routing = _validate_routing(routing)
     if routing is None:
         return None
-    for bus in RETURN_BUSES:
-        prior = routing[bus]
+    source = routing["source"]
+    for bus, prior in routing["buses"].items():
         if prior["known"]:
-            dev.set_send_db(RETURN_SOURCE, bus, prior["level_db"])
-        dev.set_send_assigned(RETURN_SOURCE, bus, prior["assigned"])
+            dev.set_send_db(source, bus, prior["level_db"])
+        dev.set_send_assigned(source, bus, prior["assigned"])
     return None
 
 
@@ -320,6 +403,11 @@ class SpringChain(io24_mbc.Chain):
     def __init__(self):
         super().__init__()
         self._configuration = None
+        self._lane = None
+
+    @property
+    def return_lane(self):
+        return dict(self._lane) if self._lane is not None else None
 
     def ladspa_paths(self):
         return (io24_mbc.io24_uc_comp.default_cache_dir(), default_cache_dir())
@@ -331,12 +419,14 @@ class SpringChain(io24_mbc.Chain):
             io24_mbc.capture_positions(capture_target)
         playback_positions = playback_positions or \
             io24_mbc.capture_positions(playback_target)
+        lane = playback_lane(playback_positions)
         configuration = build_conf(
             state, capture_target, playback_target,
             capture_positions=capture_positions,
             playback_positions=playback_positions,
             plugin=plugin_reference())
         if self.running and configuration == self._configuration:
+            self._lane = lane
             return True
         self.last_error = None
         if not self._launch(configuration, configured=True):
@@ -346,6 +436,7 @@ class SpringChain(io24_mbc.Chain):
         while self.running:
             if self.node_id() is not None:
                 self._configuration = configuration
+                self._lane = lane
                 return True
             if time.monotonic() >= deadline:
                 self.last_error = "spring return node did not appear"
@@ -359,6 +450,7 @@ class SpringChain(io24_mbc.Chain):
     def stop(self):
         super().stop()
         self._configuration = None
+        self._lane = None
 
     def set_state(self, state):
         return self.set_controls({

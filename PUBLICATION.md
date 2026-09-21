@@ -1,10 +1,9 @@
-# Publication and source boundary
+# Public release boundary
 
 The public [`Ajuntanaga/io24`](https://github.com/Ajuntanaga/io24) repository is
 prepared as a fresh-history clean source import from a larger private research
-workspace. This document records what belongs in that public distribution and
-what deliberately stays private. It is an engineering inventory, not a legal
-conclusion.
+workspace. This page is the practical inventory of what belongs in that public
+release and what stays private. It is not a legal conclusion.
 
 ## Published source
 

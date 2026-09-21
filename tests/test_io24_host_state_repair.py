@@ -49,6 +49,9 @@ class _OrderOnlyIo24(_MixerOnlyIo24):
     def set_reverb(self, **kwargs):
         self.calls.append(("reverb", kwargs.get("on")))
 
+    def set_fx(self, model, **kwargs):
+        self.calls.append(("voicefx", model, kwargs.get("on")))
+
     def read_params(self):
         return {
             "input1Gain": 30.0,
@@ -301,7 +304,8 @@ class HostStateRepairTests(unittest.TestCase):
             path = Path(directory) / "old-host.json"
             path.write_text(json.dumps({"version": 1, "live": {}, "calls": calls}))
 
-            _live, applied = dev.load_preset(path)
+            _live, applied = dev.load_preset(
+                path, sample_rate_hz=48000.0)
 
         self.assertEqual(applied, 1)
         self.assertIsNone(dev.pan("line/ch2", "main"))
@@ -368,8 +372,9 @@ class HostStateRepairTests(unittest.TestCase):
                 dev._last_preset_load_report[
                     "quarantined_device_preset_calls"], 2)
             self.assertEqual(dev.calls, [
-                ("reverb", True), ("processing_mix", 2, 1.0),
-                ("processing", 1, 2)])
+                ("processing", 1, 2),
+                ("reverb", True),
+                ("processing_mix", 2, 1.0)])
 
             dev.calls.clear()
             _live, applied = dev.load_preset(
@@ -380,11 +385,38 @@ class HostStateRepairTests(unittest.TestCase):
             dev._last_preset_load_report[
                 "quarantined_device_preset_calls"], 0)
         self.assertEqual(dev.calls, [
+            ("mode", 1),
+            ("slot", 2, 3),
+            ("processing", 1, 2),
             ("reverb", True),
             ("processing_mix", 2, 1.0),
+        ])
+
+    def test_host_file_load_assigns_voicefx_before_model_state(self):
+        calls = {
+            "set_fx": {
+                "fn": "set_fx",
+                "kwargs": {"model": "delay", "on": True},
+            },
+            "set_processing_channel#channel=1": {
+                "fn": "set_processing_channel",
+                "kwargs": {"channel": 1, "source_input": 2},
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "channel-2-voicefx.json"
+            path.write_text(json.dumps({
+                "version": 1, "live": {}, "calls": calls,
+            }))
+            dev = _OrderOnlyIo24({})
+
+            _live, applied = dev.load_preset(
+                path, sample_rate_hz=48000.0)
+
+        self.assertEqual(applied, 2)
+        self.assertEqual(dev.calls, [
             ("processing", 1, 2),
-            ("slot", 2, 3),
-            ("mode", 1),
+            ("voicefx", "delay", True),
         ])
 
     def test_reapply_does_not_touch_stale_channel1_selector_by_default(self):

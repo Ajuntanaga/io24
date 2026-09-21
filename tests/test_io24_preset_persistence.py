@@ -498,7 +498,8 @@ class PresetPersistenceTests(unittest.TestCase):
         device = _HardwareFreeIo24()
 
         result = device.configure_voice_fx_intent(
-            True, "delay", time_s=0.24, feedback=0.42, mix=0.6)
+            True, "delay", time_s=0.24, feedback=0.42, mix=0.6,
+            fs=48000.0)
 
         self.assertEqual(result["model"], "delay")
         self.assertGreater(result["parameter_writes"], 0)
@@ -512,7 +513,7 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertFalse(disabled["audible"])
         self.assertEqual(device.protocol_writes, writes_after_arm)
 
-    def test_gtk_fx_sends_one_global_model_without_routing_mutation(self):
+    def test_gtk_fx_assigns_one_input_then_sends_global_model(self):
         tree = ast.parse((Path(__file__).parents[1] / "io24gtk.py").read_text())
         push_fx = next(node for node in ast.walk(tree)
                        if isinstance(node, ast.FunctionDef)
@@ -524,13 +525,13 @@ class PresetPersistenceTests(unittest.TestCase):
 
         self.assertNotIn("configure_voice_fx_intent", push_attributes)
         self.assertIn("submit", push_attributes)
-        self.assertNotIn("set_voicefx_channel", push_attributes)
+        self.assertIn("set_voicefx_channel", push_attributes)
         self.assertIn("set_fx", push_attributes)
         for forbidden in ("fx_on", "fx_off", "set_fx_mix", "set_reverb"):
             self.assertNotIn(forbidden, push_attributes)
         self.assertNotIn("_save_private_reverb_both", methods)
 
-    def test_gtk_fx_parameter_edits_never_send_owner_assignment(self):
+    def test_gtk_fx_parameter_edits_do_not_repeat_same_assignment(self):
         class Value:
             def __init__(self, value):
                 self.value = value
@@ -566,6 +567,8 @@ class PresetPersistenceTests(unittest.TestCase):
         device = Device()
         window = io24gtk.Win.__new__(io24gtk.Win)
         window._fx_mute = False
+        window._fx_last_sent_device = None
+        window._fx_last_sent_target = None
         window.ctl = Ctl(device)
         window.fx_arm = Value(True)
         window.fx_model = Value(0)
@@ -586,11 +589,11 @@ class PresetPersistenceTests(unittest.TestCase):
             window.fx_params["transformer"]["mix"].value = 0.7
             window._push_fx()
 
-        self.assertEqual(device.assignments, [])
+        self.assertEqual(device.assignments, [1])
         self.assertEqual(len(device.models), 2)
         self.assertEqual(device.models[-1][2]["mix"], 0.7)
 
-    def test_gtk_fx_state_stays_global_across_edits_and_devices(self):
+    def test_gtk_fx_assignment_follows_target_and_new_device(self):
         class Value:
             def __init__(self, value):
                 self.value = value
@@ -625,6 +628,8 @@ class PresetPersistenceTests(unittest.TestCase):
         second = Device()
         window = io24gtk.Win.__new__(io24gtk.Win)
         window._fx_mute = False
+        window._fx_last_sent_device = None
+        window._fx_last_sent_target = None
         window.ctl = Ctl(first)
         window.fx_arm = Value(True)
         window.fx_model = Value(0)
@@ -646,8 +651,8 @@ class PresetPersistenceTests(unittest.TestCase):
             window.ctl.dev = second
             window._push_fx()
 
-        self.assertEqual(first.assignments, [])
-        self.assertEqual(second.assignments, [])
+        self.assertEqual(first.assignments, [1, 2])
+        self.assertEqual(second.assignments, [2])
 
     def test_factory_device_store_refuses_the_currently_selected_slot(self):
         class Selected:
@@ -812,7 +817,8 @@ class PresetPersistenceTests(unittest.TestCase):
             source = _HardwareFreeIo24()
             source.set_reverb(on=True, size=0.72, mix=0.38,
                               hp_freq=180.0, predelay=0.027, fs=48000.0)
-            source.set_fx("delay", time_s=0.24, feedback=0.42, mix=0.6)
+            source.set_fx("delay", time_s=0.24, feedback=0.42, mix=0.6,
+                          fs=48000.0)
             source.set_fx_mix(1, 0.75)
             source.set_send_db("fxreturn/ch1", "aux1", -3.5)
             source.set_send_assigned("fxreturn/ch1", "mixa", True)
@@ -829,7 +835,8 @@ class PresetPersistenceTests(unittest.TestCase):
                 "input2PhantomPower": False,
             }
             restored = _HardwareFreeIo24(conflicting_live)
-            live_count, call_count = restored.load_preset(first)
+            live_count, call_count = restored.load_preset(
+                first, sample_rate_hz=48000.0)
             restored.save_preset(second)
 
             self.assertEqual(live_count, len(io24.Io24.LIVE_KEYS))

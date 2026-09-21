@@ -128,15 +128,17 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
                 decoded = io24_fx.voicefx_preset_call(state)
                 self.assertEqual(decoded, (model, EXPECTED_KWARGS[model]))
 
-    def test_explicit_apply_supplies_one_global_model_state(self):
+    def test_explicit_apply_assigns_channel_then_supplies_model_state(self):
         device = _RecordingDevice()
 
         done = io24_presets.apply_preset(
             device, {"voicefx": STATES["transformer"]}, channel=2,
-            with_fx=True)
+            with_fx=True, fs=48000.0)
 
         self.assertEqual(device.calls, [
-            ("set_fx", "transformer", EXPECTED_KWARGS["transformer"]),
+            ("set_voicefx_channel", 2),
+            ("set_fx", "transformer", dict(
+                EXPECTED_KWARGS["transformer"], fs=48000.0)),
         ])
         self.assertEqual(done, [
             "voicefx=transformer (6 writes; UC 4.7.2 state transaction)",
@@ -146,11 +148,14 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
         device = _RecordingDevice()
 
         done = io24_presets.apply_preset(
-            device, {"voicefx": STATES["delay"]}, with_fx=True)
+            device, {"voicefx": STATES["delay"]}, with_fx=True,
+            fs=48000.0)
 
         # A model being restored in its off state needs no return opening.
         self.assertEqual(device.calls, [
-            ("set_fx", "delay", EXPECTED_KWARGS["delay"]),
+            ("set_voicefx_channel", 1),
+            ("set_fx", "delay", dict(
+                EXPECTED_KWARGS["delay"], fs=48000.0)),
         ])
         self.assertEqual(done, ["voicefx=delay off (2 writes; off)"])
 
@@ -164,6 +169,15 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
         self.assertEqual(done, [
             "[voicefx retained for device-slot save; direct replay omitted]",
         ])
+
+    def test_delay_apply_without_current_rate_fails_before_assignment(self):
+        device = _RecordingDevice()
+
+        with self.assertRaisesRegex(RuntimeError, "current sample rate"):
+            io24_presets.apply_preset(
+                device, {"voicefx": STATES["delay"]}, with_fx=True)
+
+        self.assertEqual(device.calls, [])
 
     def test_bad_voicefx_state_fails_before_any_fat_channel_write(self):
         device = _RecordingDevice()
@@ -192,10 +206,25 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
 
         assign.assert_called_once_with(1, 2)
 
+    def test_assignment_change_forces_complete_model_materialization(self):
+        device = _ProtocolDevice()
+        device.set_fx("delay", fs=48000.0, **EXPECTED_KWARGS["delay"])
+        device.writes.clear()
+
+        device.set_voicefx_channel(2)
+        device.set_fx("delay", fs=48000.0, **EXPECTED_KWARGS["delay"])
+
+        block_201 = [payload for payload in device.writes
+                     if struct.unpack_from("<I", payload, 4)[0] == 201]
+        self.assertEqual(len(block_201), 2)
+        self.assertEqual(struct.unpack_from("<I", block_201[0], 12)[0],
+                         io24_fx.TAG_VOFX)
+
     def test_complete_snapshot_emits_model_selector_before_model_state(self):
         device = _ProtocolDevice()
 
-        report = device.apply_voicefx_snapshot(STATES["transformer"])
+        report = device.apply_voicefx_snapshot(
+            STATES["transformer"], sample_rate_hz=48000.0)
 
         self.assertEqual(report, {
             "model": "transformer",
@@ -213,6 +242,14 @@ class VoiceFxPresetApplyTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", device.writes[0], 24)[0], 0)
         self.assertEqual(struct.unpack_from("<I", device.writes[-1], 12)[0],
                          io24_fx.TAG_GODV)
+
+    def test_delay_snapshot_without_current_rate_writes_nothing(self):
+        device = _ProtocolDevice()
+
+        with self.assertRaisesRegex(RuntimeError, "current sample rate"):
+            device.apply_voicefx_snapshot(STATES["delay"])
+
+        self.assertEqual(device.writes, [])
 
 
 if __name__ == "__main__":

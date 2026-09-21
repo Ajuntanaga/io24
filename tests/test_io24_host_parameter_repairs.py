@@ -1115,6 +1115,9 @@ class HostRefinementTests(unittest.TestCase):
             def __init__(self):
                 self.fail = False
 
+            def set_voicefx_channel(self, _channel):
+                pass
+
             def set_fx(self, _model, **_params):
                 if self.fail:
                     raise RuntimeError("broken transport")
@@ -1131,6 +1134,7 @@ class HostRefinementTests(unittest.TestCase):
         messages = []
         host = SimpleNamespace(
             _fx_mute=False,
+            _fs=48000.0,
             FX_ORDER=io24gtk.Win.FX_ORDER,
             _fx_last_sent_device=None,
             _fx_last_sent_target=None,
@@ -1151,14 +1155,18 @@ class HostRefinementTests(unittest.TestCase):
             device.fail = True
             io24gtk.Win._push_fx(host)
             self.assertEqual(messages, [
-                "FX send failed: broken transport",
+                "Voice FX send failed: broken transport",
             ])
 
             host.ctl.dev = None
             io24gtk.Win._push_fx(host)
             self.assertEqual(messages, [
-                "FX send failed: broken transport",
+                "Voice FX send failed: broken transport",
             ])
+
+    def test_after_load_tolerates_presets_page_not_built_yet(self):
+        source = inspect.getsource(io24gtk.Win._after_load)
+        self.assertIn('getattr(self, "preset_rows", {}).get(ch)', source)
 
     def test_factory_load_reports_worker_completion_not_early_queueing(self):
         class Toggle:
@@ -1184,7 +1192,10 @@ class HostRefinementTests(unittest.TestCase):
             def to_bands(self, _preset):
                 return []
 
-            def apply_preset(self, _dev, _preset, _channel, with_fx=False):
+            def apply_preset(self, _dev, _preset, _channel, with_fx=False,
+                             fs=None):
+                if fs != 48000.0:
+                    raise AssertionError("factory load lost its runtime rate")
                 if self.fail:
                     raise RuntimeError("apply broke")
 
@@ -1200,7 +1211,7 @@ class HostRefinementTests(unittest.TestCase):
         ctl = Controller()
         toggle = Toggle()
         host = SimpleNamespace(
-            PR=presets, ctl=ctl, link_both=False,
+            PR=presets, ctl=ctl, link_both=False, _fs=48000.0,
             _factory_target_channel=lambda: 1,
             _current_channel=lambda: 1,
             bands_by_ch={1: []}, dyn_by_ch={1: {}},

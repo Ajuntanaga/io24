@@ -55,6 +55,12 @@ class _Value:
 
 
 class GlobalFxTests(unittest.TestCase):
+    def test_live_processing_permutation_identifies_voicefx_input(self):
+        self.assertEqual(io24gtk.voicefx_target_from_processing([0, 1]), 1)
+        self.assertEqual(io24gtk.voicefx_target_from_processing([1, 0]), 2)
+        self.assertIsNone(io24gtk.voicefx_target_from_processing([0, 0]))
+        self.assertIsNone(io24gtk.voicefx_target_from_processing(None))
+
     def test_fx_page_uses_xml_components_and_rack_without_a_master(self):
         source = (ROOT / "io24gtk.py").read_text()
         tree = ast.parse(source)
@@ -276,10 +282,13 @@ class GlobalFxTests(unittest.TestCase):
         selector.value = 0
         self.assertTrue(controls["transformer"].get_active())
 
-    def test_fx_edit_sends_only_the_global_model_state(self):
+    def test_fx_edit_assigns_the_selected_input_before_model_state(self):
         calls = []
 
         class Device:
+            def set_voicefx_channel(self, channel):
+                calls.append(("target", channel))
+
             def set_fx(self, model, **kwargs):
                 calls.append((model, kwargs))
                 return 2
@@ -287,9 +296,13 @@ class GlobalFxTests(unittest.TestCase):
         device = Device()
         host = SimpleNamespace(
             _fx_mute=False,
+            _fs=48000.0,
+            _fx_last_sent_device=None,
+            _fx_last_sent_target=None,
             ctl=SimpleNamespace(dev=device, submit=lambda fn: fn(device)),
             fx_arm=_Value(True),
             fx_model=_Value(5),
+            fx_target=_Value(1),
             fx_params={"delay": {
                 "time_s": _Value(0.173),
                 "feedback": _Value(0.82),
@@ -302,12 +315,49 @@ class GlobalFxTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add", return_value=1):
             io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [("delay", {
+        self.assertEqual(calls, [("target", 2), ("delay", {
             "on": True,
             "time_s": 0.173,
             "feedback": 0.82,
             "mix": 1.0,
+            "fs": 48000.0,
         })])
+
+    def test_96khz_delay_selection_is_blocked_before_assignment_or_state(self):
+        calls = []
+        messages = []
+
+        class Device:
+            def set_voicefx_channel(self, channel):
+                calls.append(("target", channel))
+
+            def set_fx(self, model, **kwargs):
+                calls.append((model, kwargs))
+
+        device = Device()
+        host = SimpleNamespace(
+            _fx_mute=False,
+            _fs=96000.0,
+            _fx_last_sent_device=None,
+            _fx_last_sent_target=None,
+            ctl=SimpleNamespace(dev=device, submit=lambda fn: fn(device)),
+            fx_arm=_Value(True),
+            fx_model=_Value(5),
+            fx_target=_Value(0),
+            fx_params={"delay": {
+                "time_s": _Value(0.173),
+                "feedback": _Value(0.25),
+                "mix": _Value(0.5),
+            }},
+            FX_ORDER=io24gtk.Win.FX_ORDER,
+            say=messages.append,
+        )
+
+        io24gtk.Win._push_fx(host)
+
+        self.assertEqual(calls, [])
+        self.assertEqual(len(messages), 1)
+        self.assertIn("96 kHz", messages[0])
 
     def test_either_channel_preset_records_the_same_global_fx_state(self):
         host = SimpleNamespace(
@@ -323,10 +373,13 @@ class GlobalFxTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertTrue(first[1]["on"])
 
-    def test_direct_preset_apply_sends_one_global_model_state(self):
+    def test_direct_preset_apply_assigns_the_requested_input(self):
         calls = []
 
         class Device:
+            def set_voicefx_channel(self, channel):
+                calls.append(("set_voicefx_channel", channel))
+
             def set_fx(self, model, **kwargs):
                 calls.append(("set_fx", model, kwargs))
                 return 2
@@ -351,15 +404,20 @@ class GlobalFxTests(unittest.TestCase):
         }
 
         io24_presets.apply_preset(with_effects_return(Device()), preset,
-                                  channel=2, with_fx=True)
+                                  channel=2, with_fx=True, fs=48000.0)
 
         self.assertEqual(calls, [
+            ("set_voicefx_channel", 2),
             ("set_fx", "delay", {"on": True, "time_s": 0.173,
-                                 "feedback": 0.82, "mix": 1.0}),
+                                 "feedback": 0.82, "mix": 1.0,
+                                 "fs": 48000.0}),
         ])
 
     def test_voicefx_preset_apply_is_independent_of_reverb_return(self):
         class Device:
+            def set_voicefx_channel(self, _channel):
+                pass
+
             def set_fx(self, _model, **_kwargs):
                 return 2
 
@@ -367,7 +425,7 @@ class GlobalFxTests(unittest.TestCase):
             Device(),
             {"voicefx": {"__classid": io24_fx.VOICEFX_CLASS_IDS["delay"],
                          "on": 1, "time": 0.1, "feedback": 0.2, "mix": 0.3}},
-            establish_return=False)
+            channel=2, establish_return=False, fs=48000.0)
 
         self.assertEqual(
             report,
@@ -383,17 +441,21 @@ class GlobalFxTests(unittest.TestCase):
                 return True, "exact"
 
             @staticmethod
-            def apply_preset(_device, _record, channel, with_fx=False):
+            def apply_preset(_device, _record, channel, with_fx=False,
+                             fs=None):
+                self.assertEqual(fs, 48000.0)
                 calls.append(("strip", channel, with_fx))
 
             @staticmethod
             def apply_voicefx(_device, _record, **kwargs):
-                calls.append(("fx", kwargs.get("establish_return")))
+                calls.append(("fx", kwargs.get("channel"),
+                              kwargs.get("establish_return")))
                 raise RuntimeError("FX transport failed")
 
         messages = []
         host = SimpleNamespace(
             PR=Presets,
+            _fs=48000.0,
             ctl=SimpleNamespace(submit=lambda fn: fn(object())),
             link_both=False,
             factory_target=_Value(0),
@@ -408,7 +470,7 @@ class GlobalFxTests(unittest.TestCase):
                 host, None, "Saved", True,
                 record={"voicefx": {"on": 1}})
 
-        self.assertEqual(calls, [("strip", 1, False), ("fx", None)])
+        self.assertEqual(calls, [("strip", 1, False), ("fx", 1, None)])
         self.assertEqual(messages, [
             "Loaded Saved on Channel 1; FX not loaded: FX transport failed",
         ])
@@ -420,8 +482,10 @@ class GlobalFxTests(unittest.TestCase):
                 return True, "exact"
 
             @staticmethod
-            def apply_preset(_device, _record, _channel, with_fx=False):
+            def apply_preset(_device, _record, _channel, with_fx=False,
+                             fs=None):
                 self.assertFalse(with_fx)
+                self.assertEqual(fs, 48000.0)
 
             @staticmethod
             def apply_voicefx(_device, _record, **_kwargs):
@@ -432,6 +496,7 @@ class GlobalFxTests(unittest.TestCase):
         adopted = []
         host = SimpleNamespace(
             PR=Presets,
+            _fs=48000.0,
             ctl=SimpleNamespace(submit=lambda fn: fn(object())),
             link_both=False,
             _factory_target_channel=lambda: 1,
@@ -474,6 +539,9 @@ class GlobalFxTests(unittest.TestCase):
         calls = []
 
         class Device:
+            def set_voicefx_channel(self, channel):
+                calls.append(("set_voicefx_channel", channel))
+
             def set_fx_mix(self, channel, value):
                 calls.append(("set_fx_mix", channel, value))
 
@@ -493,9 +561,13 @@ class GlobalFxTests(unittest.TestCase):
         messages = []
         host = SimpleNamespace(
             _fx_mute=False,
+            _fs=48000.0,
+            _fx_last_sent_device=None,
+            _fx_last_sent_target=None,
             ctl=SimpleNamespace(dev=device, submit=lambda fn: fn(device)),
             fx_arm=_Value(True),
             fx_model=_Value(5),
+            fx_target=_Value(0),
             fx_params={"delay": {
                 "time_s": _Value(0.25),
                 "feedback": _Value(0.9),
@@ -516,7 +588,10 @@ class GlobalFxTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add", return_value=1):
             io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [("set_fx", "delay", True)])
+        self.assertEqual(calls, [
+            ("set_voicefx_channel", 1),
+            ("set_fx", "delay", True),
+        ])
 
     def test_arming_fx_never_lifts_a_channel_bypass_and_says_so(self):
         device, calls = self._recording_device()
@@ -545,7 +620,10 @@ class GlobalFxTests(unittest.TestCase):
         with mock.patch.object(io24gtk.GLib, "idle_add", side_effect=run):
             io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [("set_fx", "delay", True)])
+        self.assertEqual(calls, [
+            ("set_voicefx_channel", 1),
+            ("set_fx", "delay", True),
+        ])
         self.assertEqual(messages, [])
 
     def test_a_usable_return_says_nothing(self):
@@ -561,14 +639,17 @@ class GlobalFxTests(unittest.TestCase):
 
         self.assertEqual(messages, [])
 
-    def test_turning_fx_off_leaves_the_shared_routing_alone(self):
+    def test_turning_fx_off_does_not_touch_reverb_routing(self):
         device, calls = self._recording_device()
         host, _messages = self._fx_host(device)
         host.fx_arm = _Value(False)
 
         io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [("set_fx", "delay", False)])
+        self.assertEqual(calls, [
+            ("set_voicefx_channel", 1),
+            ("set_fx", "delay", False),
+        ])
 
     def test_only_reverb_establishes_the_shared_return(self):
         self.assertNotIn("establish_effects_path",
@@ -595,7 +676,10 @@ class GlobalFxTests(unittest.TestCase):
 
         io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [("set_fx", "delay", True)])
+        self.assertEqual(calls, [
+            ("set_voicefx_channel", 1),
+            ("set_fx", "delay", True),
+        ])
 
     def test_the_driver_transaction_leaves_a_bypassed_channel_alone(self):
         """``channel_mix=None`` must not write wire 4: it is a single scalar, so
@@ -646,7 +730,7 @@ class GlobalFxTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             device.establish_effects_return(channel=3, channel_mix=1.0)
 
-    def test_legacy_owner_shadow_is_not_projected_as_fx_state(self):
+    def test_assignment_shadow_is_projected_as_voicefx_target(self):
         state = io24gtk.shadow_ui_state({
             "old-owner": {
                 "fn": "set_processing_channel",
@@ -658,7 +742,7 @@ class GlobalFxTests(unittest.TestCase):
             },
         })
 
-        self.assertNotIn("voicefx_target", state)
+        self.assertEqual(state["voicefx_target"], 2)
         self.assertEqual(state["voicefx"], {"model": "delay", "on": True})
 
 

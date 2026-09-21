@@ -82,8 +82,16 @@ def _scene():
 
 
 class ScenePlanTests(unittest.TestCase):
+    def test_live_cli_requires_an_explicit_current_rate(self):
+        with self.assertRaisesRegex(SystemExit, "--sample-rate is required"):
+            io24_scene._cli_sample_rate(None, live_apply=True)
+
+        self.assertEqual(io24_scene._cli_sample_rate(None), 48000.0)
+        self.assertEqual(
+            io24_scene._cli_sample_rate(88200.0, live_apply=True), 88200.0)
+
     def test_complete_uc_sections_map_to_linux_host_setters(self):
-        calls, skips = io24_scene.plan(_scene(), sample_rate_hz=96000.0)
+        calls, skips = io24_scene.plan(_scene(), sample_rate_hz=48000.0)
         names = [call[0] for call in calls]
 
         for expected in (
@@ -96,10 +104,15 @@ class ScenePlanTests(unittest.TestCase):
         fx = next(call for call in calls if call[0] == "set_fx")
         self.assertEqual(fx[1], ("delay",))
         self.assertTrue(fx[2]["on"])
+        self.assertEqual(fx[2]["fs"], 48000.0)
         reverb = next(call for call in calls if call[0] == "set_reverb")
-        self.assertEqual(reverb[2]["fs"], 96000.0)
+        self.assertEqual(reverb[2]["fs"], 48000.0)
         self.assertTrue(any("pan is not representable" in skip for skip in skips))
         self.assertFalse(any("voicefx" in skip.lower() for skip in skips))
+
+    def test_delay_scene_at_96khz_is_rejected_during_planning(self):
+        with self.assertRaisesRegex(RuntimeError, "96 kHz"):
+            io24_scene.plan(_scene(), sample_rate_hz=96000.0)
 
     def test_conflicting_channel_voicefx_fails_before_a_plan_is_returned(self):
         scene = _scene()
@@ -259,7 +272,7 @@ class SceneExportTests(unittest.TestCase):
         self.assertNotIn("presets", scene)
         self.assertTrue(any("mainVolume" in item for item in omissions))
 
-        calls, skips = io24_scene.plan(scene, sample_rate_hz=96000.0)
+        calls, skips = io24_scene.plan(scene, sample_rate_hz=48000.0)
         names = [call[0] for call in calls]
         self.assertIn("set_fx", names)
         self.assertIn("set_reverb", names)
@@ -279,7 +292,11 @@ class SceneExportTests(unittest.TestCase):
             self.assertEqual(path.read_text(), "original")
 
             scene = _scene()
-            io24_scene.save(path, scene, sample_rate_hz=96000.0)
+            with self.assertRaisesRegex(RuntimeError, "96 kHz"):
+                io24_scene.save(path, scene, sample_rate_hz=96000.0)
+            self.assertEqual(path.read_text(), "original")
+
+            io24_scene.save(path, scene, sample_rate_hz=48000.0)
             self.assertEqual(json.loads(path.read_text()), scene)
 
     def test_readable_mute_link_processing_and_bypass_override_stale_shadow(self):

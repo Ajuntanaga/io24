@@ -244,8 +244,9 @@ class _Backend:
         # resume that unwrapped `.dev` again would reach this and fail.
         self.dev = object()
 
-    def reapply_shadow(self, include_device_preset_state=False, skip=()):
-        self.calls.append(("reapply", tuple(skip)))
+    def reapply_shadow(self, include_device_preset_state=False, skip=(),
+                       sample_rate_hz=None):
+        self.calls.append(("reapply", tuple(skip), sample_rate_hz))
         return {"applied": 3, "failed": []}
 
     def recall_device_slot(self, channel, slot):
@@ -283,7 +284,9 @@ class ResumeSessionTests(unittest.TestCase):
     def test_first_resume_restores_host_features_and_skips_readable_settings(self):
         host, backend, adopted = self._host({})
         host._resume_session(first=True, path=self.path)
-        self.assertEqual(backend.calls, [("reapply", io24gtk.RESUME_SKIP)])
+        self.assertEqual(backend.calls, [
+            ("reapply", io24gtk.RESUME_SKIP, io24gtk.DEFAULT_SAMPLE_RATE),
+        ])
         self.assertEqual(adopted[0][1], {"reverb_character": {"version": 1}})
 
     def test_a_reconnect_restores_the_unit_but_not_host_features(self):
@@ -296,7 +299,9 @@ class ResumeSessionTests(unittest.TestCase):
                              "kwargs": {"model": "detuner", "on": False}}}
         host, backend, _adopted = self._host(shadow)
         host._resume_session(first=False, path=self.path)
-        self.assertEqual(backend.calls, [("reapply", io24gtk.RESUME_SKIP)])
+        self.assertEqual(backend.calls, [
+            ("reapply", io24gtk.RESUME_SKIP, io24gtk.DEFAULT_SAMPLE_RATE),
+        ])
 
 
 class AutoGainSessionTests(unittest.TestCase):

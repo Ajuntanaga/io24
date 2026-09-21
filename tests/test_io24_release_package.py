@@ -101,6 +101,7 @@ class ReleasePackageTests(unittest.TestCase):
                 licenses = [
                     name for name in names
                     if name.endswith(".dist-info/licenses/LICENSE")
+                    or name.endswith(".dist-info/LICENSE")
                 ]
                 vendor_evidence = [
                     name for name in names
@@ -121,7 +122,12 @@ class ReleasePackageTests(unittest.TestCase):
             isolated.mkdir()
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(wheels[0])
-            module_names = sorted(name[:-3] for name in required_modules)
+            # The GTK launcher depends on the distro-provided PyGObject
+            # bindings, which are intentionally not a pip dependency.  Its
+            # presence in the wheel is checked above; exercise every module
+            # that can be imported in a hardware-free Python environment here.
+            importable_modules = required_modules - {"io24gtk.py"}
+            module_names = sorted(name[:-3] for name in importable_modules)
             import_result = subprocess.run(
                 [
                     sys.executable,

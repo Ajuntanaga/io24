@@ -1,0 +1,61 @@
+# Personal Universal Control scenes — these are the user's own presets, copied
+# from a Windows install. io24_scene.py takes a path argument, so keep them
+# outside the tree (~/.cache/io24/re/scenes/) rather than here.
+*.scene
+re/scenes/
+
+# Reverse-engineering inputs: PreSonus firmware image and the Universal Control
+# DLL. Redistributing them is not ours to do — the analysis scripts locate their
+# own copies under ~/.cache/io24/re/.
+*.bin
+*.dll
+io24_fw*
+dspusbdevice*
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.coverage
+coverage.xml
+htmlcov/
+.DS_Store
+
+# build artefacts — build/lib keeps stale copies of every module
+build/
+dist/
+*.egg-info/
+
+# Durable, project-local disposable Wine build trees. Milestone manifests and
+# hashes live under re/; compiler output and extracted packages do not.
+.io24-build/
+
+# editor/agent tool config, not project content
+.claude/
+.claude-peer/
+
+# Local agent, session, and test state
+.agents/
+.codex/
+.context/
+.gstack/
+.pytest_cache/
+
+# Local VMs, agent work records, and hardware/audio capture runs. Some older
+# paths are already tracked in the private research history; ignore rules keep
+# new evidence from being added accidentally but do not remove that history.
+.vm/
+.superpowers/
+/runs/
+/docs/superpowers/
+/captures/
+*.wav
+*.flac
+*.pcap
+*.pcapng
+*.qcow2
+
+# Proprietary installer/package inputs
+*.exe
+*.msi
+*.cab

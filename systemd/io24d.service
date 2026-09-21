@@ -1,0 +1,21 @@
+# User unit, not system: the udev rule grants the *logged-in session* access to
+# the device via uaccess, so the daemon must run as that user. Install with
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/io24d.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now io24d
+[Unit]
+Description=PreSonus Revelator io24 control daemon
+After=sound.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/io24d --wait --socket %t/io24d.sock
+Restart=on-failure
+RestartSec=5
+# Unplugging the device makes the daemon exit; systemd restarts it and it waits
+# for the device to come back, so a replug does not need manual intervention.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "io24"
+version = "0.1.0"
+description = "Linux userspace driver for the PreSonus Revelator io24"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = ["pyusb>=1.2", "capstone>=5,<6"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ajuntanaga/io24"
+Repository = "https://github.com/Ajuntanaga/io24"
+Documentation = "https://github.com/Ajuntanaga/io24#readme"
+Issues = "https://github.com/Ajuntanaga/io24/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=7,<9"]
+
+[project.scripts]
+io24 = "io24:main"
+io24d = "io24d:main"
+io24-web = "io24web:main"
+io24-mixer = "io24gtk:main"
+io24-ucnet-shim = "ucnet_shim:main"
+io24-calibrate = "calibrate:main"
+io24-scene = "io24_scene:main"
+
+# Flat modules rather than a package: the driver grew as a set of peer modules
+# that import each other by name, and renaming them into a package would break
+# every path in PROTOCOL.md that points at the code behind a finding.
+[tool.setuptools]
+py-modules = [
+    "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters",
+    "io24_mbc", "io24_uc_comp", "io24_spring", "io24_native_stat", "io24_native_strip", "io24_preset_record", "io24_presets",
+    "io24_alt_eq", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
+    "io24_scene", "io24d", "io24web", "io24gtk", "ucnet_shim", "calibrate",
+]
+
+[tool.setuptools.data-files]
+"share/io24" = ["io24_uc_comp.c", "io24_spring.c"]

@@ -1,0 +1,37 @@
+name: package-and-docs
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hardware-free:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install project and test tools
+        run: python -m pip install --upgrade pip setuptools wheel '.[test]'
+      - name: Run hardware-free release suite
+        run: >-
+          python -m pytest -q
+          tests/test_io24_host_parameter_repairs.py
+          tests/test_io24_host_state_repair.py
+          tests/test_io24_global_fx.py
+          tests/test_io24_scene.py
+          tests/test_io24_uc_parity_closure.py
+          tests/test_io24_standard_eq_ui.py
+          tests/test_io24_vintage_eq_view.py
+          tests/test_io24_spring.py
+          tests/test_io24_multiband_insert.py
+          tests/test_publication_docs.py
+          tests/test_io24_release_package.py

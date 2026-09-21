@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!--
+    io24 mixer icon.
+
+    Built from the two things the app actually looks like: the pan/blend knob
+    and the level meters. Deliberately not a microphone or a speaker — those say
+    "audio thing", not "this program", and every second icon in the menu is one.
+
+    Constraints it is drawn to:
+      * legible at 32px, where thin strokes and any text disappear. Nothing here
+        is under 3px at nominal scale, and there is no lettering.
+      * one strong silhouette (the arc) so it is findable by shape alone in a
+        crowded launcher.
+      * the app's own palette, so the icon and the window agree.
+  -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#141d2b"/>
+      <stop offset="1"   stop-color="#070a11"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0"   stop-color="#2aa9b4"/>
+      <stop offset="1"   stop-color="#5ef0f7"/>
+    </linearGradient>
+    <linearGradient id="meter" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0"    stop-color="#28d99e"/>
+      <stop offset="0.62" stop-color="#28d99e"/>
+      <stop offset="0.82" stop-color="#fab733"/>
+      <stop offset="1"    stop-color="#fa4a5c"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="27" fill="url(#ground)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="26.25"
+        fill="none" stroke="#3dd6de" stroke-opacity="0.28" stroke-width="1.5"/>
+
+  <!-- knob: unlit travel track, then the lit sweep from centre, then a pointer -->
+  <g transform="translate(48,64)">
+    <path d="M -25.5 18 A 31 31 0 1 1 25.5 18"
+          fill="none" stroke="#3dd6de" stroke-opacity="0.20"
+          stroke-width="7" stroke-linecap="round"/>
+    <path d="M 0 -31 A 31 31 0 0 1 25.5 18"
+          fill="none" stroke="url(#sweep)" stroke-width="7"
+          stroke-linecap="round" filter="url(#glow)"/>
+    <line x1="0" y1="-6" x2="14.5" y2="14.5"
+          stroke="#eaf6fb" stroke-width="6" stroke-linecap="round"
+          filter="url(#glow)"/>
+    <circle cx="0" cy="0" r="4.4" fill="#0a1119" stroke="#3dd6de"
+            stroke-opacity="0.5" stroke-width="1.6"/>
+  </g>
+
+  <!-- meters: three columns at different levels, so it reads as "levels" -->
+  <g filter="url(#glow)">
+    <rect x="92"  y="66" width="9" height="30" rx="3" fill="url(#meter)"/>
+    <rect x="105" y="42" width="9" height="54" rx="3" fill="url(#meter)"/>
+  </g>
+  <rect x="92"  y="62" width="9" height="3" rx="1.5" fill="#eaf6fb" opacity="0.9"/>
+  <rect x="105" y="38" width="9" height="3" rx="1.5" fill="#fa4a5c" opacity="0.95"/>
+  <g fill="#3dd6de" opacity="0.16">
+    <rect x="92"  y="34" width="9" height="26" rx="3"/>
+    <rect x="105" y="34" width="9" height="2"  rx="1"/>
+  </g>
+</svg>

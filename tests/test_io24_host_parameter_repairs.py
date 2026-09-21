@@ -1377,6 +1377,8 @@ class HostRefinementTests(unittest.TestCase):
                     mock.patch.object(io24_mbc.tempfile, "mkdtemp",
                                       return_value=str(config)), \
                     mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc, "uc_comp_available",
+                                      return_value=None), \
                     mock.patch.object(io24_mbc.subprocess, "Popen",
                                       side_effect=OSError("spawn failed")):
                 started = chain.start(
@@ -1407,6 +1409,8 @@ class HostRefinementTests(unittest.TestCase):
                     mock.patch.object(io24_mbc.tempfile, "mkdtemp",
                                       return_value=str(config)), \
                     mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc, "uc_comp_available",
+                                      return_value=None), \
                     mock.patch.object(io24_mbc.subprocess, "Popen",
                                       return_value=Process()), \
                     mock.patch.object(chain, "node_id", return_value=None), \
@@ -1434,6 +1438,8 @@ class HostRefinementTests(unittest.TestCase):
                     mock.patch.object(io24_mbc.tempfile, "mkdtemp",
                                       return_value=str(config)), \
                     mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc, "uc_comp_available",
+                                      return_value=None), \
                     mock.patch.object(io24_mbc.subprocess, "Popen",
                                       return_value=Process()), \
                     mock.patch.object(chain, "node_id",
@@ -1506,6 +1512,8 @@ class HostRefinementTests(unittest.TestCase):
                     mock.patch.object(io24_mbc.tempfile, "mkdtemp",
                                       return_value=str(new_config)), \
                     mock.patch.object(io24_mbc.shutil, "copy"), \
+                    mock.patch.object(io24_mbc, "uc_comp_available",
+                                      return_value=None), \
                     mock.patch.object(io24_mbc.subprocess, "Popen",
                                       return_value=NewProcess()) as spawn, \
                     mock.patch.object(chain, "node_id", return_value="42"):

@@ -2061,7 +2061,6 @@ upset the firmware. That remains an unresolved risk worth respecting — but the
 | [`calibrate.py`](calibrate.py) | Measurements needing a stable known signal — `tone` / `level` / `mixer` / `comp` |
 | [`io24d.py`](io24d.py) | **The daemon.** Holds the device open and shares it with many clients over a Unix socket |
 | [`io24gtk.py`](io24gtk.py) | **The mixer app.** Native GTK4/libadwaita; meters, strips, EQ with live response curve, dynamics, presets, and an XML-driven six-unit Voice FX rack with per-component On controls. USB on a worker thread |
-| [`io24web.py`](io24web.py) | The same controls over HTTP on loopback, for reaching the device from a phone |
 | [`ucnet_shim.py`](ucnet_shim.py) | **UCNET compatibility server** — speaks the protocol existing PreSonus plugins expect, and translates to native USB |
 | [`PROTOCOL.md`](PROTOCOL.md) | This document |
 | `re/UCNET_SHIM_SPEC.md` (private research evidence) | The derived spec the shim implements |
@@ -6302,9 +6301,9 @@ that §13b warned about.
 ### Also fixed: `send ... off` never reached the wire
 
 `_push_send` tested `lvl is None` to mean "never set", which conflated that with
-"explicitly set to off". `set_send_db(src, bus, None)`, `mix_off()`, the CLI
-`send <src> <bus> off` and io24web's `mix_off` endpoint were **all silent
-no-ops**. Now distinguished by key presence, verified offline: an explicit off
+"explicitly set to off". `set_send_db(src, bus, None)`, `mix_off()`, and the CLI
+`send <src> <bus> off` were **all silent no-ops**. Now distinguished by key
+presence, verified offline: an explicit off
 writes the `MIXER_OFF_DB` sentinel, an unset send still writes nothing.
 
 ## 12R. The preset button, settled at the hardware (2026-08-10)

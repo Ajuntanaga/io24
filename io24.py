@@ -1831,8 +1831,8 @@ class Io24:
         if lvl is None:
             # Explicitly off. This MUST reach the wire: testing `is None` alone
             # conflated "set to off" with "never set", so `set_send_db(.., None)`,
-            # `mix_off()`, the CLI `send <src> <bus> off` and io24web's mix_off
-            # were all silent no-ops.
+            # `mix_off()` and the CLI `send <src> <bus> off` were all silent
+            # no-ops.
             return self._write_mix(source, bus, None)
         pan = s["pan"].get((source, state_bus))
         pan_db = 0.0

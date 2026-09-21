@@ -47,7 +47,7 @@ The published runtime contains this project's original interoperability code
 and bounded transcriptions needed to construct supported device messages. Users
 who want optional factory data or exact alternate-EQ coefficients must recover
 the required data from their own lawful Universal Control copy. The Host remains
-usable without factory preset data and reports that browser as unavailable.
+usable without factory preset data and reports that catalog as unavailable.
 
 ## Reproducible release checks
 

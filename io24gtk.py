@@ -2,12 +2,12 @@
 """
 io24gtk — a native GTK4 / libadwaita mixer for the PreSonus Revelator io24.
 
-The Linux replacement for Universal Control's window. Needs only PyGObject,
-which is already present on any GNOME system.
+The Linux replacement for Universal Control's window. Needs the PyGObject GTK4
+and libadwaita bindings.
 
     io24gtk.py [--wait]
 
-USB is exclusive: run this OR io24d OR io24web OR ucnet_shim, not several.
+USB is exclusive: run this OR io24d OR ucnet_shim, not several.
 
 Two things this is built around, both learned the hard way:
 
@@ -8309,27 +8309,6 @@ class Win(Adw.ApplicationWindow):
             pts.append((px, max(1, min(h - 1, y))))
         cache[ch] = (key, pts)
         return pts
-
-    def response_db(self, f, fs=48000.0):
-        """Legacy single-channel helper, kept for the web UI's shared maths."""
-        return self.response_for(1, f, fs)
-
-    def _unused_response(self, f, fs=48000.0):
-        re, im = 1.0, 0.0
-        for b in self.bands_by_ch[1]:
-            c = self._biquad(b, fs)
-            if not c:
-                continue
-            b0, b1, b2, a1, a2 = c
-            om = 2 * math.pi * f / fs
-            c1, s1 = math.cos(-om), math.sin(-om)
-            c2, s2 = math.cos(-2 * om), math.sin(-2 * om)
-            nr, ni = b0 + b1 * c1 + b2 * c2, b1 * s1 + b2 * s2
-            dr, di = 1 + a1 * c1 + a2 * c2, a1 * s1 + a2 * s2
-            dd = dr * dr + di * di or 1e-12
-            hr, hi = (nr * dr + ni * di) / dd, (ni * dr - nr * di) / dd
-            re, im = re * hr - im * hi, re * hi + im * hr
-        return 20 * math.log10(max(math.hypot(re, im), 1e-6))
 
     def _biquad(self, b, fs=48000.0):
         if b["shape"] == "off":

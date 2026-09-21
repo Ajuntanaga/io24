@@ -102,6 +102,18 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn('Documentation = "%s#readme"' % base, metadata)
         self.assertIn('Issues = "%s/issues"' % base, metadata)
 
+    def test_public_release_has_no_browser_control_surface(self):
+        self.assertFalse((ROOT / "io24web.py").exists())
+
+        metadata = (ROOT / "pyproject.toml").read_text()
+        self.assertNotIn("io24-web", metadata)
+        self.assertNotIn("io24web", metadata)
+
+        for filename in PUBLIC_DOCS:
+            with self.subTest(filename=filename):
+                self.assertNotIn(
+                    "io24web", (ROOT / filename).read_text().lower())
+
 
 if __name__ == "__main__":
     unittest.main()

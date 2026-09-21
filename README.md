@@ -44,7 +44,7 @@ The source-publication boundary and release checks are in
 
 ## What works
 
-Hardware-verified unless the row says otherwise. The two front ends and the
+Hardware-verified unless the row says otherwise. The GTK front end and UCNET
 shim are software over the same verified driver calls, so they are marked
 separately rather than implied to be independently measured.
 
@@ -74,7 +74,6 @@ separately rather than implied to be independently measured.
 | Voice FX control model and UC transaction | exact XML-ordered controls and builders for all six models, a six-unit visual rack, one global settings object over two structural lanes, and a separate **On** state per model component. A UC 4.7.2 USB capture controls model selection, state-only edits, Transformer `MBdf` tables and pacing. All six models are objectively verified through physical Input 1 in two on/off cycles each: exact Delay timing, Detuner pitch targets, Ring Modulator sidebands, and repeatable Transformer/Vocoder/Filters spectral changes, with same-path reverb controls and stable off states. |
 | **Universal Control scene save/load** (`io24_scene.py`) | prevalidates and applies all supported sections of a real UC `.scene`, and atomically saves readable plus Host-known state with UC field names. Every complete front-panel-block and Device-Presets body known to this exact unit is included; load reports those libraries but never overwrites them. A failed load compensates from its pre-load checkpoint and reports whether rollback was complete or partial. |
 | GTK4 mixer app (`io24gtk.py`) | both channels side by side — meters, strips, draggable EQ nodes + spectrum, dynamics, clickable rack, routing, device page |
-| Browser UI (`io24web.py`) | a subset — meters, both channels, monitor and presets. Binds to localhost by default; pass `--bind` to reach it from a phone |
 | UCNET shim | lets UCNET-speaking clients talk to the device |
 
 ## Current hardware and validation limits
@@ -179,8 +178,8 @@ sudo apt install libusb-1.0-0 python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-
 ```
 
 (Fedora: `dnf install libusb1 python3-gobject gtk4 libadwaita`.) The GTK
-packages are only needed for `io24gtk.py` — the CLI, the web UI and the library
-need just libusb. Having GNOME installed is **not** sufficient on its own: the
+packages are only needed for `io24gtk.py` — the CLI and library need just
+libusb. Having GNOME installed is **not** sufficient on its own: the
 desktop ships the C libraries, but the *Python* bindings and typelibs above are a
 separate package on most distributions.
 
@@ -266,35 +265,14 @@ blocking the UI on them. (Strictly there are two threads that touch USB: the
 worker, and the one-shot probe at start-up that finds the device. They do not
 overlap.)
 
-### The browser mixer
-
-```bash
-python3 io24web.py
-```
-
-A subset of the app's controls at <http://127.0.0.1:8424/> — meters, both
-channels, monitoring and presets, not the full mixer. **It does not use the
-internet**: one self-contained 14 KB page, no CDN, no external requests, no build
-step.
-
-It defaults to loopback, so a phone cannot reach it as shipped. To use it from a
-phone or tablet over USB tethering or a local hotspot you must bind wider:
-
-```bash
-python3 io24web.py --bind 0.0.0.0
-```
-
-Do that only on a network you trust — there is no authentication whatsoever, and
-anyone who can reach the port can change your monitoring.
-
-Only one process can hold the control interface at a time, so run the app *or*
-the web UI *or* `io24d` *or* `ucnet_shim` — not several at once.
+Only one process can hold the control interface at a time, so run the GTK app,
+`io24d`, or `ucnet_shim` — not several at once.
 
 `io24d` serves newline-delimited JSON over a Unix socket, but **no front end in
-this repo speaks that socket yet** — the app and the web UI each open the device
-directly. So running the daemon does not let them share the device, it locks them
-out of it. It is useful if you are writing your own client (`io24d.py --client`
-is one), not as a general way to run everything at once.
+this repo speaks that socket yet** — the GTK app opens the device directly. So
+running the daemon does not let the app share the device; it locks the app out.
+The daemon is useful if you are writing your own client (`io24d.py --client` is
+one), not as a general way to run everything at once.
 
 ### From the command line
 
@@ -600,7 +578,6 @@ so several clients can share it.
 | `io24_meters.py` | meter datagram decoding, reverb |
 | `io24d.py` | daemon: holds the device, multiplexes clients |
 | `io24gtk.py` | the GTK4 mixer app — including the six-unit Voice FX rack, parameter-driven selected-model visual, and exact XML controls |
-| `io24web.py` | the same, in a browser, for phones and tablets |
 | `ucnet_shim.py` | speaks UCNET, so existing clients can drive the device |
 | `io24_scene.py` | applies a Universal Control `.scene` file to the device |
 | `calibrate.py` | measurements that need a known input signal |
@@ -890,7 +867,7 @@ its redistribution status is not asserted by this project's GPL:
 
 These files are retained privately as research evidence. Without
 `uc_factory_presets.json` the Host remains usable but shows the factory-preset
-browser as unavailable. A user may recover optional data from a lawfully
+catalog as unavailable. A user may recover optional data from a lawfully
 obtained Universal Control installer for personal interoperability work.
 
 Also not included: `dspusbdevice.dll` itself and the io24 firmware image.

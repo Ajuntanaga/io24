@@ -792,10 +792,9 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertNotIn("set_fx", attributes)
         self.assertNotIn("set_preset_slot", attributes)
 
-    def test_preset_frontends_distinguish_host_files_from_device_slots(self):
+    def test_preset_frontend_distinguishes_host_files_from_device_slots(self):
         root = Path(__file__).parents[1]
         gtk_source = (root / "io24gtk.py").read_text()
-        web_source = (root / "io24web.py").read_text()
 
         self.assertIn('menu.append("Save snapshot…"', gtk_source)
         # 2026-09-11: presets on the unit are listed among User Presets,
@@ -804,7 +803,6 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertIn('"Input %d · Device preset %d"', gtk_source)
         self.assertNotIn("WRITE_SENT_UNVERIFIED", gtk_source)
         self.assertNotIn("selected device slot", gtk_source)
-        self.assertIn('"scope": "host-file"', web_source)
 
     def test_effects_survive_hardware_free_save_load_save_round_trip(self):
         """The real preset replay must preserve saved effect and route intent."""

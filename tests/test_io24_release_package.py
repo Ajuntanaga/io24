@@ -33,14 +33,12 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_scene.py",
             "io24d.py",
             "io24gtk.py",
-            "io24web.py",
             "ucnet_shim.py",
             "calibrate.py",
         }
         required_entry_points = {
             "io24 = io24:main",
             "io24d = io24d:main",
-            "io24-web = io24web:main",
             "io24-mixer = io24gtk:main",
             "io24-ucnet-shim = ucnet_shim:main",
             "io24-calibrate = calibrate:main",
@@ -113,6 +111,9 @@ class ReleasePackageTests(unittest.TestCase):
 
             self.assertEqual(missing, set())
             self.assertEqual(required_entry_points - entry_points, set())
+            self.assertNotIn("io24web.py", names)
+            self.assertFalse(any(
+                entry.startswith("io24-web =") for entry in entry_points))
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(len(spring_source), 1)
             self.assertEqual(len(licenses), 1)

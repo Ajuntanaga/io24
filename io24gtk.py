@@ -2,12 +2,12 @@
 """
 io24gtk — a native GTK4 / libadwaita mixer for the PreSonus Revelator io24.
 
-The Linux replacement for Universal Control's window. Needs only PyGObject,
-which is already present on any GNOME system.
+The Linux replacement for Universal Control's window. Needs the PyGObject GTK4
+and libadwaita bindings.
 
     io24gtk.py [--wait]
 
-USB is exclusive: run this OR io24d OR io24web OR ucnet_shim, not several.
+USB is exclusive: run this OR io24d OR ucnet_shim, not several.
 
 Two things this is built around, both learned the hard way:
 
@@ -336,7 +336,8 @@ def shadow_ui_state(shadow):
         "hpf_toggle": {}, "hpf_freq": {}, "eq": {1: {}, 2: {}},
         "gate": {}, "compressor": {}, "limiter": {}, "order": {},
         "reverb": None, "processing_mix": {}, "reverb_return": {},
-        "voicefx": None, "preset_mode": None, "mute_mode": None,
+        "voicefx": None, "voicefx_target": None,
+        "preset_mode": None, "mute_mode": None,
         "preset_slot": {}, "output_delay": None,
         "output_delay_bus": None, "phones_source": None,
         "link": None, "balance": None, "component_names": {},
@@ -386,6 +387,10 @@ def shadow_ui_state(shadow):
                 state["reverb_return"][bus] = kw.get("gain_db")
         elif name == "set_fx":
             state["voicefx"] = dict(kw)
+        elif name == "set_processing_channel" and ch == 1:
+            source = int(kw.get("source_input", 1))
+            if source in (1, 2):
+                state["voicefx_target"] = source
         elif name == "set_preset_mode":
             state["preset_mode"] = int(kw.get("mode", 1))
         elif name == "set_mute_mode":
@@ -425,6 +430,18 @@ def shadow_ui_state(shadow):
                 ("line/ch1", "line/ch2") and kw.get("bus") == "main":
             state["balance"] = kw.get("pan")
     return state
+
+
+def voicefx_target_from_processing(processing):
+    """Return the physical input that owns Voice FX in a live permutation."""
+    if not isinstance(processing, (list, tuple)) or len(processing) != 2:
+        return None
+    values = tuple(processing)
+    if values == (0, 1):
+        return 1
+    if values == (1, 0):
+        return 2
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -565,6 +582,7 @@ class Ctl:
             "preset_off": [False, False], "preset_slot": [0, 0],
             "mute": [False, False], "hpmute": False, "link": False,
             "mainmute": False,
+            "processing_channel": [None, None],
             # DSP/mixer blocks cannot be read back.  A newly opened handle may
             # follow a cold boot, so a disk cache is *pending* until the window
             # resumes the last session, which re-sends it on every connection
@@ -703,6 +721,9 @@ class Ctl:
                     s["preset_slot"] = [
                         struct.unpack("<i", struct.pack("<f", f[40]))[0],
                         struct.unpack("<i", struct.pack("<f", f[41]))[0]]
+                    s["processing_channel"] = [
+                        struct.unpack("<i", struct.pack("<f", f[38]))[0] - 3,
+                        struct.unpack("<i", struct.pack("<f", f[39]))[0] - 3]
                     s["alive"] = True
                     s["error"] = None
                     self._errs = 0        # a good poll ends any error streak
@@ -3267,7 +3288,7 @@ class Win(Adw.ApplicationWindow):
         self._insert_stale = False
         self._insert_pending = 0
         # A distinct Host spring tank: wet-only Input 1/2 capture returned on
-        # USB playback 5-6 and reserved for physical Main 1-2 while enabled.
+        # the best stereo pair exposed by the active io24 playback profile.
         # This does not replace or relabel the unit's block-202 reverb.
         self.spring = io24_spring.SpringChain()
         self._spring_routing = None
@@ -3286,9 +3307,12 @@ class Win(Adw.ApplicationWindow):
         self.device_preset_library_registry = DevicePresetLibraryRegistry(
             DEVICE_PRESET_LIBRARY_REGISTRY_PATH)
         self._fx_push_id = None
-        # Block 201 is one settings object over two structural audio lanes.
-        # Normal FX control never mutates processingChannel: that value swaps
-        # physical inputs between DSP chains and is not an FX owner switch.
+        # Block 201 is one shared processor, assigned to one physical input by
+        # processingChannel. The assignment exchanges the device's processing
+        # permutation, so remember the confirmed target and do not resend it
+        # for every slider movement.
+        self._fx_last_sent_device = None
+        self._fx_last_sent_target = None
         # Every coefficient this Host computes — biquads, gate/comp/limiter
         # time constants, reverb, the rate-dependent Voice FX filters — is a
         # function of the device clock. Nothing used to pass one, so all of it
@@ -4960,9 +4984,8 @@ class Win(Adw.ApplicationWindow):
 
         # A real Host-side spring tank, not another character preset for the
         # device's one shared digital reverb. The PipeWire graph is wet-only:
-        # Inputs 1/2 feed it after the Fat Channel, USB playback 5-6 carries
-        # the return, and that lane is reserved for physical Main 1-2 only
-        # while the switch is on.
+        # Inputs 1/2 feed it after the Fat Channel and its stereo return joins
+        # the physical Main playback path.
         spring = Adw.PreferencesGroup(title="Spring reverb")
         self.spring_on = Adw.SwitchRow(
             title="On", subtitle="Off")
@@ -4989,29 +5012,31 @@ class Win(Adw.ApplicationWindow):
                 ("width", "Stereo width", 0.0, 1.0, 0.005,
                  lambda v: "%.0f %%" % (v * 100), None),
                 ("predelay_s", "Pre-delay", 0.0, 0.1, 0.0005,
-                 lambda v: "%.0f ms" % (v * 1000), None)):
+                 lambda v: "%.0f ms" % (v * 1000), None),
+                ("output_db", "Spring return → Main 1–2", -60.0, 10.0, 0.1,
+                 lambda v: "%.1f dB" % v, None)):
             row, control = self._srow(
                 title, lower, upper, step, defaults[key], formatter,
                 lambda _value: self._spring_controls_changed(), note)
             self.spring_controls[key] = control
+            if key == "output_db":
+                self.spring_return_row = row
+                self.spring_return_control = control
+                control.set_sensitive(False)
             spring.add(row)
-
-        row, self.spring_return_control = self._srow(
-            "Spring return → Main 1–2", -60.0, 10.0, 0.1,
-            io24_spring.DEFAULT_RETURN_DB,
-            lambda v: "%.1f dB" % v,
-            self._spring_return_changed)
-        self.spring_return_row = row
-        self.spring_return_control.set_sensitive(False)
-        spring.add(row)
         page.add(spring)
 
-        # Block 201 is one settings object over two structural input lanes.
-        # Configure it once; processingChannel is separate routing state and
-        # must not be changed by an FX edit.
+        # UC exposes one block-201 processor and an explicit input assignment.
         ig = Adw.PreferencesGroup(title="Voice FX")
 
         self.fx_visual = FXVisual("transformer", self._fx_live_params)
+        self.fx_target = Adw.ComboRow(
+            title="Voice FX input",
+            subtitle="Choose which input receives the shared processor",
+            model=Gtk.StringList.new(["Input 1", "Input 2"]))
+        self.fx_target.set_selected(0)
+        self.fx_target.connect(
+            "notify::selected", lambda *_a: self._fx_target_changed())
         self.fx_model = Adw.ComboRow(title="Model",
                                      model=Gtk.StringList.new(MODEL_TITLES))
         self.fx_model.connect("notify::selected", lambda *_a: self._fx_model_changed())
@@ -5082,6 +5107,7 @@ class Win(Adw.ApplicationWindow):
         self.fx_rack = VoiceFxRack(self)
         ig.add(self.fx_rack)
         ig.add(self.fx_visual)
+        ig.add(self.fx_target)
         ig.add(self.fx_model)
         ig.add(self.fx_param_stack)
 
@@ -5117,6 +5143,28 @@ class Win(Adw.ApplicationWindow):
             rack.queue_draw()
         self._push_fx()
 
+    def _fx_target_changed(self):
+        """Apply the selected UC Voice FX assignment before model state."""
+        self._push_fx()
+
+    def _remember_voicefx_target(self, target):
+        """Adopt a confirmed live/preset assignment without echoing a write."""
+        if target not in (1, 2):
+            return False
+        prior = self._fx_mute
+        self._fx_mute = True
+        try:
+            target_row = getattr(self, "fx_target", None)
+            if target_row is not None:
+                target_row.set_selected(target - 1)
+        finally:
+            self._fx_mute = prior
+        holder = getattr(getattr(self, "ctl", None), "dev", None)
+        backend = getattr(holder, "dev", holder)
+        self._fx_last_sent_device = backend
+        self._fx_last_sent_target = target
+        return True
+
     def _fx_power_changed(self, *_args):
         rack = getattr(self, "fx_rack", None)
         if rack is not None:
@@ -5146,7 +5194,7 @@ class Win(Adw.ApplicationWindow):
         return False
 
     def _push_fx(self):
-        """Send one selected model/state to the shared two-lane singleton.
+        """Assign the shared processor, then send its selected model state.
 
         Block 201 has no readable state, so success here means only that the
         known UC-ordered writes completed.  Audibility is decided separately by
@@ -5165,6 +5213,7 @@ class Win(Adw.ApplicationWindow):
         on = self.fx_arm.get_active()
         model = self.FX_ORDER[max(0, min(len(self.FX_ORDER) - 1,
                                          self.fx_model.get_selected()))]
+        target = 2 if self.fx_target.get_selected() == 1 else 1
         params = {name: control.get_value()
                   for name, control in self.fx_params[model].items()}
         for name in ("detune", "carrier_type"):
@@ -5172,23 +5221,36 @@ class Win(Adw.ApplicationWindow):
                 params[name] = int(params[name])
         if "carrier2" in params:
             params["carrier2"] = bool(params["carrier2"])
-        processing = getattr(self, "processing_mix_controls", {}).get(1)
+        try:
+            params = io24_fx.voicefx_runtime_kwargs(
+                model, params, getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
+        except (TypeError, ValueError, RuntimeError) as error:
+            self.say(str(error))
+            return
+        processing = getattr(self, "processing_mix_controls", {}).get(target)
         bypassed = bool(on and processing is not None and
                         processing.bypassed())
 
-        def work(dev, name=model, enabled=on, kw=dict(params),
+        def work(dev, ch=target, name=model, enabled=on, kw=dict(params),
                  channel_bypassed=bypassed):
             try:
+                if self._fx_last_sent_device is not dev or \
+                        self._fx_last_sent_target != ch:
+                    dev.set_voicefx_channel(ch)
+                    # Keep a successful assignment even if the following
+                    # model write fails. Retrying must not exchange the route
+                    # again when the target is already correct.
+                    self._fx_last_sent_device = dev
+                    self._fx_last_sent_target = ch
                 dev.set_fx(name, on=enabled, **kw)
             except Exception as error:
-                GLib.idle_add(self.say, "FX send failed: %s" % error)
+                GLib.idle_add(self.say, "Voice FX send failed: %s" % error)
                 return
             if channel_bypassed:
                 GLib.idle_add(
                     self.say,
-                    "FX is armed, but Channel 1 is bypassed, so nothing "
-                    "reaches its processing chain; clear Channel 1 bypass on "
-                    "the Device page to hear it.")
+                    "Voice FX is on, but Input %d processing is bypassed; "
+                    "clear that bypass on the Device page to hear it." % ch)
 
         self.ctl.submit(work)
 
@@ -5432,12 +5494,8 @@ class Win(Adw.ApplicationWindow):
             self.say("Spring reverb update failed")
 
     def _spring_return_changed(self, value):
-        switch = getattr(self, "spring_on", None)
-        if self._spring_mute or self._adopt_mute or switch is None or \
-                not switch.get_active():
-            return
-        self.ctl.submit(lambda dev: dev.set_mix_db(
-            io24_spring.RETURN_SOURCE, float(value), bus="main"))
+        _ = value
+        self._spring_controls_changed()
 
     def _spring_route_main(self):
         if self._spring_route_pending:
@@ -5446,8 +5504,11 @@ class Win(Adw.ApplicationWindow):
 
         def work(dev):
             try:
+                lane = getattr(self.spring, "return_lane", None)
+                if lane is None:
+                    raise RuntimeError("Spring reverb has no playback lane")
                 self._spring_routing = io24_spring.route_main_only(
-                    dev, self._spring_routing)
+                    dev, self._spring_routing, lane=lane)
                 message = None
             except Exception as error:
                 message = "Spring reverb output failed: %s" % error
@@ -5938,17 +5999,6 @@ class Win(Adw.ApplicationWindow):
                 mirror.set_active(dev.mirror_main_enabled(bus))
             for (src, bus), solo in getattr(self, "solo_widgets", {}).items():
                 solo.set_active(dev.soloed(src, bus))
-            spring_return = getattr(self, "spring_return_control", None)
-            if spring_return is not None and dev.has_send_level(
-                    io24_spring.RETURN_SOURCE, "main"):
-                level = dev.send_db(io24_spring.RETURN_SOURCE, "main")
-                if level is not None:
-                    prior_spring, self._spring_mute = self._spring_mute, True
-                    try:
-                        spring_return.set_value(
-                            max(-60.0, min(10.0, float(level))))
-                    finally:
-                        self._spring_mute = prior_spring
         finally:
             self._mix_mute = False
         return False
@@ -7628,7 +7678,7 @@ class Win(Adw.ApplicationWindow):
         return True
 
     def _adopt_record_voicefx(self, pr, channel):
-        """Show a record's stored global FX state. Sends nothing to the device.
+        """Show a record's assigned Voice FX state. Sends nothing to the device.
 
         A body the Host cannot model — an archive Voice FX class it has no
         builder for — leaves the controls untouched rather than inventing a
@@ -7642,10 +7692,10 @@ class Win(Adw.ApplicationWindow):
             return False
         if model not in self.FX_ORDER:
             return False
-        _ = channel                    # old records remain load-compatible
         prior = self._fx_mute
         self._fx_mute = True         # adoption must not echo back as a write
         try:
+            self.fx_target.set_selected(channel - 1)
             self.fx_model.set_selected(self.FX_ORDER.index(model))
             if getattr(self, "fx_param_stack", None) is not None:
                 self.fx_param_stack.set_visible_child_name(model)
@@ -7657,6 +7707,7 @@ class Win(Adw.ApplicationWindow):
                 self.fx_visual.set_model(model)
         finally:
             self._fx_mute = prior
+        self._remember_voicefx_target(channel)
         return True
 
     def _load_factory(self, _b, name, with_fx=False, record=None,
@@ -7671,10 +7722,6 @@ class Win(Adw.ApplicationWindow):
             chans = tuple(channels)
         else:
             chans = (1, 2) if self.link_both else (target,)
-        alternate_view = getattr(self.PR, "alternate_eq_view", None)
-        alternate_eq = callable(alternate_view) and \
-            alternate_view(pr) is not None
-
         def work(dev):
             fx_command_sent = False
             fx_error = None
@@ -7683,11 +7730,9 @@ class Win(Adw.ApplicationWindow):
                 # rolled back or reported as failed when the separate global
                 # FX activation handshake is unavailable.
                 for ch in chans:
-                    if alternate_eq:
-                        self.PR.apply_preset(
-                            dev, pr, ch, with_fx=False, fs=self._fs)
-                    else:
-                        self.PR.apply_preset(dev, pr, ch, with_fx=False)
+                    self.PR.apply_preset(
+                        dev, pr, ch, with_fx=False,
+                        fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
             except Exception as error:
                 GLib.idle_add(
                     self.say, "%s load failed: %s" % (name, error))
@@ -7695,7 +7740,9 @@ class Win(Adw.ApplicationWindow):
 
             if with_fx:
                 try:
-                    fx_report = self.PR.apply_voicefx(dev, pr)
+                    fx_report = self.PR.apply_voicefx(
+                        dev, pr, channel=target,
+                        fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
                     fx_command_sent = fx_report is not None
                 except Exception as error:
                     fx_error = str(error)
@@ -8310,27 +8357,6 @@ class Win(Adw.ApplicationWindow):
         cache[ch] = (key, pts)
         return pts
 
-    def response_db(self, f, fs=48000.0):
-        """Legacy single-channel helper, kept for the web UI's shared maths."""
-        return self.response_for(1, f, fs)
-
-    def _unused_response(self, f, fs=48000.0):
-        re, im = 1.0, 0.0
-        for b in self.bands_by_ch[1]:
-            c = self._biquad(b, fs)
-            if not c:
-                continue
-            b0, b1, b2, a1, a2 = c
-            om = 2 * math.pi * f / fs
-            c1, s1 = math.cos(-om), math.sin(-om)
-            c2, s2 = math.cos(-2 * om), math.sin(-2 * om)
-            nr, ni = b0 + b1 * c1 + b2 * c2, b1 * s1 + b2 * s2
-            dr, di = 1 + a1 * c1 + a2 * c2, a1 * s1 + a2 * s2
-            dd = dr * dr + di * di or 1e-12
-            hr, hi = (nr * dr + ni * di) / dd, (ni * dr - nr * di) / dd
-            re, im = re * hr - im * hi, re * hi + im * hr
-        return 20 * math.log10(max(math.hypot(re, im), 1e-6))
-
     def _biquad(self, b, fs=48000.0):
         if b["shape"] == "off":
             return None
@@ -8541,6 +8567,10 @@ class Win(Adw.ApplicationWindow):
         if generation == previous:
             return
         self._resumed_generation = generation
+        live_target = voicefx_target_from_processing(
+            snap.get("processing_channel"))
+        if live_target is not None:
+            self._remember_voicefx_target(live_target)
         self._resume_session(first=previous is None)
         if previous is not None:
             # a new connection: the insert's streams went with the old one
@@ -8556,9 +8586,9 @@ class Win(Adw.ApplicationWindow):
         through a power cycle and loses every write-only DSP setting. So on
         each connection the Host re-sends what it last sent, except what the
         unit reports itself, and shows it on the controls. Its own Host-only
-        features come back once per launch. FX state is replayed globally; an
-        old processingChannel write is routing state and is never replayed by
-        automatic resume.
+        features come back once per launch. FX model state is replayed, while
+        the live processingChannel assignment is read from the unit rather
+        than replaced by an old cached route.
         """
         session = load_last_session(path) if first else None
         if first:
@@ -8587,8 +8617,16 @@ class Win(Adw.ApplicationWindow):
             backend = dev
             mirror = json.loads(json.dumps(
                 getattr(backend, "_shadow", None) or {}))
+            mirror = {
+                key: call for key, call in mirror.items()
+                if not isinstance(call, dict) or
+                call.get("fn") != "set_processing_channel"
+            }
             try:
-                report = backend.reapply_shadow(skip=RESUME_SKIP)
+                report = backend.reapply_shadow(
+                    skip=RESUME_SKIP,
+                    sample_rate_hz=getattr(
+                        self, "_fs", DEFAULT_SAMPLE_RATE))
             except Exception as error:
                 GLib.idle_add(self.say,
                               "Could not restore the last session: %s" % error)
@@ -8638,7 +8676,9 @@ class Win(Adw.ApplicationWindow):
                         quarantined = snap.get(
                             "quarantined_device_preset_calls", 0)
                     else:
-                        n_live, n_calls = dev.load_preset(path)
+                        n_live, n_calls = dev.load_preset(
+                            path, sample_rate_hz=getattr(
+                                self, "_fs", DEFAULT_SAMPLE_RATE))
                         msg = "Loaded %s" % os.path.basename(path)
                         load_report = getattr(
                             dev, "_last_preset_load_report", {})
@@ -8799,6 +8839,9 @@ class Win(Adw.ApplicationWindow):
                             control.set_value(voicefx[name])
                     self.fx_arm.set_active(bool(voicefx.get("on", True)))
                     self.fx_visual.set_model(model)
+            target = state["voicefx_target"]
+            if target in (1, 2):
+                self._remember_voicefx_target(target)
             mode = state["preset_mode"]
             if mode in (0, 1, 2):
                 self.preset_mode_row.set_selected(mode)
@@ -8806,7 +8849,7 @@ class Win(Adw.ApplicationWindow):
                     getattr(self, "mute_sync_row", None) is not None:
                 self.mute_sync_row.set_active(state["mute_mode"])
             for ch, slot in state["preset_slot"].items():
-                row = self.preset_rows.get(ch)
+                row = getattr(self, "preset_rows", {}).get(ch)
                 if row is not None:
                     local = slot - self.PRESET_BASE[ch]
                     row[1].set_selected(local if 0 <= local <= 1 else -1)
@@ -9204,7 +9247,7 @@ def release_insert_routing(ctl, routing):
 
 
 def release_spring_routing(ctl, routing):
-    """Restore playback 5-6's three bus assignments before Host exit."""
+    """Restore any dedicated Spring playback lane before Host exit."""
     if not routing:
         return None
     dev = getattr(ctl, "dev", None)

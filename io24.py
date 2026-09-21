@@ -187,8 +187,8 @@ def build_paired_doubler_private_reverb_frames(
     """Build a two-slot Voice-FX fixture for offline comparison only.
 
     The tagged archive is retained only as a UC settled-state fixture.
-    Duplicating a global settings object into two physical preset bodies is
-    neither atomic nor required by the Host's two-lane runtime control.
+    Duplicating one settings object into two physical preset bodies is neither
+    atomic nor part of UC's explicit one-input Voice FX assignment workflow.
     """
     from io24_preset_record import paired_doubler_private_reverb_slots
     records = paired_doubler_private_reverb_slots(
@@ -542,7 +542,7 @@ def probe_channel2_slot3_with_gate_transition(
     }
 
 
-def arm_channel2_delay(dev):
+def arm_channel2_delay(dev, sample_rate_hz=None):
     """Use the native host to arm the fixed shared delay after Ch-2 recall.
 
     Block 201 is a singleton, so only its exact existing delay parameters can
@@ -564,8 +564,10 @@ def arm_channel2_delay(dev):
     channel1_before = _channel1_guard(before)
     dev.set_preset_enabled(2, True)
     dev.set_preset_slot(2, 3)
-    delay_parameter_writes = dev.set_fx(
-        "delay", on=True, time_s=0.173, feedback=0.25, mix=0.5)
+    delay_kwargs = _fx_mod().voicefx_runtime_kwargs(
+        "delay", {"on": True, "time_s": 0.173,
+                  "feedback": 0.25, "mix": 0.5}, sample_rate_hz)
+    delay_parameter_writes = dev.set_fx("delay", **delay_kwargs)
 
     after = dev.read_params()
     if after is None:
@@ -1361,8 +1363,15 @@ class Io24:
             raise ValueError("channel must be 1 or 2")
         if source_input not in (1, 2):
             raise ValueError("source_input must be 1 or 2")
-        return self.set_param(12, source_input - 1, index=channel - 1,
-                              as_int=True)
+        result = self.set_param(12, source_input - 1, index=channel - 1,
+                                as_int=True)
+        # Changing the processing permutation moves the singleton VoiceFX
+        # engine.  The destination cannot be assumed to retain the model that
+        # was materialized on the previous input, even when the model name and
+        # controls are unchanged.
+        self._voicefx_selected_model = None
+        self._voicefx_selected_state = {}
+        return result
 
     def set_voicefx_channel(self, channel):
         """Assign the singleton VoiceFX layer to a physical input channel.
@@ -1831,8 +1840,8 @@ class Io24:
         if lvl is None:
             # Explicitly off. This MUST reach the wire: testing `is None` alone
             # conflated "set to off" with "never set", so `set_send_db(.., None)`,
-            # `mix_off()`, the CLI `send <src> <bus> off` and io24web's mix_off
-            # were all silent no-ops.
+            # `mix_off()` and the CLI `send <src> <bus> off` were all silent
+            # no-ops.
             return self._write_mix(source, bus, None)
         pan = s["pan"].get((source, state_bus))
         pan_db = 0.0
@@ -2274,7 +2283,7 @@ class Io24:
         """Refuse a non-atomic duplicate write before either slot is touched."""
         raise HostActionError(
             "paired FX slot writes are not atomic and are unnecessary for the "
-            "global engine; no device write was attempted")
+            "shared assigned engine; no device write was attempted")
 
     def snapshot(self, include_device_preset_state=False):
         """Return a Host snapshot without moving device slots on later load.
@@ -2315,7 +2324,8 @@ class Io24:
             calls, include_device_preset_state)
         return len(replayable)
 
-    def reapply_shadow(self, include_device_preset_state=False, skip=()):
+    def reapply_shadow(self, include_device_preset_state=False, skip=(),
+                       sample_rate_hz=None):
         """Explicitly replay cached write-only Host state after an attachment.
 
         Opening a USB handle is not proof that the device still contains the
@@ -2348,38 +2358,11 @@ class Io24:
         # Rebuild from the normalised calls.  Otherwise a send model already
         # materialised from the pre-migration cache could retain an orphaned pan.
         self._send_state = None
-        phases = {
-            "set_preset_mode": 0,
-            "set_preset_slot": 2,
-            "set_processing_channel": 10,
-            "set_channel_link": 10,
-            "set_send_db": 30,
-            "set_mix_db": 30,
-            "set_bus_master": 40,
-            "set_pan": 50,
-            "set_send_assigned": 60,
-            "set_mirror_main": 65,
-            "set_source_mute": 70,
-            "set_bus_mute": 70,
-        }
-
-        def replay_phase(entry):
-            key, call = entry
-            name = call.get("fn") or key.split("#", 1)[0]
-            return phases.get(name, 20)
-
-        ordered = sorted(
-            enumerate(replay_calls.items()),
-            key=lambda item: (
-                replay_phase(item[1]),
-                item[0],
-            ))
-
         applied = 0
         by_request = 0
         skipped = []
         failed = []
-        for _position, (key, call) in ordered:
+        for key, call in _ordered_shadow_items(replay_calls):
             name = call.get("fn") or key.split("#", 1)[0]
             if name in skip:
                 by_request += 1
@@ -2388,7 +2371,9 @@ class Io24:
                 skipped.append(key)
                 continue
             try:
-                getattr(self, name)(**call.get("kwargs", {}))
+                kwargs = _shadow_runtime_kwargs(
+                    name, call.get("kwargs", {}), sample_rate_hz)
+                getattr(self, name)(**kwargs)
                 applied += 1
             except Exception as error:
                 failed.append({"key": key,
@@ -2422,13 +2407,15 @@ class Io24:
             self.STARTUP_PATH,
             include_device_preset_state=include_device_preset_state)
 
-    def apply_startup(self, include_device_preset_state=False):
+    def apply_startup(self, include_device_preset_state=False,
+                      sample_rate_hz=None):
         """Apply the on-connect preset, if one has been saved."""
         if not os.path.exists(self.STARTUP_PATH):
             return None
         return self.load_preset(
             self.STARTUP_PATH,
-            include_device_preset_state=include_device_preset_state)
+            include_device_preset_state=include_device_preset_state,
+            sample_rate_hz=sample_rate_hz)
 
     def save_preset(self, path, include_device_preset_state=False,
                     host_features=None):
@@ -2465,7 +2452,8 @@ class Io24:
             raise
         return snap
 
-    def load_preset(self, path, include_device_preset_state=False):
+    def load_preset(self, path, include_device_preset_state=False,
+                    sample_rate_hz=None):
         """Apply a saved preset. Live 'Appl' values first, then replay writes."""
         with open(path) as fh:
             snap = json.load(fh)
@@ -2495,13 +2483,15 @@ class Io24:
         calls = _normalise_shadow(snap.get("calls", {}))
         calls, quarantined = _quarantine_device_preset_calls(
             calls, include_device_preset_state)
-        for key, call in calls.items():
+        for key, call in _ordered_shadow_items(calls):
             name = call.get("fn") or key.split("#")[0]
             if name not in _SHADOWED:     # only replay setters we know we wrap
                 print("  preset: skipping unknown call %r" % name)
                 continue
             try:
-                getattr(self, name)(**call.get("kwargs", {}))
+                kwargs = _shadow_runtime_kwargs(
+                    name, call.get("kwargs", {}), sample_rate_hz)
+                getattr(self, name)(**kwargs)
                 applied += 1
             except Exception as e:
                 print("  preset: %s failed (%s)" % (key, e))
@@ -2561,6 +2551,14 @@ class Io24:
         if name not in self.FX_MODELS:
             raise ValueError("unknown FX model %r — one of %s"
                              % (model, "/".join(self.FX_MODELS)))
+        if name == "delay":
+            # Unlike coefficient-bearing models, Delay does not use ``fs`` in
+            # its payload. It is still mandatory safety context: selecting the
+            # model at 96 kHz caused a confirmed bootloader reset. Refuse an
+            # unknown clock as well as the observed unsafe one before VoFx.
+            if "fs" not in kw:
+                X.validate_delay_sample_rate(None)
+            X.validate_delay_sample_rate(kw["fs"])
         previous_model = getattr(self, "_voicefx_selected_model", None)
         previous_state = getattr(self, "_voicefx_selected_state", {})
         if previous_model != name:
@@ -2588,7 +2586,7 @@ class Io24:
         self._voicefx_selected_state = dict(kw)
         return written
 
-    def apply_voicefx_snapshot(self, state):
+    def apply_voicefx_snapshot(self, state, sample_rate_hz=None):
         """Apply one complete UC ``voicefx`` component in source order.
 
         UC owns the active algorithm in its component tree: it resolves the
@@ -2596,9 +2594,13 @@ class Io24:
         then pushes that selected model's state.  Reproduce that exact ordering
         without claiming the stock processing gate, persistence, or audibility.
         The device cannot supply this state through readback; ``state`` must be
-        a complete known snapshot.
+        a complete known snapshot. Rate-aware models require the caller's
+        current device rate. In particular, Delay never assumes 48 kHz because
+        that could bypass the 96 kHz reset interlock.
         """
-        model, kwargs = _fx_mod().voicefx_preset_call(state)
+        X = _fx_mod()
+        model, kwargs = X.voicefx_preset_call(state)
+        kwargs = X.voicefx_runtime_kwargs(model, kwargs, sample_rate_hz)
         written = self.set_fx(model, **kwargs)
         return {
             "model": model,
@@ -3152,6 +3154,60 @@ def _quarantine_device_preset_calls(calls, include_device_preset_state=False):
     return replayable, quarantined
 
 
+_REPLAY_PHASES = {
+    "set_preset_mode": 0,
+    "set_preset_slot": 2,
+    # UC chooses the Voice FX owner before selecting/materializing its model.
+    "set_processing_channel": 10,
+    "set_channel_link": 10,
+    "set_send_db": 30,
+    "set_mix_db": 30,
+    "set_bus_master": 40,
+    "set_pan": 50,
+    "set_send_assigned": 60,
+    "set_mirror_main": 65,
+    "set_source_mute": 70,
+    "set_bus_mute": 70,
+}
+
+
+def _ordered_shadow_items(calls):
+    """Replay cached calls in dependency order while preserving peers."""
+    indexed = list(enumerate(calls.items()))
+
+    def order(item):
+        position, (shadow_key, call) = item
+        name = call.get("fn") or shadow_key.split("#", 1)[0]
+        return _REPLAY_PHASES.get(name, 20), position
+
+    return [entry for _position, entry in sorted(indexed, key=order)]
+
+
+def _shadow_runtime_kwargs(name, raw_kwargs, sample_rate_hz):
+    """Rebuild rate-sensitive FX state for the clock active during replay.
+
+    A saved ``fs`` describes the clock when the state was written, not the
+    clock after a reconnect. In particular it must never authorize a saved
+    Delay selection on an unknown or newly selected 96 kHz clock.
+    """
+    kwargs = dict(raw_kwargs or {})
+    if name != "set_fx":
+        return kwargs
+    model = str(kwargs.get("model", "")).lower()
+    if not model:
+        return kwargs
+    state = dict(kwargs)
+    state.pop("model", None)
+    state.pop("fs", None)
+    if sample_rate_hz is None:
+        if model == "delay":
+            _fx_mod().validate_delay_sample_rate(None)
+        return kwargs
+    runtime = _fx_mod().voicefx_runtime_kwargs(
+        model, state, sample_rate_hz)
+    return dict(runtime, model=model)
+
+
 _SHADOWED = ("set_fx_mix", "set_highpass", "set_mute", "set_hp_mute",
              "set_mute_mode", "set_phones_source",
              "set_channel_link", "set_limiter", "set_compressor", "set_gate",
@@ -3417,8 +3473,13 @@ def _normalise_host_features(features):
                 "legacy Host multiband insert migrated to UC model schema v2")
     if "spring_reverb" in features:
         import io24_spring
+        legacy = (isinstance(features["spring_reverb"], dict) and
+                  features["spring_reverb"].get("version") == 1)
         normalized["spring_reverb"] = io24_spring.validate_state(
             features["spring_reverb"])
+        if legacy:
+            migrations.append(
+                "legacy Host spring return migrated to schema v2")
     if "pan" in features:
         migrations.append(
             "legacy Host bus pan was ignored; bus pan controls were removed")

@@ -16,7 +16,7 @@ The preset data itself is PreSonus's, not this project's original work and not
 covered by its GPL. The private research tree retains it at
 re/uc_factory_presets.json, while the runtime wheel deliberately excludes it.
 See README.md and PUBLICATION.md before redistributing a source tree. The Host
-continues without the file and reports the factory browser as unavailable; a
+continues without the file and reports the factory catalog as unavailable; a
 user can regenerate it from a lawfully obtained installer with
 re/extract_presets.py.
 
@@ -31,9 +31,9 @@ A preset names seven modules. Six map onto DSP this driver drives:
 
 The seventh, `voicefx`, is record-resident Voice FX state for block 201. The
 ordinary live setter replay omits it unless ``with_fx=True`` is explicitly
-requested. That opt-in configures the one shared settings object: it resolves
-UC's saved class id, selects/instantiates the model, and then applies only that
-model's state. It does not change ``processingChannel`` routing. The corrected
+requested. That opt-in assigns the shared processor to the requested physical
+input, resolves UC's saved class id, selects/instantiates the model, and then
+applies only that model's state. The corrected
 UC 4.7.2 transaction is audibly verified for all six models on physical Input 1;
 saved state still does not prove standalone VoiceFX recall without the Host.
 Tagged scene records remain useful for Host-side replay, but the 2026-09-14
@@ -605,21 +605,32 @@ def describe(p):
 
 
 def apply_preset(dev, preset, channel=1, with_fx=False,
-                 establish_return=True, return_db=0.0, fs=48000.0):
+                 establish_return=True, return_db=0.0, fs=None):
     """Send a factory preset to a channel. Returns a list of what was applied.
 
-    ``with_fx`` is an explicit opt-in to configure the one global block-201
-    settings object after applying the selected channel's Fat Channel state.
-    It never changes ``processingChannel`` routing. ``establish_return`` is
-    retained for call compatibility but ignored: the UC 4.7.2 capture changes
-    no mixer return as part of a VoiceFX transaction.
+    ``with_fx`` is an explicit opt-in to assign the one block-201 processor to
+    the selected physical input, then restore its model state. The assignment
+    uses UC's ``processingChannel`` route and remains separate from the preset
+    control namespace. ``establish_return`` is retained for call compatibility
+    but ignored: the UC 4.7.2 capture changes no mixer return as part of a
+    VoiceFX transaction.
     """
     if isinstance(preset, str):
         preset = load()[preset]
+    # Historical Fat Channel callers used the 48 kHz default. Keep that
+    # compatibility for coefficient design, but never let an omitted rate
+    # authorize a live Voice FX transaction. Delay at an assumed 48 kHz could
+    # otherwise reach a unit that is actually running at 96 kHz.
+    design_fs = 48000.0 if fs is None else fs
+    rate_kw = {} if fs is None else {"fs": design_fs}
     fx = preset.get("voicefx") or {}
     # Validate the complete VoiceFX object before changing any Fat Channel
     # state. A malformed opt-in must fail atomically at the host boundary.
     fx_call = io24_fx.voicefx_preset_call(fx) if with_fx and fx else None
+    if fx_call is not None:
+        model, kwargs = fx_call
+        fx_call = (model, io24_fx.voicefx_runtime_kwargs(
+            model, kwargs, fs))
     comp = preset.get("comp") or {}
     comp_call = _compressor_call(comp) if comp else None
     eq = preset.get("eq") or {}
@@ -641,7 +652,7 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
 
     filt = preset.get("filter") or {}
     if "hpf" in filt:
-        dev.set_highpass_freq(channel, float(filt["hpf"]))
+        dev.set_highpass_freq(channel, float(filt["hpf"]), **rate_kw)
         done.append("hpf=%.0fHz" % filt["hpf"])
 
     g = preset.get("gate") or {}
@@ -654,7 +665,8 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
                          release_s=float(g.get("release", 0.3)),
                          keyfilter_hz=float(g.get("keyfilter", 0.0)),
                          expander=bool(g.get("expander", 1)),
-                         keylisten=bool(g.get("keylisten", 0)))
+                         keylisten=bool(g.get("keylisten", 0)),
+                         **rate_kw)
             done.append("gate")
         else:
             dev.gate_off(channel)
@@ -662,7 +674,8 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
     if comp_call is not None:
         comp_index, comp_kwargs = comp_call
         if comp_kwargs["on"]:
-            dev.set_compressor(channel, model=comp_index, **comp_kwargs)
+            dev.set_compressor(
+                channel, model=comp_index, **comp_kwargs, **rate_kw)
             done.append("comp(%s)" % compressor_model(comp).title())
         else:
             dev.compressor_off(channel)
@@ -672,34 +685,36 @@ def apply_preset(dev, preset, channel=1, with_fx=False,
             for band, values in enumerate(eq_bands):
                 dev.set_eq_band(channel, band, values["shape"],
                                 freq_hz=values["freq"],
-                                gain_db=values["gain"], q=values["q"])
+                                gain_db=values["gain"], q=values["q"],
+                                **rate_kw)
             done.append("eq(4)")
         else:
             dev.eq_off(channel)
     elif alternate_eq is not None:
-        dev.set_alternate_eq(channel, alternate_eq, fs=fs)
+        dev.set_alternate_eq(channel, alternate_eq, fs=design_fs)
         done.append("eq(%s)" % eq_kind)
 
     lm = preset.get("limit") or {}
     if lm:
         dev.set_limiter(channel, bool(lm.get("limiteron")),
-                        float(lm.get("threshold", -28)))
+                        float(lm.get("threshold", -28)), **rate_kw)
         if lm.get("limiteron"):
             done.append("limiter")
 
     if fx_call is not None:
-        model, kwargs = fx_call
-        done.append(_apply_voicefx_call(dev, fx_call, establish_return))
+        done.append(_apply_voicefx_call(
+            dev, fx_call, establish_return, channel=channel))
     elif fx.get("on"):
         done.append("[voicefx retained for device-slot save; direct replay omitted]")
     return done
 
 
 def _apply_voicefx_call(dev, fx_call, establish_return, return_db=0.0,
-                        bus="main", channel_mix=None):
+                        bus="main", channel_mix=None, channel=1):
     """Apply the captured UC VoiceFX transaction without mixer side effects."""
     _ = establish_return, return_db, bus, channel_mix
     model, kwargs = fx_call
+    dev.set_voicefx_channel(channel)
     writes = dev.set_fx(model, **kwargs)
     state = "" if kwargs["on"] else " off"
     how = "UC 4.7.2 state transaction" if kwargs["on"] else "off"
@@ -707,21 +722,25 @@ def _apply_voicefx_call(dev, fx_call, establish_return, return_db=0.0,
 
 
 def apply_voicefx(dev, preset, establish_return=True, return_db=0.0,
-                  bus="main", channel_mix=None):
-    """Apply only a preset's global FX state and return its report string.
+                  bus="main", channel_mix=None, channel=1, fs=None):
+    """Assign and apply only a preset's Voice FX state.
 
     Deliberately separate from the Fat Channel replay, so an ordinary preset
-    load still completes if the VoiceFX transaction fails. Malformed FX still
-    fails before any write. Legacy return arguments are accepted but ignored.
+    load still completes if the VoiceFX transaction fails. Malformed FX and a
+    missing runtime rate fail before any write. Legacy return arguments are
+    accepted but ignored.
     """
     if isinstance(preset, str):
         preset = load()[preset]
     fx = preset.get("voicefx") or {}
     if not fx:
         return None
+    model, kwargs = io24_fx.voicefx_preset_call(fx)
+    fx_call = (model, io24_fx.voicefx_runtime_kwargs(model, kwargs, fs))
     return _apply_voicefx_call(
-        dev, io24_fx.voicefx_preset_call(fx), establish_return,
-        return_db=return_db, bus=bus, channel_mix=channel_mix)
+        dev, fx_call, establish_return,
+        return_db=return_db, bus=bus, channel_mix=channel_mix,
+        channel=channel)
 
 
 def to_bands(preset):

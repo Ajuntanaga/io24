@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "io24"
 version = "0.1.0"
-description = "Linux userspace driver for the PreSonus Revelator io24"
+description = "Native Linux control host for the PreSonus Revelator io24"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }
@@ -30,7 +30,6 @@ test = ["pytest>=7,<9"]
 [project.scripts]
 io24 = "io24:main"
 io24d = "io24d:main"
-io24-web = "io24web:main"
 io24-mixer = "io24gtk:main"
 io24-ucnet-shim = "ucnet_shim:main"
 io24-calibrate = "calibrate:main"
@@ -44,7 +43,7 @@ py-modules = [
     "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters",
     "io24_mbc", "io24_uc_comp", "io24_spring", "io24_native_stat", "io24_native_strip", "io24_preset_record", "io24_presets",
     "io24_alt_eq", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
-    "io24_scene", "io24d", "io24web", "io24gtk", "ucnet_shim", "calibrate",
+    "io24_scene", "io24d", "io24gtk", "ucnet_shim", "calibrate",
 ]
 
 [tool.setuptools.data-files]

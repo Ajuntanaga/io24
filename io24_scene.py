@@ -7,7 +7,7 @@ mixer matrix, output masters and mutes, shared reverb, and the one shared
 VoiceFX processor. Passive and Vintage EQ use the exact retained UC 4.7.2
 coefficient designers already used by the Host.
 
-    python3 io24_scene.py "B A S E.scene"
+    python3 io24_scene.py --sample-rate 48000 "B A S E.scene"
     python3 io24_scene.py --dry-run --sample-rate 96000 Main.scene
     python3 io24_scene.py --export io24-host.scene
 
@@ -244,9 +244,7 @@ def _plan_processing(channel, component, prefix, fs, calls, voicefx, skips):
     fx = _object(component.get("voicefx"), "%s.voicefx" % prefix)
     if fx:
         model, kwargs = io24_fx.voicefx_preset_call(fx)
-        kwargs = dict(kwargs)
-        if model in ("transformer", "detuner", "vocoder"):
-            kwargs["fs"] = fs
+        kwargs = io24_fx.voicefx_runtime_kwargs(model, kwargs, fs)
         # Materialize the exact model transaction offline, including its own On.
         getattr(io24_fx, "set_fx_" + model)(**kwargs)
         voicefx.append((prefix, model, kwargs))
@@ -1339,11 +1337,23 @@ def _parser():
                         help="save readable and Host-known state as a .scene")
     parser.add_argument("-n", "--dry-run", action="store_true",
                         help="validate and print the complete plan without USB")
-    parser.add_argument("--sample-rate", type=float, default=48000.0,
-                        help="device sample rate for DSP coefficients (default 48000)")
+    parser.add_argument(
+        "--sample-rate", type=float,
+        help="current device rate; required when applying a scene")
     parser.add_argument("--vintage-eq", action="store_true",
                         help=argparse.SUPPRESS)
     return parser
+
+
+def _cli_sample_rate(requested, live_apply=False):
+    """Never let a live scene assume 48 kHz behind the user's back."""
+    if requested is not None:
+        return _number(requested, "sample rate", 8000.0, 192000.0)
+    if live_apply:
+        raise SystemExit(
+            "--sample-rate is required when applying a scene; use the "
+            "current io24 rate (for Delay, choose 48000 rather than 96000)")
+    return 48000.0
 
 
 def main(argv=None):
@@ -1357,8 +1367,9 @@ def main(argv=None):
         device = Io24()
         try:
             scene, omissions = capture(device)
-            save(args.export, scene, sample_rate_hz=args.sample_rate)
-            calls, skips = plan(scene, sample_rate_hz=args.sample_rate)
+            rate = _cli_sample_rate(args.sample_rate)
+            save(args.export, scene, sample_rate_hz=rate)
+            calls, skips = plan(scene, sample_rate_hz=rate)
             print("saved %s (%d Host-known settings)" %
                   (os.path.basename(args.export), len(calls)))
             for omitted in omissions + skips:
@@ -1372,8 +1383,10 @@ def main(argv=None):
     if not os.path.exists(args.scene):
         raise SystemExit("no such scene file: %s" % args.scene)
     scene = load(args.scene)
+    rate = _cli_sample_rate(
+        args.sample_rate, live_apply=not args.dry_run)
     calls, skips = plan(scene, vintage=args.vintage_eq,
-                        sample_rate_hz=args.sample_rate)
+                        sample_rate_hz=rate)
 
     print("scene: %s" % os.path.basename(args.scene))
     slots, users = describe_presets(scene)

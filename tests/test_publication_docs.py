@@ -62,7 +62,25 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn("MemP/PrsM", readme)
         self.assertNotIn("**FX Model** row", guide)
         self.assertIn("**Model** row", guide)
+        self.assertIn("**Voice FX input**", guide)
+        self.assertIn("processingChannel", guide)
         self.assertIn("does not display a permanently disabled control", guide)
+        self.assertIn("Delay is disabled while the interface is at 96 kHz",
+                      readme)
+        self.assertIn("USB 1-2", guide)
+        self.assertNotIn("must expose all\nsix playback channels", guide)
+
+    def test_github_facing_copy_is_plain_and_credits_prior_work(self):
+        readme = (ROOT / "README.md").read_text()
+        front_facing = ("README.md", "GUIDE.md", "PUBLICATION.md",
+                        "CONTRIBUTING.md")
+
+        self.assertIn(
+            "https://github.com/oddbear/Revelator.io24.Api", readme)
+        self.assertIn("There is no browser or phone", readme)
+        for filename in front_facing:
+            with self.subTest(filename=filename):
+                self.assertNotIn("—", (ROOT / filename).read_text())
 
     def test_protocol_current_questions_do_not_repeat_superseded_fx_claim(self):
         protocol = (ROOT / "PROTOCOL.md").read_text()
@@ -101,6 +119,21 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn('Repository = "%s"' % base, metadata)
         self.assertIn('Documentation = "%s#readme"' % base, metadata)
         self.assertIn('Issues = "%s/issues"' % base, metadata)
+        self.assertIn(
+            'description = "Native Linux control host for the PreSonus '
+            'Revelator io24"', metadata)
+
+    def test_public_release_has_no_browser_control_surface(self):
+        self.assertFalse((ROOT / "io24web.py").exists())
+
+        metadata = (ROOT / "pyproject.toml").read_text()
+        self.assertNotIn("io24-web", metadata)
+        self.assertNotIn("io24web", metadata)
+
+        for filename in PUBLIC_DOCS:
+            with self.subTest(filename=filename):
+                self.assertNotIn(
+                    "io24web", (ROOT / filename).read_text().lower())
 
 
 if __name__ == "__main__":

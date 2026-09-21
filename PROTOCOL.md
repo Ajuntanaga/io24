@@ -1,4 +1,4 @@
-# PreSonus Revelator io24 — Native USB Control Protocol
+# PreSonus Revelator io24 Native USB Control Protocol
 
 Reverse-engineering notes and a working Linux implementation.
 
@@ -10,12 +10,76 @@ chronological: the newest dated result controls. Within the older notebook,
 labels such as “controlling” describe what was known on that date, not the
 current implementation.
 
-The current boundaries are the 2026-09-20 preset/mixer sections below, the
-2026-09-19 scene section, the 2026-09-18 alternate-EQ section, and the three
-2026-09-17 VoiceFX sections. In short: UC Store is `MemP/PrsM`; all six VoiceFX
-models process audio on physical Input 1 with the corrected UC 4.7.2
-transaction; and a sent Device Presets record remains
+The current boundaries are the 2026-09-21 Delay and Spring section below, the
+2026-09-20 Voice FX, preset, and mixer sections, the 2026-09-19 scene section,
+the 2026-09-18 alternate-EQ section, and the three 2026-09-17 VoiceFX sections.
+In short: UC Store is `MemP/PrsM`; all six VoiceFX models process audio on
+physical Input 1 with the corrected UC 4.7.2 transaction; the Linux Host now
+restores UC's explicit Input 1/Input 2 assignment step; and a sent Device
+Presets record remains
 `WRITE_SENT_UNVERIFIED`, not body readback or cold-boot proof.
+
+## 2026-09-21 controlling safety result: Delay at 96 kHz and Spring Main return
+
+Selecting Voice FX Delay while the io24 was running at 96 kHz caused an
+immediate USB disconnect. The device then enumerated as `194f:0405`,
+`Revelator IO 24 BOOTLOADER`, rather than its normal `194f:0422` identity. A
+physical reconnect restored the normal device. This was a model selection, not
+an explicit reset or firmware command. The exact firmware fault is not inferred
+from the enumeration result.
+
+The earlier physical Delay acceptance ran at 48 kHz. It does not establish
+that the same transition is safe at 96 kHz. The Linux Host therefore applies a
+narrow safety interlock: Delay at 96 kHz, or at an unknown current rate, is
+rejected before `processingChannel`, `VoFx`, or `vech` can be written. The same
+preflight covers direct Host edits, factory and user presets, scene planning,
+snapshot load, and automatic reconnect replay. Direct preset helpers refuse an
+omitted runtime rate, and the scene CLI requires `--sample-rate` for a live
+apply instead of assuming 48 kHz. Other Voice FX models retain their rate-aware
+transaction. No live Delay replay was made while adding this guard.
+
+The active Linux PipeWire profile exposed three playback positions,
+`[FL, FR, LFE]`, not six. The first Spring implementation hard-coded USB 5-6
+and failed before audio could start. Spring now selects the best stereo pair
+the exact io24 playback node exposes. Six-channel profiles use USB 5-6,
+four-channel profiles use USB 3-4, and stereo or 2.1 profiles use USB 1-2. The
+last case mixes the wet-only stream into the ordinary Main playback sink and
+makes no device-mixer writes. Dedicated pairs are still assigned to physical
+Main 1-2 only and restored exactly. Output gain now lives in the Spring
+processor, so the same control works on either route. These graph, DSP,
+migration, and route contracts are hardware-free verified; live Spring
+audibility remains a separate acceptance check.
+
+## 2026-09-20 controlling Voice FX correction: Input 2 needs UC assignment
+
+The previous Linux Host conclusion combined two different facts. Firmware
+block 201 has one model/settings object with two structural lanes, but Universal
+Control still assigns the Voice FX owner to one physical input at a time. UC's
+component model names `line/ch1/processingChannel` **Assigned Processing
+Channel**, and its exact channel code enables `voicefxopt/fxmodel` only for the
+channel object whose `processingChannel == 0`. Its Settings UI exposes that as
+**Assign Voice FX: Ch1 / Ch2**.
+
+The earlier physical Input-2 Delay run left the readable permutation at its
+normal `(0, 1)` state and never sent the Ch2 assignment. Its null result is
+therefore evidence that Input 2 was dry while Voice FX remained assigned to
+Input 1. It does not show that the explicit Channel 2 route is ineffective.
+Static two-lane topology also does not override UC's runtime ownership switch.
+
+The Linux Host now exposes **Voice FX input** and performs the UC ordering:
+assign the requested physical input through `set_voicefx_channel(channel)`,
+then send the selected model transaction. It remembers the successful target
+per device object so ordinary On/Off and parameter edits do not repeatedly
+exchange the processing permutation or slot indicators. On reconnect, it reads
+JaSt slots 38/39 and follows the live `processingChannel` permutation; automatic
+resume does not replay an old route. Explicit preset loads assign the preset's
+target before its Voice FX state.
+
+Hardware-free tests cover Input 1/Input 2 selection, assignment-before-state
+ordering, same-target suppression, new-device reassertion, preset replay, live
+permutation decoding, and shadow/UI adoption. No USB or audio operation was
+performed for this correction. A fresh physical Input-2 waveform run remains
+the final audible acceptance gate.
 
 ## 2026-09-20 controlling preset result: UC Store is `PrsM`, not a button-slot write
 
@@ -75,22 +139,22 @@ nearby controls:
   parameter reaches it. UC itself binds `hardwareMute` as display-only. Linux's
   output mute is the distinct software control.
 
-The Effects page now also has a **Host spring reverb**, deliberately separate
-from device block 202. `io24_spring.c` is a wet-only stereo LADSPA processor:
+The Effects page also has a **Host spring reverb**, deliberately separate from
+device block 202. `io24_spring.c` is a wet-only stereo LADSPA processor:
 short dispersive all-pass stages excite two decorrelated banks of damped
 resonators. Its public controls are Input 1/2 send gain, Dwell, Tone, Drip,
-Width and pre-delay. `io24_spring.py` validates/persists that state, builds the
-content-addressed plugin, emits a no-fallback/no-remix PipeWire graph and owns
-its lifecycle.
+Width, pre-delay, and Main output gain. `io24_spring.py` validates/persists that
+state, builds the content-addressed plugin, emits a no-fallback/no-remix
+PipeWire graph and owns its lifecycle.
 
 The graph captures physical Inputs 1/2 after the Fat Channel and returns wet
-audio on USB playback 5-6 (`return/ch3`). That pair is an internal transport,
-not the destination: while enabled, the Host assigns it to **physical Main
-1-2 only**, removes it from Mix A/Mix B, and restores every prior assignment
-and known fader state on disable or clean shutdown. USB playback 1-2 remains
-available for ordinary computer audio. Profiles exposing fewer than six
-playback channels fail explicitly; there is no silent remix or fallback to
-another device.
+audio through the best stereo pair exposed by the active io24 playback profile.
+A dedicated USB 3-4 or 5-6 pair is an internal transport, not the destination:
+while enabled, the Host assigns it to **physical Main 1-2 only**, removes it
+from Mix A/Mix B, and restores every prior assignment and known fader state on
+disable or clean shutdown. A stereo or 2.1 profile instead uses USB 1-2 and
+leaves its existing device routes untouched. The graph still forbids remix and
+fallback to another sound device.
 
 `host_features.spring_reverb` keeps the algorithm controls and On state in Host
 snapshots and last-session recovery. Named snapshots strip the temporary route
@@ -1010,6 +1074,10 @@ slots, DSP Amount, and `processingChannel` were untouched. Controlling report:
 SHA-256 `0436e1da0a3fa9e3c83a7988f0d7b90507aaeae998403e8e7d36c0ac4578002e`.
 
 ## 2026-09-13 controlling Host correction: global FX, no owner mutation
+
+**Historical, superseded by the 2026-09-20 Voice FX correction above.** The
+structural two-lane finding remains valid, but it does not remove UC's explicit
+one-input-at-a-time assignment step.
 
 The stock UC `processingChannel == 0` conditional arbitrates ownership in its
 host component tree. It is not a second block-201 instance and is not proof of
@@ -2061,7 +2129,6 @@ upset the firmware. That remains an unresolved risk worth respecting — but the
 | [`calibrate.py`](calibrate.py) | Measurements needing a stable known signal — `tone` / `level` / `mixer` / `comp` |
 | [`io24d.py`](io24d.py) | **The daemon.** Holds the device open and shares it with many clients over a Unix socket |
 | [`io24gtk.py`](io24gtk.py) | **The mixer app.** Native GTK4/libadwaita; meters, strips, EQ with live response curve, dynamics, presets, and an XML-driven six-unit Voice FX rack with per-component On controls. USB on a worker thread |
-| [`io24web.py`](io24web.py) | The same controls over HTTP on loopback, for reaching the device from a phone |
 | [`ucnet_shim.py`](ucnet_shim.py) | **UCNET compatibility server** — speaks the protocol existing PreSonus plugins expect, and translates to native USB |
 | [`PROTOCOL.md`](PROTOCOL.md) | This document |
 | `re/UCNET_SHIM_SPEC.md` (private research evidence) | The derived spec the shim implements |
@@ -3255,10 +3322,11 @@ UCNET shim, which is now built and hardware-verified (§9).
    stored-body read command. Cold-boot persistence, a durable device commit, and
    standalone VoiceFX recall therefore remain unproved. Linux records the honest
    status `WRITE_SENT_UNVERIFIED` and replays known bodies on Load.
-2. **VoiceFX lane coverage.** All six models are objectively verified through
-   physical Input 1 with the corrected UC 4.7.2 transaction. A valid Input-2
-   Delay run was null. Simultaneous two-lane processing and model-0 private
-   reverb on both lanes remain open; the Host does not imply either result.
+2. **VoiceFX Input-2 acceptance.** All six models are objectively verified
+   through physical Input 1. The earlier Input-2 Delay run did not change UC's
+   assignment from Input 1, so it did not test the repaired route. The Host now
+   performs the exact assignment-before-state sequence; a fresh physical
+   Input-2 waveform run remains pending.
 3. **No faithful io24 command for several UC model fields.** The unresolved set
    is mono-source `pan`, `stereopan` width/mono collapse, independent per-input
    `FXA`, `dawpostdsp`, output mono fold-down, writable component names, and the
@@ -3271,7 +3339,9 @@ UCNET shim, which is now built and hardware-verified (§9).
    live Main-output acceptance run.
 5. **96 kHz DSP coverage.** The device clocks at 96 kHz and the Host Mix A/B
    source smoke passed there, but every device DSP block has not been swept at
-   that rate.
+   that rate. Delay is now deliberately blocked at 96 kHz after its model
+   selection reset the unit into its bootloader; the exact firmware cause
+   remains unknown.
 6. **Compressor knee semantics.** The measured transfer curve and emitted
    coefficients are correct; the knee field's meaning remains inferred from the
    firmware algebra rather than directly measured in the coprocessor audio path.
@@ -6302,9 +6372,9 @@ that §13b warned about.
 ### Also fixed: `send ... off` never reached the wire
 
 `_push_send` tested `lvl is None` to mean "never set", which conflated that with
-"explicitly set to off". `set_send_db(src, bus, None)`, `mix_off()`, the CLI
-`send <src> <bus> off` and io24web's `mix_off` endpoint were **all silent
-no-ops**. Now distinguished by key presence, verified offline: an explicit off
+"explicitly set to off". `set_send_db(src, bus, None)`, `mix_off()`, and the CLI
+`send <src> <bus> off` were **all silent no-ops**. Now distinguished by key
+presence, verified offline: an explicit off
 writes the `MIXER_OFF_DB` sentinel, an unset send still writes nothing.
 
 ## 12R. The preset button, settled at the hardware (2026-08-10)

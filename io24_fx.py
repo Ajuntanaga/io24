@@ -81,6 +81,59 @@ TAG_MBDF = 0x4d426466   # 'MBdf'  sample-rate-indexed biquad table (model 0)
 MODEL_NAMES = ['Transformer', 'De-Tuner', 'Vocoder',
                'Ring Modulator', 'Filters', 'Delay']
 
+DELAY_BLOCKED_RATE_HZ = 96000.0
+RATE_AWARE_MODELS = frozenset((
+    "transformer", "detuner", "vocoder", "delay",
+))
+
+
+class UnsafeDelayRate(RuntimeError):
+    """A Delay operation whose device-clock safety is not established."""
+
+
+def validate_delay_sample_rate(fs):
+    """Return a safe runtime rate or refuse before a Delay frame is built.
+
+    Delay was waveform-verified at 48 kHz. On 2026-09-21, selecting it while
+    the io24 was clocked at 96 kHz immediately re-enumerated the interface as
+    its bootloader. The exact firmware failure is not inferred here; this is a
+    narrow interlock around the observed unsafe transition.
+    """
+    if fs is None:
+        raise UnsafeDelayRate(
+            "Delay needs the current sample rate before it can be sent")
+    try:
+        rate = float(fs)
+    except (TypeError, ValueError) as error:
+        raise UnsafeDelayRate(
+            "Delay needs a valid current sample rate before it can be sent") \
+            from error
+    if not math.isfinite(rate) or not 8000.0 <= rate <= 192000.0:
+        raise UnsafeDelayRate(
+            "Delay needs a valid current sample rate before it can be sent")
+    if rate >= DELAY_BLOCKED_RATE_HZ:
+        raise UnsafeDelayRate(
+            "Delay is disabled at 96 kHz because selecting it reset the io24; "
+            "choose 48 kHz before using Delay")
+    return rate
+
+
+def voicefx_runtime_kwargs(model, kwargs, fs):
+    """Add only the runtime clock data a selected Voice FX model needs."""
+    name = str(model).lower()
+    result = dict(kwargs)
+    if name == "delay":
+        result["fs"] = validate_delay_sample_rate(fs)
+    elif name in RATE_AWARE_MODELS:
+        try:
+            rate = float(fs)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Voice FX sample rate must be numeric") from error
+        if not math.isfinite(rate) or not 8000.0 <= rate <= 192000.0:
+            raise ValueError("Voice FX sample rate must be 8000..192000 Hz")
+        result["fs"] = rate
+    return result
+
 # UC persists the selected VoiceFX implementation as the mutable component's
 # class id.  Parameter 450 is the host-side selector that materializes this
 # choice; the io24 does not expose a readable block-201 selector.  Keep the
@@ -756,7 +809,8 @@ def set_fx_filters(**kw):
     return [set_fx_model(4), setp(201, fx_filters(**kw))]
 
 
-def set_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5):
+def set_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5, fs=48000.0):
+    validate_delay_sample_rate(fs)
     return [set_fx_model(5), setp(201, fx_delay(on, time_s, feedback, mix))]
 
 
@@ -803,7 +857,9 @@ def update_fx_filters(**kw):
     return [setp(BLOCK_FX, fx_filters(**kw))]
 
 
-def update_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5):
+def update_fx_delay(on=True, time_s=0.125, feedback=0.5, mix=0.5,
+                    fs=48000.0):
+    validate_delay_sample_rate(fs)
     return [setp(BLOCK_FX, fx_delay(on, time_s, feedback, mix))]
 
 

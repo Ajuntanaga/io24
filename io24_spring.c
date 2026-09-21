@@ -64,6 +64,7 @@ enum {
     P_DRIP,
     P_WIDTH,
     P_PREDELAY,
+    P_OUTPUT_GAIN,
     P_INPUT1,
     P_INPUT2,
     P_OUTPUT_L,
@@ -71,7 +72,7 @@ enum {
     PORT_COUNT
 };
 
-enum { CONTROL_COUNT = P_PREDELAY + 1 };
+enum { CONTROL_COUNT = P_OUTPUT_GAIN + 1 };
 enum { ALLPASS_COUNT = 4, RESONATOR_COUNT = 4 };
 
 typedef struct {
@@ -257,6 +258,9 @@ static void process(Io24Spring *self, const float *input1, const float *input2,
     const float width = bounded(finite_or(controls[P_WIDTH], 0.82f), 0.0f, 1.0f);
     const float predelay_s = bounded(
         finite_or(controls[P_PREDELAY], 0.008f), 0.0f, 0.1f);
+    const float output_db = bounded(
+        finite_or(controls[P_OUTPUT_GAIN], -12.0f), -60.0f, 10.0f);
+    const float output_gain = powf(10.0f, output_db / 20.0f);
     const unsigned long predelay_samples = (unsigned long)(
         predelay_s * (float)self->sample_rate + 0.5f);
     /* A spring's useful decay is measured in seconds, not a few echoes.  The
@@ -308,8 +312,8 @@ static void process(Io24Spring *self, const float *input1, const float *input2,
         wet_r *= 0.19f;
         const float mid = 0.5f * (wet_l + wet_r);
         const float side = 0.5f * (wet_l - wet_r) * width;
-        output_l[frame] = tanhf(mid + side);
-        output_r[frame] = tanhf(mid - side);
+        output_l[frame] = tanhf(mid + side) * output_gain;
+        output_r[frame] = tanhf(mid - side) * output_gain;
     }
 
     self->input_previous = input_previous;
@@ -391,6 +395,7 @@ static const LADSPA_PortDescriptor port_descriptors[PORT_COUNT] = {
     LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
     LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
     LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
+    LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
     LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO,
     LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO,
     LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO,
@@ -399,7 +404,8 @@ static const LADSPA_PortDescriptor port_descriptors[PORT_COUNT] = {
 
 static const char *const port_names[PORT_COUNT] = {
     "Input 1 gain", "Input 2 gain", "Dwell", "Tone", "Drip", "Width",
-    "Pre-delay (s)", "Input 1", "Input 2", "Output L", "Output R",
+    "Pre-delay (s)", "Output gain (dB)",
+    "Input 1", "Input 2", "Output L", "Output R",
 };
 
 #define RANGE(low, high) \
@@ -408,7 +414,7 @@ static const char *const port_names[PORT_COUNT] = {
 static const LADSPA_PortRangeHint port_hints[PORT_COUNT] = {
     RANGE(0.001f, 1.0f), RANGE(0.001f, 1.0f),
     RANGE(0.0f, 1.0f), RANGE(0.0f, 1.0f), RANGE(0.0f, 1.0f),
-    RANGE(0.0f, 1.0f), RANGE(0.0f, 0.1f),
+    RANGE(0.0f, 1.0f), RANGE(0.0f, 0.1f), RANGE(-60.0f, 10.0f),
     { 0, 0.0f, 0.0f }, { 0, 0.0f, 0.0f },
     { 0, 0.0f, 0.0f }, { 0, 0.0f, 0.0f },
 };

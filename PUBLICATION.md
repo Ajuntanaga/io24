@@ -1,10 +1,9 @@
-# Publication and source boundary
+# Public release boundary
 
 The public [`Ajuntanaga/io24`](https://github.com/Ajuntanaga/io24) repository is
 prepared as a fresh-history clean source import from a larger private research
-workspace. This document records what belongs in that public distribution and
-what deliberately stays private. It is an engineering inventory, not a legal
-conclusion.
+workspace. This page is the practical inventory of what belongs in that public
+release and what stays private. It is not a legal conclusion.
 
 ## Published source
 
@@ -47,7 +46,7 @@ The published runtime contains this project's original interoperability code
 and bounded transcriptions needed to construct supported device messages. Users
 who want optional factory data or exact alternate-EQ coefficients must recover
 the required data from their own lawful Universal Control copy. The Host remains
-usable without factory preset data and reports that browser as unavailable.
+usable without factory preset data and reports that catalog as unavailable.
 
 ## Reproducible release checks
 

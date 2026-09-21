@@ -7,6 +7,8 @@ archive used by the adjacent factory/library collection.  This module is
 local-only: it has no transport, USB, audio, or device access.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import base64
 import hashlib

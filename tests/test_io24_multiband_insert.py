@@ -154,21 +154,28 @@ class _Insert:
         self.ok = ok
         self.starts, self.stops = [], 0
         self.channels, self._running = (), False
+        self.multiband_channels, self.delay_channels = (), ()
         self.last_error = "the io24 Input Multiband nodes did not appear"
 
     @property
     def running(self):
         return self._running
 
-    def start(self, states, capture, sink, sample_rate=48000.0):
+    def start(self, states, capture, sink, sample_rate=48000.0, delays=None,
+              **_kwargs):
         self.starts.append((sorted(states), capture, sink))
         if self.ok:
-            self._running, self.channels = True, tuple(sorted(states))
+            self._running = True
+            self.multiband_channels = tuple(sorted(states))
+            self.delay_channels = tuple(sorted(delays or {}))
+            self.channels = tuple(sorted(
+                set(self.multiband_channels) | set(self.delay_channels)))
         return self.ok
 
     def stop(self):
         self.stops += 1
         self._running, self.channels = False, ()
+        self.multiband_channels, self.delay_channels = (), ()
 
 
 class InsertGraphTests(unittest.TestCase):
@@ -509,8 +516,9 @@ class ReconcileTests(unittest.TestCase):
             ctl=SimpleNamespace(submit=jobs.append), say=said.append,
             _sync_mix_widgets=lambda: False,
             _mbc_snapshot_state=lambda ch: io24_mbc.default_snapshot(True),
-            _insert_missing=lambda: missing)
-        _bind(host, "_multiband_selected", "_insert_wanted",
+            _insert_missing=lambda *_args: missing)
+        _bind(host, "_multiband_selected", "_multiband_insert_wanted",
+              "_host_delay_states", "_insert_wanted",
               "_insert_reconcile", "_insert_give_up", "_insert_sync_mixer",
               "_insert_lower_quantum", "_insert_restore_system",
               "_insert_show", "_insert_watchdog")

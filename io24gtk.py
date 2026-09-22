@@ -45,6 +45,7 @@ import io24_dsp                            # noqa: E402  (exact compressor model
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
 import io24_spring                         # noqa: E402  (host spring reverb)
+import io24_voicefx_delay                  # noqa: E402  (safe 96 kHz Delay)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 import io24_scene                          # noqa: E402  (UC scene import)
 from io24_preset_record import (           # noqa: E402
@@ -3313,6 +3314,16 @@ class Win(Adw.ApplicationWindow):
         # for every slider movement.
         self._fx_last_sent_device = None
         self._fx_last_sent_target = None
+        # Firmware model 5 is never selected at 96 kHz.  At that rate the
+        # visible Delay state is hosted by the same PipeWire insert as
+        # Multiband; this remembers which attached unit has already had its
+        # hardware Voice FX block safely bypassed.
+        self._host_delay_quiesced_device = None
+        # A saved or newly selected 96 kHz clock is held at a known-safe old
+        # rate while the interface is absent. On attach, block 201 is
+        # quiesced before the requested clock is allowed to move.
+        self._audio_clock_restore_deferred = False
+        self._audio_clock_restore_inflight = False
         # Every coefficient this Host computes — biquads, gate/comp/limiter
         # time constants, reverb, the rate-dependent Voice FX filters — is a
         # function of the device clock. Nothing used to pass one, so all of it
@@ -4250,7 +4261,8 @@ class Win(Adw.ApplicationWindow):
         ctl = getattr(self, "mbc_ctl", {}).get(ch)
         if not ctl:
             return None
-        state = io24_mbc.default_snapshot(enabled=ch in self._insert_wanted())
+        state = io24_mbc.default_snapshot(
+            enabled=ch in self._multiband_insert_wanted())
         state["xovers"] = [ctl["x%d" % index].get_value() for index in range(3)]
         for index, band in enumerate(io24_mbc.BANDS):
             state["bands"][band] = self._mbc_band_state(ch, index)
@@ -4367,24 +4379,50 @@ class Win(Adw.ApplicationWindow):
         return "Multiband restored on Input %s" % " and ".join(map(str, on))
 
     @staticmethod
-    def _insert_missing():
-        """What this computer lacks for Multiband, or None."""
+    def _insert_missing(multiband=(), delays=()):
+        """What this computer lacks for the requested Host insert."""
         if not io24_mbc.pipewire_available():
             return "Audio service unavailable"
-        if io24_mbc.uc_comp_available() is None:
+        if multiband and io24_mbc.uc_comp_available() is None:
             return "Compressor unavailable: %s" % (
                 io24_mbc.uc_comp_error() or "unknown compiler error")
+        if delays and io24_mbc.voicefx_delay_available() is None:
+            return "Delay unavailable: %s" % (
+                io24_mbc.voicefx_delay_error() or "unknown compiler error")
         return None
 
     def _multiband_selected(self, ch):
         model = (getattr(self, "w", {}).get(ch) or {}).get("model")
         return model is not None and model.get_selected() == MULTIBAND_MODEL
 
-    def _insert_wanted(self):
+    def _multiband_insert_wanted(self):
         """Inputs with Multiband selected and the Compressor switched on."""
         return tuple(ch for ch in io24_mbc.INSERT_CHANNELS
                      if self._multiband_selected(ch)
                      and self.dyn_by_ch[ch]["comp"])
+
+    def _host_delay_states(self):
+        """The selected 96 kHz VocalEcho state, keyed by its input."""
+        model_row = getattr(self, "fx_model", None)
+        target_row = getattr(self, "fx_target", None)
+        if model_row is None or target_row is None or not \
+                io24_fx.delay_needs_host_fallback(
+                    Win._voicefx_effective_rate(self)):
+            return {}
+        index = max(0, min(len(self.FX_ORDER) - 1,
+                           model_row.get_selected()))
+        if self.FX_ORDER[index] != "delay":
+            return {}
+        state = self._fx_live_params()
+        if not state.get("on"):
+            return {}
+        target = 2 if target_row.get_selected() == 1 else 1
+        return {target: io24_voicefx_delay.validate_state(state)}
+
+    def _insert_wanted(self):
+        """Union of Multiband and the safe 96 kHz Delay insert channels."""
+        return tuple(sorted(set(self._multiband_insert_wanted()) |
+                            set(self._host_delay_states())))
 
     def _insert_reconcile(self, restart=False):
         """Bring the running insert, the unit's mixer and PipeWire into line
@@ -4397,15 +4435,21 @@ class Win(Adw.ApplicationWindow):
         insert = getattr(self, "insert", None)
         if insert is None:
             return
-        wanted = self._insert_wanted()
+        multiband = self._multiband_insert_wanted()
+        delays = self._host_delay_states()
+        wanted = tuple(sorted(set(multiband) | set(delays)))
         waiting = None
         if wanted:
-            missing = self._insert_missing()
+            missing = self._insert_missing(multiband, delays)
             if missing:
-                self._insert_give_up(wanted, "Multiband %s" % missing)
+                self._insert_give_up(multiband, "Host insert %s" % missing)
                 return
+            active_multiband = getattr(
+                insert, "multiband_channels", insert.channels)
+            active_delays = getattr(insert, "delay_channels", ())
             if restart or self._insert_stale or not insert.running or \
-                    insert.channels != wanted:
+                    tuple(active_multiband) != tuple(multiband) or \
+                    tuple(active_delays) != tuple(sorted(delays)):
                 capture = io24_mbc.find_io24_capture_source()
                 sink = io24_mbc.find_io24_sink()
                 if not capture or not sink:
@@ -4413,12 +4457,13 @@ class Win(Adw.ApplicationWindow):
                     waiting = "Waiting for audio"
                 else:
                     states = {ch: self._mbc_snapshot_state(ch)
-                              for ch in wanted}
+                              for ch in multiband}
                     if not insert.start(
                             states, capture, sink,
-                            sample_rate=getattr(self, "_fs", 48000.0)):
+                            sample_rate=getattr(self, "_fs", 48000.0),
+                            delays=delays):
                         self._insert_give_up(
-                            wanted, "Multiband did not start: %s"
+                            multiband, "Host insert did not start: %s"
                             % insert.last_error)
                         return
                     self._insert_stale = False
@@ -4503,9 +4548,9 @@ class Win(Adw.ApplicationWindow):
 
     def _insert_show(self, waiting=None):
         insert = getattr(self, "insert", None)
-        running = insert.channels if insert is not None and insert.running \
-            else ()
-        wanted = self._insert_wanted()
+        running = getattr(insert, "multiband_channels", insert.channels) \
+            if insert is not None and insert.running else ()
+        wanted = self._multiband_insert_wanted()
         for ch, row in getattr(self, "mbc_status", {}).items():
             if ch in running:
                 text = "On"
@@ -4520,8 +4565,15 @@ class Win(Adw.ApplicationWindow):
         that died, an io24 whose audio came back."""
         insert = getattr(self, "insert", None)
         if insert is not None:
+            multiband = self._multiband_insert_wanted()
+            delays = self._host_delay_states()
             wanted = self._insert_wanted()
-            if (wanted and (not insert.running or insert.channels != wanted)) \
+            active_multiband = getattr(
+                insert, "multiband_channels", insert.channels)
+            active_delays = getattr(insert, "delay_channels", ())
+            if (wanted and (not insert.running or
+                            tuple(active_multiband) != tuple(multiband) or
+                            tuple(active_delays) != tuple(sorted(delays)))) \
                     or (not wanted and insert.running):
                 self._insert_reconcile()
         return True
@@ -5130,6 +5182,25 @@ class Win(Adw.ApplicationWindow):
                        else bool(self.fx_arm.get_active()))
         return state
 
+    def _voicefx_effective_rate(self):
+        """Conservative clock for deciding whether hardware Delay is safe.
+
+        During a rate transition ``_selected_rate`` changes before ALSA can
+        report the new hardware clock. Taking the higher of requested and
+        observed rates moves Delay to the Host immediately on 48 -> 96, and
+        keeps it there until 96 -> 48 has actually been observed.
+        """
+        rates = []
+        for value in (getattr(self, "_fs", None),
+                      getattr(self, "_selected_rate", None)):
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(value) and 8000.0 <= value <= 192000.0:
+                rates.append(value)
+        return max(rates) if rates else DEFAULT_SAMPLE_RATE
+
     def _fx_model_changed(self):
         idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
         name = self.FX_ORDER[idx]
@@ -5194,11 +5265,12 @@ class Win(Adw.ApplicationWindow):
         return False
 
     def _push_fx(self):
-        """Assign the shared processor, then send its selected model state.
+        """Apply the selected Voice FX on its safe processing path.
 
-        Block 201 has no readable state, so success here means only that the
-        known UC-ordered writes completed.  Audibility is decided separately by
-        the loopback campaign and never inferred from transport replies.
+        Models 0-4 and Delay below 96 kHz use block 201 in the unit. At 96 kHz
+        Delay uses the Host insert and block 201 is left on a bypassed,
+        lightweight model. This boundary is what prevents a model-5 selection
+        from resetting the interface.
         """
         if self._fx_mute:
             return
@@ -5208,8 +5280,6 @@ class Win(Adw.ApplicationWindow):
         visual = getattr(self, "fx_visual", None)
         if visual is not None:
             visual.queue_draw()
-        if self.ctl.dev is None:
-            return
         on = self.fx_arm.get_active()
         model = self.FX_ORDER[max(0, min(len(self.FX_ORDER) - 1,
                                          self.fx_model.get_selected()))]
@@ -5221,6 +5291,52 @@ class Win(Adw.ApplicationWindow):
                 params[name] = int(params[name])
         if "carrier2" in params:
             params["carrier2"] = bool(params["carrier2"])
+
+        host_delay = model == "delay" and io24_fx.delay_needs_host_fallback(
+            Win._voicefx_effective_rate(self))
+        if host_delay:
+            state = io24_voicefx_delay.validate_state(dict(params, on=on))
+            subtitle = getattr(self.fx_model, "set_subtitle", None)
+            if callable(subtitle):
+                subtitle("Host processing at 96 kHz")
+
+            # Queue the hardware bypass before the mixer-route job generated by
+            # _insert_reconcile. The processed return cannot become audible on
+            # top of a stale hardware effect, even briefly.
+            if self.ctl.dev is not None:
+                def quiesce(
+                        dev, fs=self._fs,
+                        quantum=getattr(
+                            self, "_selected_quantum", DEFAULT_QUANTUM)):
+                    if getattr(self, "_host_delay_quiesced_device", None) is dev:
+                        return
+                    try:
+                        dev.quiesce_voicefx_for_host_delay(
+                            fs, quantum=quantum)
+                    except Exception as error:
+                        GLib.idle_add(
+                            self.say, "Voice FX safety bypass failed: %s" % error)
+                        return
+                    self._host_delay_quiesced_device = dev
+                self.ctl.submit(quiesce)
+
+            self._insert_reconcile()
+            insert = getattr(self, "insert", None)
+            if on and insert is not None and insert.running:
+                insert.set_delay_controls(target, state)
+            return
+
+        subtitle = getattr(self.fx_model, "set_subtitle", None)
+        if callable(subtitle):
+            subtitle("")
+        # Moving away from the 96 kHz fallback removes only its Delay node; a
+        # Multiband node on either channel remains in the shared insert.
+        if Win._host_delay_states(self) or getattr(
+                getattr(self, "insert", None), "delay_channels", ()):
+            self._insert_reconcile()
+        self._host_delay_quiesced_device = None
+        if self.ctl.dev is None:
+            return
         try:
             params = io24_fx.voicefx_runtime_kwargs(
                 model, params, getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
@@ -6125,15 +6241,17 @@ class Win(Adw.ApplicationWindow):
         if not callable(apply_preset):
             report["host_applied"] = False
             return report
+        host_delay = Win._record_uses_host_delay(self, record)
         try:
             report["host_parts"] = apply_preset(
-                dev, record, channel, with_fx=True,
+                dev, record, channel, with_fx=not host_delay,
                 fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
         except Exception as error:
             report["host_applied"] = False
             report["host_apply_error"] = str(error)
         else:
             report["host_applied"] = True
+            report["host_delay"] = host_delay
         return report
 
     def _select_and_load_slot(self, dev, channel, slot):
@@ -6156,6 +6274,8 @@ class Win(Adw.ApplicationWindow):
             pair[1].set_selected(local if 0 <= local < 2 else -1)
         if report.get("host_applied"):
             self._adopt_recalled_slot(ch, slot)
+            if report.get("host_delay"):
+                self._push_fx()
         self._follow_recall_processing(ch, report)
         label = name or intent["name"]
         enabled = (" · Processing enabled"
@@ -6602,22 +6722,94 @@ class Win(Adw.ApplicationWindow):
             pass
         return "unknown"
 
+    def _apply_rate_change(self, want, previous=None):
+        """Pin PipeWire after any required hardware-Delay preflight."""
+        if previous is None:
+            previous = getattr(self, "_selected_rate", DEFAULT_SAMPLE_RATE)
+        # Establish the conservative Delay guard before PipeWire can begin the
+        # transition. On failure the old preference is restored.
+        self._selected_rate = want
+        ok, msg = pw_set("clock.force-rate", want)
+        if not ok:
+            self._selected_rate = previous
+            self._audio_clock_restore_deferred = False
+            self.say("Rate change failed: %s" % msg)
+            return False
+        self._audio_clock_restore_deferred = False
+        save = getattr(self, "_save_last_session", None)
+        if callable(save):
+            save()
+        return False
+
     def _rate_changed(self, row, _p):
         if getattr(self, "_dev_mute", False):
             return
         want = self._rates[row.get_selected()]
-        allowed = pw_settings().get("clock.allowed-rates", "")
-        if str(want) not in allowed:
+        settings = pw_settings()
+        allowed = settings.get("clock.allowed-rates", "")
+        available = set(int(value) for value in re.findall(r"\d+", allowed))
+        if available and want not in available:
             self.say("Available rates: %s" % allowed.strip("[] "))
             return
-        ok, msg = pw_set("clock.force-rate", want)
-        if not ok:
-            self.say("Rate change failed: %s" % msg)
+
+        # Model 5 must not survive a 96 kHz clock transition in the unit. Do
+        # the device transaction first, and only then ask PipeWire to change
+        # the clock. This also cleans a stale/dirty model selected outside the
+        # Host; the visible model is re-applied on the new safe path when ALSA
+        # reports the rate change.
+        if io24_fx.delay_needs_host_fallback(want) and self.ctl.dev is None:
+            previous = getattr(
+                self, "_selected_rate", DEFAULT_SAMPLE_RATE)
+            safe_rate = self._safe_delay_transition_rate(available)
+            self._selected_rate = want
+            ok, message = pw_set("clock.force-rate", safe_rate)
+            if not ok:
+                self._selected_rate = previous
+                self._audio_clock_restore_deferred = False
+                self.say("Rate change failed: %s" % message)
+                return
+            self._audio_clock_restore_deferred = True
+            save = getattr(self, "_save_last_session", None)
+            if callable(save):
+                save()
+            self.say(
+                "%d kHz will be applied after the io24 connects safely" %
+                (want // 1000))
             return
-        self._selected_rate = want
-        save = getattr(self, "_save_last_session", None)
-        if callable(save):
-            save()
+
+        if io24_fx.delay_needs_host_fallback(want) and self.ctl.dev is not None:
+            previous = getattr(
+                self, "_selected_rate", DEFAULT_SAMPLE_RATE)
+            current_rate, current_quantum = self._transition_clock(
+                settings, alsa_live())
+            # Route any Voice FX edit that arrives during the old-rate settle
+            # window to the Host. Otherwise a queued slider edit could select
+            # model 5 again between the safety transaction and the rate call.
+            self._selected_rate = want
+
+            def quiesce(
+                    dev, rate=current_rate,
+                    quantum=current_quantum):
+                try:
+                    dev.quiesce_voicefx_for_host_delay(
+                        rate, quantum=quantum)
+                except Exception as error:
+                    def failed(problem=error):
+                        self._selected_rate = previous
+                        self.say(
+                            "Rate change stopped: Voice FX safety bypass "
+                            "failed: %s" % problem)
+                        return False
+                    GLib.idle_add(
+                        failed)
+                    return
+                self._host_delay_quiesced_device = dev
+                GLib.idle_add(
+                    self._apply_rate_change, want, previous)
+
+            self.ctl.submit(quiesce)
+            return
+        self._apply_rate_change(want)
 
     def _delay_bus_changed(self, row, _p):
         """Pick the bus, then re-apply the delay to it.
@@ -6663,30 +6855,58 @@ class Win(Adw.ApplicationWindow):
             },
         })
 
-    def _restore_audio_clock(self):
-        """Apply the last selected base clock once when the Host opens."""
-        clock = self._audio_clock_state()
-        rate, quantum = clock["sample_rate"], clock["quantum"]
-        settings = pw_settings()
-        available = set(int(value) for value in re.findall(
-            r"\d+", settings.get("clock.allowed-rates", "")))
+    def _safe_delay_transition_rate(self, available):
+        """Choose a below-96 kHz staging clock, preferring verified 48 kHz."""
+        candidates = sorted(
+            int(rate) for rate in (available or SUPPORTED_SAMPLE_RATES)
+            if 8000 <= int(rate) < io24_fx.DELAY_BLOCKED_RATE_HZ)
+        if 48000 in candidates:
+            return 48000
+        if not candidates:
+            return 48000
+        return candidates[-1]
 
-        rate_ok = True
-        if available and rate not in available:
-            rate_ok = False
-            self.say("Saved rate %d Hz is unavailable" % rate)
-        else:
-            try:
-                forced_rate = int(settings.get("clock.force-rate", "0") or 0)
-            except (TypeError, ValueError):
-                forced_rate = 0
-            if forced_rate != rate:
-                rate_ok, message = pw_set("clock.force-rate", rate)
-                if not rate_ok:
-                    self.say("Saved rate could not be restored: %s" % message)
-        if rate_ok:
-            self._set_device_fs(rate)
+    def _transition_clock(self, settings, live=None):
+        """Return the old live rate and quantum for a guarded transition."""
+        stream = ((live or {}).get("capture") or
+                  (live or {}).get("playback") or {})
+        try:
+            live_rate = int(str(stream.get("rate", "0")).split()[0])
+        except (TypeError, ValueError, IndexError):
+            live_rate = 0
+        try:
+            live_quantum = int(stream.get("period_size", "0") or 0)
+        except (TypeError, ValueError):
+            live_quantum = 0
+        try:
+            forced_rate = int(settings.get("clock.force-rate", "0") or 0)
+        except (TypeError, ValueError):
+            forced_rate = 0
+        try:
+            default_rate = int(settings.get("clock.rate", "0") or 0)
+        except (TypeError, ValueError):
+            default_rate = 0
+        observed_rate = getattr(self, "_fs", 0) \
+            if getattr(self, "_fs_seen", False) else 0
+        rate = live_rate or observed_rate or forced_rate or default_rate or \
+            getattr(self, "_fs", DEFAULT_SAMPLE_RATE)
+        if not 8000 <= rate <= 192000:
+            rate = DEFAULT_SAMPLE_RATE
 
+        try:
+            quantum = int(
+                settings.get("clock.force-quantum", "0") or 0) or int(
+                settings.get("clock.quantum", "0") or 0)
+        except (TypeError, ValueError):
+            quantum = 0
+        quantum = live_quantum or quantum or getattr(
+            self, "_selected_quantum", DEFAULT_QUANTUM)
+        if not 1 <= quantum <= 16384:
+            quantum = DEFAULT_QUANTUM
+        return float(rate), quantum
+
+    def _apply_saved_quantum(self, quantum, settings):
+        """Restore the saved PipeWire quantum without changing a rate."""
         try:
             forced_quantum = int(
                 settings.get("clock.force-quantum", "0") or 0)
@@ -6696,9 +6916,89 @@ class Win(Adw.ApplicationWindow):
             quantum_ok, message = pw_set("clock.force-quantum", quantum)
             if not quantum_ok:
                 self.say("Saved buffer could not be restored: %s" % message)
-            else:
-                self._insert_quantum_before = None
+                return False
+            self._insert_quantum_before = None
+        return True
+
+    def _apply_saved_audio_clock(self, rate, quantum, settings):
+        """Finish startup clock restore after its optional safety preflight."""
+        try:
+            forced_rate = int(settings.get("clock.force-rate", "0") or 0)
+        except (TypeError, ValueError):
+            forced_rate = 0
+        rate_ok = True
+        if forced_rate != rate:
+            rate_ok, message = pw_set("clock.force-rate", rate)
+            if not rate_ok:
+                self.say("Saved rate could not be restored: %s" % message)
+        if rate_ok:
+            self._set_device_fs(rate)
+        self._apply_saved_quantum(quantum, settings)
+        self._audio_clock_restore_inflight = False
+        self._audio_clock_restore_deferred = False
         return False
+
+    def _restore_audio_clock(self):
+        """Apply the last selected base clock once when the Host opens."""
+        if getattr(self, "_audio_clock_restore_inflight", False):
+            return False
+        clock = self._audio_clock_state()
+        rate, quantum = clock["sample_rate"], clock["quantum"]
+        settings = pw_settings()
+        available = set(int(value) for value in re.findall(
+            r"\d+", settings.get("clock.allowed-rates", "")))
+
+        if available and rate not in available:
+            self.say("Saved rate %d Hz is unavailable" % rate)
+            return False
+
+        try:
+            forced_rate = int(settings.get("clock.force-rate", "0") or 0)
+        except (TypeError, ValueError):
+            forced_rate = 0
+        dev = getattr(getattr(self, "ctl", None), "dev", None)
+        if dev is None and io24_fx.delay_needs_host_fallback(rate):
+            safe_rate = self._safe_delay_transition_rate(available)
+            self._audio_clock_restore_deferred = True
+            rate_ok, message = pw_set("clock.force-rate", safe_rate)
+            if not rate_ok:
+                self.say(
+                    "Saved rate is waiting for the io24, but the safe "
+                    "staging clock could not be set: %s" % message)
+                return False
+            self._apply_saved_quantum(quantum, settings)
+            return False
+
+        if dev is not None and (forced_rate != rate or getattr(
+                self, "_audio_clock_restore_deferred", False)) and \
+                io24_fx.delay_needs_host_fallback(rate):
+            old_rate, old_quantum = self._transition_clock(
+                settings, alsa_live())
+            self._audio_clock_restore_inflight = True
+
+            def quiesce(backend):
+                try:
+                    backend.quiesce_voicefx_for_host_delay(
+                        old_rate, quantum=old_quantum)
+                except Exception as error:
+                    def failed(problem=error):
+                        self._audio_clock_restore_inflight = False
+                        self._audio_clock_restore_deferred = False
+                        self.say(
+                            "Saved rate restore stopped: Voice FX safety "
+                            "bypass failed: %s" % problem)
+                        return False
+                    GLib.idle_add(
+                        failed)
+                    return
+                self._host_delay_quiesced_device = backend
+                GLib.idle_add(
+                    self._apply_saved_audio_clock,
+                    rate, quantum, settings)
+
+            self.ctl.submit(quiesce)
+            return False
+        return self._apply_saved_audio_clock(rate, quantum, settings)
 
     def _set_device_fs(self, rate):
         """Adopt the clock the device is actually running at.
@@ -6942,10 +7242,12 @@ class Win(Adw.ApplicationWindow):
                     preset_state = self._scene_preset_state(dev)
                     scene, omitted = io24_scene.capture(
                         dev, host_features=features, presets=preset_state)
+                    scene_rate = Win._voicefx_effective_rate(self)
                     io24_scene.save(
-                        destination, scene, sample_rate_hz=self._fs)
+                        destination, scene, sample_rate_hz=scene_rate)
                     _calls, _skips = io24_scene.plan(
-                        scene, sample_rate_hz=self._fs)
+                        scene, sample_rate_hz=scene_rate,
+                        allow_host_delay=True)
                 except Exception as error:
                     GLib.idle_add(
                         self.say, "Scene was not saved: %s" % error)
@@ -6973,7 +7275,9 @@ class Win(Adw.ApplicationWindow):
             try:
                 scene = io24_scene.load(path)
                 calls, skips = io24_scene.plan(
-                    scene, sample_rate_hz=self._fs)
+                    scene,
+                    sample_rate_hz=Win._voicefx_effective_rate(self),
+                    allow_host_delay=True)
             except Exception as error:
                 self.say("Scene was not loaded: %s" % error)
                 return
@@ -7032,6 +7336,10 @@ class Win(Adw.ApplicationWindow):
             except Exception as error:
                 self.say("Scene was applied, but Channel %d controls could not "
                          "be adopted: %s" % (ch, error))
+        if fx_owner is not None and Win._record_uses_host_delay(
+                self,
+                line.get("ch%d" % fx_owner) or {}):
+            self._push_fx()
         self.say(message)
         return False
 
@@ -7483,6 +7791,18 @@ class Win(Adw.ApplicationWindow):
         voicefx.setdefault("on", self.fx_arm.get_active())
         return fx_model, voicefx
 
+    def _record_uses_host_delay(self, record):
+        """Whether a preset/scene Voice FX belongs on the safe Host path."""
+        fx = (record or {}).get("voicefx") or {}
+        if not fx:
+            return False
+        try:
+            model, _kwargs = io24_fx.voicefx_preset_call(fx)
+        except Exception:
+            return False
+        return model == "delay" and io24_fx.delay_needs_host_fallback(
+            Win._voicefx_effective_rate(self))
+
     def _current_slot_record(self, base_name, target, preset_name,
                              strict_voicefx=True):
         """Build a complete slot body from the current visible controls."""
@@ -7724,6 +8044,7 @@ class Win(Adw.ApplicationWindow):
             chans = (1, 2) if self.link_both else (target,)
         def work(dev):
             fx_command_sent = False
+            fx_hosted = False
             fx_error = None
             try:
                 # The Fat Channel is the preset's reliable core and must not be
@@ -7740,18 +8061,22 @@ class Win(Adw.ApplicationWindow):
 
             if with_fx:
                 try:
-                    fx_report = self.PR.apply_voicefx(
-                        dev, pr, channel=target,
-                        fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
-                    fx_command_sent = fx_report is not None
+                    fx_hosted = Win._record_uses_host_delay(self, pr)
+                    if not fx_hosted:
+                        fx_report = self.PR.apply_voicefx(
+                            dev, pr, channel=target,
+                            fs=getattr(self, "_fs", DEFAULT_SAMPLE_RATE))
+                        fx_command_sent = fx_report is not None
                 except Exception as error:
                     fx_error = str(error)
 
             def finished():
-                if fx_command_sent:
+                if fx_command_sent or fx_hosted:
                     # Adopt the requested controls, but do not turn a USB ACK
                     # into an audibility claim.
                     self._adopt_preset_record(pr, chans, fx_channel=target)
+                    if fx_hosted:
+                        self._push_fx()
                 else:
                     self._adopt_preset_record(pr, chans)
                 channel_text = " and ".join(str(ch) for ch in chans)
@@ -7759,6 +8084,8 @@ class Win(Adw.ApplicationWindow):
                     name, "s" if len(chans) > 1 else "", channel_text)
                 if fx_error:
                     message += "; FX not loaded: %s" % fx_error
+                elif fx_hosted:
+                    message += " · Voice FX hosted at 96 kHz"
                 elif fx_command_sent:
                     message += " · Voice FX updated"
                 self.say(message)
@@ -8405,6 +8732,11 @@ class Win(Adw.ApplicationWindow):
             if callable(alternate_eq_state) else None
         if alternate_eq is not None:
             host_features["alternate_eq"] = alternate_eq
+        host_delay_state = getattr(self, "_host_delay_feature_state", None)
+        host_delay = host_delay_state() \
+            if callable(host_delay_state) else None
+        if host_delay is not None:
+            host_features["voicefx_delay"] = host_delay
         insert = self._insert_state()
         if insert is not None:
             host_features["multiband_insert"] = insert
@@ -8420,6 +8752,63 @@ class Win(Adw.ApplicationWindow):
         if autogain:
             host_features["autogain"] = {"version": 1, "on": autogain}
         return host_features
+
+    def _host_delay_feature_state(self):
+        """Return the semantic Delay that replaces unsafe model 5 at 96 kHz.
+
+        The device shadow cannot carry edits made while Delay is hosted in
+        PipeWire: writing those edits to block 201 would be the reset hazard
+        this path exists to avoid.  Keep the selected input and all four exact
+        UC controls beside the other Host-only session state instead.
+        """
+        model_row = getattr(self, "fx_model", None)
+        target_row = getattr(self, "fx_target", None)
+        if model_row is None or target_row is None or not \
+                io24_fx.delay_needs_host_fallback(
+                    Win._voicefx_effective_rate(self)):
+            return None
+        index = max(0, min(len(self.FX_ORDER) - 1,
+                           model_row.get_selected()))
+        if self.FX_ORDER[index] != "delay":
+            return None
+        target = 2 if target_row.get_selected() == 1 else 1
+        return io24_voicefx_delay.validate_host_feature({
+            "version": io24_voicefx_delay.HOST_FEATURE_VERSION,
+            "target": target,
+            "state": self._fx_live_params(),
+        })
+
+    def _adopt_host_delay_feature(self, feature):
+        """Restore a Host Delay without treating its owner as device-read."""
+        if feature is None:
+            return None
+        try:
+            feature = io24_voicefx_delay.validate_host_feature(feature)
+        except (TypeError, ValueError) as error:
+            return "Host Delay was not restored: %s" % error
+        required = (getattr(self, "fx_target", None),
+                    getattr(self, "fx_model", None),
+                    getattr(self, "fx_arm", None))
+        if any(control is None for control in required) or \
+                "delay" not in getattr(self, "fx_params", {}):
+            return "Host Delay was not restored: controls unavailable"
+        prior = getattr(self, "_fx_mute", False)
+        self._fx_mute = True
+        try:
+            self.fx_target.set_selected(feature["target"] - 1)
+            self.fx_model.set_selected(self.FX_ORDER.index("delay"))
+            stack = getattr(self, "fx_param_stack", None)
+            if stack is not None:
+                stack.set_visible_child_name("delay")
+            for name, control in self.fx_params["delay"].items():
+                control.set_value(feature["state"][name])
+            self.fx_arm.set_active(feature["state"]["on"])
+            visual = getattr(self, "fx_visual", None)
+            if visual is not None:
+                visual.set_model("delay")
+        finally:
+            self._fx_mute = prior
+        return None
 
     def _standard_eq_state(self):
         """Return the semantic Standard-EQ state that coefficients cannot hold."""
@@ -8562,6 +8951,11 @@ class Win(Adw.ApplicationWindow):
         """Resume once per connection; Host-only state only on the first."""
         if not snap.get("alive"):
             return
+        if getattr(self, "_audio_clock_restore_inflight", False):
+            return
+        if getattr(self, "_audio_clock_restore_deferred", False):
+            self._restore_audio_clock()
+            return
         generation = snap.get("attach_generation")
         previous = getattr(self, "_resumed_generation", None)
         if generation == previous:
@@ -8608,7 +9002,14 @@ class Win(Adw.ApplicationWindow):
                 host_features["standard_eq"] = standard_eq
             if alternate_eq is not None:
                 host_features["alternate_eq"] = alternate_eq
+            host_delay_state = getattr(self, "_host_delay_feature_state", None)
+            host_delay = host_delay_state() \
+                if callable(host_delay_state) else None
+            if host_delay is not None:
+                host_features["voicefx_delay"] = host_delay
             host_features = host_features or None
+
+        host_delay_rate = Win._voicefx_effective_rate(self)
 
         def work(dev):
             # The worker hands each job the Io24 driver itself
@@ -8623,8 +9024,20 @@ class Win(Adw.ApplicationWindow):
                 call.get("fn") != "set_processing_channel"
             }
             try:
+                mirrored_fx = shadow_ui_state(mirror).get("voicefx") or {}
+                host_delay = (
+                    str(mirrored_fx.get("model", "")).lower() == "delay" and
+                    io24_fx.delay_needs_host_fallback(host_delay_rate))
+                replay_skip = RESUME_SKIP
+                if host_delay:
+                    backend.quiesce_voicefx_for_host_delay(
+                        host_delay_rate,
+                        quantum=getattr(
+                            self, "_selected_quantum", DEFAULT_QUANTUM))
+                    self._host_delay_quiesced_device = backend
+                    replay_skip += ("set_fx",)
                 report = backend.reapply_shadow(
-                    skip=RESUME_SKIP,
+                    skip=replay_skip,
                     sample_rate_hz=getattr(
                         self, "_fs", DEFAULT_SAMPLE_RATE))
             except Exception as error:
@@ -8894,6 +9307,7 @@ class Win(Adw.ApplicationWindow):
         for rack in self.racks.values():
             rack.queue_draw()
         host_messages = []
+        host_delay_message = None
         if host_features:
             standard_eq_message = self._adopt_standard_eq_state(
                 host_features.get("standard_eq"))
@@ -8909,15 +9323,31 @@ class Win(Adw.ApplicationWindow):
                 host_features.get("spring_reverb"))
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
+            host_delay_message = self._adopt_host_delay_feature(
+                host_features.get("voicefx_delay"))
             messages = (standard_eq_message, alternate_eq_message,
                         multiband_message, insert_message, reverb_message,
-                        spring_message, autogain_message)
+                        spring_message, autogain_message, host_delay_message)
             host_messages = [message for message in messages
                              if message and any(word in message.casefold()
                                                 for word in ("not restored",
                                                              "unavailable",
                                                              "unreadable"))]
-        self._insert_reconcile()
+        restored_voicefx = state.get("voicefx") or {}
+        restored_host_delay = bool(
+            host_features and host_features.get("voicefx_delay") is not None
+            and not (host_delay_message or "").casefold().startswith(
+                "host delay was not restored"))
+        if restored_host_delay or (str(
+                restored_voicefx.get("model", "")).lower() == "delay" and \
+                io24_fx.delay_needs_host_fallback(
+                    Win._voicefx_effective_rate(self))):
+            # reapply_shadow deliberately skipped/refused model 5. The mirror
+            # has now repopulated the exact visible controls, so materialize
+            # that intent on the Host path and quiesce hardware block 201.
+            self._push_fx()
+        else:
+            self._insert_reconcile()
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)

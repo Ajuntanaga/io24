@@ -299,13 +299,25 @@ separate master enable or hidden activation tag. Selecting Delay sends
 `VoFx + two Bqdf + two MBdf + godv`; later On/Off, Width and WetDry changes send
 only `godv`. The Host now follows those rules and adds no artificial delay.
 
-Delay is currently refused while the interface is at 96 kHz. Selecting it at
-that rate caused the unit to disconnect and reappear as its bootloader on
-2026-09-21. The Host now checks the live rate before it assigns Voice FX or
-sends a Delay frame, including preset, scene and reconnect replay. The desktop
-Host supplies that rate automatically; `io24-scene` requires `--sample-rate`
-for a live load. Choose 48 kHz before using Delay; its exact repeat timing was
-physically verified there.
+The hardware Delay is never selected while the interface is at 96 kHz.
+Selecting it at that rate caused the unit to disconnect and reappear as its
+bootloader on 2026-09-21. In the desktop Host, the Delay rack keeps working:
+On, Time, Feedback and WetDry drive a sample-rate-safe PipeWire processor on
+the selected input. An upward rate change performs the firmware's deferred
+replacement at the old rate: request Transformer, wait 60 ms, replay that
+selector, send Transformer Off, wait two complete old-rate audio quanta, and
+only then let PipeWire move the clock. That final wait scales with the active
+buffer and avoids treating a transport reply as an audio-frame fence. Presets,
+scenes and reconnect restore use the same Host path. The standalone
+`io24-scene` command has no such audio insert, so a direct
+96 kHz hardware load remains blocked. Native repeat timing was
+physically verified at 48 kHz; the Host 96 kHz path has deterministic DSP and
+routing coverage pending a separately authorized listening pass.
+
+When the io24 is disconnected, selecting or restoring 96 kHz holds PipeWire
+at 48 kHz. The Host completes the requested change only after the interface
+attaches, the live old rate and ALSA period are known, and the same safety
+preflight succeeds. The saved preference remains 96 kHz during that staging.
 
 The earlier Linux listening campaign used the superseded transaction: it
 reselected on every edit, omitted both Transformer `MBdf` tables, inserted
@@ -448,9 +460,12 @@ re-sends them and says so. Before this, nothing passed a rate at all and every
 write was built for 48 kHz. At 96 kHz a 1 kHz EQ band was landing at 2 kHz and
 a 240 ms delay was running at 120 ms.
 
-Voice FX Delay is the exception to normal 96 kHz support. A model selection at
-96 kHz reset this firmware into its bootloader, so the Host blocks Delay there
-before any related device write. Switch the device to 48 kHz to use Delay.
+Voice FX Delay is the exception to normal device-side 96 kHz support. A model
+selection at 96 kHz reset this firmware into its bootloader, so the desktop
+Host leaves that model bypassed in the unit and runs Delay on the computer.
+The switch is automatic; the visible controls and selected input do not
+change. Moving back down keeps the safe Host path until ALSA reports the lower
+hardware clock.
 
 **Buffer** is PipeWire's quantum. Latency is quantum ÷ rate, so smaller is
 tighter but works the CPU harder and risks dropouts.
@@ -580,11 +595,13 @@ also have **Delete**, which removes them from this computer only.
 **Save scene…** writes the readable and Host-known device state atomically with
 Universal Control's scene field names. It includes exact semantic Standard,
 Passive, and Vintage EQ state from the editor and the selected Voice FX model's
-own On value. It also includes every complete front-panel-block and Device
-Presets body retained for this exact unit. Unknown bodies, physical slot
-selection, and any other unknown value are reported and omitted; they are never
-guessed. The saved file is proven to round-trip through this Linux Host, not
-through the untested Universal Control import path.
+own On value. At 96 kHz, the exact Host Delay controls and owning input replace
+the intentionally stale device-shadow copy, so reloading the scene cannot
+materialize hardware model 5. It also includes every complete front-panel-block
+and Device Presets body retained for this exact unit. Unknown bodies, physical
+slot selection, and any other unknown value are reported and omitted; they are
+never guessed. The saved file is proven to round-trip through this Linux Host,
+not through the untested Universal Control import path.
 
 **Load scene…** applies a Universal Control `.scene` from the Presets page. The
 Host parses and validates the entire file before the first device
@@ -674,7 +691,7 @@ to load and do not change the current Host-only state.
 The Host picks up where it left off, as Universal Control did. Everything it
 sends to the unit is kept on disk (`~/.cache/io24/shadow.json`), and its own
 features (both inputs' Multiband, reverb character and movement, and which
-inputs have Auto gain on, plus the Host spring) are saved to
+inputs have Auto gain on, plus the Host spring and any 96 kHz Host Delay) are saved to
 `~/.config/io24/last-session.json` every few seconds and on exit.
 
 Each time the io24 connects, the Host re-sends the settings the unit cannot

@@ -55,7 +55,10 @@ Run the hardware-free release suite from a clean checkout:
 ```bash
 python3 -m pip install -e '.[test]'
 python3 -m pytest -q \
+  tests/test_io24_fx_model_transition.py \
   tests/test_io24_host_parameter_repairs.py \
+  tests/test_io24_host_rate_and_effects.py \
+  tests/test_io24_host_resume.py \
   tests/test_io24_host_state_repair.py \
   tests/test_io24_global_fx.py \
   tests/test_io24_scene.py \
@@ -64,6 +67,7 @@ python3 -m pytest -q \
   tests/test_io24_vintage_eq_view.py \
   tests/test_io24_spring.py \
   tests/test_io24_multiband_insert.py \
+  tests/test_io24_voicefx_delay.py \
   tests/test_publication_docs.py \
   tests/test_io24_release_package.py
 python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .

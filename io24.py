@@ -62,6 +62,26 @@ DATA_START = 0x1C          # payload offset where the float array begins
 # UC 4.7.2 submits the block-201 materialization frames back-to-back.  _exec()
 # already serializes each USB request/reply; do not add a second host delay.
 FX_FRAME_INTERVAL_S = 0.0
+# Firmware block 201 replaces its selected delegate only after a nominal
+# 40 ms bypass transition and a second VoFx selector visit.  Quiescing before
+# an upward clock change uses a deliberately larger old-rate barrier before
+# that synchronous replacement.  After its transport reply, two live quanta
+# provide the separate audio-frame visibility barrier.  Ordinary UC control
+# edits still use no invented inter-frame delay.
+FX_MODEL_TRANSITION_SETTLE_S = 0.060
+
+
+def voicefx_audio_settle_seconds(rate_hz, quantum_frames):
+    """Two old-rate blocks after a control-plane model replacement reply."""
+    try:
+        rate = float(rate_hz)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Voice FX sample rate must be numeric") from error
+    if not math.isfinite(rate) or not 8000.0 <= rate <= 192000.0:
+        raise ValueError("Voice FX sample rate must be 8000..192000 Hz")
+    if type(quantum_frames) is not int or not 1 <= quantum_frames <= 16384:
+        raise ValueError("Voice FX quantum must be 1..16384 frames")
+    return 2.0 * quantum_frames / rate
 
 
 def fourcc(s):
@@ -2584,6 +2604,45 @@ class Io24:
         written = self.send_fx(frames)
         self._voicefx_selected_model = name
         self._voicefx_selected_state = dict(kw)
+        return written
+
+    def quiesce_voicefx_for_host_delay(
+            self, fs, quantum=512, *, sleep_fn=time.sleep):
+        """Leave block 201 on a lightweight, bypassed model.
+
+        At 96 kHz the Linux Host runs Delay in PipeWire and must not select
+        firmware model 5.  A previously selected hardware model also must not
+        remain audible underneath that insert.  Transformer has no rate-scaled
+        delay history, so materialize its exact UC state with its own On field
+        clear.  This is an internal safety action and intentionally does not
+        replace the user's shadowed Delay intent.
+        """
+        X = _fx_mod()
+        rate = float(fs)
+        if not math.isfinite(rate) or not 8000.0 <= rate <= 192000.0:
+            raise ValueError("Voice FX sample rate must be 8000..192000 Hz")
+        audio_settle = voicefx_audio_settle_seconds(rate, quantum)
+        state = {
+            "on": False, "lows": 0.5, "width": 0.5, "mix": 0.5,
+            "fs": rate,
+        }
+        frames = X.set_fx_transformer(**state)
+        selector, materialization = frames[:1], frames[1:]
+
+        # A first VoFx request only starts block 201's 40 ms fade to bypass.
+        # Once that old-rate transition is complete, replaying VoFx enters the
+        # synchronous work slot that stores the model-0 delegate.  Its USB
+        # reply is a transport acknowledgement, not claimed as an audio-frame
+        # fence, so retain two complete old-rate audio quanta after sending the
+        # complete Transformer-Off state.  Only the caller may then request the
+        # new rate.
+        written = self.send_fx(selector)
+        sleep_fn(FX_MODEL_TRANSITION_SETTLE_S)
+        written += self.send_fx(selector)
+        written += self.send_fx(materialization)
+        sleep_fn(audio_settle)
+        self._voicefx_selected_model = "transformer"
+        self._voicefx_selected_state = dict(state)
         return written
 
     def apply_voicefx_snapshot(self, state, sample_rate_hz=None):

@@ -114,6 +114,14 @@ class ScenePlanTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "96 kHz"):
             io24_scene.plan(_scene(), sample_rate_hz=96000.0)
 
+    def test_host_plan_retains_96khz_delay_without_a_device_model_5_call(self):
+        calls, skips = io24_scene.plan(
+            _scene(), sample_rate_hz=96000.0, allow_host_delay=True)
+
+        self.assertNotIn("set_fx", [call[0] for call in calls])
+        self.assertFalse(any("voicefx" in skip.lower() for skip in skips))
+        self.assertIn("set_reverb", [call[0] for call in calls])
+
     def test_conflicting_channel_voicefx_fails_before_a_plan_is_returned(self):
         scene = _scene()
         scene["line"]["ch2"] = {"voicefx": _delay(mix=0.75)}
@@ -292,12 +300,37 @@ class SceneExportTests(unittest.TestCase):
             self.assertEqual(path.read_text(), "original")
 
             scene = _scene()
-            with self.assertRaisesRegex(RuntimeError, "96 kHz"):
-                io24_scene.save(path, scene, sample_rate_hz=96000.0)
-            self.assertEqual(path.read_text(), "original")
-
-            io24_scene.save(path, scene, sample_rate_hz=48000.0)
+            io24_scene.save(path, scene, sample_rate_hz=96000.0)
             self.assertEqual(json.loads(path.read_text()), scene)
+
+    def test_host_delay_overrides_stale_shadow_and_keeps_its_input_owner(self):
+        snapshot = {
+            "live": {},
+            "calls": {
+                "voicefx": {"fn": "set_fx", "kwargs": {
+                    "model": "delay", "on": True, "time_s": 0.125,
+                    "feedback": 0.5, "mix": 0.1,
+                }},
+            },
+        }
+        feature = {
+            "version": 1, "target": 2,
+            "state": {"on": False, "time_s": 0.173,
+                      "feedback": 0.25, "mix": 0.8},
+        }
+
+        scene, omissions = io24_scene.export_snapshot(
+            snapshot, host_features={"voicefx_delay": feature})
+
+        self.assertNotIn("voicefx", scene["line"].get("ch1", {}))
+        model, state = io24_fx.voicefx_preset_call(
+            scene["line"]["ch2"]["voicefx"])
+        self.assertEqual(model, "delay")
+        self.assertEqual(state, feature["state"])
+        self.assertFalse(any("voicefx_delay" in item for item in omissions))
+        calls, _skips = io24_scene.plan(
+            scene, sample_rate_hz=96000.0, allow_host_delay=True)
+        self.assertNotIn("set_fx", [call[0] for call in calls])
 
     def test_readable_mute_link_processing_and_bypass_override_stale_shadow(self):
         snapshot = {

@@ -37,6 +37,7 @@ ROOT = Path(__file__).parents[1]
 class _Value:
     def __init__(self, value):
         self.value = value
+        self.subtitle = ""
 
     def get_active(self):
         return bool(self.value)
@@ -52,6 +53,9 @@ class _Value:
 
     def set_selected(self, value):
         self.value = value
+
+    def set_subtitle(self, value):
+        self.subtitle = value
 
 
 class GlobalFxTests(unittest.TestCase):
@@ -323,9 +327,10 @@ class GlobalFxTests(unittest.TestCase):
             "fs": 48000.0,
         })])
 
-    def test_96khz_delay_selection_is_blocked_before_assignment_or_state(self):
+    def test_96khz_delay_uses_host_insert_without_selecting_device_model_5(self):
         calls = []
         messages = []
+        controls = []
 
         class Device:
             def set_voicefx_channel(self, channel):
@@ -334,13 +339,25 @@ class GlobalFxTests(unittest.TestCase):
             def set_fx(self, model, **kwargs):
                 calls.append((model, kwargs))
 
+            def quiesce_voicefx_for_host_delay(self, fs, quantum=512):
+                calls.append(("quiesce", fs, quantum))
+
+        insert = SimpleNamespace(
+            running=True, delay_channels=(1,),
+            set_delay_controls=lambda channel, state:
+            controls.append((channel, state)) or True)
+
         device = Device()
         host = SimpleNamespace(
             _fx_mute=False,
             _fs=96000.0,
+            _selected_rate=96000,
             _fx_last_sent_device=None,
             _fx_last_sent_target=None,
+            _host_delay_quiesced_device=None,
             ctl=SimpleNamespace(dev=device, submit=lambda fn: fn(device)),
+            insert=insert,
+            _insert_reconcile=lambda: None,
             fx_arm=_Value(True),
             fx_model=_Value(5),
             fx_target=_Value(0),
@@ -355,9 +372,14 @@ class GlobalFxTests(unittest.TestCase):
 
         io24gtk.Win._push_fx(host)
 
-        self.assertEqual(calls, [])
-        self.assertEqual(len(messages), 1)
-        self.assertIn("96 kHz", messages[0])
+        self.assertEqual(calls, [("quiesce", 96000.0, 512)])
+        self.assertEqual(controls, [(1, {
+            "on": True, "time_s": 0.173,
+            "feedback": 0.25, "mix": 0.5,
+        })])
+        self.assertEqual(messages, [])
+        self.assertEqual(host.fx_model.subtitle,
+                         "Host processing at 96 kHz")
 
     def test_either_channel_preset_records_the_same_global_fx_state(self):
         host = SimpleNamespace(

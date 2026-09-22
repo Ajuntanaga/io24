@@ -28,15 +28,90 @@ physical reconnect restored the normal device. This was a model selection, not
 an explicit reset or firmware command. The exact firmware fault is not inferred
 from the enumeration result.
 
+The follow-up trace uses the complete firmware 1.28 vendor package at SHA-256
+`790f668608448b7c9f244c360ad72e3c51f71b4e8a3d828eab0e08cd03b35de1`.
+Its application prefix has SHA-256
+`65ad2b65bcef932b41e748bfab87f62a9e529c17cceaa0a6a7679e387952eb1a`.
+It is an ARM Cortex-M image with a Thumb reset vector and VFP instructions, not
+a recovered SigmaStudio project. No `SigmaDSP`, `ADAU`, `SHARC`, or
+`Blackfin` marker occurs in the package. A separate unobserved processor is
+not logically impossible, but the online claim that this image is "almost
+certainly" an ADAU17x1 project is unsupported and must not drive a board,
+EEPROM, PLL, or reflash operation.
+
+There is a concrete rate-dependent mechanism inside the recovered code. A
+`Setu` message configures block 201 and then its selected model. Delay's
+vtable `+0x30` routine at raw `0x572d4` stores the new sample rate and resizes
+two float delay buffers for approximately 0.35 s and 0.25 s, each plus the
+current audio quantum. At a 512-frame quantum the two allocator requests total
+119,568 bytes at 48 kHz and 234,768 bytes at 96 kHz, an increase of 115,200
+bytes. The `vech` state handler also rechecks capacity after a time change.
+
+This directly disproves the stated explanation for the "48 kHz first"
+workaround: a later 96 kHz `Setu` does reconfigure Delay and grow its buffers;
+the heavy state is not simply carried across without initialization. Starting
+at 48 kHz could still change allocator history, but that narrower hypothesis
+has not been tested. The trace proves rate-scaled configuration pressure, not
+that a 96 kHz allocation actually fails, an instruction-budget overrun, a
+watchdog path, or the exact reset cause.
+
+It does expose a concrete failure path if either resize allocation returns
+null. The allocator's null branch stores zero into the buffer's logical length
+at `buffer+0x14`. Delay's audio loop later loads that length and reaches `SDIV`
+at raw `0x4ec74` without a zero guard. With divide-by-zero trapping enabled
+that can raise a UsageFault; without it, the zero quotient feeds index math
+that is no longer safely bounded. This makes allocation failure a viable reset
+mechanism, not a demonstrated 96 kHz event. The bounded analyzer is
+`re/cp34_delay_rate_config_static.py`; the immutable report is under
+`runs/20260921T194341-0700-delay-96k-static-correction/`.
+
+The complete package closes one gap left by the truncated application dump.
+Delay's vtable `+0x18` workspace-size routine returns zero, so its two histories
+are private dynamic allocations rather than part of a shared block workspace.
+The resize route reaches the initialized default resource at `0x202b0e54`,
+whose vtable forwards allocation through the runtime reallocator at raw
+`0x3ce70`. The statically visible `_sbrk` start and limit are both
+`0x202b1860`. That does not establish exhaustion: Delay is known to work at
+48 kHz, so some live allocator setup or arena fact is still missing. It does
+establish that the extra 115,200 bytes are requested from a dynamic path and
+that the actual 96 kHz allocation result remains unproved.
+
 The earlier physical Delay acceptance ran at 48 kHz. It does not establish
-that the same transition is safe at 96 kHz. The Linux Host therefore applies a
-narrow safety interlock: Delay at 96 kHz, or at an unknown current rate, is
-rejected before `processingChannel`, `VoFx`, or `vech` can be written. The same
-preflight covers direct Host edits, factory and user presets, scene planning,
-snapshot load, and automatic reconnect replay. Direct preset helpers refuse an
-omitted runtime rate, and the scene CLI requires `--sample-rate` for a live
-apply instead of assuming 48 kHz. Other Voice FX models retain their rate-aware
-transaction. No live Delay replay was made while adding this guard.
+that the firmware transition is safe at 96 kHz. The Linux Host therefore never
+selects hardware model 5 at that rate. The complete package also pins the
+replacement path: the first `VoFx` stores the requested model and asks block
+201 to enter bypass; after its nominal 40 ms transition, a replayed `VoFx`
+calls the work virtual synchronously and stores the new delegate at
+`block+0x14` before returning. Before an upward clock change, the Host sends
+model 0 at the old rate, waits 60 ms, replays model 0, sends the exact
+Transformer-Off state, waits two complete old-rate audio quanta, and only then
+changes PipeWire's rate. A USB reply is transport evidence, not claimed as an
+audio-frame fence; the quantum-scaled old-rate barrier covers that proof
+boundary. The same VocalEcho state, with independent On, Time, Feedback and
+WetDry controls, runs in the
+existing per-input PipeWire insert. Requested and observed rates are both
+considered, so a downward change remains on the Host until the lower hardware
+clock is visible. Factory and user presets, Host snapshots, scenes, known
+device-slot recall and reconnect replay all adopt the same Host path.
+
+The runtime barrier uses the live ALSA period and rate when available, then
+the PipeWire forced/default clock, rather than assuming 512 frames. If the
+interface is absent, a requested or saved 96 kHz clock is pinned temporarily
+at 48 kHz; session replay waits until attach, the model-0 preflight, and the
+guarded move to 96 kHz have completed. This covers Host-owned transitions. It
+does not claim to intercept an unrelated program changing PipeWire directly.
+
+At 96 kHz, Delay's exact controls and input owner are persisted as the
+Host-only `voicefx_delay` feature rather than written into the device shadow.
+Scene export makes that state authoritative over a stale shadowed model, and
+the rate-aware scene planner validates it without emitting `set_fx`. The Host
+persists semantic intent and chooses its safe execution lane from the current
+rate; it does not claim to serialize an unreadable firmware model table.
+The standalone preset helpers and scene CLI have no audio insert, so their
+direct device path retains the hard interlock and requires an explicit current
+rate. Other Voice FX models retain their rate-aware hardware transaction. The
+Host fallback, transition ordering and DSP response are hardware-free verified;
+no live USB or listening run was made while implementing it.
 
 The active Linux PipeWire profile exposed three playback positions,
 `[FL, FR, LFE]`, not six. The first Spring implementation hard-coded USB 5-6
@@ -50,7 +125,15 @@ processor, so the same control works on either route. These graph, DSP,
 migration, and route contracts are hardware-free verified; live Spring
 audibility remains a separate acceptance check.
 
-## 2026-09-20 controlling Voice FX correction: Input 2 needs UC assignment
+The observed Voice FX tail surviving a laptop reboot establishes powered-device
+runtime retention while the io24 itself remains powered. It does not establish
+nonvolatile storage or survival across an io24 power cycle. The online
+standalone/NVRAM explanation is compatible with the earlier cold-start
+negative, but neither a second boot path nor an omitted monolithic USB "DSP
+blob" has been source-bound. UC uses tagged block and parameter messages, not
+one demonstrated complete configuration blob.
+
+## 2026-09-21 controlling Voice FX result: Input 2 is model-specific
 
 The previous Linux Host conclusion combined two different facts. Firmware
 block 201 has one model/settings object with two structural lanes, but Universal
@@ -75,11 +158,21 @@ JaSt slots 38/39 and follows the live `processingChannel` permutation; automatic
 resume does not replay an old route. Explicit preset loads assign the preset's
 target before its Voice FX state.
 
-Hardware-free tests cover Input 1/Input 2 selection, assignment-before-state
-ordering, same-target suppression, new-device reassertion, preset replay, live
-permutation decoding, and shadow/UI adoption. No USB or audio operation was
-performed for this correction. A fresh physical Input-2 waveform run remains
-the final audible acceptance gate.
+The subsequent 48 kHz physical Input-2 run resolved most of that gate.
+Detuner, Vocoder, Ring Modulator, and Filters produced their exact signatures
+twice; Delay produced its 250/500/750 ms taps twice. The shared-reverb control
+moved about 25 dB, Input-2 stimulus contrast exceeded 33 dB, and restoration
+was exact. Therefore the assignment path and model 1 through model 5 processing
+on Input 2 are proven.
+
+Transformer/Doubler, model 0, remains the one exception. It stayed below the
+2 dB shape threshold under assignment-before-state, model-before-assignment,
+and a fresh selector replay; the final two distances were 0.817 and 0.280 dB.
+Per-channel L/R, mono, and side analysis also rules out a hidden stereo effect
+cancelled by mono averaging. The failure is now model-0-specific, not a general
+Channel-2 routing failure. Evidence is under
+`runs/20260921T162414-0700-voicefx-input2-assignment/` and
+`runs/20260921T182831-0700-transformer-selector-replay/`.
 
 ## 2026-09-20 controlling preset result: UC Store is `PrsM`, not a button-slot write
 
@@ -1639,13 +1732,15 @@ merge, factory fallback, or write; it returns local frames only. No CLI or GTK
 file picker exposes this route yet, and the caller is responsible for retaining
 complete valid records that actually correspond to the desired strips.
 
-The private-core hook is now source-bound, but it is not an emitted patch. The
-reset copy table maps raw `0x0fd8..0x405d0` into ITCM
-`0x000002c0..0x0001f8b8`; model-0 work at raw `0x1e1a8` selects the lane from
-model `+0x338`, loads shared mix from `+0x358` at raw `0x1e2be`, and calls the
-resolved core at raw `0x1c408`. That core performs the final dry/wet blend.
-The intended hook is therefore `effective_mix = bypass[lane] ? 0 :
-clamp(shared_mix * wet[lane], 0, 1)`, not an unproved post-buffer multiply.
+The former private-core hook claim was wrong and is now withdrawn. The reset
+copy table maps raw `0x0fd8..0x205d0` into ITCM
+`0x000002c0..0x0001f8b8`. Model-0 runtime configuration copies the `Setu`
+frame quantum from config `+0x0c` to model `+0x338`; raw `0x1e1a8` uses it as
+a buffer stride. It is not a lane selector. The actual user WetDry value is
+model `+0x350`, loaded into `s17` at raw `0x1e1cc`. The `s0` value loaded from
+model `+0x358` at raw `0x1e2be` is instead the Width-derived private-core
+scalar `0.2 * (1 + width)`. A real per-lane identity and post-core blend hook
+remain unresolved, so the proposed `effective_mix` patch is not source-bound.
 
 No custom firmware image is shipped by this repository. No safe existing
 extension storage or executable placement has been proved: the nearby
@@ -3339,9 +3434,10 @@ UCNET shim, which is now built and hardware-verified (§9).
    live Main-output acceptance run.
 5. **96 kHz DSP coverage.** The device clocks at 96 kHz and the Host Mix A/B
    source smoke passed there, but every device DSP block has not been swept at
-   that rate. Delay is now deliberately blocked at 96 kHz after its model
-   selection reset the unit into its bootloader; the exact firmware cause
-   remains unknown.
+   that rate. Hardware Delay is deliberately blocked after its model selection
+   reset the unit into its bootloader. The desktop Host substitutes its safe
+   Delay insert; live acceptance of that fallback and the exact firmware cause
+   remain open.
 6. **Compressor knee semantics.** The measured transfer curve and emitted
    coefficients are correct; the knee field's meaning remains inferred from the
    firmware algebra rather than directly measured in the coprocessor audio path.

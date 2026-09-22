@@ -65,8 +65,9 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn("**Voice FX input**", guide)
         self.assertIn("processingChannel", guide)
         self.assertIn("does not display a permanently disabled control", guide)
-        self.assertIn("Delay is disabled while the interface is at 96 kHz",
+        self.assertIn("The io24's hardware Delay is never selected at 96 kHz",
                       readme)
+        self.assertIn("Host processing at 96 kHz", (ROOT / "io24gtk.py").read_text())
         self.assertIn("USB 1-2", guide)
         self.assertNotIn("must expose all\nsix playback channels", guide)
 

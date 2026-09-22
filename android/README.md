@@ -21,8 +21,9 @@ change mixer, effect, preset, firmware, or sample-rate state.
 - Native Android source: implemented without AndroidX or Compose.
 - APK compilation: verified with the ignored project-local toolchain pinned in
   `toolchain.lock.json` and detected automatically by `verify.sh`.
-- Physical phone/io24 coexistence test: not run; it remains a separately
-  authorized hardware step.
+- Physical phone/io24 coexistence: verified on a BLU 1660V. Android recorded
+  io24 input 2 and played audio through the io24 output while the app retained
+  control interface 5.
 
 ## Verify
 
@@ -46,4 +47,5 @@ and Build Tools 35.0.0.
 See [DESIGN.md](DESIGN.md) for the safety boundary and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged build plan.
 The latest offline result and APK checksum are in
-[BUILD_REPORT.md](BUILD_REPORT.md).
+[BUILD_REPORT.md](BUILD_REPORT.md). The authorized hardware result is in
+[LIVE_TEST_REPORT.md](LIVE_TEST_REPORT.md).

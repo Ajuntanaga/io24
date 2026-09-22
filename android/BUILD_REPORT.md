@@ -24,4 +24,5 @@ The build used the versions and checksums pinned in `toolchain.lock.json`.
 `./verify.sh` ran Gradle in offline mode.
 
 No APK installation, USB access, phone operation, or io24 operation occurred
-during this build.
+during this offline build. A later, separately authorized hardware test is
+recorded in `LIVE_TEST_REPORT.md`.

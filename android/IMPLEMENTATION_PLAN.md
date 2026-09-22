@@ -91,3 +91,22 @@ JUnit 4, and the repository's Python safety-contract tests.
 - [x] Record the APK path and SHA-256 in `BUILD_REPORT.md`.
 - [x] Stop before installation or USB access and request exact authorization for
       the phone trial.
+
+### Task 4: Authorized phone and audio-coexistence trial
+
+**Files:**
+
+- Create: `android/LIVE_TEST_REPORT.md`
+- Modify: `android/README.md`
+
+**Interfaces:**
+
+- Consumes: the debug APK and an explicit hardware authorization.
+- Produces: device evidence that Android control and audio interfaces coexist.
+
+- [x] Install the checksum-verified APK on the BLU 1660V.
+- [x] Read protocol version 1 and the complete `GetP / Appl / JaSt` reply.
+- [x] Retain control interface 5 while recording io24 input 2.
+- [x] Play the recording through the io24 output.
+- [x] Return to the controller and confirm it remains connected.
+- [x] Release interface 5 with **Disconnect Control** and confirm the idle state.

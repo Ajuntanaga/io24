@@ -1,5 +1,8 @@
+import os
 import pathlib
 import re
+import subprocess
+import tempfile
 import unittest
 from urllib.parse import unquote, urlparse
 
@@ -135,6 +138,70 @@ class PublicationDocumentationTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertNotIn(
                     "io24web", (ROOT / filename).read_text().lower())
+
+    def test_debian_setup_uses_a_project_venv_and_lists_host_dependencies(self):
+        readme = (ROOT / "README.md").read_text()
+        contributing = (ROOT / "CONTRIBUTING.md").read_text()
+        publication = (ROOT / "PUBLICATION.md").read_text()
+
+        for package in (
+                "build-essential", "pipewire-bin", "wireplumber",
+                "python3-venv"):
+            self.assertIn(package, readme)
+        self.assertIn(
+            "python3 -m venv --system-site-packages .venv", readme)
+        self.assertIn(".venv/bin/python -m pip install .", readme)
+        self.assertIn(".venv/bin/io24-mixer", readme)
+        self.assertIn(".venv/bin/io24 status", readme)
+        self.assertNotIn("\npython3 -m pip install .\n", readme)
+        for document in (contributing, publication):
+            self.assertIn(
+                "python3 -m venv --system-site-packages .venv", document)
+            self.assertIn(".venv/bin/python -m pip", document)
+
+    def test_desktop_launcher_prefers_checkout_venv_then_system_python(self):
+        source = (ROOT / "io24-mixer").read_text()
+
+        with tempfile.TemporaryDirectory(prefix="io24-launcher-") as temp:
+            stage = pathlib.Path(temp)
+            app = stage / "project with spaces | pipe"
+            app.mkdir()
+            (app / "io24gtk.py").write_text("# test target\n")
+            launcher = stage / "io24-mixer"
+            launcher.write_text(source.replace("__APP_DIR__", str(app)))
+            launcher.chmod(0o755)
+
+            fallback_bin = stage / "fallback"
+            fallback_bin.mkdir()
+            fallback = fallback_bin / "python3"
+            fallback.write_text(
+                "#!/bin/sh\nprintf 'fallback:%s\\n' \"$*\"\n")
+            fallback.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = "%s:%s" % (
+                fallback_bin, environment.get("PATH", os.defpath))
+
+            result = subprocess.run(
+                [launcher, "--offline"], env=environment, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(
+                result.stdout.strip(),
+                "fallback:%s --offline" % (app / "io24gtk.py"))
+
+            venv_python = app / ".venv" / "bin" / "python"
+            venv_python.parent.mkdir(parents=True)
+            venv_python.write_text(
+                "#!/bin/sh\nprintf 'venv:%s\\n' \"$*\"\n")
+            venv_python.chmod(0o755)
+
+            result = subprocess.run(
+                [launcher, "--offline"], env=environment, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(
+                result.stdout.strip(),
+                "venv:%s --offline" % (app / "io24gtk.py"))
 
 
 if __name__ == "__main__":

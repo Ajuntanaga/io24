@@ -12,4 +12,8 @@ APP_DIR="__APP_DIR__"
 # The app opens with or without the interface: offline it shows a banner and
 # host-side features (the multiband) work; plugging the device in attaches it
 # live. So the launcher no longer gates on lsusb or plays notification games.
-exec python3 "$APP_DIR/io24gtk.py" "$@"
+PYTHON="$APP_DIR/.venv/bin/python"
+if [ ! -x "$PYTHON" ]; then
+    PYTHON=python3
+fi
+exec "$PYTHON" "$APP_DIR/io24gtk.py" "$@"

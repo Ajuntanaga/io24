@@ -2,43 +2,50 @@
 
 A native Linux control host for the PreSonus Revelator io24.
 
-The io24 already works as a class-compliant audio interface on Linux, but the
-device's mixer and DSP controls are hidden behind a vendor USB protocol. This
-project opens those controls without Windows or macOS. It includes a GTK4
-desktop app, a command-line tool, preset and scene support, and detailed
-protocol notes for anyone who wants to understand the device.
+The io24 already works as a class-compliant audio interface on Linux. What
+Linux does not get out of the box are its mixer and DSP controls, which sit
+behind a vendor USB protocol. This project opens those controls without
+Windows or macOS. You get a GTK4 desktop app, a command-line tool, preset and
+scene support, and detailed protocol notes if you want to dig deeper.
 
 The main interface is a native desktop app. There is no browser or phone
-controller in this repository.
+controller to set up.
 
 ## Quick start
 
-On Debian or Ubuntu:
+Here is a clean setup for Debian or Ubuntu:
 
 ```bash
-sudo apt install libusb-1.0-0 python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
-python3 -m pip install .
+sudo apt install build-essential libusb-1.0-0 pipewire-bin wireplumber \
+  python3-gi python3-gi-cairo python3-venv gir1.2-gtk-4.0 gir1.2-adw-1
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install .
 sudo cp 70-presonus-io24.rules /etc/udev/rules.d/
-sudo udevadm control --reload
+sudo udevadm control --reload-rules
 ```
 
-Replug the interface, then launch the Host:
+The virtual environment keeps the Python packages local while still using your
+distro's GTK bindings. Replug the interface, then launch the Host:
 
 ```bash
-io24-mixer
+.venv/bin/io24-mixer
 ```
 
-You can also run it directly from a checkout:
+You can also run the app directly from the checkout:
 
 ```bash
-python3 io24gtk.py
+.venv/bin/python io24gtk.py
 ```
 
 Check the connection from a terminal with:
 
 ```bash
-io24 status
+.venv/bin/io24 status
 ```
+
+If you want the app in your desktop menu, run `./install-desktop.sh`. The
+launcher uses the checkout's `.venv` when it is available and falls back to
+the system Python otherwise.
 
 If `pyusb` reports `No backend available`, the libusb system package is
 missing. If the device is connected but `io24 status` cannot find it, recheck
@@ -46,7 +53,8 @@ the udev rule and replug the interface.
 
 ## What works
 
-The Host covers the parts of Universal Control that matter in daily use:
+The Host covers the parts of Universal Control you are likely to use every
+day:
 
 | Area | Linux Host support |
 |---|---|
@@ -315,11 +323,13 @@ PreSonus.
 
 ## Development
 
-Install the test dependencies and run the hardware-free suite:
+Want to work on it? Install the test dependencies and run the hardware-free
+suite:
 
 ```bash
-python3 -m pip install -e '.[test]'
-python3 -m pytest -q
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pytest -q
 ```
 
 Hardware, USB, audio-routing, firmware, and preset persistence checks are never

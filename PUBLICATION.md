@@ -53,8 +53,9 @@ usable without factory preset data and reports that catalog as unavailable.
 Run the hardware-free release suite from a clean checkout:
 
 ```bash
-python3 -m pip install -e '.[test]'
-python3 -m pytest -q \
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pytest -q \
   tests/test_io24_fx_model_transition.py \
   tests/test_io24_host_parameter_repairs.py \
   tests/test_io24_host_rate_and_effects.py \
@@ -70,7 +71,7 @@ python3 -m pytest -q \
   tests/test_io24_voicefx_delay.py \
   tests/test_publication_docs.py \
   tests/test_io24_release_package.py
-python3 -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
+.venv/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
 ```
 
 Before a release is pushed, inspect the clean tree itself:

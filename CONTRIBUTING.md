@@ -2,20 +2,23 @@
 
 Thanks for helping make the io24 easier to use on Linux.
 
-Because this project controls real audio hardware, ordinary pull-request checks
-must stay hardware-free. They should not claim USB interfaces, write device
-state, change firmware, alter audio routing, or assume that an io24 is attached.
+Most changes are easy to check locally. Because this project also controls real
+audio hardware, ordinary pull-request checks must stay hardware-free. They
+should not claim USB interfaces, write device state, change firmware, alter
+audio routing, or assume that an io24 is attached.
 
 ## Development setup
 
 ```bash
-python3 -m pip install -e '.[test]'
-python3 -m pytest -q tests/test_publication_docs.py tests/test_io24_release_package.py
+python3 -m venv --system-site-packages .venv
+.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pytest -q tests/test_publication_docs.py tests/test_io24_release_package.py
 ```
 
-Run the focused tests for the code you changed too. The complete release command
-is in [PUBLICATION.md](PUBLICATION.md). Tests that compare against lawfully
-retained vendor evidence skip clearly when that local evidence is absent.
+Once those pass, run the focused tests for the code you changed. The complete
+release command is in [PUBLICATION.md](PUBLICATION.md). Tests that compare
+against lawfully retained vendor evidence skip clearly when that local evidence
+is absent.
 
 Live tests belong in a separately authorized local campaign. Record the exact
 device, route, stimulus, restoration, and result boundary. Live hardware is

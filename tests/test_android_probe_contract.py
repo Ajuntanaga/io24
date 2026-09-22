@@ -40,6 +40,29 @@ def _build_reference_state_read(vector):
     )
 
 
+def _build_reference_input2_mute(vector, uid, muted):
+    write = vector["input2_mute_write"]
+    blob = struct.pack(
+        "<IIIIi",
+        int(write["blob_tag"], 16),
+        write["blob_size"],
+        write["channel_index"],
+        write["parameter_id"],
+        int(muted),
+    )
+    payload = struct.pack(
+        "<III",
+        int(write["command_tag"], 16),
+        int(write["block_tag"], 16),
+        write["block_index"],
+    ) + blob
+    return (
+        struct.pack("<H", len(payload) + 8)
+        + bytes((1, 1, uid, 0, 0, 0))
+        + payload
+    )
+
+
 def test_state_read_vector_matches_the_proven_linux_wire_contract():
     vector = _vector()
     frame = _build_reference_state_read(vector)
@@ -61,7 +84,24 @@ def test_state_read_vector_matches_the_proven_linux_wire_contract():
     )
 
 
-def test_android_protocol_core_exposes_only_the_read_path():
+def test_input2_mute_vector_is_fixed_to_the_proven_parameter():
+    vector = _vector()
+    muted = _build_reference_input2_mute(vector, 17, True)
+    unmuted = _build_reference_input2_mute(vector, 18, False)
+
+    assert muted.hex() == (
+        "2800010111000000"
+        "507465536c70704100000000"
+        "6972615014000000010000000700000001000000"
+    )
+    assert unmuted.hex() == (
+        "2800010112000000"
+        "507465536c70704100000000"
+        "6972615014000000010000000700000000000000"
+    )
+
+
+def test_android_protocol_core_exposes_read_and_only_the_bounded_write():
     source = (PACKAGE / "PaeFrame.java").read_text()
 
     assert "buildStateRead" in source
@@ -70,7 +110,10 @@ def test_android_protocol_core_exposes_only_the_read_path():
     assert "0x4170706c" in source  # Appl
     assert "0x4a615374" in source  # JaSt
     assert "0x52706c79" in source  # Rply
-    for forbidden in ("SetP", "SETP", "0x53657450", "FRst", "setParam"):
+    assert "buildInput2MuteWrite" in source
+    assert "0x53657450" in source  # SetP
+    assert "0x50617269" in source  # Pari
+    for forbidden in ("FRst", "setParam", "parameterId", "channelIndex"):
         assert forbidden not in source
 
 
@@ -102,7 +145,9 @@ def test_usb_transport_claims_only_the_unforced_control_interface():
     assert "ENDPOINT_IN = 0x81" in source
     assert "claimInterface(controlInterface, false)" in source
     assert "setInterface(controlInterface)" in source
-    for forbidden in ("claimInterface(controlInterface, true)", "SetP", "FRst"):
+    assert "setInput2Mute" in source
+    assert "MUTE_SETTLE_MS = 350" in source
+    for forbidden in ("claimInterface(controlInterface, true)", "FRst"):
         assert forbidden not in source
 
 
@@ -153,7 +198,19 @@ def test_front_facing_android_metadata_is_resource_backed():
         "app_description",
         "action_inspect",
         "action_disconnect",
+        "action_mute_input2",
+        "action_unmute_input2",
         "status_connected",
+        "status_input2_mute_writing",
+        "status_input2_mute_unverified",
         "status_probe_failed",
     } <= names
     assert '.setText("' not in activity
+
+
+def test_input2_mute_is_an_explicit_disabled_until_connected_action():
+    activity = (PACKAGE / "MainActivity.java").read_text()
+
+    assert "input2MuteButton" in activity
+    assert "setInput2Mute" in activity
+    assert "input2MuteButton.setEnabled(false)" in activity

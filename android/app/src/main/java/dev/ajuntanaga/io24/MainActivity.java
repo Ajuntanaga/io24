@@ -20,7 +20,7 @@ import android.widget.TextView;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** One-screen, explicit read-only io24 connection probe. */
+/** One-screen io24 controller with one explicit, readback-verified write. */
 public final class MainActivity extends Activity {
     private static final String ACTION_USB_PERMISSION =
             "dev.ajuntanaga.io24.USB_PERMISSION";
@@ -30,7 +30,10 @@ public final class MainActivity extends Activity {
     private Io24UsbProbe probe;
     private TextView status;
     private Button inspectButton;
+    private Button input2MuteButton;
     private Button disconnectButton;
+    private boolean input2Muted;
+    private ProbeResult lastResult;
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -115,6 +118,14 @@ public final class MainActivity extends Activity {
         inspectButton.setOnClickListener(view -> inspect());
         content.addView(inspectButton, matchWidth());
 
+        input2MuteButton = new Button(this);
+        input2MuteButton.setText(R.string.action_mute_input2);
+        input2MuteButton.setEnabled(false);
+        input2MuteButton.setOnClickListener(view -> writeInput2Mute());
+        LinearLayout.LayoutParams muteLayout = matchWidth();
+        muteLayout.topMargin = dp(8);
+        content.addView(input2MuteButton, muteLayout);
+
         disconnectButton = new Button(this);
         disconnectButton.setText(R.string.action_disconnect);
         disconnectButton.setOnClickListener(
@@ -162,15 +173,7 @@ public final class MainActivity extends Activity {
                         probe.close();
                     }
                     probe = candidate;
-                    status.setText(getString(
-                            R.string.status_connected,
-                            result.protocolVersion(),
-                            result.maxCommandLength(),
-                            result.maxResponseLength(),
-                            result.responseLength(),
-                            result.stateSlotCount()));
-                    inspectButton.setEnabled(false);
-                    disconnectButton.setEnabled(true);
+                    showConnected(result);
                 });
             } catch (Io24UsbProbe.ProbeException error) {
                 candidate.close();
@@ -180,17 +183,79 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void writeInput2Mute() {
+        Io24UsbProbe activeProbe = probe;
+        if (activeProbe == null || !activeProbe.isConnected()) {
+            showIdle(getString(R.string.status_control_released));
+            return;
+        }
+
+        boolean requestedMute = !input2Muted;
+        status.setText(R.string.status_input2_mute_writing);
+        input2MuteButton.setEnabled(false);
+        disconnectButton.setEnabled(false);
+        executor.execute(() -> {
+            try {
+                boolean verifiedMute = activeProbe.setInput2Mute(requestedMute);
+                runOnUiThread(() -> {
+                    if (probe != activeProbe || lastResult == null) {
+                        return;
+                    }
+                    input2Muted = verifiedMute;
+                    showConnected(new ProbeResult(
+                            lastResult.protocolVersion(),
+                            lastResult.maxCommandLength(),
+                            lastResult.maxResponseLength(),
+                            lastResult.responseLength(),
+                            lastResult.stateSlotCount(),
+                            verifiedMute));
+                });
+            } catch (Io24UsbProbe.ProbeException error) {
+                activeProbe.close();
+                runOnUiThread(() -> {
+                    if (probe == activeProbe) {
+                        probe = null;
+                    }
+                    showIdle(getString(
+                            R.string.status_input2_mute_unverified,
+                            error.getMessage()));
+                });
+            }
+        });
+    }
+
+    private void showConnected(ProbeResult result) {
+        lastResult = result;
+        input2Muted = result.input2Muted();
+        status.setText(getString(
+                R.string.status_connected,
+                result.protocolVersion(),
+                result.maxCommandLength(),
+                result.maxResponseLength(),
+                result.responseLength(),
+                result.stateSlotCount(),
+                getString(input2Muted ? R.string.state_on : R.string.state_off)));
+        input2MuteButton.setText(input2Muted
+                ? R.string.action_unmute_input2
+                : R.string.action_mute_input2);
+        inspectButton.setEnabled(false);
+        input2MuteButton.setEnabled(true);
+        disconnectButton.setEnabled(true);
+    }
+
     private void disconnect(String message) {
         if (probe != null) {
             probe.close();
             probe = null;
         }
+        lastResult = null;
         showIdle(message);
     }
 
     private void showIdle(String message) {
         status.setText(message);
         inspectButton.setEnabled(true);
+        input2MuteButton.setEnabled(false);
         disconnectButton.setEnabled(false);
     }
 

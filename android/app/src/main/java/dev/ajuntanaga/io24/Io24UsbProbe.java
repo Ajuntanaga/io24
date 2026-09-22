@@ -10,7 +10,7 @@ import android.os.SystemClock;
 
 import java.io.ByteArrayOutputStream;
 
-/** Owns one explicit, read-only connection to io24 vendor interface 5. */
+/** Owns one explicit, bounded connection to io24 vendor interface 5. */
 public final class Io24UsbProbe implements AutoCloseable {
     static final int VENDOR_ID = 0x194f;
     static final int PRODUCT_ID = 0x0422;
@@ -25,10 +25,15 @@ public final class Io24UsbProbe implements AutoCloseable {
     private static final int IO_TIMEOUT_MS = 2_000;
     private static final int RESPONSE_DEADLINE_MS = 1_600;
     private static final int ABSOLUTE_MAX_RESPONSE = 65_536;
+    static final int MUTE_SETTLE_MS = 350;
 
     private final UsbManager usbManager;
     private UsbDeviceConnection connection;
     private UsbInterface claimedInterface;
+    private UsbEndpoint endpointOut;
+    private UsbEndpoint endpointIn;
+    private int maxResponseLength;
+    private int nextUid = 1;
 
     public Io24UsbProbe(UsbManager usbManager) {
         if (usbManager == null) {
@@ -118,6 +123,10 @@ public final class Io24UsbProbe implements AutoCloseable {
 
             connection = opened;
             claimedInterface = controlInterface;
+            this.endpointOut = endpointOut;
+            this.endpointIn = endpointIn;
+            this.maxResponseLength = maxResponseLength;
+            nextUid = nextUid(uid);
             opened = null;
             claimed = false;
             return new ProbeResult(
@@ -125,7 +134,8 @@ public final class Io24UsbProbe implements AutoCloseable {
                     maxCommandLength,
                     maxResponseLength,
                     state.responseLength(),
-                    state.stateSlotCount());
+                    state.stateSlotCount(),
+                    state.input2Muted());
         } catch (PaeFrame.ProtocolException error) {
             throw new ProbeException(error.getMessage(), error);
         } finally {
@@ -142,6 +152,38 @@ public final class Io24UsbProbe implements AutoCloseable {
         return connection != null;
     }
 
+    /**
+     * Changes only Input 2 mute, waits at the old state boundary, then confirms
+     * the result with a fresh full-state read.
+     */
+    public synchronized boolean setInput2Mute(boolean muted) throws ProbeException {
+        if (connection == null || endpointOut == null || endpointIn == null) {
+            throw new ProbeException("The io24 control interface is not connected");
+        }
+
+        int writeUid = claimUid();
+        byte[] write = PaeFrame.buildInput2MuteWrite(writeUid, muted);
+        writeFrame(connection, endpointOut, write, "Input 2 mute write");
+
+        SystemClock.sleep(MUTE_SETTLE_MS);
+
+        int readUid = claimUid();
+        byte[] request = PaeFrame.buildStateRead(readUid);
+        writeFrame(connection, endpointOut, request, "State verification request");
+        byte[] response = readOneResponse(
+                connection, endpointIn, maxResponseLength);
+        try {
+            PaeFrame.StateReply state = PaeFrame.parseStateReply(response, readUid);
+            if (state.input2Muted() != muted) {
+                throw new ProbeException(
+                        "Fresh device state did not confirm the requested value");
+            }
+            return state.input2Muted();
+        } catch (PaeFrame.ProtocolException error) {
+            throw new ProbeException(error.getMessage(), error);
+        }
+    }
+
     @Override
     public synchronized void close() {
         if (connection == null) {
@@ -153,6 +195,10 @@ public final class Io24UsbProbe implements AutoCloseable {
         connection.close();
         connection = null;
         claimedInterface = null;
+        endpointOut = null;
+        endpointIn = null;
+        maxResponseLength = 0;
+        nextUid = 1;
     }
 
     private static UsbInterface findControlInterface(UsbDevice device)
@@ -203,6 +249,29 @@ public final class Io24UsbProbe implements AutoCloseable {
             result |= (buffer[index] & 0xff) << (index * 8);
         }
         return result;
+    }
+
+    private int claimUid() {
+        int uid = nextUid;
+        nextUid = nextUid(uid);
+        return uid;
+    }
+
+    private static int nextUid(int uid) {
+        return uid == 255 ? 1 : uid + 1;
+    }
+
+    private static void writeFrame(
+            UsbDeviceConnection connection,
+            UsbEndpoint endpointOut,
+            byte[] frame,
+            String label) throws ProbeException {
+        int written = connection.bulkTransfer(
+                endpointOut, frame, frame.length, IO_TIMEOUT_MS);
+        if (written != frame.length) {
+            throw new ProbeException(
+                    label + " was short: " + written + "/" + frame.length);
+        }
     }
 
     private static byte[] readOneResponse(

@@ -9,11 +9,16 @@ The intended runtime connection is direct:
 Android phone -> USB-C -> Revelator io24
 ```
 
-The Linux Host remains a separate application. The current Android milestone is
-an intentionally read-only USB control probe. It verifies the device identity,
-opens only vendor interface 5, reads the paesdk capabilities and `JaSt` state,
-then holds that interface until **Disconnect control** is tapped. It does not
-change mixer, effect, preset, firmware, or sample-rate state.
+The Linux Host remains a separate application. The Android controller verifies
+the device identity, opens only vendor interface 5, reads the paesdk
+capabilities and `JaSt` state, then holds that interface until **Disconnect
+control** is tapped.
+
+Version 0.2.0 adds one deliberately narrow control: **Mute input 2**. The app
+sends the fixed native mute record, waits 350 ms, and reads the full device
+state again. It reports success only when the Input 2 mute bit matches the
+requested value. It exposes no generic parameter writer and does not change
+effects, presets, firmware, or sample rate.
 
 ## Project status
 
@@ -24,6 +29,9 @@ change mixer, effect, preset, firmware, or sample-rate state.
 - Physical phone/io24 coexistence: verified on a BLU 1660V. Android recorded
   io24 input 2 and played audio through the io24 output while the app retained
   control interface 5.
+- Input 2 mute frame and readback logic: implemented and verified offline.
+- Input 2 mute on physical hardware: not yet run; it requires separate exact
+  authorization.
 
 ## Verify
 
@@ -47,5 +55,5 @@ and Build Tools 35.0.0.
 See [DESIGN.md](DESIGN.md) for the safety boundary and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged build plan.
 The latest offline result and APK checksum are in
-[BUILD_REPORT.md](BUILD_REPORT.md). The authorized hardware result is in
-[LIVE_TEST_REPORT.md](LIVE_TEST_REPORT.md).
+[BUILD_REPORT.md](BUILD_REPORT.md). The authorized hardware result for the
+read-only 0.1.0 build is in [LIVE_TEST_REPORT.md](LIVE_TEST_REPORT.md).

@@ -1,11 +1,11 @@
-# io24 Android Read-Only Probe Implementation Plan
+# io24 Android Controller Implementation Plan
 
 > **For agentic workers:** Implement inline, task by task. Preserve one writer,
 > use test-first changes, and do not perform a live USB run without separate
 > authorization.
 
-**Goal:** Produce a minimal Android APK that performs one explicit, read-only
-io24 control probe while leaving Android audio interfaces untouched.
+**Goal:** Grow the direct Android controller from a verified state reader into
+a useful io24 controller through narrow, readback-verified controls.
 
 **Architecture:** A pure-Java paesdk framing core feeds a narrow Android USB
 transport. A single platform Activity handles permission and status without
@@ -21,8 +21,10 @@ JUnit 4, and the repository's Python safety-contract tests.
 - Match only USB `194f:0422`.
 - Claim only interface 5, alternate setting 1, without forced driver detach.
 - Endpoint addresses must be bulk OUT `0x01` and bulk IN `0x81`.
-- Permit only vendor capability reads and one `GetP / Appl / JaSt` request.
-- Never send `SetP`, touch interface 6, or request Android Internet permission.
+- Permit vendor capability reads and serialized `GetP / Appl / JaSt` requests.
+- Permit only explicitly modeled `SetP` records with matching readback tests.
+- Never expose a generic parameter writer, touch interface 6, or request the
+  Android Internet permission.
 - Do not access USB hardware during offline implementation or verification.
 
 ---
@@ -110,3 +112,28 @@ JUnit 4, and the repository's Python safety-contract tests.
 - [x] Play the recording through the io24 output.
 - [x] Return to the controller and confirm it remains connected.
 - [x] Release interface 5 with **Disconnect Control** and confirm the idle state.
+
+### Task 5: Bounded Input 2 mute control
+
+**Files:**
+
+- Modify: `android/protocol/io24-read-state-v1.json`
+- Modify: `android/app/src/main/java/dev/ajuntanaga/io24/PaeFrame.java`
+- Modify: `android/app/src/main/java/dev/ajuntanaga/io24/Io24UsbProbe.java`
+- Modify: `android/app/src/main/java/dev/ajuntanaga/io24/MainActivity.java`
+- Modify: `android/app/src/test/java/dev/ajuntanaga/io24/PaeFrameTest.java`
+- Modify: `tests/test_android_probe_contract.py`
+
+**Interfaces:**
+
+- Produces: one fixed Input 2 mute on/off frame and a fresh-state verification
+  result. No generic parameter-write API is introduced.
+
+- [x] Add the exact mute/unmute vectors and Input 2 flag decoding tests; observe
+  RED before implementation.
+- [x] Implement the fixed frame builder and state-bit parser.
+- [x] Add the disabled-until-connected action, 350 ms settle, fresh UID/read,
+  and fail-closed mismatch handling.
+- [x] Run host contracts, Java tests, lint, and offline APK assembly.
+- [ ] Obtain separate exact authorization before installing or sending the
+  write to a physical io24.

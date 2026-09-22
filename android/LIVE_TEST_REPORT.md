@@ -2,6 +2,9 @@
 
 Authorized live test completed on 2026-09-22.
 
+This report applies only to version 0.1.0. The later 0.2.0 Input 2 mute path has
+not been installed or exercised on hardware.
+
 ## Test setup
 
 - Phone: BLU 1660V

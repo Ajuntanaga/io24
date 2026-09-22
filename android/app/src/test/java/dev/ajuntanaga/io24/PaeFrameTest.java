@@ -2,7 +2,9 @@ package dev.ajuntanaga.io24;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -52,6 +54,46 @@ public final class PaeFrameTest {
         assertThrows(
                 PaeFrame.ProtocolException.class,
                 () -> PaeFrame.parseStateReply(frame, 1));
+    }
+
+    @Test
+    public void input2MuteWriteMatchesTheProvenWireVector() {
+        assertArrayEquals(
+                hex("2800010111000000"
+                        + "507465536c70704100000000"
+                        + "6972615014000000010000000700000001000000"),
+                PaeFrame.buildInput2MuteWrite(17, true));
+        assertArrayEquals(
+                hex("2800010112000000"
+                        + "507465536c70704100000000"
+                        + "6972615014000000010000000700000000000000"),
+                PaeFrame.buildInput2MuteWrite(18, false));
+    }
+
+    @Test
+    public void stateReplyDecodesOnlyTheInput2MuteFlag() throws Exception {
+        byte[] frame = stateReply(9);
+        ByteBuffer.wrap(frame)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(36 + 42 * 4, 1 << 4);
+
+        PaeFrame.StateReply muted = PaeFrame.parseStateReply(frame, 9);
+        assertTrue(muted.input2Muted());
+
+        ByteBuffer.wrap(frame)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(36 + 42 * 4, 1 << 3);
+        PaeFrame.StateReply input1Only = PaeFrame.parseStateReply(frame, 9);
+        assertFalse(input1Only.input2Muted());
+    }
+
+    private static byte[] stateReply(int uid) {
+        byte[] frame = PaeFrame.buildStateRead(uid);
+        frame[3] = (byte) 0x81;
+        ByteBuffer.wrap(frame, 8, 4)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(0x52706c79);
+        return frame;
     }
 
     private static byte[] slice(byte[] source, int start, int end) {

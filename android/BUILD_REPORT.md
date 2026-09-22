@@ -1,19 +1,19 @@
-# Android Read-Only Probe Build
+# Android Bounded Controller Build
 
 Built and verified offline on 2026-09-22.
 
 ## Result
 
 - Artifact: `app/build/outputs/apk/debug/app-debug.apk`
-- SHA-256: `f415bc4af06e18eda3691ba4a0a21cbebb9e56c840d1291f403166062336ef17`
+- SHA-256: `164b4c48b23f8df03e9b96023dff822415b19d1112f836dbf5371e229d28f3cf`
 - Package: `dev.ajuntanaga.io24`
-- Version: `0.1.0` (`versionCode` 1)
+- Version: `0.2.0` (`versionCode` 2)
 - Android range: API 23 minimum, API 35 target
 - Signing: Android debug certificate, APK signature schemes v1 and v2 verified
 
 ## Verification
 
-- Host protocol and safety contracts: 7 passed
+- Host protocol and safety contracts: 9 passed
 - Java unit tests: passed
 - Android lint: no issues found
 - Debug APK assembly: passed
@@ -23,6 +23,7 @@ Built and verified offline on 2026-09-22.
 The build used the versions and checksums pinned in `toolchain.lock.json`.
 `./verify.sh` ran Gradle in offline mode.
 
-No APK installation, USB access, phone operation, or io24 operation occurred
-during this offline build. A later, separately authorized hardware test is
-recorded in `LIVE_TEST_REPORT.md`.
+Version 0.2.0 adds only the fixed Input 2 mute record and mandatory fresh-state
+readback. No APK installation, USB access, phone operation, or io24 operation
+occurred during this offline build. `LIVE_TEST_REPORT.md` records the earlier
+authorized read-only 0.1.0 hardware test; it does not validate this write path.

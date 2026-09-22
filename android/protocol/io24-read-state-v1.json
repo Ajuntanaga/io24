@@ -45,5 +45,18 @@
     "frame_size": 2048,
     "frame_prefix_hex": "0008010101000000507465476c707041000000007453614aec0700000000000000000000",
     "frame_sha256": "0cc107bdd645d9df161d4ede8355226c3c6f56166f9359a331d9e077a0230bb2"
+  },
+  "input2_mute_write": {
+    "command_tag": "53657450",
+    "block_tag": "4170706c",
+    "blob_tag": "50617269",
+    "blob_size": 20,
+    "block_index": 0,
+    "channel_index": 1,
+    "parameter_id": 7,
+    "frame_size": 40,
+    "state_flags_slot": 42,
+    "state_flag_bit": 4,
+    "settle_milliseconds": 350
   }
 }

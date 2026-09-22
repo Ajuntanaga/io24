@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">io24 Controller</string>
+    <string name="app_description">Read-only connection test. This build does not change mixer, effects, presets, firmware, or sample rate.</string>
+    <string name="action_inspect">Inspect io24</string>
+    <string name="action_disconnect">Disconnect control</string>
+    <string name="status_connect_device">Connect the Revelator io24 directly to this phone.</string>
+    <string name="status_device_ready">Revelator io24 detected. Tap Inspect io24 when ready.</string>
+    <string name="status_device_missing">No Revelator io24 is connected.</string>
+    <string name="status_permission_denied">USB permission was not granted.</string>
+    <string name="status_waiting_permission">Waiting for Android USB permission…</string>
+    <string name="status_reading">Reading the io24 control channel…</string>
+    <string name="status_control_released">Control interface released.</string>
+    <string name="status_device_detached">The io24 was disconnected.</string>
+    <string name="status_probe_failed">Probe failed: %1$s</string>
+    <string name="status_connected">Connected read-only\nProtocol: %1$d\nCommand limit: %2$d B\nResponse limit: %3$d B\nState reply size: %4$d B\nState slot count: %5$d\n\nThe control interface is being held. You can now test recording in another app.</string>
+</resources>

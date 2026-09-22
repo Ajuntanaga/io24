@@ -759,7 +759,7 @@ class HostRefinementTests(unittest.TestCase):
         host = SimpleNamespace(
             mbc_ctl={ch: _multiband_controls() for ch in (1, 2)},
             _mbc_mute=False, _insert_stale=False,
-            _insert_wanted=lambda: ())
+            _multiband_insert_wanted=lambda: ())
         for name in ("_adopt_mbc_controls", "_mbc_snapshot_state",
                      "_mbc_band_state"):
             setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
@@ -1329,7 +1329,7 @@ class HostRefinementTests(unittest.TestCase):
         state = self._multiband_state()
         controls = _multiband_controls()
         host = SimpleNamespace(mbc_ctl={1: controls}, _mbc_mute=False,
-                               _insert_wanted=lambda: (1,))
+                               _multiband_insert_wanted=lambda: (1,))
         for name in ("_adopt_mbc_controls", "_mbc_snapshot_state",
                      "_mbc_band_state"):
             setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
@@ -1342,7 +1342,7 @@ class HostRefinementTests(unittest.TestCase):
                 controls[(index, "stack")].visible_child_name,
                 state["bands"][band]["type"])
         self.assertFalse(host._mbc_mute)
-        host._insert_wanted = lambda: ()
+        host._multiband_insert_wanted = lambda: ()
         self.assertFalse(host._mbc_snapshot_state(1)["enabled"])
 
     def test_multiband_selection_hides_single_band_only_controls(self):

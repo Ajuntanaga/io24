@@ -5,7 +5,15 @@ The rig and safety envelope are inherited from ``io24_voicefx_waveform_probe``:
 Main Out L returns through physical Input 1 (or 2), the input capture provides
 the gate reference, and Mix A observes only the VoiceFX return.  Every model is
 fully materialized while off, then independently toggled on/off twice.  A
-reverb tail is the in-run positive control.
+reverb tail is the in-run positive control.  Transformer is first preceded by
+a known-off Filters selection so its proof always crosses a real model
+boundary, including after Voice FX is reassigned while Transformer was already
+selected.
+
+Unlike the older sealed Delay runner, this version exercises the corrected UC
+assignment path. It reads and retains the processingChannel permutation,
+assigns Voice FX to the selected physical input before model state, verifies
+the new permutation, and restores the prior assignment at the end.
 
 Without ``--execute`` this command only prints its plan.
 """
@@ -14,6 +22,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -30,7 +39,7 @@ import io24_voicefx_waveform_probe as base  # noqa: E402
 import io24_fx_shared_return_probe as shared  # noqa: E402
 
 
-SCHEMA = "io24-voicefx-model-waveform-probe-v1"
+SCHEMA = "io24-voicefx-model-waveform-probe-v2"
 RATE = base.RATE
 CAPTURE_SECONDS = base.CAPTURE_SECONDS
 
@@ -57,10 +66,68 @@ OFF_BURST_MAX_DRIFT_DB = 2.0
 DETUNER_MIN_RISE_DB = 12.0
 DETUNER_MIN_PROMINENCE_DB = 10.0
 DETUNER_GUARD_OFFSET_HZ = 40.0
+TRANSFORMER_REBUILD_SETTLE_S = 0.060
 
 
 class ModelProbeError(base.WaveformProbeError):
     """Fail closed before playback whenever a premise is missing."""
+
+
+def pipewire_rate(runner=subprocess.run):
+    """Read the active graph rate before any rate-sensitive device write."""
+    completed = runner(
+        ["pw-metadata", "-n", "settings", "0"],
+        capture_output=True, text=True)
+    if completed.returncode != 0:
+        raise ModelProbeError(
+            "PipeWire clock read failed: %s" %
+            (completed.stderr or "").strip())
+    for line in completed.stdout.splitlines():
+        if "key:'clock.rate'" not in line or "value:'" not in line:
+            continue
+        try:
+            return int(line.split("value:'", 1)[1].split("'", 1)[0])
+        except (IndexError, ValueError) as error:
+            raise ModelProbeError("PipeWire clock rate is malformed") from error
+    raise ModelProbeError("PipeWire clock rate is unavailable")
+
+
+def voicefx_assignment(state):
+    """Decode UC's two-entry processingChannel permutation."""
+    pair = (state.get("input1_processing_channel"),
+            state.get("input2_processing_channel"))
+    if pair == (0, 1):
+        return 1
+    if pair == (1, 0):
+        return 2
+    raise ModelProbeError(
+        "processingChannel is not a valid 0/1 permutation: %r" % (pair,))
+
+
+def assert_assignment_guards(state, input_channel):
+    channel = base._input_channel(input_channel)
+    if state["input1_phantom"] or state["input2_phantom"]:
+        raise ModelProbeError("phantom must be off on both inputs")
+    if state["channel_linked"]:
+        raise ModelProbeError("stereo link must be off")
+    voicefx_assignment(state)
+    if not state["input%d_processing_enabled" % channel]:
+        raise ModelProbeError(
+            "Input %d processing is bypassed; the probe will not change "
+            "DSP Amount" % channel)
+
+
+def assign_and_verify(device, input_channel):
+    """Use the production UC assignment path and prove its readable result."""
+    channel = base._input_channel(input_channel)
+    device.set_voicefx_channel(channel)
+    state = base.readable_state(device.read_params())
+    observed = voicefx_assignment(state)
+    if observed != channel:
+        raise ModelProbeError(
+            "Voice FX assignment read back Input %d, expected Input %d" %
+            (observed, channel))
+    return state
 
 
 def _delta(after, before):
@@ -210,9 +277,17 @@ def run_sequence(device, output_dir, stimulus, sink, input_channel=1,
         stages[label] = capture(
             label, output_dir, stimulus, sink, input_channel=input_channel)
 
-    # Use the already-proven Delay bypass for the rig control, keeping every
-    # remaining model's selection sequence identical and independently auditable.
-    device.set_fx("delay", on=False, **base.DELAY_TEST)
+    # Start from a safe, non-Delay model-local off state.  A real model
+    # transition is material here: the first Input-2 run began with
+    # Transformer already selected, while the earlier successful Input-1 run
+    # crossed from Delay into Transformer.  Filters-off is already proven at
+    # 48 kHz and makes the following Transformer selector a genuine change.
+    # Selecting Delay is unnecessary and deliberately avoided after the
+    # observed 96 kHz reset.
+    progress("preconditioning Transformer through Filters off")
+    device.set_fx("filters", on=False, **MODEL_PROFILES["filters"])
+    device.set_fx("transformer", on=False,
+                  **MODEL_PROFILES["transformer"])
     device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
                       hp_freq=200.0, fs=float(RATE))
     observe("control_off")
@@ -226,7 +301,10 @@ def run_sequence(device, output_dir, stimulus, sink, input_channel=1,
 
     for model, profile in MODEL_PROFILES.items():
         progress("materializing %s off" % model)
-        device.set_fx(model, on=False, **profile)
+        # Transformer is already the explicitly materialized control-off state
+        # above; do not send its identical state twice.
+        if model != "transformer":
+            device.set_fx(model, on=False, **profile)
         observe(model + "_off_0")
         for cycle in (1, 2):
             progress("VoiceFX %s on, cycle %d" % (model, cycle))
@@ -235,6 +313,170 @@ def run_sequence(device, output_dir, stimulus, sink, input_channel=1,
             progress("VoiceFX %s off, cycle %d" % (model, cycle))
             device.set_fx(model, on=False, **profile)
             observe("%s_off_%d" % (model, cycle))
+    return stages
+
+
+def run_transformer_handoff_sequence(
+        device, output_dir, stimulus, sink, input_channel=2,
+        progress=lambda _message: None, capture=None, settle=time.sleep):
+    """Test model-0 state materialized before the UC owner handoff.
+
+    Models 1--4 process Input 2 after the ordinary assignment-before-state
+    transaction, while Transformer remains dry.  Model 0 is the only model
+    with a private stereo core configured during its own materialization.  This
+    sequence isolates the remaining ordering question without inventing any
+    wire command: arm Transformer on the other UC-assigned input, perform the
+    exact Settings assignment, then observe the already-armed state on the
+    target.  Two independent cycles are required.
+    """
+    channel = base._input_channel(input_channel)
+    source = 1 if channel == 2 else 2
+    capture = _capture if capture is None else capture
+    stages = {}
+
+    def observe(label):
+        progress("capturing %s" % label)
+        settle(shared.SETTLE_SECONDS)
+        stages[label] = capture(
+            label, output_dir, stimulus, sink, input_channel=channel)
+
+    profile = MODEL_PROFILES["transformer"]
+    progress("materializing Transformer off on Input %d" % source)
+    device.set_fx("transformer", on=False, **profile)
+    progress("handing the off state to Input %d" % channel)
+    assign_and_verify(device, channel)
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off")
+    progress("positive control: reverb on")
+    device.set_reverb(**base.REVERB_CONTROL)
+    observe("control_reverb")
+    progress("positive control: reverb off")
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off_after")
+
+    for cycle in (1, 2):
+        progress("assigning Voice FX to Input %d for Transformer arm" % source)
+        assign_and_verify(device, source)
+        device.set_fx("transformer", on=True, **profile)
+        progress("handing armed Transformer to Input %d, cycle %d" %
+                 (channel, cycle))
+        assign_and_verify(device, channel)
+        observe("transformer_handoff_on_%d" % cycle)
+        progress("Transformer off on Input %d, cycle %d" % (channel, cycle))
+        device.set_fx("transformer", on=False, **profile)
+        observe("transformer_handoff_off_%d" % cycle)
+    return stages
+
+
+def materialize_transformer_with_selector_replay(
+        device, on=True, profile=None, settle=time.sleep):
+    """Run the firmware's deferred model-0 replacement transaction.
+
+    The first ``VoFx`` asks block 201 to enter its replacement path.  After
+    that path's approximately 40 ms transition window, the same selector is
+    replayed and followed by the normal UC Transformer materialization frames.
+    No undocumented message or parameter is introduced.
+    """
+    profile = (MODEL_PROFILES["transformer"] if profile is None
+               else dict(profile))
+    frames = io24_fx.set_fx_transformer(on=on, **profile)
+    written = device.send_fx(frames[:1])
+    settle(TRANSFORMER_REBUILD_SETTLE_S)
+    written += device.send_fx(frames)
+
+    # The probe deliberately bypasses Io24.set_fx() to control the two selector
+    # writes.  Keep its ordinary state-only update cache truthful afterwards.
+    device._voicefx_selected_model = "transformer"
+    device._voicefx_selected_state = dict(on=on, **profile)
+    return written
+
+
+def run_transformer_selector_replay_sequence(
+        device, output_dir, stimulus, sink, input_channel=2,
+        progress=lambda _message: None, capture=None, settle=time.sleep,
+        rebuild_settle=time.sleep):
+    """Rebuild Transformer after assignment using the firmware replay path."""
+    channel = base._input_channel(input_channel)
+    capture = _capture if capture is None else capture
+    stages = {}
+    profile = MODEL_PROFILES["transformer"]
+
+    def observe(label):
+        progress("capturing %s" % label)
+        settle(shared.SETTLE_SECONDS)
+        stages[label] = capture(
+            label, output_dir, stimulus, sink, input_channel=channel)
+
+    progress("establishing Transformer-off baseline")
+    device.set_fx("filters", on=False, **MODEL_PROFILES["filters"])
+    device.set_fx("transformer", on=False, **profile)
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off")
+    progress("positive control: shared reverb on")
+    device.set_reverb(**base.REVERB_CONTROL)
+    observe("control_reverb")
+    progress("positive control: shared reverb off")
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off_after")
+
+    for cycle in (1, 2):
+        progress("selecting Filters off before Transformer rebuild, cycle %d" %
+                 cycle)
+        device.set_fx("filters", on=False, **MODEL_PROFILES["filters"])
+        progress("replaying Transformer selector after deferred replacement, "
+                 "cycle %d" % cycle)
+        materialize_transformer_with_selector_replay(
+            device, on=True, profile=profile, settle=rebuild_settle)
+        observe("transformer_selector_replay_on_%d" % cycle)
+        progress("Transformer off after replay, cycle %d" % cycle)
+        device.set_fx("transformer", on=False, **profile)
+        observe("transformer_selector_replay_off_%d" % cycle)
+    return stages
+
+
+def run_assigned_delay_sequence(
+        device, output_dir, stimulus, sink, input_channel=2,
+        progress=lambda _message: None, capture=None, settle=time.sleep):
+    """Run the proven temporal Delay discriminator after UC assignment.
+
+    Delay is permitted here only because the enclosing live gate has verified
+    the active PipeWire/device graph at 48 kHz.  Pass that rate explicitly on
+    every state write so the production 96 kHz reset interlock remains active.
+    """
+    channel = base._input_channel(input_channel)
+    capture = _capture if capture is None else capture
+    stages = {}
+    delay = dict(base.DELAY_TEST, fs=float(RATE))
+
+    def observe(label):
+        progress("capturing %s" % label)
+        settle(shared.SETTLE_SECONDS)
+        stages[label] = capture(
+            label, output_dir, stimulus, sink, input_channel=channel)
+
+    progress("materializing Delay off at verified 48 kHz")
+    device.set_fx("delay", on=False, **delay)
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off")
+    progress("positive control: reverb on")
+    device.set_reverb(**base.REVERB_CONTROL)
+    observe("control_reverb")
+    progress("positive control: reverb off")
+    device.set_reverb(on=False, size=0.1, mix=0.0, predelay=0.02,
+                      hp_freq=200.0, fs=float(RATE))
+    observe("control_off_after")
+    for cycle in (1, 2):
+        progress("VoiceFX Delay on, cycle %d" % cycle)
+        device.set_fx("delay", on=True, **delay)
+        observe("delay_on_%d" % cycle)
+        progress("VoiceFX Delay off, cycle %d" % cycle)
+        device.set_fx("delay", on=False, **delay)
+        observe("delay_off_%d" % cycle)
     return stages
 
 
@@ -372,28 +614,197 @@ def classify(stages, input_channel=1):
     }
 
 
-def plan(input_channel=1):
+def classify_transformer_handoff(stages, input_channel=2):
+    """Classify the exact model-before-assignment Transformer experiment."""
     channel = base._input_channel(input_channel)
+    required = (
+        "control_off", "control_reverb", "control_off_after",
+        "transformer_handoff_on_1", "transformer_handoff_off_1",
+        "transformer_handoff_on_2", "transformer_handoff_off_2",
+    )
+    absent = [name for name in required if name not in stages]
+    if absent:
+        raise ModelProbeError("missing capture stages: %s" % ", ".join(absent))
+
+    baseline = stages["control_off"]
+    contrast = _delta(baseline["reference_burst_rms_dbfs"],
+                      baseline["reference_gap_rms_dbfs"])
+    stimulus_ok = bool(
+        baseline["reference_bursts_found"] >= shared.MIN_BURSTS
+        and baseline["reference_burst_rms_dbfs"] is not None
+        and baseline["reference_burst_rms_dbfs"] >=
+        base.REFERENCE_MIN_BURST_DBFS
+        and contrast is not None
+        and contrast >= base.REFERENCE_MIN_GATE_CONTRAST_DB)
+    control = shared.classify_gap_energy(
+        stages["control_off"], stages["control_reverb"],
+        shared.CONTROL_MIN_GAP_RISE_DB)
+    off_names = (
+        "control_off", "control_reverb", "control_off_after",
+        "transformer_handoff_off_1", "transformer_handoff_off_2",
+    )
+    reference_levels = [
+        stages[name]["reference_burst_rms_dbfs"] for name in off_names
+        if stages[name]["reference_burst_rms_dbfs"] is not None
+    ]
+    reference_drift = ((max(reference_levels) - min(reference_levels))
+                       if reference_levels else None)
+    reference_stable = bool(
+        reference_drift is not None
+        and reference_drift <= base.REFERENCE_MAX_DRIFT_DB)
+    off_bursts = [
+        stages[name]["burst_rms_dbfs"] for name in off_names
+        if name != "control_reverb"
+        and stages[name]["burst_rms_dbfs"] is not None
+    ]
+    off_burst_drift = ((max(off_bursts) - min(off_bursts))
+                       if off_bursts else None)
+    off_stable = bool(off_burst_drift is not None
+                      and off_burst_drift <= OFF_BURST_MAX_DRIFT_DB)
+    shape = classify_shape_repeatability(
+        [stages["control_off_after"],
+         stages["transformer_handoff_off_1"],
+         stages["transformer_handoff_off_2"]],
+        [stages["transformer_handoff_on_1"],
+         stages["transformer_handoff_on_2"]])
+    run_valid = bool(stimulus_ok and control["detected"]
+                     and reference_stable and off_stable)
+    if not stimulus_ok:
+        status = "BLOCKED_PHYSICAL_INPUT%d_STIMULUS_UNUSABLE" % channel
+    elif not control["detected"]:
+        status = "INVALID_REVERB_CONTROL_NO_SHARED_RETURN_TAIL"
+    elif not reference_stable:
+        status = "INVALID_INPUT%d_SOURCE_DRIFTED" % channel
+    elif not off_stable:
+        status = "INVALID_OFF_STATE_DRIFTED"
+    elif shape["detected"]:
+        status = "TRANSFORMER_HANDOFF_PROCESSING_DETECTED"
+    else:
+        status = "TRANSFORMER_HANDOFF_NO_PROCESSING_DETECTED"
+    return {
+        "status": status,
+        "run_valid": run_valid,
+        "physical_input%d_stimulus" % channel: {
+            "bursts_found": baseline["reference_bursts_found"],
+            "burst_rms_dbfs": baseline["reference_burst_rms_dbfs"],
+            "gap_rms_dbfs": baseline["reference_gap_rms_dbfs"],
+            "gate_contrast_db": contrast,
+            "maximum_off_stage_drift_db": reference_drift,
+            "usable": stimulus_ok,
+            "stable": reference_stable,
+        },
+        "reverb_control": control,
+        "off_state_burst_drift_db": off_burst_drift,
+        "off_state_held": off_stable,
+        "transformer": {
+            "profile": MODEL_PROFILES["transformer"],
+            "shape": shape,
+            "processing_detected": shape["detected"],
+        },
+    }
+
+
+def classify_transformer_selector_replay(stages, input_channel=2):
+    """Classify the deferred selector replay using the focused shape vote."""
+    remapped = dict(stages)
+    for cycle in (1, 2):
+        remapped["transformer_handoff_on_%d" % cycle] = stages[
+            "transformer_selector_replay_on_%d" % cycle]
+        remapped["transformer_handoff_off_%d" % cycle] = stages[
+            "transformer_selector_replay_off_%d" % cycle]
+    result = classify_transformer_handoff(remapped, input_channel=input_channel)
+    if result["status"] == "TRANSFORMER_HANDOFF_PROCESSING_DETECTED":
+        result["status"] = "TRANSFORMER_SELECTOR_REPLAY_PROCESSING_DETECTED"
+    elif result["status"] == "TRANSFORMER_HANDOFF_NO_PROCESSING_DETECTED":
+        result["status"] = "TRANSFORMER_SELECTOR_REPLAY_NO_PROCESSING_DETECTED"
+    result["activation_sequence"] = (
+        "VoFx(Transformer), settle 60 ms, VoFx(Transformer), "
+        "Bqdf0, Bqdf1, MBdf0, MBdf1, godv")
+    return result
+
+
+def plan(input_channel=1, transformer_handoff=False, delay_only=False,
+         selector_replay=False):
+    channel = base._input_channel(input_channel)
+    if sum(bool(value) for value in (
+            transformer_handoff, delay_only, selector_replay)) > 1:
+        raise ModelProbeError("choose one focused probe mode")
     value = base.plan(input_channel=channel)
-    value.update({
-        "schema": SCHEMA,
-        "measurement": [
+    value["never_written"] = [
+        item for item in value["never_written"]
+        if item != "processingChannel"
+    ]
+    measurement = [
+        "reverb off/on/off positive control",
+        "cross Filters-off -> Transformer-off before the first capture",
+        "fully materialize each remaining model while off",
+        "toggle each model on/off twice with its own XML On control",
+        "Input %d is the post-DSP timing reference; Mix A is the return"
+        % channel,
+    ]
+    assignment = [
+        "read and retain the current processingChannel permutation",
+        "assign Voice FX to Input %d before model state" % channel,
+        "verify the readable permutation",
+        "restore the prior assignment after restoring model and routes",
+    ]
+    if transformer_handoff:
+        source = 1 if channel == 2 else 2
+        measurement = [
             "reverb off/on/off positive control",
-            "fully materialize each remaining model while off",
-            "toggle each model on/off twice with its own XML On control",
+            "materialize Transformer on Input %d before each handoff" % source,
+            "assign the already-armed model to Input %d and capture twice"
+            % channel,
+            "turn Transformer off on Input %d after each capture" % channel,
             "Input %d is the post-DSP timing reference; Mix A is the return"
             % channel,
-        ],
+        ]
+        assignment = [
+            "read and retain the current processingChannel permutation",
+            "alternate only the exact UC Settings assignment between Inputs %d and %d"
+            % (source, channel),
+            "verify every readable permutation",
+            "restore the prior assignment after restoring model and routes",
+        ]
+    elif selector_replay:
+        measurement = [
+            "reverb off/on/off positive control",
+            "cross Filters-off into Transformer for each independent cycle",
+            "send VoFx, wait 60 ms, replay VoFx, then send model state",
+            "toggle Transformer off after each processed capture",
+            "Input %d is the post-DSP timing reference; Mix A is the return"
+            % channel,
+        ]
+    elif delay_only:
+        measurement = [
+            "reverb off/on/off positive control",
+            "materialize Delay only after verified 48 kHz assignment",
+            "toggle Delay on/off twice at 250 ms and test its repeat taps",
+            "Input %d is the post-DSP timing reference; Mix A is the return"
+            % channel,
+        ]
+    value.update({
+        "schema": SCHEMA,
+        "mode": ("transformer_model_before_assignment" if transformer_handoff
+                 else "transformer_deferred_selector_replay" if selector_replay
+                 else "assigned_delay_48khz" if delay_only
+                 else "all_remaining_models_assignment_before_state"),
+        "measurement": measurement,
         "models": MODEL_PROFILES,
         "already_proven_separately": "delay",
+        "processing_assignment": assignment,
     })
     return value
 
 
 def run_live(output_dir, battery_path, shadow_path, input_channel=1,
-             progress=lambda _message: None):
+             progress=lambda _message: None, transformer_handoff=False,
+             delay_only=False, selector_replay=False):
     """Run inside the prior probe's exact-restoration safety envelope."""
     channel = base._input_channel(input_channel)
+    if sum(bool(value) for value in (
+            transformer_handoff, delay_only, selector_replay)) > 1:
+        raise ModelProbeError("choose one focused probe mode")
     mute_key = "input%d_muted" % channel
     gain_key = "input%d_gain_db" % channel
     output_dir = Path(output_dir)
@@ -403,13 +814,21 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
         "schema": SCHEMA,
         "status": "LIVE_FAILED",
         "started": base._now(),
-        "plan": plan(input_channel=channel),
+        "plan": plan(input_channel=channel,
+                     transformer_handoff=transformer_handoff,
+                     delay_only=delay_only,
+                     selector_replay=selector_replay),
         "device": {"serial": base.foundation.EXPECTED_SERIAL,
                    "bcd_device": "%04x" % base.foundation.EXPECTED_BCD_DEVICE},
         "cable": "MAIN_OUT_L_TO_INPUT_%d" % channel,
-        "processing_channel": "UNTOUCHED_IDENTITY_0_1_REQUIRED",
+        "processing_channel": (
+            "MODEL_ON_OTHER_INPUT_THEN_ASSIGN_INPUT_%d_THEN_RESTORE" % channel
+            if transformer_handoff else
+            "ASSIGN_INPUT_%d_THEN_RESTORE" % channel),
         "dsp_amount": "UNTOUCHED_INPUT%d_POSITIVE_REQUIRED" % channel,
-        "preset_slots": "UNTOUCHED",
+        "preset_slots": (
+            "NO_DIRECT_WRITE; assignment firmware may exchange exposed "
+            "active-slot values before restoration"),
     }
     device = None
     stages = {}
@@ -418,6 +837,8 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
     wrote = False
     sink_state = None
     sink_restore_required = False
+    prior_assignment = None
+    assignment_write_started = False
     try:
         prior = base.load_exact_prior_state(shadow_path, input_channel=channel)
         report["prior_host_known_state"] = {
@@ -431,6 +852,11 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
         if battery <= base.foundation.BATTERY_FLOOR:
             report["status"] = "BLOCKED_BATTERY"
             return report
+        active_rate = pipewire_rate()
+        report["pipewire_rate_hz"] = active_rate
+        if active_rate != RATE:
+            report["status"] = "BLOCKED_SAMPLE_RATE"
+            return report
         stimulus = base.build_stimulus(output_dir / "stimulus.wav")
         sink_state = base.resolve_playback_sink_state()
         sink = sink_state["name"]
@@ -438,15 +864,33 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
         device = base.foundation._open_checked()
         before = base.readable_state(device.read_params())
         report["readable_state_before"] = before
-        base.assert_input_guards(before, input_channel=channel)
+        assert_assignment_guards(before, input_channel=channel)
+        prior_assignment = voicefx_assignment(before)
+        report["voicefx_assignment_before"] = prior_assignment
+
+        if transformer_handoff:
+            source = 1 if channel == 2 else 2
+            if prior_assignment != source:
+                raise ModelProbeError(
+                    "Transformer handoff requires the readable prestate on "
+                    "Input %d; found Input %d" % (source, prior_assignment))
 
         progress("muting Input %d and breaking both Main feedback paths"
                  % channel)
         wrote = True
         base.configure_safe_path(device, before[mute_key], input_channel=channel)
+        if transformer_handoff:
+            assignment_write_started = True
+            guarded = base.readable_state(device.read_params())
+        elif prior_assignment != channel:
+            assignment_write_started = True
+            progress("assigning Voice FX to Input %d" % channel)
+            guarded = assign_and_verify(device, channel)
+        else:
+            guarded = base.readable_state(device.read_params())
         time.sleep(0.35)
-        guarded = base.readable_state(device.read_params())
         report["readable_state_guarded"] = guarded
+        report["voicefx_assignment_for_run"] = voicefx_assignment(guarded)
         if guarded[mute_key] != before[mute_key]:
             raise ModelProbeError("Input %d mute did not return to prestate"
                                   % channel)
@@ -455,10 +899,8 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
         report["input%d_gain_for_run_db" % channel] = guarded[gain_key]
         protected_gain = "input%d_gain_db" % (1 if channel == 2 else 2)
         for key in (protected_gain, "main_volume", "headphone_volume",
-                    "monitor_mix", "input1_processing_channel",
-                    "input2_processing_channel", "input1_processing_enabled",
-                    "input2_processing_enabled", "input1_slot_index",
-                    "input2_slot_index"):
+                    "monitor_mix", "input1_processing_enabled",
+                    "input2_processing_enabled"):
             if guarded[key] != before[key]:
                 raise ModelProbeError("protected readable field changed: %s" % key)
 
@@ -469,9 +911,29 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
                 sink, False)
         else:
             report["playback_sink_for_run"] = sink_state
-        stages = run_sequence(device, output_dir, stimulus, sink,
-                              input_channel=channel, progress=progress)
-        report["verdict"] = classify(stages, input_channel=channel)
+        if transformer_handoff:
+            stages = run_transformer_handoff_sequence(
+                device, output_dir, stimulus, sink,
+                input_channel=channel, progress=progress)
+            report["voicefx_assignment_after_sequence"] = voicefx_assignment(
+                base.readable_state(device.read_params()))
+            report["verdict"] = classify_transformer_handoff(
+                stages, input_channel=channel)
+        elif selector_replay:
+            stages = run_transformer_selector_replay_sequence(
+                device, output_dir, stimulus, sink,
+                input_channel=channel, progress=progress)
+            report["verdict"] = classify_transformer_selector_replay(
+                stages, input_channel=channel)
+        elif delay_only:
+            stages = run_assigned_delay_sequence(
+                device, output_dir, stimulus, sink,
+                input_channel=channel, progress=progress)
+            report["verdict"] = base.classify(stages, input_channel=channel)
+        else:
+            stages = run_sequence(device, output_dir, stimulus, sink,
+                                  input_channel=channel, progress=progress)
+            report["verdict"] = classify(stages, input_channel=channel)
         report["status"] = report["verdict"]["status"]
     except BaseException as error:  # noqa: BLE001 - restore on Ctrl-C too
         report["error"] = {"type": type(error).__name__, "message": str(error)}
@@ -490,11 +952,29 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
                 report["status"] = "RESTORATION_FAILED"
         if device is not None:
             if wrote and prior is not None and before is not None:
+                restoration_errors = []
                 try:
                     progress("restoring exact prior state")
                     base.restore_exact_state(
                         device, prior, before[mute_key], before[gain_key],
                         input_channel=channel)
+                except BaseException as error:  # noqa: BLE001
+                    restoration_errors.append({
+                        "step": "model_routes_gain",
+                        "type": type(error).__name__, "message": str(error)})
+                if assignment_write_started and prior_assignment is not None:
+                    try:
+                        progress("restoring Voice FX assignment to Input %d" %
+                                 prior_assignment)
+                        restored = assign_and_verify(device, prior_assignment)
+                        report["voicefx_assignment_restored"] = \
+                            voicefx_assignment(restored)
+                    except BaseException as error:  # noqa: BLE001
+                        restoration_errors.append({
+                            "step": "processing_assignment",
+                            "type": type(error).__name__,
+                            "message": str(error)})
+                try:
                     time.sleep(0.35)
                     after = base.readable_state(device.read_params())
                     report["readable_state_after"] = after
@@ -507,11 +987,14 @@ def run_live(output_dir, battery_path, shadow_path, input_channel=1,
                         "routes": report["prior_host_known_state"]["routes"],
                         "fx": prior["fx"], "reverb": prior["reverb"],
                     }
-                    if not report["readable_state_matches"]:
-                        report["status"] = "RESTORATION_FAILED"
                 except BaseException as error:  # noqa: BLE001
-                    report["restoration_error"] = {
-                        "type": type(error).__name__, "message": str(error)}
+                    restoration_errors.append({
+                        "step": "readback",
+                        "type": type(error).__name__, "message": str(error)})
+                if restoration_errors:
+                    report["restoration_errors"] = restoration_errors
+                    report["status"] = "RESTORATION_FAILED"
+                elif not report.get("readable_state_matches"):
                     report["status"] = "RESTORATION_FAILED"
             report["transport"] = list(device.transport_log)
             try:
@@ -533,6 +1016,16 @@ def main(argv=None):
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--output-dir")
     parser.add_argument("--input-channel", type=int, choices=(1, 2), default=1)
+    focused = parser.add_mutually_exclusive_group()
+    focused.add_argument(
+        "--transformer-handoff", action="store_true",
+        help="arm Transformer before each UC input assignment")
+    focused.add_argument(
+        "--delay-only", action="store_true",
+        help="test assigned Delay at the verified 48 kHz graph rate")
+    focused.add_argument(
+        "--selector-replay", action="store_true",
+        help="test firmware-deferred Transformer selector replay")
     parser.add_argument("--battery-path",
                         default="/sys/class/power_supply/BAT0/capacity")
     parser.add_argument("--shadow-path",
@@ -540,14 +1033,21 @@ def main(argv=None):
                                     / "shadow.json"))
     args = parser.parse_args(argv)
     if not args.execute:
-        print(json.dumps(plan(input_channel=args.input_channel),
+        print(json.dumps(plan(
+            input_channel=args.input_channel,
+            transformer_handoff=args.transformer_handoff,
+            delay_only=args.delay_only,
+            selector_replay=args.selector_replay),
                          indent=2, sort_keys=True))
         return 0
     if not args.output_dir:
         parser.error("--execute requires --output-dir")
     report = run_live(args.output_dir, args.battery_path, args.shadow_path,
                       input_channel=args.input_channel,
-                      progress=lambda message: print(message, flush=True))
+                      progress=lambda message: print(message, flush=True),
+                      transformer_handoff=args.transformer_handoff,
+                      delay_only=args.delay_only,
+                      selector_replay=args.selector_replay)
     base._write_json(Path(args.output_dir) / "live-report.json", report)
     summary = {key: report[key] for key in (
         "status", "battery_before", "battery_after", "error")

@@ -91,6 +91,15 @@ class UnsafeDelayRate(RuntimeError):
     """A Delay operation whose device-clock safety is not established."""
 
 
+def delay_needs_host_fallback(fs):
+    """Whether the hardware Delay must be replaced by the Host processor."""
+    try:
+        rate = float(fs)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(rate) and rate >= DELAY_BLOCKED_RATE_HZ
+
+
 def validate_delay_sample_rate(fs):
     """Return a safe runtime rate or refuse before a Delay frame is built.
 
@@ -113,8 +122,8 @@ def validate_delay_sample_rate(fs):
             "Delay needs a valid current sample rate before it can be sent")
     if rate >= DELAY_BLOCKED_RATE_HZ:
         raise UnsafeDelayRate(
-            "Delay is disabled at 96 kHz because selecting it reset the io24; "
-            "choose 48 kHz before using Delay")
+            "hardware Delay is blocked at 96 kHz because selecting it reset "
+            "the io24; the Linux Host must use its safe Delay insert")
     return rate
 
 

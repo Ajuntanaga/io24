@@ -31,6 +31,7 @@ import io24_alt_eq
 import io24_dsp
 import io24_fx
 import io24_presets
+import io24_voicefx_delay
 
 
 SOURCE = {1: "line/ch1", 2: "line/ch2"}
@@ -153,7 +154,8 @@ def _plan_standard_eq(channel, eq, prefix, fs, calls):
                values["gain"], values["q"]))
 
 
-def _plan_processing(channel, component, prefix, fs, calls, voicefx, skips):
+def _plan_processing(channel, component, prefix, fs, calls, voicefx, skips,
+                     allow_host_delay=False):
     opt = _object(component.get("opt"), "%s.opt" % prefix)
     if "swapcompeq" in opt:
         eq_first = _toggle(opt["swapcompeq"], "%s.opt.swapcompeq" % prefix)
@@ -244,13 +246,23 @@ def _plan_processing(channel, component, prefix, fs, calls, voicefx, skips):
     fx = _object(component.get("voicefx"), "%s.voicefx" % prefix)
     if fx:
         model, kwargs = io24_fx.voicefx_preset_call(fx)
-        kwargs = io24_fx.voicefx_runtime_kwargs(model, kwargs, fs)
-        # Materialize the exact model transaction offline, including its own On.
-        getattr(io24_fx, "set_fx_" + model)(**kwargs)
-        voicefx.append((prefix, model, kwargs))
+        host_only = (allow_host_delay and model == "delay" and
+                     io24_fx.delay_needs_host_fallback(fs))
+        if host_only:
+            # Validate the exact saved controls, but deliberately do not build
+            # a device model-5 transaction. The GTK Host will adopt this
+            # semantic record into its PipeWire Delay after the device calls
+            # in the rest of the scene have succeeded.
+            io24_fx.fx_delay(**kwargs)
+        else:
+            kwargs = io24_fx.voicefx_runtime_kwargs(model, kwargs, fs)
+            # Materialize the exact device transaction offline, including On.
+            getattr(io24_fx, "set_fx_" + model)(**kwargs)
+        voicefx.append((prefix, model, kwargs, host_only))
 
 
-def plan(scene, vintage=False, sample_rate_hz=48000.0):
+def plan(scene, vintage=False, sample_rate_hz=48000.0,
+         allow_host_delay=False):
     """Return ``(calls, skips)`` without touching USB or the device.
 
     ``vintage`` is accepted for source compatibility. Alternate EQ no longer
@@ -341,7 +353,8 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
             for bus in ("main", "mixa", "mixb"):
                 solos.append(("set_solo", (source, bus, on), {},
                               "%s solo in %s = %s" % (prefix, bus, on)))
-        _plan_processing(channel, component, prefix, fs, calls, voicefx, skips)
+        _plan_processing(channel, component, prefix, fs, calls, voicefx, skips,
+                         allow_host_delay=allow_host_delay)
         for field, reason in (
                 ("pan", "mono-source pan is not representable by block 100"),
                 ("stereopan", "stereo width/mono collapse is not representable"),
@@ -368,10 +381,11 @@ def plan(scene, vintage=False, sample_rate_hz=48000.0):
                 "scene contains conflicting per-channel VoiceFX records, but "
                 "the io24 has one shared VoiceFX processor")
     if voicefx:
-        prefix, model, kwargs = voicefx[0]
-        _call(calls, "set_fx", (model,), kwargs,
-              "shared VoiceFX from %s = %s, on=%s" %
-              (prefix, model, kwargs["on"]))
+        prefix, model, kwargs, host_only = voicefx[0]
+        if not host_only:
+            _call(calls, "set_fx", (model,), kwargs,
+                  "shared VoiceFX from %s = %s, on=%s" %
+                  (prefix, model, kwargs["on"]))
 
     for section in ("return", "fxreturn"):
         group = _object(scene.get(section), section)
@@ -849,11 +863,22 @@ def export_snapshot(snapshot, host_features=None, solo=None, presets=None):
     features = _object(host_features, "host_features")
     standard = features.get("standard_eq")
     alternate = features.get("alternate_eq")
+    host_delay = features.get("voicefx_delay")
     if standard is not None:
         standard = io24_presets.validate_standard_eq_host_state(standard)
     if alternate is not None:
         alternate = io24_presets.validate_alternate_eq_host_state(alternate)
-    for name in sorted(set(features) - {"standard_eq", "alternate_eq"}):
+    if host_delay is not None:
+        host_delay = io24_voicefx_delay.validate_host_feature(host_delay)
+        # The device shadow deliberately retains the user's last native Delay
+        # intent while hardware block 201 is quiesced.  At 96 kHz this Host
+        # feature is newer and authoritative, including its input owner.
+        for channel in (1, 2):
+            scene["line"]["ch%d" % channel].pop("voicefx", None)
+        scene["line"]["ch%d" % host_delay["target"]]["voicefx"] = \
+            io24_fx.voicefx_preset_state("delay", **host_delay["state"])
+    for name in sorted(set(features) - {
+            "standard_eq", "alternate_eq", "voicefx_delay"}):
         omissions.append(
             "host_features.%s has no UC scene representation" % name)
     alternate_channels = (alternate or {}).get("channels", {})
@@ -954,7 +979,7 @@ def capture(dev, host_features=None, presets=None):
 
 def save(path, scene, sample_rate_hz=48000.0):
     """Validate and atomically write a Host-known UC-vocabulary scene."""
-    plan(scene, sample_rate_hz=sample_rate_hz)
+    plan(scene, sample_rate_hz=sample_rate_hz, allow_host_delay=True)
     target = os.path.abspath(os.fspath(path))
     directory = os.path.dirname(target)
     fd, temporary = tempfile.mkstemp(

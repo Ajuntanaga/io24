@@ -46,6 +46,7 @@ import tempfile
 import time
 
 import io24_uc_comp
+import io24_voicefx_delay
 
 SINK_NAME = "io24-multiband"
 SINK_DESC = "io24 Multiband"
@@ -117,6 +118,7 @@ _BAND_FIELDS = frozenset({
 })
 
 _LAST_PLUGIN_ERROR = None
+_LAST_DELAY_PLUGIN_ERROR = None
 
 
 def _finite_number(value, name, low, high):
@@ -332,6 +334,22 @@ def uc_comp_available(cache_dir=None):
 
 def uc_comp_error():
     return _LAST_PLUGIN_ERROR
+
+
+def voicefx_delay_available(cache_dir=None):
+    """Built Host Delay path, or None with a retained build error."""
+    global _LAST_DELAY_PLUGIN_ERROR
+    try:
+        path = io24_voicefx_delay.build_plugin(cache_dir)
+    except io24_voicefx_delay.PluginBuildError as error:
+        _LAST_DELAY_PLUGIN_ERROR = str(error)
+        return None
+    _LAST_DELAY_PLUGIN_ERROR = None
+    return str(path)
+
+
+def voicefx_delay_error():
+    return _LAST_DELAY_PLUGIN_ERROR
 
 
 def pipewire_available():
@@ -670,9 +688,9 @@ def _prefixed(graph, prefix):
     }
 
 
-def _insert_states(states):
+def _insert_states(states, allow_empty=False):
     """{channel: snapshot} for the channels with Multiband, validated."""
-    if not isinstance(states, dict) or not states:
+    if not isinstance(states, dict) or (not states and not allow_empty):
         raise ValueError("the multiband insert needs at least one channel")
     normalized = {}
     for channel, state in states.items():
@@ -682,15 +700,42 @@ def _insert_states(states):
     return normalized
 
 
+def _insert_delays(delays):
+    """{channel: VocalEcho state} for safe Host processing, validated."""
+    if delays is None:
+        return {}
+    if not isinstance(delays, dict):
+        raise ValueError("the Host Delay insert state must be an object")
+    normalized = {}
+    for channel, state in delays.items():
+        if isinstance(channel, bool) or channel not in INSERT_CHANNELS:
+            raise ValueError("Host Delay insert channel must be 1 or 2")
+        normalized[channel] = io24_voicefx_delay.validate_state(state)
+    return normalized
+
+
+def _insert_effects(states, delays):
+    states = _insert_states(states, allow_empty=bool(delays))
+    delays = _insert_delays(delays)
+    channels = tuple(sorted(set(states) | set(delays)))
+    if not channels:
+        raise ValueError("the Host insert needs at least one channel")
+    return states, delays, channels
+
+
 def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS,
-                       sample_rate=48000.0, plugin=None):
-    """Both inputs from the capture node, each through its own 4-band graph
-    when its channel has Multiband, otherwise straight through.
+                       sample_rate=48000.0, plugin=None, delays=None,
+                       delay_plugin=None):
+    """Both inputs, each through its requested computer-side processors.
+
+    Multiband remains first, directly after the unit's Fat Channel. At 96 kHz
+    the safe Voice FX Delay follows it in the same graph, so both features can
+    be selected without two processes fighting over the input's mixer route.
 
     Only device capture channels 1 and 2 are needed, so every profile that
     exposes a stereo pair carries the insert.
     """
-    states = _insert_states(states)
+    states, delays, _channels = _insert_effects(states, delays)
     if len(positions) < max(INSERT_CAPTURE_INDEX.values()) + 1:
         raise ValueError(
             "the Multiband insert needs both inputs; this profile exposes %d "
@@ -701,6 +746,7 @@ def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS,
     links = []
     for channel in INSERT_CHANNELS:
         tap = "src%d:Out" % INSERT_CAPTURE_INDEX[channel]
+        tail = tap
         out = "out%d" % channel
         nodes.append({"type": "builtin", "name": out, "label": "copy"})
         if channel in states:
@@ -710,10 +756,20 @@ def build_insert_graph(states, with_comp=True, positions=CAPTURE_POSITIONS,
                             insert_prefix(channel))
             nodes.extend(sub["nodes"])
             links.extend(sub["links"])
-            links.append({"output": tap, "input": sub["inputs"][0]})
-            links.append({"output": sub["outputs"][0], "input": out + ":In"})
-        else:
-            links.append({"output": tap, "input": out + ":In"})
+            links.append({"output": tail, "input": sub["inputs"][0]})
+            tail = sub["outputs"][0]
+        if channel in delays:
+            name = insert_prefix(channel) + "delay"
+            nodes.append({
+                "type": "ladspa",
+                "name": name,
+                "plugin": delay_plugin or io24_voicefx_delay.plugin_name(),
+                "label": io24_voicefx_delay.PLUGIN_LABEL,
+                "control": io24_voicefx_delay.plugin_controls(delays[channel]),
+            })
+            links.append({"output": tail, "input": name + ":Input"})
+            tail = name + ":Output"
+        links.append({"output": tail, "input": out + ":In"})
     return {"nodes": nodes, "links": links,
             "inputs": ["src%d:In" % index for index in range(len(positions))],
             "outputs": ["out%d:Out" % channel for channel in INSERT_CHANNELS]}
@@ -750,7 +806,8 @@ def build_insert_return_graph(channels):
 
 def build_insert_conf(states, capture_target, playback_target,
                       with_comp=None, positions=CAPTURE_POSITIONS,
-                      sample_rate=48000.0, plugin=None):
+                      sample_rate=48000.0, plugin=None, delays=None,
+                      delay_plugin=None):
     """PipeWire config for the insert: the processing, published as a source,
     and its return into the io24's USB playback 1-2.
 
@@ -758,17 +815,18 @@ def build_insert_conf(states, capture_target, playback_target,
     device: an insert that lost the io24 must go quiet, not process the
     laptop's microphone into its speakers.
     """
-    states = _insert_states(states)
+    states, delays, channels = _insert_effects(states, delays)
     if not capture_target or not playback_target:
         raise ValueError("the multiband insert needs the io24's capture and "
                          "playback nodes")
-    if with_comp is None:
+    if with_comp is None and states:
         with_comp = uc_comp_available() is not None
     process = {
         "node.description": INSERT_SOURCE_DESC,
         "media.name": INSERT_SOURCE_DESC,
         "filter.graph": build_insert_graph(
-            states, with_comp, positions, sample_rate, plugin),
+            states, with_comp, positions, sample_rate, plugin,
+            delays=delays, delay_plugin=delay_plugin),
         "capture.props": {
             "node.name": INSERT_PROCESS_NAME,
             "media.class": "Stream/Input/Audio",
@@ -790,7 +848,7 @@ def build_insert_conf(states, capture_target, playback_target,
     ret = {
         "node.description": "io24 Multiband return",
         "media.name": "io24 Multiband return",
-        "filter.graph": build_insert_return_graph(sorted(states)),
+        "filter.graph": build_insert_return_graph(channels),
         "capture.props": {
             "node.name": INSERT_RETURN_NAME + "-in",
             "media.class": "Stream/Input/Audio",
@@ -1281,9 +1339,9 @@ def _present_nodes():
 
 class InsertChain(Chain):
     """Owns the input insert: one child process with the processing and its
-    return. The processed channels are fixed per process, so changing which
-    channels have Multiband restarts it with the current settings; control
-    moves in between are live."""
+    return. Multiband and the 96 kHz Voice FX Delay share this graph and one
+    mixer route. Changing processor membership restarts it; ordinary control
+    moves are live."""
 
     NODE_NAME = INSERT_PROCESS_NAME
     CONF_PREFIX = "io24-insert-"
@@ -1294,24 +1352,29 @@ class InsertChain(Chain):
     def __init__(self):
         super().__init__()
         self.channels = ()
+        self.multiband_channels = ()
+        self.delay_channels = ()
         self._configuration = None
 
     def start(self, states, capture_target=None, playback_target=None,
               with_comp=None, positions=None, sample_rate=48000.0,
-              plugin=None):
+              plugin=None, delays=None, delay_plugin=None):
         """Run the insert for exactly these channels. True once all three of
         its nodes are present; anything short of that stops it again."""
         if positions is None:
             positions = capture_positions(capture_target) or CAPTURE_POSITIONS
+        states, delays, channels = _insert_effects(states, delays)
         configuration = build_insert_conf(
             states, capture_target, playback_target, with_comp=with_comp,
-            positions=positions, sample_rate=sample_rate, plugin=plugin)
-        channels = tuple(sorted(states))
+            positions=positions, sample_rate=sample_rate, plugin=plugin,
+            delays=delays, delay_plugin=delay_plugin)
         if self.running and configuration == self._configuration:
             return True
         self.last_error = None
         if not self._launch(configuration, configured=True):
             self.channels = ()
+            self.multiband_channels = ()
+            self.delay_channels = ()
             self.last_error = "PipeWire process could not start"
             return False
         self._configuration = configuration
@@ -1319,6 +1382,8 @@ class InsertChain(Chain):
         while self.running:
             if set(self.READY_NODES) <= _present_nodes():
                 self.channels = channels
+                self.multiband_channels = tuple(sorted(states))
+                self.delay_channels = tuple(sorted(delays))
                 return True
             if time.monotonic() >= deadline:
                 self.last_error = "the io24 Input Multiband nodes did not appear"
@@ -1332,6 +1397,8 @@ class InsertChain(Chain):
     def stop(self):
         super().stop()
         self.channels = ()
+        self.multiband_channels = ()
+        self.delay_channels = ()
         self._configuration = None
 
     def set_channel_controls(self, channel, controls):
@@ -1339,6 +1406,15 @@ class InsertChain(Chain):
         if channel not in self.channels:
             return False
         prefix = insert_prefix(channel)
+        return self.set_controls(
+            {prefix + key: value for key, value in controls.items()})
+
+    def set_delay_controls(self, channel, state):
+        """Move VocalEcho controls without rebuilding the PipeWire graph."""
+        if channel not in self.delay_channels:
+            return False
+        controls = io24_voicefx_delay.plugin_controls(state)
+        prefix = insert_prefix(channel) + "delay:"
         return self.set_controls(
             {prefix + key: value for key, value in controls.items()})
 

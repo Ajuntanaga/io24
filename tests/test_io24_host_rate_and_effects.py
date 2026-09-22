@@ -12,6 +12,8 @@ Nothing here opens USB.
 """
 
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 import io24gtk
 
@@ -147,6 +149,128 @@ class DeviceClockTests(unittest.TestCase):
         window.ctl.dev = None
         self.assertFalse(window._resend_rate_dependent_state())
         self.assertEqual(window.ctl.sent, [])
+
+
+class RateTransitionSafetyTests(unittest.TestCase):
+    def test_pending_96khz_transition_routes_delay_to_host_immediately(self):
+        window = _window()
+        window._selected_rate = 48000
+        window._rates = [48000, 96000]
+        queued = []
+        device = object()
+        window.ctl = SimpleNamespace(
+            dev=device, submit=queued.append)
+
+        with mock.patch.object(io24gtk, "pw_settings", return_value={
+                "clock.allowed-rates": "[ 48000, 96000 ]",
+                "clock.rate": "48000",
+                "clock.quantum": "512",
+        }), mock.patch.object(io24gtk, "alsa_live", return_value={}):
+            window._rate_changed(_Value(1), None)
+
+        self.assertEqual(window._selected_rate, 96000)
+        self.assertEqual(window._voicefx_effective_rate(), 96000.0)
+        self.assertEqual(len(queued), 1)
+
+    def test_96khz_transition_quiesces_hardware_before_pipewire_moves(self):
+        window = _window()
+        window._selected_rate = 48000
+        window._rates = [48000, 96000]
+        window._host_delay_quiesced_device = None
+        events = []
+
+        class Device:
+            def quiesce_voicefx_for_host_delay(self, fs, quantum=512):
+                events.append(("quiesce", fs, quantum))
+
+        device = Device()
+        window.ctl = SimpleNamespace(
+            dev=device, submit=lambda function: function(device))
+        row = _Value(1)
+        with mock.patch.object(io24gtk, "pw_settings", return_value={
+                "clock.allowed-rates": "[ 48000, 96000 ]",
+        }), mock.patch.object(
+                io24gtk, "pw_set",
+                side_effect=lambda key, value:
+                (events.append((key, value)) or (True, ""))), \
+                mock.patch.object(io24gtk, "alsa_live", return_value={}), \
+                mock.patch.object(
+                    io24gtk.GLib, "idle_add",
+                    side_effect=lambda function, *args: function(*args)):
+            window._rate_changed(row, None)
+
+        self.assertEqual(events, [
+            ("quiesce", 48000.0, 512),
+            ("clock.force-rate", 96000),
+        ])
+        self.assertEqual(window._selected_rate, 96000)
+        self.assertIs(window._host_delay_quiesced_device, device)
+
+    def test_failed_safety_bypass_prevents_the_rate_change(self):
+        window = _window()
+        window._selected_rate = 48000
+        window._rates = [48000, 96000]
+        window._host_delay_quiesced_device = None
+        pipewire = []
+
+        class Device:
+            def quiesce_voicefx_for_host_delay(self, _fs, quantum=512):
+                _ = quantum
+                raise RuntimeError("transport stopped")
+
+        device = Device()
+        window.ctl = SimpleNamespace(
+            dev=device, submit=lambda function: function(device))
+        with mock.patch.object(io24gtk, "pw_settings", return_value={
+                "clock.allowed-rates": "[ 48000, 96000 ]",
+        }), mock.patch.object(
+                io24gtk, "pw_set",
+                side_effect=lambda *args: pipewire.append(args)), \
+                mock.patch.object(io24gtk, "alsa_live", return_value={}), \
+                mock.patch.object(
+                    io24gtk.GLib, "idle_add",
+                    side_effect=lambda function, *args: function(*args)):
+            window._rate_changed(_Value(1), None)
+
+        self.assertEqual(pipewire, [])
+        self.assertEqual(window._selected_rate, 48000)
+        self.assertIn("safety bypass failed", window.messages[-1])
+
+    def test_offline_96khz_selection_stays_at_48khz_until_attach(self):
+        window = _window()
+        window._selected_rate = 48000
+        window._rates = [48000, 96000]
+        events = []
+        with mock.patch.object(io24gtk, "pw_settings", return_value={
+                "clock.allowed-rates": "[ 48000, 96000 ]",
+        }), mock.patch.object(
+                io24gtk, "pw_set",
+                side_effect=lambda key, value:
+                (events.append((key, value)) or (True, ""))):
+            window._rate_changed(_Value(1), None)
+
+        self.assertEqual(events, [("clock.force-rate", 48000)])
+        self.assertEqual(window._selected_rate, 96000)
+        self.assertTrue(window._audio_clock_restore_deferred)
+        self.assertIn("after the io24 connects", window.messages[-1])
+
+    def test_live_period_is_the_old_rate_barrier_quantum(self):
+        window = _window()
+        window._fs_seen = False
+        rate, quantum = window._transition_clock({
+            "clock.force-rate": "48000",
+            "clock.force-quantum": "512",
+        }, {"capture": {"rate": "44100 Hz", "period_size": "1024"}})
+
+        self.assertEqual((rate, quantum), (44100.0, 1024))
+
+    def test_delay_stays_hosted_until_a_downshift_is_observed(self):
+        window = _window()
+        window._fs = 96000.0
+        window._selected_rate = 48000
+        self.assertEqual(window._voicefx_effective_rate(), 96000.0)
+        window._fs = 48000.0
+        self.assertEqual(window._voicefx_effective_rate(), 48000.0)
 
 
 class RateDependentWriteTests(unittest.TestCase):

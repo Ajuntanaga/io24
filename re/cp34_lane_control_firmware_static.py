@@ -128,13 +128,13 @@ FIRMWARE_CODE_SLICES = {
     "model0_itcm_process": (
         0x1E1A8, 0x180,
         "ac894573b3a7e4d1d17f9e02a679b5975371178935c11176c8978406f9fce322"),
-    "model0_lane_mix_call": (
+    "model0_private_core_scalar_call": (
         0x1E2BE, 0x12,
         "9e658934b447364de9701df453b9f5350364c7d3d1470b626bfd0903618b3a78"),
-    "private_core_final_dry_wet_blend": (
+    "private_core_internal_blend": (
         0x1C618, 0xF0,
         "66916fc44d236970d528df8ed79d9de5dd50927ce8aabdfc31026f4edcd2d527"),
-    "model0_lane_selector_write": (
+    "model0_runtime_configuration": (
         0x5BFE0, 0x30,
         "e20895a582eee3d15e1a1ac06f1d866a973aed466855e71356008d8d68113cbf"),
 }
@@ -146,17 +146,23 @@ FIRMWARE_CALL_ANCHORS = {
 }
 
 # ``0x1d491`` is the Thumb vtable entry for the model-0 ITCM process method;
-# its even instruction address maps to raw ``0x1e1a8``.  Just before the core
-# call, the method loads the shared mix into s0 from ``model + 0x358``.  The BL
-# is resolved through the reset relocation to raw ``0x1c408``.  That target has
-# the verified final dry/wet blending loop.
+# its even instruction address maps to raw ``0x1e1a8``.  Runtime configuration
+# copies Setu's frame quantum to ``model+0x338``.  The process uses that value as
+# a buffer stride; it is not a lane selector.  User WetDry is loaded from
+# ``model+0x350``.  The scalar passed in s0 to the private core comes from
+# ``model+0x358`` and is derived from Width as ``0.2 * (1 + width)``; it is not
+# the user WetDry value.  The BL resolves through reset relocation to raw
+# ``0x1c408``.
 MODEL0_PROCESS_VTABLE_ENTRY = 0x1D491
 MODEL0_PROCESS_RAW_OFFSET = 0x1E1A8
-MODEL0_LANE_SELECTOR_WRITE_RAW_OFFSET = 0x5BFE0
-MODEL0_LANE_SELECTOR_OFFSET = 0x338
-MODEL0_LANE_SELECTOR_CONFIG_OFFSET = 0x0C
-MODEL0_MIX_LOAD_RAW_OFFSET = 0x1E2BE
-MODEL0_MIX_OFFSET = 0x358
+MODEL0_RUNTIME_CONFIG_RAW_OFFSET = 0x5BFE0
+MODEL0_FRAME_COUNT_WRITE_RAW_OFFSET = 0x5C004
+MODEL0_FRAME_COUNT_OFFSET = 0x338
+MODEL0_FRAME_COUNT_CONFIG_OFFSET = 0x0C
+MODEL0_USER_MIX_LOAD_RAW_OFFSET = 0x1E1CC
+MODEL0_USER_MIX_OFFSET = 0x350
+MODEL0_CORE_SCALAR_LOAD_RAW_OFFSET = 0x1E2BE
+MODEL0_CORE_SCALAR_OFFSET = 0x358
 MODEL0_PRIVATE_CORE_CALL_RAW_OFFSET = 0x1E2CC
 MODEL0_PRIVATE_CORE_RAW_OFFSET = 0x1C408
 
@@ -661,7 +667,7 @@ MODEL0_GODV_TAG_VALUE = 0x676F6476
 MODEL0_GODV_TAG_COMPARE_RAW_OFFSET = 0x5BC06
 MODEL0_GODV_FIRST_STATE_STORE_RAW_OFFSET = 0x5BC1A
 MODEL0_GODV_STOCK_STATE_OFFSETS = (0x340, 0x344, 0x348, 0x34C, 0x350)
-MODEL0_GODV_DERIVED_MIX_OFFSET = 0x358
+MODEL0_GODV_DERIVED_CORE_SCALAR_OFFSET = 0x358
 MODEL0_GODV_TAGGED_HANDLER_RAW_END_EXCLUSIVE = 0x5BD30
 VOICEFX_STOCK_RESERVED_TAIL_BYTE = 0x2884
 VOICEFX_PARENT_CONSTRUCTOR_TAIL_WRITE_RAW_OFFSET = 0x59246
@@ -1400,9 +1406,69 @@ def _stock_godv_tagged_handler_evidence(data):
             MODEL0_GODV_FIRST_STATE_STORE_RAW_OFFSET),
         "stock_state_offsets": [hex(offset) for offset in
                                 MODEL0_GODV_STOCK_STATE_OFFSETS],
-        "derived_mix_offset": hex(MODEL0_GODV_DERIVED_MIX_OFFSET),
+        "derived_core_scalar_offset": hex(
+            MODEL0_GODV_DERIVED_CORE_SCALAR_OFFSET),
+        "derived_core_scalar_formula": "0.2 * (1 + width)",
         "status": "STOCK_GODV_TAGGED_HANDLER_SOURCE_BOUND",
         "relation_to_structured_state_apply": "UNRESOLVED",
+    }
+
+
+def _model0_runtime_field_evidence(data):
+    """Separate the frame quantum, user WetDry, and private-core scalar."""
+    config_pointer, = struct.unpack_from("<I", data, 0x10C8C0)
+    _require(config_pointer == FIRMWARE_BASE + MODEL0_RUNTIME_CONFIG_RAW_OFFSET + 1,
+             "model-0 vtable +0x30 target differs: %#x" % config_pointer)
+
+    # The live block installer invokes the selected model's vtable +0x30 with
+    # block+0x1c, the Setu configuration copied by block 201.
+    _require_thumb_instruction(data, 0x5F176, "ldr", "r3, [r6]")
+    _require_thumb_instruction(data, 0x5F178, "mov", "r0, r6")
+    _require_thumb_instruction(data, 0x5F17A, "add.w", "r1, r4, #0x1c")
+    _require_thumb_instruction(data, 0x5F17E, "ldr", "r3, [r3, #0x30]")
+    _require_thumb_instruction(data, 0x5F180, "blx", "r3")
+
+    _require_thumb_instruction(
+        data, 0x5BFFC, "ldr", "r3, [r7, #0xc]")
+    _require_thumb_instruction(
+        data, MODEL0_FRAME_COUNT_WRITE_RAW_OFFSET,
+        "str.w", "r3, [r4, #0x338]")
+    _require_thumb_instruction(
+        data, 0x1E1E6, "ldr.w", "lr, [sl, #0x338]")
+    _require_thumb_instruction(
+        data, 0x1E1F4, "add.w", "r0, r7, lr, lsl #3")
+    _require_thumb_instruction(
+        data, MODEL0_USER_MIX_LOAD_RAW_OFFSET,
+        "vldr", "s17, [sl, #0x350]")
+    _require_thumb_instruction(
+        data, MODEL0_CORE_SCALAR_LOAD_RAW_OFFSET,
+        "vldr", "s0, [sl, #0x358]")
+
+    return {
+        "runtime_config_raw_offset": hex(MODEL0_RUNTIME_CONFIG_RAW_OFFSET),
+        "runtime_config_vtable_slot": "vtable+0x30",
+        "runtime_config_caller_raw_offset": "0x5f176",
+        "frame_count": {
+            "config_offset": hex(MODEL0_FRAME_COUNT_CONFIG_OFFSET),
+            "model_offset": hex(MODEL0_FRAME_COUNT_OFFSET),
+            "write_raw_offset": hex(MODEL0_FRAME_COUNT_WRITE_RAW_OFFSET),
+            "process_load_raw_offset": "0x1e1e6",
+            "process_use": "buffer stride",
+            "lane_selector": False,
+        },
+        "user_wet_dry": {
+            "model_offset": hex(MODEL0_USER_MIX_OFFSET),
+            "load_raw_offset": hex(MODEL0_USER_MIX_LOAD_RAW_OFFSET),
+            "register": "s17",
+        },
+        "private_core_scalar": {
+            "model_offset": hex(MODEL0_CORE_SCALAR_OFFSET),
+            "load_raw_offset": hex(MODEL0_CORE_SCALAR_LOAD_RAW_OFFSET),
+            "register": "s0",
+            "formula": "0.2 * (1 + width)",
+            "user_wet_dry": False,
+        },
+        "status": "SOURCE_BOUND_FIELD_CORRECTION",
     }
 
 
@@ -5453,6 +5519,7 @@ def analyze_firmware(data):
     model_zero_decoder_direct_edge_inventory_boundary = \
         _model_zero_decoder_direct_edge_inventory_boundary_evidence(data)
     stock_godv_tagged_handler = _stock_godv_tagged_handler_evidence(data)
+    model0_runtime_fields = _model0_runtime_field_evidence(data)
     state_apply_godv_direct_edge_evidence = _state_apply_godv_direct_edge_evidence(
         data)
     structured_state_dispatcher_boundary = \
@@ -5564,6 +5631,7 @@ def analyze_firmware(data):
             "model_zero_decoder_direct_edge_inventory_boundary":
                 model_zero_decoder_direct_edge_inventory_boundary,
             "stock_godv_tagged_handler": stock_godv_tagged_handler,
+            "model0_runtime_fields": model0_runtime_fields,
             "state_apply_godv_direct_edge_evidence":
                 state_apply_godv_direct_edge_evidence,
             "structured_state_dispatcher_boundary":
@@ -5638,33 +5706,40 @@ def analyze_firmware(data):
             "source_bound_hook": {
                 "model0_process_vtable_entry": hex(MODEL0_PROCESS_VTABLE_ENTRY),
                 "model0_process_raw_offset": hex(MODEL0_PROCESS_RAW_OFFSET),
-                "lane_selector": {
-                    "write_raw_offset": hex(MODEL0_LANE_SELECTOR_WRITE_RAW_OFFSET),
-                    "model_offset": hex(MODEL0_LANE_SELECTOR_OFFSET),
-                    "config_offset": hex(MODEL0_LANE_SELECTOR_CONFIG_OFFSET),
+                "frame_count": {
+                    "write_raw_offset": hex(MODEL0_FRAME_COUNT_WRITE_RAW_OFFSET),
+                    "model_offset": hex(MODEL0_FRAME_COUNT_OFFSET),
+                    "config_offset": hex(MODEL0_FRAME_COUNT_CONFIG_OFFSET),
+                    "process_use": "buffer stride",
                 },
-                "mix_load": {
-                    "raw_offset": hex(MODEL0_MIX_LOAD_RAW_OFFSET),
+                "user_wet_dry": {
+                    "raw_offset": hex(MODEL0_USER_MIX_LOAD_RAW_OFFSET),
+                    "register": "s17",
+                    "model_offset": hex(MODEL0_USER_MIX_OFFSET),
+                },
+                "private_core_scalar": {
+                    "raw_offset": hex(MODEL0_CORE_SCALAR_LOAD_RAW_OFFSET),
                     "register": "s0",
-                    "model_offset": hex(MODEL0_MIX_OFFSET),
+                    "model_offset": hex(MODEL0_CORE_SCALAR_OFFSET),
+                    "formula": "0.2 * (1 + width)",
                 },
                 "private_core_call": {
                     "raw_offset": hex(MODEL0_PRIVATE_CORE_CALL_RAW_OFFSET),
                     "target_raw_offset": hex(MODEL0_PRIVATE_CORE_RAW_OFFSET),
-                    "final_blend": "verified stock dry/wet blend",
+                    "internal_blend": "verified stock private-core blend",
                 },
             },
             "required_operation": (
-                "derive the selected lane from model+0x338; replace the "
-                "source-bound s0 scalar at raw 0x1e2be with effective_mix = "
-                "bypass ? 0.0 : clamp(shared_mix * wet, 0.0, 1.0), then use "
-                "the private core's verified stock dry/wet blend"),
+                "recover a real per-lane identity and post-core blend control; "
+                "do not reinterpret model+0x338 (frame count) or model+0x358 "
+                "(the Width-derived private-core scalar) as that control"),
             "unsafe_regions": list(UNSAFE_COEFFICIENT_REGIONS),
-            "per_lane_blend_control_hook": "SOURCE_BOUND",
+            "per_lane_blend_control_hook": "UNRESOLVED",
             "reason": (
-                "the model-0 ITCM process method loads s0 from model+0x358 and "
-                "calls the reset-relocated private core whose final dry/wet "
-                "blend is verified; the +0x6a4/+0x6b4 arrays remain off-limits"),
+                "the corrected field trace proves +0x338 is the Setu frame "
+                "quantum, +0x350 is user WetDry, and +0x358 is derived from "
+                "Width; the actual per-lane interception point remains unbound "
+                "and the +0x6a4/+0x6b4 arrays remain off-limits"),
         },
         "release_gate": {
             "image_emission": "BLOCKED",

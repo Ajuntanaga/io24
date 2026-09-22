@@ -92,14 +92,17 @@ class LaneControlFirmwareStaticTests(unittest.TestCase):
             "model0_private_core_final_blend"],
             (0x10D910, 0x0001B6F1))
 
-    def test_source_bound_hook_has_lane_selection_mix_and_final_blend(self):
+    def test_source_bound_hook_separates_frame_count_mix_and_core_scalar(self):
         self.assertEqual(MODULE.MODEL0_PROCESS_VTABLE_ENTRY, 0x1D491)
         self.assertEqual(MODULE.MODEL0_PROCESS_RAW_OFFSET, 0x1E1A8)
-        self.assertEqual(MODULE.MODEL0_LANE_SELECTOR_WRITE_RAW_OFFSET, 0x5BFE0)
-        self.assertEqual(MODULE.MODEL0_LANE_SELECTOR_OFFSET, 0x338)
-        self.assertEqual(MODULE.MODEL0_LANE_SELECTOR_CONFIG_OFFSET, 0x0C)
-        self.assertEqual(MODULE.MODEL0_MIX_LOAD_RAW_OFFSET, 0x1E2BE)
-        self.assertEqual(MODULE.MODEL0_MIX_OFFSET, 0x358)
+        self.assertEqual(MODULE.MODEL0_RUNTIME_CONFIG_RAW_OFFSET, 0x5BFE0)
+        self.assertEqual(MODULE.MODEL0_FRAME_COUNT_WRITE_RAW_OFFSET, 0x5C004)
+        self.assertEqual(MODULE.MODEL0_FRAME_COUNT_OFFSET, 0x338)
+        self.assertEqual(MODULE.MODEL0_FRAME_COUNT_CONFIG_OFFSET, 0x0C)
+        self.assertEqual(MODULE.MODEL0_USER_MIX_LOAD_RAW_OFFSET, 0x1E1CC)
+        self.assertEqual(MODULE.MODEL0_USER_MIX_OFFSET, 0x350)
+        self.assertEqual(MODULE.MODEL0_CORE_SCALAR_LOAD_RAW_OFFSET, 0x1E2BE)
+        self.assertEqual(MODULE.MODEL0_CORE_SCALAR_OFFSET, 0x358)
         self.assertEqual(MODULE.MODEL0_PRIVATE_CORE_CALL_RAW_OFFSET, 0x1E2CC)
         self.assertEqual(MODULE.MODEL0_PRIVATE_CORE_RAW_OFFSET, 0x1C408)
 
@@ -207,10 +210,39 @@ class LaneControlFirmwareStaticTests(unittest.TestCase):
             "tag_compare_raw_offset": "0x5bc06",
             "first_stock_state_store_raw_offset": "0x5bc1a",
             "stock_state_offsets": ["0x340", "0x344", "0x348", "0x34c", "0x350"],
-            "derived_mix_offset": "0x358",
+            "derived_core_scalar_offset": "0x358",
+            "derived_core_scalar_formula": "0.2 * (1 + width)",
             "status": "STOCK_GODV_TAGGED_HANDLER_SOURCE_BOUND",
             "relation_to_structured_state_apply": "UNRESOLVED",
         })
+
+    @unittest.skipUnless(UC472_DLL.is_file(),
+                         "local UC 4.7.2 DLL is unavailable")
+    def test_pinned_image_corrects_model0_runtime_field_semantics(self):
+        report = MODULE.analyze_firmware(pinned_application())
+        fields = report["parser_patch"]["model0_runtime_fields"]
+        self.assertEqual(fields["frame_count"], {
+            "config_offset": "0xc",
+            "model_offset": "0x338",
+            "write_raw_offset": "0x5c004",
+            "process_load_raw_offset": "0x1e1e6",
+            "process_use": "buffer stride",
+            "lane_selector": False,
+        })
+        self.assertEqual(fields["user_wet_dry"], {
+            "model_offset": "0x350",
+            "load_raw_offset": "0x1e1cc",
+            "register": "s17",
+        })
+        self.assertEqual(fields["private_core_scalar"], {
+            "model_offset": "0x358",
+            "load_raw_offset": "0x1e2be",
+            "register": "s0",
+            "formula": "0.2 * (1 + width)",
+            "user_wet_dry": False,
+        })
+        self.assertEqual(report["dsp_patch"]["per_lane_blend_control_hook"],
+                         "UNRESOLVED")
 
     @unittest.skipUnless(UC472_DLL.is_file(),
                          "local UC 4.7.2 DLL is unavailable")

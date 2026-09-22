@@ -118,6 +118,42 @@ class VoiceFxModelTransitionTests(unittest.TestCase):
         self.assertEqual(device.sent, [])
         self.assertIsNone(getattr(device, "_voicefx_selected_model", None))
 
+    def test_host_delay_quiesce_selects_only_bypassed_transformer(self):
+        device = self._device()
+        waits = []
+
+        written = device.quiesce_voicefx_for_host_delay(
+            48000.0, sleep_fn=waits.append)
+
+        self.assertEqual(written, 7)
+        self.assertEqual([_body_tag(body) for body in device.sent], [
+            io24_fx.TAG_VOFX,
+            io24_fx.TAG_VOFX,
+            io24_fx.TAG_BQDF,
+            io24_fx.TAG_BQDF,
+            io24_fx.TAG_MBDF,
+            io24_fx.TAG_MBDF,
+            io24_fx.TAG_GODV,
+        ])
+        self.assertEqual(waits, [io24.FX_MODEL_TRANSITION_SETTLE_S,
+                                 2.0 * 512 / 48000.0])
+        self.assertEqual(device._voicefx_selected_model, "transformer")
+        self.assertFalse(device._voicefx_selected_state["on"])
+        self.assertEqual(device._voicefx_selected_state["fs"], 48000.0)
+
+    def test_post_ack_barrier_scales_to_two_old_rate_quanta(self):
+        self.assertAlmostEqual(
+            io24.voicefx_audio_settle_seconds(48000.0, 2048),
+            2.0 * 2048 / 48000.0)
+
+    def test_invalid_quantum_is_rejected_before_any_usb_write(self):
+        device = self._device()
+
+        with self.assertRaisesRegex(ValueError, "quantum"):
+            device.quiesce_voicefx_for_host_delay(48000.0, quantum=0)
+
+        self.assertEqual(device.sent, [])
+
     def test_delay_requires_the_current_rate_before_any_usb_write(self):
         device = self._device()
 

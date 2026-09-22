@@ -1,5 +1,94 @@
 # CP34 Host preset and FX continuation
 
+## 2026-09-21 controlling implementation: safe 96 kHz Host Delay
+
+The hardware model-5 interlock remains absolute, but Delay is no longer absent
+from the desktop Host at 96 kHz. `io24_voicefx_delay.c` implements the exact
+VocalEcho surface, On, Time, Feedback and WetDry, as a bounded mono LADSPA
+processor with one allocation at instantiation and none in the realtime
+callback. `io24_mbc.InsertChain` now owns one shared per-input graph for
+Multiband followed by Delay, so the two Host processors cannot fight over the
+io24 mixer route. The return remains on the existing input-insert path through
+USB playback 1-2.
+
+An upward rate selection first calls
+`Io24.quiesce_voicefx_for_host_delay()`. At the old rate it requests model 0,
+waits 60 ms for the firmware's nominal 40 ms bypass transition, replays the
+selector so the synchronous work path stores the model-0 delegate, sends the
+exact Transformer-Off state, waits two complete old-rate audio quanta, and
+only then changes PipeWire's rate. The transport reply is not promoted to an
+audio-frame fence.
+Delay uses the higher of the requested and observed rates when choosing its
+path. It therefore moves to the Host before 48 -> 96 and stays there until
+96 -> 48 is actually observed. Direct edits, preset loads, known-slot loads,
+Host shadow resume and scene load/save all retain Delay state on this path.
+Low-level and standalone CLI calls still reject a 96 kHz hardware model-5
+write because they do not own an audio insert.
+
+The final barrier uses the live ALSA period and rate when they are available,
+not a fixed 512-frame assumption. While the interface is absent, a requested
+or saved 96 kHz clock is held at 48 kHz. Session replay waits for attach, the
+model-0 preflight and the guarded 96 kHz move, so hotplug cannot bypass the
+startup guard.
+
+The last-session and snapshot schema now carries exact 96 kHz Host Delay
+controls plus their input owner under `voicefx_delay`. Scene export makes that
+state override the deliberately stale device shadow; rate-aware scene restore
+at 96 kHz adopts it without a hardware `set_fx`. This persists semantic intent
+and safe placement without claiming access to an unreadable firmware model
+table.
+
+The static analyzer now pins the complete 0x12a694-byte UC 4.7.2 package,
+SHA-256
+`790f668608448b7c9f244c360ad72e3c51f71b4e8a3d828eab0e08cd03b35de1`,
+instead of the truncated application dump. It proves that Delay reports zero
+shared workspace and reaches the initialized default runtime resource for its
+two histories. The visible `_sbrk` start and limit are equal, but 48 kHz Delay
+is known to work, so the live allocator arena and exact reset cause remain
+unresolved. The safe repair does not depend on resolving either one.
+
+Hardware-free verification covers the 96 kHz impulse/repeat response, bypass,
+control validation, Multiband-plus-Delay graph order, rate-transition ordering,
+preset/scene adoption and the continuing device-level interlock. No USB,
+device, Wine, VM, network, firmware or system-state action occurred. Live
+audibility at 96 kHz remains a separate authorized acceptance step.
+
+## 2026-09-21 controlling correction: Delay at 96 kHz and model-0 fields
+
+The exact firmware 1.28 application was traced offline after selecting Delay
+at 96 kHz reset the interface into `194f:0405` bootloader mode. The image is a
+raw ARM Cortex-M/Thumb application with VFP code; the supplied online
+SigmaDSP/ADAU diagnosis is not established for this device. Delay model 5
+receives every `Setu` through its vtable `+0x30` routine at raw `0x572d4` and
+resizes two rate-scaled float buffers for approximately 0.35 s and 0.25 s. At
+a 512-frame quantum their allocator requests total 119,568 bytes at 48 kHz and
+234,768 bytes at 96 kHz. A 48 -> 96 kHz transition therefore does reconfigure
+and grow Delay; it does not carry an initialized 48 kHz graph forward without
+reinitialization. The exact reset cause remains unresolved and the Host's
+pre-write 96 kHz Delay interlock stays controlling. The allocator's null path
+does provide one source-bound fault mechanism: it writes a zero logical buffer
+length, which Delay processing subsequently uses as an `SDIV` divisor without
+a zero check. Whether either 96 kHz allocation actually returns null is still
+unproven.
+
+The same pass corrected an earlier model-0 inference before any firmware or
+device experiment used it. Model `+0x338` is the `Setu` frame quantum used as a
+buffer stride, not a lane selector. User WetDry is `+0x350`; `+0x358` is the
+Width-derived private-core scalar `0.2 * (1 + width)`. The proposed per-lane
+blend hook is consequently unresolved and remains blocked from image emission.
+Focused hardware-free contracts cover both corrections. No USB, Wine, VM,
+network, firmware, or system-state operation occurred.
+
+Evidence:
+`runs/20260921T194341-0700-delay-96k-static-correction/`.
+
+The 48 kHz Input-2 result is also closed model by model. Detuner, Vocoder, Ring
+Modulator, Filters, and Delay processed twice with exact signatures and exact
+restoration. Transformer/Doubler alone remained dry across
+assignment-before-state, model-before-assignment, and selector replay. Stereo
+L/R, mono, and side analysis ruled out measurement cancellation. This is a
+model-0/Input-2 defect, not a general assignment or Channel-2 failure.
+
 ## 2026-09-20 controlling implementation: Mixer parity and Host spring
 
 The UC 4.7.2 Mixer comparison is closed. Linux already covers the complete
@@ -3479,7 +3568,8 @@ network, or other live action.
 At `2026-09-01T01:55:28-07:00`, static contracts separately bound the stock
 model-0 primary tagged callback: primary vtable `0x10c890` enters `0x5bb6c`,
 compares the `godv` literal at `0x5bd38`, then writes the five existing state
-values at model offsets `+0x340..+0x350` and derives shared mix at `+0x358`.
+values at model offsets `+0x340..+0x350` and derives the Width-dependent
+private-core scalar at `+0x358`.
 That callback is not aliased to the model state-apply target `0x546ec`, but no
 call relationship between the two has been established. Focused contracts pass
 15/15; optional-field lookup and safe extension placement remain unresolved.
@@ -3787,14 +3877,14 @@ match UC 4.7.2. The historical 0x10da40 extraction is truncated and must not
 be flashed. The current work may inspect and verify the original package, but
 may not emit a modified binary or run an updater.
 
-The reset copy table and model-0 process path are now source-bound: raw
-`0x1e1a8` selects a lane from model `+0x338`, loads shared mix from `+0x358` at
-raw `0x1e2be`, and calls the private core at raw `0x1c408`, whose final dry/wet
-blend is verified. The future hook is
-`bypass[lane] ? 0 : clamp(shared_mix * wet[lane], 0, 1)`. It remains blocked
-from image emission because no newly owned parser/default storage or safe code
-placement is proven; nearby model fields/coefficient arrays and all models 0–5
-are live.
+The reset copy table and model-0 process path are source-bound, but the former
+field interpretation is superseded. Raw `0x1e1a8` uses model `+0x338` as the
+`Setu` frame quantum/buffer stride. It loads user WetDry from `+0x350` and a
+Width-derived private-core scalar from `+0x358` before calling the private core
+at raw `0x1c408`. No per-lane identity or safe per-lane blend hook is currently
+bound. Image emission remains blocked because parser/default storage, a real
+lane hook, and safe code placement are unproved; nearby model fields,
+coefficient arrays, and all models 0–5 are live.
 
 Durable current handoff:
 `runs/20260901T001259-0700-custom-firmware-lane-controls/`. It contains the

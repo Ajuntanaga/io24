@@ -124,6 +124,69 @@ class LastSessionFileTests(unittest.TestCase):
     def test_the_snapshot_dialog_uses_the_same_gathering(self):
         self.assertIn("self._host_features_state()", _function("_pick"))
 
+    def test_96khz_delay_state_is_gathered_outside_the_device_shadow(self):
+        class Value:
+            def __init__(self, value):
+                self.value = value
+
+            def get_selected(self):
+                return self.value
+
+        delay = {"on": True, "time_s": 0.173,
+                 "feedback": 0.25, "mix": 0.8}
+        host = _bind(SimpleNamespace(
+            FX_ORDER=io24gtk.Win.FX_ORDER,
+            _fs=96000.0,
+            _selected_rate=96000,
+            fx_model=Value(io24gtk.Win.FX_ORDER.index("delay")),
+            fx_target=Value(1),
+            _fx_live_params=lambda: dict(delay)),
+            "_voicefx_effective_rate", "_host_delay_feature_state")
+
+        self.assertEqual(host._host_delay_feature_state(), {
+            "version": 1, "target": 2, "state": delay,
+        })
+
+    def test_saved_host_delay_adopts_controls_without_claiming_device_owner(self):
+        class Value:
+            def __init__(self, value=None):
+                self.value = value
+
+            def set_selected(self, value):
+                self.value = value
+
+            def set_value(self, value):
+                self.value = value
+
+            def set_active(self, value):
+                self.value = value
+
+        controls = {name: Value() for name in
+                    ("time_s", "feedback", "mix")}
+        host = _bind(SimpleNamespace(
+            FX_ORDER=io24gtk.Win.FX_ORDER,
+            _fx_mute=False,
+            fx_target=Value(),
+            fx_model=Value(),
+            fx_arm=Value(),
+            fx_params={"delay": controls}),
+            "_adopt_host_delay_feature")
+        feature = {
+            "version": 1, "target": 2,
+            "state": {"on": False, "time_s": 0.173,
+                      "feedback": 0.25, "mix": 0.8},
+        }
+
+        self.assertIsNone(host._adopt_host_delay_feature(feature))
+        self.assertEqual(host.fx_target.value, 1)
+        self.assertEqual(host.fx_model.value,
+                         io24gtk.Win.FX_ORDER.index("delay"))
+        self.assertFalse(host.fx_arm.value)
+        self.assertEqual({name: control.value
+                          for name, control in controls.items()},
+                         {"time_s": 0.173, "feedback": 0.25, "mix": 0.8})
+        self.assertFalse(hasattr(host, "_fx_last_sent_target"))
+
 
 class AudioClockPreferenceTests(unittest.TestCase):
     def test_first_launch_defaults_to_96khz_and_512_frames(self):
@@ -173,12 +236,14 @@ class AudioClockPreferenceTests(unittest.TestCase):
     def test_startup_applies_the_saved_rate_and_standard_quantum(self):
         calls = []
         host = _bind(SimpleNamespace(
-            _selected_rate=96000,
+            _selected_rate=88200,
             _selected_quantum=512,
             _insert_quantum_before=None,
             _set_device_fs=lambda rate: calls.append(("device-fs", rate)),
             say=lambda message: calls.append(("message", message))),
-            "_audio_clock_state", "_restore_audio_clock")
+            "_audio_clock_state", "_apply_saved_quantum",
+            "_apply_saved_audio_clock",
+            "_restore_audio_clock")
         with mock.patch.object(io24gtk, "pw_settings", return_value={
                 "clock.allowed-rates": "[ 44100, 48000, 88200, 96000 ]",
                 "clock.force-rate": "0",
@@ -190,10 +255,128 @@ class AudioClockPreferenceTests(unittest.TestCase):
             self.assertFalse(host._restore_audio_clock())
 
         self.assertEqual(calls, [
+            ("clock.force-rate", 88200),
+            ("device-fs", 88200),
+            ("clock.force-quantum", 512),
+        ])
+
+    def test_offline_96khz_startup_is_held_at_48khz_until_attach(self):
+        calls = []
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _insert_quantum_before=None,
+            _audio_clock_restore_deferred=False,
+            _audio_clock_restore_inflight=False,
+            ctl=SimpleNamespace(dev=None),
+            _set_device_fs=lambda rate: calls.append(("device-fs", rate)),
+            say=lambda message: calls.append(("message", message))),
+            "_audio_clock_state", "_safe_delay_transition_rate",
+            "_apply_saved_quantum", "_apply_saved_audio_clock",
+            "_restore_audio_clock")
+        settings = {
+            "clock.allowed-rates": "[ 44100, 48000, 88200, 96000 ]",
+            "clock.force-rate": "96000",
+            "clock.force-quantum": "512",
+        }
+        with mock.patch.object(io24gtk, "pw_settings", return_value=settings), \
+                mock.patch.object(
+                    io24gtk, "pw_set",
+                    side_effect=lambda key, value:
+                    (calls.append((key, value)) or (True, ""))):
+            self.assertFalse(host._restore_audio_clock())
+
+        self.assertEqual(calls, [("clock.force-rate", 48000)])
+        self.assertTrue(host._audio_clock_restore_deferred)
+
+    def test_connected_96khz_startup_restore_quiesces_at_old_clock_first(self):
+        calls = []
+
+        class Device:
+            def quiesce_voicefx_for_host_delay(self, rate, quantum=512):
+                calls.append(("quiesce", rate, quantum))
+
+        device = Device()
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _insert_quantum_before=None,
+            _fs=96000.0,
+            _fs_seen=False,
+            _host_delay_quiesced_device=None,
+            ctl=SimpleNamespace(
+                dev=device, submit=lambda function: function(device)),
+            _set_device_fs=lambda rate: calls.append(("device-fs", rate)),
+            say=lambda message: calls.append(("message", message))),
+            "_audio_clock_state", "_transition_clock",
+            "_apply_saved_quantum", "_apply_saved_audio_clock",
+            "_restore_audio_clock")
+        settings = {
+            "clock.allowed-rates": "[ 48000, 96000 ]",
+            "clock.force-rate": "48000",
+            "clock.rate": "48000",
+            "clock.force-quantum": "0",
+            "clock.quantum": "1024",
+        }
+        with mock.patch.object(io24gtk, "pw_settings", return_value=settings), \
+                mock.patch.object(
+                    io24gtk, "pw_set",
+                    side_effect=lambda key, value:
+                    (calls.append((key, value)) or (True, ""))), \
+                mock.patch.object(
+                    io24gtk.GLib, "idle_add",
+                    side_effect=lambda function, *args: function(*args)), \
+                mock.patch.object(io24gtk, "alsa_live", return_value={}):
+            self.assertFalse(host._restore_audio_clock())
+
+        self.assertEqual(calls, [
+            ("quiesce", 48000.0, 1024),
             ("clock.force-rate", 96000),
             ("device-fs", 96000),
             ("clock.force-quantum", 512),
         ])
+        self.assertIs(host._host_delay_quiesced_device, device)
+
+    def test_failed_startup_quiesce_never_requests_96khz(self):
+        calls = []
+
+        class Device:
+            def quiesce_voicefx_for_host_delay(self, _rate, quantum=512):
+                _ = quantum
+                raise RuntimeError("control stopped")
+
+        device = Device()
+        host = _bind(SimpleNamespace(
+            _selected_rate=96000,
+            _selected_quantum=512,
+            _insert_quantum_before=None,
+            _fs=48000.0,
+            _fs_seen=True,
+            ctl=SimpleNamespace(
+                dev=device, submit=lambda function: function(device)),
+            _set_device_fs=lambda rate: calls.append(("device-fs", rate)),
+            say=lambda message: calls.append(("message", message))),
+            "_audio_clock_state", "_transition_clock",
+            "_apply_saved_quantum", "_apply_saved_audio_clock",
+            "_restore_audio_clock")
+        settings = {
+            "clock.allowed-rates": "[ 48000, 96000 ]",
+            "clock.force-rate": "48000",
+            "clock.force-quantum": "512",
+        }
+        with mock.patch.object(io24gtk, "pw_settings", return_value=settings), \
+                mock.patch.object(
+                    io24gtk, "pw_set",
+                    side_effect=lambda key, value:
+                    (calls.append((key, value)) or (True, ""))), \
+                mock.patch.object(
+                    io24gtk.GLib, "idle_add",
+                    side_effect=lambda function, *args: function(*args)), \
+                mock.patch.object(io24gtk, "alsa_live", return_value={}):
+            self.assertFalse(host._restore_audio_clock())
+
+        self.assertFalse(any(call[0] == "clock.force-rate" for call in calls))
+        self.assertIn("safety bypass failed", calls[-1][1])
 
 
 class ResumeTriggerTests(unittest.TestCase):
@@ -224,6 +407,20 @@ class ResumeTriggerTests(unittest.TestCase):
         host, calls = self._host()
         host._maybe_resume({"alive": False, "attach_generation": 1})
         self.assertEqual(calls, [])
+
+    def test_deferred_96khz_restore_finishes_before_session_replay(self):
+        calls = []
+        host = _bind(SimpleNamespace(
+            _audio_clock_restore_deferred=True,
+            _audio_clock_restore_inflight=False,
+            _restore_audio_clock=lambda: calls.append("clock"),
+            _resume_session=lambda first: calls.append(("resume", first))),
+            "_maybe_resume")
+
+        host._maybe_resume({"alive": True, "attach_generation": 1})
+
+        self.assertEqual(calls, ["clock"])
+        self.assertFalse(hasattr(host, "_resumed_generation"))
 
     def test_the_tick_resumes_only_after_its_alive_gate(self):
         tick = _function("_tick")
@@ -293,6 +490,19 @@ class ResumeSessionTests(unittest.TestCase):
         host, _backend, adopted = self._host({})
         host._resume_session(first=False, path=self.path)
         self.assertIsNone(adopted[0][1])
+
+    def test_a_reconnect_keeps_the_current_96khz_host_delay(self):
+        feature = {
+            "version": 1, "target": 2,
+            "state": {"on": True, "time_s": 0.173,
+                      "feedback": 0.25, "mix": 0.8},
+        }
+        host, _backend, adopted = self._host({})
+        host._host_delay_feature_state = lambda: feature
+
+        host._resume_session(first=False, path=self.path)
+
+        self.assertEqual(adopted[0][1], {"voicefx_delay": feature})
 
     def test_voice_fx_off_loads_no_block(self):
         shadow = {"set_fx": {"fn": "set_fx",

@@ -19,6 +19,7 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_dsp.py",
             "io24_fx.py",
             "io24_mbc.py",
+            "io24_voicefx_delay.py",
             "io24_spring.py",
             "io24_uc_comp.py",
             "io24_meters.py",
@@ -53,6 +54,9 @@ class ReleasePackageTests(unittest.TestCase):
                 shutil.copy2(source, stage / source.name)
             shutil.copy2(ROOT / "io24_uc_comp.c", stage / "io24_uc_comp.c")
             shutil.copy2(ROOT / "io24_spring.c", stage / "io24_spring.c")
+            shutil.copy2(
+                ROOT / "io24_voicefx_delay.c",
+                stage / "io24_voicefx_delay.c")
             wheel_dir = stage / "wheel"
             result = subprocess.run(
                 [
@@ -96,6 +100,10 @@ class ReleasePackageTests(unittest.TestCase):
                     name for name in names
                     if name.endswith("/share/io24/io24_spring.c")
                 ]
+                delay_source = [
+                    name for name in names
+                    if name.endswith("/share/io24/io24_voicefx_delay.c")
+                ]
                 licenses = [
                     name for name in names
                     if name.endswith(".dist-info/licenses/LICENSE")
@@ -116,6 +124,7 @@ class ReleasePackageTests(unittest.TestCase):
                 entry.startswith("io24-web =") for entry in entry_points))
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(len(spring_source), 1)
+            self.assertEqual(len(delay_source), 1)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

@@ -15,9 +15,10 @@ The public tree contains:
   `CONTRIBUTING.md`;
 - the udev rule, desktop launcher, icon, install script, and systemd units;
 - three original protocol probes referenced directly by `PROTOCOL.md`;
-- hardware-free Host, Android, packaging, and documentation tests; and
-- a GitHub Actions workflow that runs those checks without claiming or writing
-  an audio interface.
+- hardware-free Host, Android, packaging, and documentation tests;
+- GitHub Actions workflows that run package, hardware-free, Android, and CodeQL
+  checks without claiming or writing an audio interface; and
+- monthly Dependabot checks for GitHub Actions, Python, and Gradle dependencies.
 
 `PUBLIC_FILES.txt` is the exact allowlist for the public tree. The exporter in
 `tools/export_public.py` copies only that list into a clean checkout and removes

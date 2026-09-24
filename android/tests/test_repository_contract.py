@@ -112,6 +112,7 @@ def test_github_workflows_are_hardware_free_and_sha_pinned():
         assert "USB" not in text
 
     assert "languages: java-kotlin" in workflows[1].read_text()
+    assert "cache: pip" not in workflows[0].read_text()
     dependabot = (ROOT / ".github/dependabot.yml").read_text()
     assert "package-ecosystem: gradle" in dependabot
     assert "package-ecosystem: github-actions" in dependabot

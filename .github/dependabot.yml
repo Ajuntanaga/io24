@@ -17,12 +17,3 @@ updates:
       python-dependencies:
         patterns: ["*"]
     open-pull-requests-limit: 5
-
-  - package-ecosystem: gradle
-    directory: /android
-    schedule:
-      interval: monthly
-    groups:
-      android-dependencies:
-        patterns: ["*"]
-    open-pull-requests-limit: 5

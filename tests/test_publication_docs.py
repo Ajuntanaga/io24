@@ -171,12 +171,37 @@ class PublicationDocumentationTests(unittest.TestCase):
         missing = [path for path in paths if not (ROOT / path).is_file()]
         self.assertEqual(missing, [])
         self.assertIn("android/README.md", paths)
+        self.assertIn(".github/dependabot.yml", paths)
+        self.assertIn(".github/workflows/codeql.yml", paths)
         self.assertIn("android/app/src/main/java/dev/ajuntanaga/io24/MainActivity.java",
                       paths)
         self.assertIn("tests/test_io24_host_autogain.py", paths)
         self.assertNotIn("io24_spring.py", paths)
         self.assertFalse(any(path.startswith(("re/", "runs/", ".superpowers/"))
                              for path in paths))
+
+    def test_github_automation_is_pinned_and_covers_supported_ecosystems(self):
+        workflows = (
+            ROOT / ".github/workflows/ci.yml",
+            ROOT / ".github/workflows/codeql.yml",
+        )
+        for workflow in workflows:
+            text = workflow.read_text()
+            with self.subTest(workflow=workflow.name):
+                self.assertIn("runs-on: ubuntu-26.04", text)
+                self.assertNotIn("ubuntu-latest", text)
+                refs = re.findall(r"uses:\s*[^@\s]+@([^\s#]+)", text)
+                self.assertTrue(refs)
+                self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", ref)
+                                    for ref in refs))
+
+        codeql = workflows[1].read_text()
+        self.assertIn("language: python", codeql)
+        self.assertIn("language: java-kotlin", codeql)
+
+        dependabot = (ROOT / ".github/dependabot.yml").read_text()
+        for ecosystem in ("github-actions", "pip", "gradle"):
+            self.assertIn("package-ecosystem: %s" % ecosystem, dependabot)
 
     def test_release_metadata_targets_intended_github_repository(self):
         metadata = (ROOT / "pyproject.toml").read_text()

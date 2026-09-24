@@ -1,4 +1,6 @@
+.github/dependabot.yml
 .github/workflows/ci.yml
+.github/workflows/codeql.yml
 .gitignore
 70-presonus-io24.rules
 CONTRIBUTING.md

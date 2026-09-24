@@ -883,6 +883,19 @@ def rounded_box(sn, x, y, w, h, radius, color, border=None):
         sn.append_border(outline, [1.0] * 4, [border] * 4)
 
 
+def rounded_vgrad(sn, x, y, w, h, radius, stops, border=None):
+    """A vertical gradient clipped to one rounded hardware surface."""
+    if w <= 0 or h <= 0:
+        return
+    outline = Gsk.RoundedRect()
+    outline.init_from_rect(Graphene.Rect().init(x, y, w, h), radius)
+    sn.push_rounded_clip(outline)
+    vgrad(sn, x, y, w, h, stops)
+    sn.pop()
+    if border is not None:
+        sn.append_border(outline, [1.0] * 4, [border] * 4)
+
+
 def polyline(sn, pts, color, width=2.0):
     if len(pts) < 2:
         return
@@ -2195,24 +2208,24 @@ VOICEFX_UI_FIELDS = _voicefx_ui_fields()
 ALTERNATE_EQ_RACK_SPECS = {
     "passive": (
         {"field": "bboost", "label": "BOOST", "group": "LOW",
-         "x": .095, "y": .48, "lo": 0.0, "hi": 10.0, "step": .1},
+         "x": .105, "y": .43, "lo": 0.0, "hi": 10.0, "step": .1},
         {"field": "batten", "label": "ATTEN", "group": "LOW",
-         "x": .205, "y": .48, "lo": 0.0, "hi": 10.0, "step": .1},
+         "x": .215, "y": .43, "lo": 0.0, "hi": 10.0, "step": .1},
         {"field": "bfreq", "label": "FREQUENCY", "group": "LOW",
-         "x": .150, "y": .79,
+         "x": .160, "y": .79, "radius": .78, "style": "selector",
          "choices": ("20 Hz", "30 Hz", "60 Hz", "100 Hz")},
         {"field": "mboost", "label": "BOOST", "group": "HIGH",
-         "x": .695, "y": .48, "lo": 0.0, "hi": 10.0, "step": .1},
+         "x": .660, "y": .43, "lo": 0.0, "hi": 10.0, "step": .1},
         {"field": "bbwidth", "label": "BANDWIDTH", "group": "HIGH",
-         "x": .775, "y": .48, "lo": 0.0, "hi": 10.0, "step": .1},
+         "x": .748, "y": .43, "lo": 0.0, "hi": 10.0, "step": .1},
         {"field": "mfreq", "label": "FREQUENCY", "group": "HIGH",
-         "x": .855, "y": .48,
+         "x": .836, "y": .43,
          "choices": ("3 kHz", "4 kHz", "5 kHz", "8 kHz", "10 kHz",
                      "12 kHz", "16 kHz")},
         {"field": "hatten", "label": "ATTEN", "group": "HIGH",
-         "x": .935, "y": .48, "lo": 0.0, "hi": 10.0, "step": .1},
+         "x": .924, "y": .43, "lo": 0.0, "hi": 10.0, "step": .1},
         {"field": "hsfreq", "label": "ATTEN SELECT", "group": "HIGH",
-         "x": .885, "y": .79,
+         "x": .865, "y": .79, "radius": .78, "style": "selector",
          "choices": ("5 kHz", "10 kHz", "20 kHz")},
     ),
     "vintage": (
@@ -2274,6 +2287,30 @@ def alternate_eq_control_text(spec, value):
     if spec["lo"] < 0:
         return "%+.1f dB" % float(value)
     return "%.1f" % float(value)
+
+
+def alternate_eq_scale_marks(spec):
+    """Return normalized faceplate markings from the exact field contract."""
+    choices = spec.get("choices")
+    if choices:
+        last = len(choices) - 1
+        marks = []
+        for index, choice in enumerate(choices):
+            text = choice.replace(" kHz", "k").replace(" Hz", "")
+            marks.append((0.0 if not last else index / last, text))
+        return tuple(marks)
+    low, high = float(spec["lo"]), float(spec["hi"])
+    if low < 0.0 < high and math.isclose(abs(low), abs(high)):
+        values = (low, low / 2.0, 0.0, high / 2.0, high)
+    else:
+        values = tuple(low + (high - low) * index / 5.0
+                       for index in range(6))
+    marks = []
+    for value in values:
+        fraction = (value - low) / (high - low)
+        text = "%+g" % value if value > 0 and low < 0 else "%g" % value
+        marks.append((fraction, text))
+    return tuple(marks)
 
 
 class Knob(Canvas):
@@ -2702,7 +2739,7 @@ class AlternateEqRack(ChannelBound, Canvas):
     DRAG_TRAVEL = 150.0
 
     def __init__(self, win, channel=1):
-        super().__init__(-1, 300)
+        super().__init__(-1, 330)
         self.win = win
         self.channel = channel
         self.set_hexpand(True)
@@ -2748,9 +2785,11 @@ class AlternateEqRack(ChannelBound, Canvas):
     def _layout(self, w=None, h=None):
         w = float(w if w is not None else (self.get_width() or 1))
         h = float(h if h is not None else (self.get_height() or 1))
-        radius = max(15.0, min(27.0, w * .028, h * .105))
+        view = self._view()
+        width_scale = .026 if view and view["model"] == "passive" else .022
+        radius = max(15.0, min(27.0, w * width_scale, h * .085))
         return {spec["field"]: (spec["x"] * w, spec["y"] * h,
-                                radius, spec)
+                                radius * spec.get("radius", 1.0), spec)
                 for spec in self._specs()}
 
     def _knob_at(self, x, y):
@@ -2882,59 +2921,112 @@ class AlternateEqRack(ChannelBound, Canvas):
         selected = spec["field"] == self.selected_field
         hovered = spec["field"] == self.hover_field
         if selected or hovered:
-            dot(sn, cx, cy, radius + (5 if selected else 3),
-                pal(ACCENT, .28 if active else .15))
-        # Eleven restrained faceplate ticks make continuous controls readable;
-        # selectors use exactly as many stops as their decoded choice list.
-        tick_count = len(spec.get("choices", ())) or 11
+            dot(sn, cx, cy, radius + (7 if selected else 5),
+                pal(ACCENT, .24 if active else .13))
+
+        # The references use engraved numeric scales, not anonymous dots. The
+        # labels here are generated from the decoded range/choice list so the
+        # faceplate stays visually faithful without inheriting illustrative
+        # values from the concept art.
+        marks = alternate_eq_scale_marks(spec)
+        mark_size = 5.4 if len(marks) > 6 else 6.0
+        for position, text in marks:
+            angle = self._knob_angle(position)
+            distance = radius * 1.63
+            mx = cx + distance * math.cos(angle)
+            my = cy + distance * math.sin(angle) - mark_size * .55
+            centred_label(self, sn, text, mx, my, pal(INK, .72), mark_size)
+
+        # Fine ticks and a ridged black skirt give the control the same
+        # concentric, machined construction as the approved rack references.
+        tick_count = len(spec["choices"]) if "choices" in spec else 21
         for index in range(tick_count):
-            step = 0.5 if tick_count == 1 else index / (tick_count - 1)
+            step = index / max(1, tick_count - 1)
             angle = self._knob_angle(step)
-            inner = radius * 1.18
-            outer = radius * (1.31 if index in (0, tick_count - 1) else 1.25)
+            inner = radius * 1.21
+            major = "choices" in spec or index % 4 == 0
+            outer = radius * (1.33 if major else 1.27)
             polyline(sn, [
                 (cx + inner * math.cos(angle), cy + inner * math.sin(angle)),
                 (cx + outer * math.cos(angle), cy + outer * math.sin(angle)),
-            ], pal(INK, .72), 1.0)
-        dot(sn, cx + 1.5, cy + 2.5, radius + 2.5, rgba(0, 0, 0, .42))
-        dot(sn, cx, cy, radius + 1.0, rgba(.035, .043, .052, 1))
+            ], pal(INK, .58), .8)
+            if major:
+                dot(sn, cx + radius * 1.43 * math.cos(angle),
+                    cy + radius * 1.43 * math.sin(angle),
+                    max(1.0, radius * .045), pal(INK, .78))
+        dot(sn, cx + 2.0, cy + 3.5, radius + 4.0, rgba(0, 0, 0, .48))
+        dot(sn, cx, cy, radius + 2.0, rgba(.015, .018, .021, 1))
+        for index in range(18):
+            angle = math.tau * index / 18.0
+            polyline(sn, [
+                (cx + radius * .91 * math.cos(angle),
+                 cy + radius * .91 * math.sin(angle)),
+                (cx + radius * 1.07 * math.cos(angle),
+                 cy + radius * 1.07 * math.sin(angle)),
+            ], rgba(.22, .24, .25, .72), 1.0)
+        dot(sn, cx, cy, radius * .88, rgba(.10, .11, .115, 1))
+        dot(sn, cx - radius * .04, cy - radius * .05, radius * .78,
+            rgba(.30, .32, .33, .78))
+        selector = spec.get("style") == "selector"
         tone = spec.get("tone", (.72, .74, .74))
-        dot(sn, cx, cy, radius * .73,
-            rgba(tone[0], tone[1], tone[2], .95))
-        dot(sn, cx - radius * .16, cy - radius * .18, radius * .50,
-            rgba(1, 1, 1, .08))
+        if selector:
+            tone = (.16, .17, .17)
+        dot(sn, cx, cy, radius * .68,
+            rgba(tone[0] * .63, tone[1] * .63, tone[2] * .63, 1))
+        dot(sn, cx - radius * .05, cy - radius * .08, radius * .61,
+            rgba(tone[0], tone[1], tone[2], .98))
+        dot(sn, cx - radius * .17, cy - radius * .22, radius * .43,
+            rgba(1, 1, 1, .12))
         angle = self._knob_angle(fraction)
         polyline(sn, [
-            (cx + radius * .24 * math.cos(angle),
-             cy + radius * .24 * math.sin(angle)),
-            (cx + radius * .72 * math.cos(angle),
-             cy + radius * .72 * math.sin(angle)),
-        ], rgba(1, 1, 1, .95), max(1.4, radius * .075))
+            (cx + radius * .18 * math.cos(angle),
+             cy + radius * .18 * math.sin(angle)),
+            (cx + radius * .78 * math.cos(angle),
+             cy + radius * .78 * math.sin(angle)),
+        ], rgba(1, 1, 1, .97), max(1.6, radius * .085))
         size = max(6.0, min(9.0, radius * .34))
         label_size = size - 1.3 if len(spec["label"]) > 7 else size
         centred_label(self, sn, spec["label"], cx,
-                      cy - radius - size * 2.4, pal(INK, .88), label_size)
-        centred_label(self, sn, alternate_eq_control_text(spec, value), cx,
-                      cy + radius + 5, pal(INK, .78), max(6.0, size - .5))
+                      cy - radius * 2.18, pal(INK, .92), label_size)
+        # The reference plates communicate the setting with their calibrated
+        # scales and pointers.  A live caption appears only while a control is
+        # being used, keeping the resting rack as clean as the source artwork.
+        if selected or hovered:
+            centred_label(self, sn, alternate_eq_control_text(spec, value), cx,
+                          cy + radius * 1.55, pal(ACCENT, .92),
+                          max(6.0, size - .5))
 
     def _draw_graph(self, sn, x, y, w, h, active):
-        rounded_box(sn, x - 7, y - 7, w + 14, h + 14, 10,
-                    rgba(.015, .020, .026, 1), rgba(.38, .45, .48, .75))
-        rounded_box(sn, x, y, w, h, 4, rgba(.018, .045, .058, 1),
-                    rgba(.20, .40, .48, .75))
+        rounded_box(sn, x - 12, y - 11, w + 24, h + 23, 13,
+                    rgba(0, 0, 0, .48))
+        rounded_vgrad(sn, x - 9, y - 9, w + 18, h + 18, 11, (
+            (0.0, (.24, .28, .29, 1)),
+            (.18, (.055, .065, .070, 1)),
+            (1.0, (.015, .020, .024, 1))), rgba(.42, .49, .50, .75))
+        rounded_box(sn, x - 3, y - 3, w + 6, h + 6, 6,
+                    rgba(.006, .012, .016, 1), rgba(.02, .025, .028, 1))
+        rounded_box(sn, x, y, w, h, 3, rgba(.012, .036, .048, 1),
+                    rgba(.22, .45, .54, .68))
         for db in (-12, -6, 0, 6, 12):
             gy = y + h / 2 - db / 18.0 * (h / 2)
             polyline(sn, [(x, gy), (x + w, gy)],
                      rgba(.30, .55, .64, .30 if db == 0 else .16), 1.0)
-        for frequency in (50, 100, 200, 500, 1000, 2000, 5000, 10000):
+            label(self, sn, "%+d" % db, x + 4, gy - 10,
+                  rgba(.55, .72, .78, .62), 5.7)
+        frequencies = ((20, "20"), (50, "50"), (100, "100"),
+                       (200, "200"), (500, "500"), (1000, "1k"),
+                       (2000, "2k"), (5000, "5k"), (10000, "10k"),
+                       (20000, "20k"))
+        for frequency, _text in frequencies:
             gx = x + math.log10(frequency / 20.0) / math.log10(
                 24000 / 20.0) * w
             polyline(sn, [(gx, y), (gx, y + h)],
                      rgba(.30, .55, .64, .16), 1.0)
-        for frequency, text in ((100, "100"), (1000, "1k"), (10000, "10k")):
+        for frequency, text in frequencies:
             gx = x + math.log10(frequency / 20.0) / math.log10(
                 24000 / 20.0) * w
-            label(self, sn, text, gx + 2, y + h - 13, pal(INK, .45), 7)
+            centred_label(self, sn, text, gx, y + h - 12,
+                          rgba(.55, .72, .78, .60), 5.6)
         if active:
             points = [(x + px, y + py) for px, py in
                       self.win.curve_points(w, h, self.channel)]
@@ -2964,57 +3056,108 @@ class AlternateEqRack(ChannelBound, Canvas):
         if view is None:
             return
         passive = view["model"] == "passive"
-        plate = (.075, .225, .315) if passive else (.075, .095, .115)
         edge = (.16, .42, .55) if passive else (.22, .27, .30)
         box(sn, 0, 0, w, h, rgba(.018, .025, .034, 1))
-        rounded_box(sn, 3, 12, w - 6, h - 24, 8,
-                    rgba(*plate, 1), rgba(*edge, 1))
-        # Rack ears, mounting slots and screws.
+        plate_stops = ((0.0, (.070, .180, .245, 1)),
+                       (.48, (.105, .300, .405, 1)),
+                       (1.0, (.055, .155, .215, 1))) if passive else (
+                           (0.0, (.060, .073, .082, 1)),
+                           (.46, (.105, .125, .135, 1)),
+                           (1.0, (.040, .050, .057, 1)))
+        rounded_vgrad(sn, 3, 12, w - 6, h - 24, 8,
+                      plate_stops, rgba(*edge, 1))
+        # Fine deterministic brushing gives the plate material without making
+        # it noisy or introducing a bitmap dependency.
+        for row in range(17, max(18, int(h - 14)), 3):
+            alpha = .018 + .008 * (1.0 + math.sin(row * .37))
+            polyline(sn, [(4, row), (w - 4, row)],
+                     rgba(.72, .83, .86, alpha), .5)
+        polyline(sn, [(8, 16), (w - 8, 16)], rgba(1, 1, 1, .15), 1.0)
+        polyline(sn, [(8, h - 17), (w - 8, h - 17)],
+                 rgba(0, 0, 0, .45), 1.0)
+        # Rack ears, paired horizontal mounting slots and screws.  Both
+        # approved references use two rack slots per ear, not a centre handle.
         ear = max(24.0, w * .036)
         for left in (True, False):
             ex = 3 if left else w - 3 - ear
-            rounded_box(sn, ex, 12, ear, h - 24, 5,
-                        rgba(.035, .055, .065, .96), rgba(*edge, .9))
-            rounded_box(sn, ex + ear * .25, h * .42, ear * .50, h * .16,
-                        ear * .18, rgba(.008, .012, .016, 1),
-                        rgba(.45, .52, .55, .65))
+            ear_stops = ((0.0, (.080, .215, .290, 1)),
+                         (.50, (.105, .300, .405, 1)),
+                         (1.0, (.050, .145, .205, 1))) if passive else (
+                             (0.0, (.10, .13, .14, 1)),
+                             (.50, (.035, .055, .065, 1)),
+                             (1.0, (.018, .028, .033, 1)))
+            rounded_vgrad(sn, ex, 12, ear, h - 24, 5,
+                          ear_stops, rgba(*edge, .9))
+            slot_height = max(8.0, ear * .28)
+            for slot_y in (h * .095, h * .815):
+                rounded_box(sn, ex + ear * .17, slot_y, ear * .66,
+                            slot_height, slot_height * .48,
+                            rgba(.004, .008, .011, 1),
+                            rgba(.48, .55, .57, .70))
+                rounded_box(sn, ex + ear * .23, slot_y + 2,
+                            ear * .54, max(4.0, slot_height - 4),
+                            max(2.0, slot_height * .32),
+                            rgba(.018, .027, .031, 1))
         for sx, sy in ((ear + 13, 31), (w - ear - 13, 31),
                        (ear + 13, h - 31), (w - ear - 13, h - 31)):
-            dot(sn, sx, sy, 7, rgba(.015, .020, .024, 1))
-            dot(sn, sx, sy, 4.2, rgba(.22, .27, .29, 1))
+            dot(sn, sx + 1, sy + 2, 8, rgba(0, 0, 0, .50))
+            dot(sn, sx, sy, 7, rgba(.045, .055, .058, 1))
+            dot(sn, sx - .5, sy - .7, 4.5, rgba(.30, .34, .35, 1))
             polyline(sn, [(sx - 3, sy), (sx + 3, sy)],
                      rgba(.02, .02, .02, .9), 1.2)
+            polyline(sn, [(sx, sy - 3), (sx, sy + 3)],
+                     rgba(.02, .02, .02, .75), 1.0)
 
         active = self.win.eq_enabled(self.channel)
         if passive:
-            graph = (.292 * w, .205 * h, .350 * w, .560 * h)
+            graph = (.292 * w, .205 * h, .325 * w, .560 * h)
             title = "P A S S I V E   P R O G R A M   E Q"
-            groups = ((.15, "L O W"), (.82, "H I G H"))
+            groups = ((.16, "L O W", INK), (.81, "H I G H", INK))
         else:
             graph = (.362 * w, .205 * h, .310 * w, .560 * h)
             title = "V I N T A G E   E Q"
-            groups = ((.125, "L O W"), (.280, "L O W - M I D"),
-                      (.775, "H I - M I D"), (.920, "H I G H"))
+            groups = ((.125, "L O W", (.67, .35, .35)),
+                      (.280, "L O W - M I D", (.72, .56, .27)),
+                      (.775, "H I - M I D", (.55, .65, .43)),
+                      (.920, "H I G H", (.40, .57, .73)))
             for divider in (.205, .345, .700, .865):
                 polyline(sn, [(divider * w, h * .18),
                               (divider * w, h * .84)],
                          pal(INK, .28), 1.0)
         centred_label(self, sn, title, w / 2, 22,
                       rgba(.88, .86, .78, .88), max(7.0, min(11.0, w / 85)))
-        for gx, group in groups:
+        for gx, group, group_colour in groups:
             centred_label(self, sn, group, gx * w, 43,
-                          pal(INK, .68), max(6.5, min(9.0, w / 100)))
+                          pal(group_colour, .82),
+                          max(6.5, min(9.0, w / 100)))
+            span = .085 * w if passive else .050 * w
+            polyline(sn, [(gx * w - span, 49), (gx * w - 28, 49)],
+                     pal(group_colour, .34), 1.0)
+            polyline(sn, [(gx * w + 28, 49), (gx * w + span, 49)],
+                     pal(group_colour, .34), 1.0)
         self._draw_graph(sn, *graph, active)
+        if not passive:
+            gx, gy, gw, gh = graph
+            for sx, sy in ((gx - 5, gy - 5), (gx + gw + 5, gy - 5),
+                           (gx - 5, gy + gh + 5),
+                           (gx + gw + 5, gy + gh + 5)):
+                dot(sn, sx, sy, 4.1, rgba(.025, .030, .032, 1))
+                dot(sn, sx - .4, sy - .6, 2.5, rgba(.30, .33, .34, 1))
+                polyline(sn, [(sx - 1.8, sy), (sx + 1.8, sy)],
+                         rgba(.02, .02, .02, .9), .8)
         eq = view["eq"]
         for field, (cx, cy, radius, spec) in self._layout(w, h).items():
             self._draw_knob(sn, cx, cy, radius, spec, eq[field], active)
         # The lamp is the model's independent EQ on/off state, not a generic
         # decoration.  The adjacent libadwaita switch remains the large target.
         lx, ly = w - ear - 25, h - 39
-        dot(sn, lx, ly, 10, rgba(.015, .020, .020, 1))
+        dot(sn, lx + 1, ly + 2, 11, rgba(0, 0, 0, .52))
+        dot(sn, lx, ly, 10, rgba(.020, .025, .024, 1))
+        dot(sn, lx, ly, 7.2, rgba(.28, .24, .13, .9))
         lamp = AMBER if active else GRID
         if active:
-            glow(sn, lambda: dot(sn, lx, ly, 5.5, pal(lamp)), radius=7.0)
+            glow(sn, lambda: dot(sn, lx, ly, 5.1, pal(lamp)), radius=8.0)
+            dot(sn, lx - 1.5, ly - 1.7, 2.1, rgba(1, 1, .82, .9))
         else:
             dot(sn, lx, ly, 4.5, pal(lamp, .35))
 

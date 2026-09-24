@@ -237,6 +237,24 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertAlmostEqual(io24gtk.alternate_eq_control_value(
             passive["bboost"], 0.55), 5.5)
 
+    def test_faceplate_scale_marks_use_exact_decoded_ranges(self):
+        passive = {s["field"]: s for s in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]}
+        vintage = {s["field"]: s for s in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["vintage"]}
+        self.assertEqual(io24gtk.alternate_eq_scale_marks(
+            passive["bboost"]), (
+                (0.0, "0"), (0.2, "2"), (0.4, "4"),
+                (0.6, "6"), (0.8, "8"), (1.0, "10")))
+        self.assertEqual(io24gtk.alternate_eq_scale_marks(
+            vintage["lowgain"]), (
+                (0.0, "-16"), (0.25, "-8"), (0.5, "0"),
+                (0.75, "+8"), (1.0, "+16")))
+        self.assertEqual(io24gtk.alternate_eq_scale_marks(
+            passive["bfreq"]), (
+                (0.0, "20"), (1 / 3, "30"), (2 / 3, "60"),
+                (1.0, "100")))
+
 
 def _window():
     window = io24gtk.Win.__new__(io24gtk.Win)

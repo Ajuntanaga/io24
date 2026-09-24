@@ -12,8 +12,9 @@ current implementation.
 
 The clean public repository keeps these notes but not the private capture and
 analysis trees named by some evidence paths below. Those paths are provenance
-labels for the retained research workspace, not files required to run the Host
-or Android controller.
+labels for the retained research workspace, not files required to run the
+Host. Android implementation and release records live separately in
+[`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android).
 
 The current boundaries are the 2026-09-23 shared-reverb section below, the
 2026-09-22 controller-parity section, the
@@ -28,22 +29,17 @@ Presets record remains
 
 ## 2026-09-24 implementation audit: safe persistence and public boundaries
 
-An independent read-only whole-tree audit found four implementation gaps that
-are now covered by executable tests. Full Host setups and automatic recovery
-accept the Host-only `voicefx_delay` state instead of rejecting it as an unknown
-feature. Android writes Voice FX assignment through the singleton block-201
-owner object for both Input 1 and Input 2. Android also begins every connection
-with the audio rate unconfirmed, and a phone scene cannot confirm or apply its
-remembered rate or move the selected front-panel block.
+An independent read-only whole-tree audit found implementation gaps that are
+now covered by executable tests across the two independent projects. Full Host
+setups and automatic recovery accept the Host-only `voicefx_delay` state
+instead of rejecting it as an unknown feature. Android-specific connection,
+scene, and assignment contracts are maintained in the Android repository.
 
 Active Delay is never embedded in a device-resident preset block at any sample
-rate. Its semantic controls belong in a phone scene or full Host setup, where
-the live rate can choose safe execution placement when the state is restored.
-At an unknown or above-48-kHz Android rate, selecting Delay retains that intent
-while materializing an off Transformer on the device. Android cannot observe
-an external audio application's clock transition, so its documentation
-requires Delay to be off before such a change and the new rate to be confirmed
-afterward.
+rate. Its semantic controls belong in a full Host setup, where the live rate
+can choose safe execution placement when the state is restored. The companion
+Android controller applies its own conservative placement contract because it
+cannot observe another app's USB audio clock.
 
 The audit also found that the earlier safety boundary left 88.2 kHz on the
 native path even though physical Delay acceptance exists only at 48 kHz. The
@@ -52,12 +48,13 @@ firmware trace proves that Delay's private histories grow with sample rate;
 acceptance result. This does **not** claim that 88.2 kHz resets the interface.
 It sets the conservative execution boundary at the highest accepted rate:
 44.1/48 kHz may use native model 5, while 88.2/96 kHz use the Host processor.
-Linux and Android enforce the same boundary before any model-5 selection.
+The Linux Host enforces that boundary before any model-5 selection.
 
-The public source boundary now has an exact allowlist and discloses the pinned,
-neutral 1,028-byte native-slot structural template used by both builders. It is
-not a named factory preset or preset library, and every decoded user-facing Fat
-Channel value is replaced before a body is eligible for transport.
+Each public source boundary has an exact allowlist. This Host repository
+discloses the pinned, neutral 1,028-byte native-slot structural template used
+by its builder. It is not a named factory preset or preset library, and every
+decoded user-facing Fat Channel value is replaced before a body is eligible
+for transport.
 
 ## 2026-09-23 controlling result: shared reverb presents one honest algorithm
 
@@ -82,11 +79,11 @@ about device audibility.
 ## 2026-09-22 controlling result: one active Voice FX and explicit save scopes
 
 Universal Control's component XML gives every Voice FX model its own storable
-`on` field, while its rack presents one active algorithm. The Linux and
-Android controllers now preserve every model's parameter values but normalize
-the On state: enabling one model clears the other five. Preset, scene, setup,
-and reconnect adoption pass through the same rule. This does not add a
-container-level master switch and does not erase a model's remembered knobs.
+`on` field, while its rack presents one active algorithm. The Linux Host
+preserves every model's parameter values but normalizes the On state: enabling
+one model clears the other five. Preset, scene, setup, and reconnect adoption
+pass through the same rule. This does not add a container-level master switch
+and does not erase a model's remembered knobs.
 
 The experimental separate Host reverb was removed from the product. The Effects
 page keeps the io24's native shared block-202 reverb and Voice FX. Setup files
@@ -100,15 +97,11 @@ recovery is the unnamed last session. The Linux **Save to device…** dialog ask
 for Input 1/2 and either front-panel block 1/2 (`MemP/Stat`) or Device library
 slot 1–6 (`MemP/PrsM`) before transport.
 
-Android 0.3.1 now exposes the same exact Input 1/2 and front-panel Block 1/2
-choice. Its native `Stat` encoder matches the Linux encoder byte for byte for
-both a flat record and a fully edited Standard Fat Channel, refuses the active
-block, refuses active Delay above 48 kHz, and refuses to silently omit an active
-model whose native block leaf is not decoded. The io24 cannot read a stored
-body back, so either controller reports a completed send as
-`WRITE_SENT_UNVERIFIED`. These changes were built and tested without USB or
+The io24 cannot read a stored body back, so the Host reports a completed send
+as `WRITE_SENT_UNVERIFIED`. These changes were built and tested without USB or
 audio hardware; audibility, recall, and power-cycle persistence were not
-inferred.
+inferred. The separate Android repository records its own matching encoder and
+safety evidence.
 
 ## 2026-09-21 safety result: Delay at 96 kHz
 

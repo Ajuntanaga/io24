@@ -10,15 +10,14 @@ release and what stays private. It is not a legal conclusion.
 The public tree contains:
 
 - the runtime Python and C sources listed by `pyproject.toml`;
-- the Android controller source, tests, Gradle build files, and design notes;
 - `README.md`, `GUIDE.md`, `PROTOCOL.md`, `LICENSE`, this boundary, and
   `CONTRIBUTING.md`;
 - the udev rule, desktop launcher, icon, install script, and systemd units;
 - three original protocol probes referenced directly by `PROTOCOL.md`;
-- hardware-free Host, Android, packaging, and documentation tests;
-- GitHub Actions workflows that run package, hardware-free, Android, and CodeQL
+- hardware-free Host, packaging, and documentation tests;
+- GitHub Actions workflows that run package, hardware-free, and Python CodeQL
   checks without claiming or writing an audio interface; and
-- monthly Dependabot checks for GitHub Actions, Python, and Gradle dependencies.
+- monthly Dependabot checks for GitHub Actions and Python dependencies.
 
 `PUBLIC_FILES.txt` is the exact allowlist for the public tree. The exporter in
 `tools/export_public.py` copies only that list into a clean checkout and removes
@@ -36,8 +35,8 @@ The public tree does not contain:
 - account details or physical-device serial numbers;
 - vendor installers, DLLs, firmware, extracted binaries, named factory presets,
   or recovered preset libraries;
-- APKs, Android SDK/JDK archives, emulator images, signing keys, or local
-  toolchain caches; or
+- the Android app, APKs, SDK/JDK archives, emulator images, signing keys, or
+  local Android toolchain caches; or
 - decompiler output and component-model XML extracted from Universal Control.
 
 These exclusions are why releases are built as clean source imports rather than
@@ -54,17 +53,17 @@ Python wheel, and this project's GPL does not relicense it.
 The published runtime contains this project's original interoperability code
 and bounded transcriptions needed to construct supported device messages. One
 disclosed exception is a neutral 1,028-byte native-slot structural template in
-`io24_native_stat.py` and its Android equivalent. It preserves the firmware's
-opaque container shape, is pinned by hash, and is not a named factory preset or
-preset library. Before a send is eligible, the builders replace every decoded
-user-facing Fat Channel field and include only a separately supported Voice FX
-leaf.
+`io24_native_stat.py`. It preserves the firmware's opaque container shape, is
+pinned by hash, and is not a named factory preset or preset library. Before a
+send is eligible, the builder replaces every decoded user-facing Fat Channel
+field and includes only a separately supported Voice FX leaf.
 
-The Android tree includes Gradle's standard wrapper JAR so a clean checkout can
-use the pinned Gradle distribution. No built APK is published. Users who want
-optional factory data or exact alternate-EQ coefficients must recover the
-required data from their own lawful Universal Control copy. The Host remains
-usable without factory preset data and reports that catalog as unavailable.
+The independent Android controller and its own release boundary live at
+[`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android). Users
+who want optional factory data or exact alternate-EQ coefficients must recover
+the required data from their own lawful Universal Control copy. The Host
+remains usable without factory preset data and reports that catalog as
+unavailable.
 
 ## Reproducible release checks
 
@@ -92,11 +91,9 @@ python3 -m venv --system-site-packages .venv
   tests/test_io24_presets_page.py \
   tests/test_io24_voicefx_delay.py \
   tests/test_io24_voicefx_preset_apply.py \
-  tests/test_android_probe_contract.py \
   tests/test_publication_docs.py \
   tests/test_io24_release_package.py
 .venv/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
-(cd android && ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug)
 ```
 
 Before a release is pushed, inspect the clean tree itself:

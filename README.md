@@ -9,9 +9,9 @@ Windows or macOS. You get a GTK4 desktop app, a command-line tool, preset and
 scene support, and detailed protocol notes if you want to dig deeper.
 
 The main Linux interface is a native desktop app. There is no browser service
-to set up. An optional direct USB Android controller lives under
-[`android/`](android/README.md); it talks to the io24 from the phone and does
-not depend on this Host.
+to set up. The independent
+[io24 Controller for Android](https://github.com/Ajuntanaga/io24-android) talks
+to the interface directly from a phone and does not depend on this Host.
 
 ## Quick start
 
@@ -329,7 +329,9 @@ older section disagrees.
 | `PROTOCOL.md` | reverse-engineering record and evidence boundaries |
 | `GUIDE.md` | detailed user guide |
 | `PUBLICATION.md` | public-source and release boundary |
-| `android/` | direct, offline Android controller and build notes |
+
+The Android controller has its own source, build, and release history in
+[`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android).
 
 ## Thanks and prior work
 

@@ -504,8 +504,11 @@ class NativeDelayComponentTests(unittest.TestCase):
     @staticmethod
     def _firmware_record():
         import importlib.util
+        disassembler = ROOT / "re" / "io24_fw_disasm.py"
+        if not disassembler.is_file():
+            return None
         spec = importlib.util.spec_from_file_location(
-            "_io24_fw_disasm", str(ROOT / "re" / "io24_fw_disasm.py"))
+            "_io24_fw_disasm", str(disassembler))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         if not Path(module.DLL).is_file():
@@ -525,7 +528,7 @@ class NativeDelayComponentTests(unittest.TestCase):
     def test_our_component_matches_the_firmware_default_record(self):
         record = self._firmware_record()
         if record is None:
-            self.skipTest("the retained UC DLL is not present")
+            self.skipTest("the retained private firmware evidence is not present")
         theirs = native_stat_summary(record)["voicefx"]
         ours = native_stat_summary(
             build_native_delay_stat_record(

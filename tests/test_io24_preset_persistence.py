@@ -23,6 +23,12 @@ from io24_preset_record import (
 )
 
 
+ROOT = Path(__file__).resolve().parents[1]
+FACTORY_PRESETS = ROOT / "re" / "uc_factory_presets.json"
+USB_CAPTURE_HELPER = Path(__file__).with_name("usbtap_py.py")
+LEGACY_FX_PROBE = Path(__file__).with_name("fx_gate_probe.py")
+
+
 class _SnapshotOnlyIo24(io24.Io24):
     """Exercise the real preset writer without opening the USB device."""
 
@@ -91,6 +97,10 @@ class _HardwareFreeIo24(io24.Io24):
 
 
 class PresetPersistenceTests(unittest.TestCase):
+    @unittest.skipUnless(
+        FACTORY_PRESETS.is_file(),
+        "the retained private factory-preset evidence is not present",
+    )
     def test_current_controls_overlay_a_complete_slot_body_including_voicefx(self):
         base = io24_presets.load()["Broadcast"]
         bands = [
@@ -128,6 +138,10 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertEqual(record["voicefx"]["on"], 1)
         self.assertNotIn("_offset", record)
 
+    @unittest.skipUnless(
+        FACTORY_PRESETS.is_file(),
+        "the retained private factory-preset evidence is not present",
+    )
     def test_user_preset_with_fx_off_saves_and_replays_the_strip_independently(self):
         record = json.loads(json.dumps(io24_presets.load()["Broadcast"]))
         record["preset_name"] = "Dry vocal"
@@ -332,6 +346,10 @@ class PresetPersistenceTests(unittest.TestCase):
                 })
             self.assertFalse(Path(registry.path).exists())
 
+    @unittest.skipUnless(
+        FACTORY_PRESETS.is_file(),
+        "the retained private factory-preset evidence is not present",
+    )
     def test_save_known_scene_writes_a_native_body_and_commits_registry(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
@@ -349,6 +367,10 @@ class PresetPersistenceTests(unittest.TestCase):
                              result["native_sha256"])
         self.assertEqual(device.protocol_writes[0][0], "exec")
 
+    @unittest.skipUnless(
+        FACTORY_PRESETS.is_file(),
+        "the retained private factory-preset evidence is not present",
+    )
     def test_save_known_slot_requires_identity_before_transport(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = DeviceSlotRegistry(Path(directory) / "device-slots.json")
@@ -363,9 +385,12 @@ class PresetPersistenceTests(unittest.TestCase):
 
         self.assertEqual(device.protocol_writes, [])
 
+    @unittest.skipUnless(
+        FACTORY_PRESETS.is_file(),
+        "the retained private factory-preset evidence is not present",
+    )
     def test_factory_reverb_json_is_a_complete_tagged_library_template(self):
-        records = json.loads((Path(__file__).parents[1] / "re" /
-                              "uc_factory_presets.json").read_text())
+        records = json.loads(FACTORY_PRESETS.read_text())
         slot = dict(records[30])
         extraction_offset = slot.pop("_offset")
 
@@ -771,8 +796,12 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertIn('getattr(self, "_host_slot_entries", [])', source)
         self.assertIn("self._load_device_entry(e)", source)
 
+    @unittest.skipUnless(
+        USB_CAPTURE_HELPER.is_file(),
+        "the retained private USB-capture helper is not present",
+    )
     def test_capture_baseline_records_parameters_not_an_unknown_gate(self):
-        tree = ast.parse((Path(__file__).with_name("usbtap_py.py")).read_text())
+        tree = ast.parse(USB_CAPTURE_HELPER.read_text())
         main = next(node for node in ast.walk(tree)
                     if isinstance(node, ast.FunctionDef) and node.name == "main")
         attributes = {node.attr for node in ast.walk(main)
@@ -783,8 +812,12 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertNotIn("fx_off", attributes)
         self.assertNotIn("set_fx_mix", attributes)
 
+    @unittest.skipUnless(
+        LEGACY_FX_PROBE.is_file(),
+        "the retained private legacy probe is not present",
+    )
     def test_legacy_direct_fx_probe_routes_to_cp34_without_device_actions(self):
-        path = Path(__file__).with_name("fx_gate_probe.py")
+        path = LEGACY_FX_PROBE
         tree = ast.parse(path.read_text())
         main = next(node for node in ast.walk(tree)
                     if isinstance(node, ast.FunctionDef) and node.name == "main")

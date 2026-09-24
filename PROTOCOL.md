@@ -286,18 +286,24 @@ same complete state visible as a matrix on **Routing**.
 The remaining UC fields are explicit protocol gaps rather than unfinished
 nearby controls:
 
-- `line.chN.pan`: the block-100 mixer has one level per source/bus and ignores
-  its index field, so it cannot place one mono source independently. The CLI's
+- `line.chN.pan`: UC stores and displays this generic field, but the block-100
+  mixer has one level per source/bus, ignores its index field, and constructs
+  mono inputs without an active pan stage. Centre (`0.5`) is therefore already
+  satisfied; any other scene value remains an explicit omission. The CLI's
   older `pan` operation is correctly limited to a Host-side balance across a
   stereo pair using UC's recovered -3 dB-centre law; the GTK Host does not
   mislabel that as mono pan.
 - `stereopan`: no representable width/mono-collapse control.
 - `FXA`: UC names a per-input reverb send, but no independent io24 wire field
   has been proved. The device exposes one unified channel processing scalar;
-  substituting it would also change EQ and dynamics.
-- `dawpostdsp`: no proved safe route. Apparent neighboring ids collide with
-  unrelated object gain/Main-volume controls.
-- output `mono` has no proved representation.
+  substituting it would also change EQ and dynamics. The off value (`-96 dB`)
+  is already satisfied; a non-off scene request is reported.
+- `dawpostdsp`: physical capture establishes the io24's fixed post-DSP tap.
+  That value (`1`) is accepted as satisfied. Pre-DSP remains unavailable;
+  apparent neighboring ids collide with unrelated object gain/Main-volume
+  controls.
+- output `mono` is fixed off. Stereo (`0`) is satisfied; fold-down (`1`) is
+  reported as unavailable.
 - writable component names are UC host-model metadata, not an io24 command.
   Linux now persists them in its shadow and scene/preset files.
 - Mirror Main is now a persistent Linux Host latch. Main level, assignment and
@@ -305,8 +311,10 @@ nearby controls:
   restores that aux's retained state. This matches UC behavior while the Host
   owns the mix without claiming a firmware-resident latch.
 - physical Main mute is readable in `JaSt` slot 42 bit 1, but no writable
-  parameter reaches it. UC itself binds `hardwareMute` as display-only. Linux's
-  output mute is the distinct software control.
+  parameter reaches it. UC itself binds `hardwareMute` as display-only. The
+  Linux Monitoring strip now labels that status separately, drives audible
+  Main muting through its retained bus-mute model, and labels wire 6 accurately
+  as Phones mute.
 
 ## 2026-09-19 controlling result: UC scene save/load and settings parity
 
@@ -394,9 +402,10 @@ Host snapshots and reconnect replay. Selecting Standard removes the alternate
 shadow for that input, and selecting Passive or Vintage removes its Standard
 band shadow, so reconnect cannot replay two competing EQ models.
 
-The proprietary DLL is read as data and never loaded or executed. The default
-path is the retained UC 4.7.2 artifact; `IO24_UC472_DSPUSBDEVICE` may point to
-another lawful copy, whose exact size and SHA-256 must match. Hardware-free
+The Universal Control DLL is read as data and never loaded or executed. The
+default path is the retained UC 4.7.2 artifact;
+`IO24_UC472_DSPUSBDEVICE` may point to the matching file from any local UC
+4.7.2 installation, whose exact size and SHA-256 must match. Hardware-free
 source, designer, packet, preset and UI-state regressions pass. No USB/device
 operation was used for this result, so exact implementation is established but
 a dedicated audible hardware A/B remains a separate gated test.

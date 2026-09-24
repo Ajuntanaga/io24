@@ -529,7 +529,7 @@ def build_native_standard_eq_stat_record(base_record, slot_index, eq):
 
 
 def _alternate_eq_coefficients(eq):
-    """Use the shipped interpreter and the user's lawful local UC DLL."""
+    """Use the shipped interpreter and the user's local UC 4.7.2 DLL."""
     import io24_alt_eq
     import io24_presets
 

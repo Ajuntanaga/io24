@@ -4,6 +4,9 @@
 .gitignore
 70-presonus-io24.rules
 CONTRIBUTING.md
+docs/design/README.md
+docs/design/passive-program-eq-reference.png
+docs/design/vintage-eq-reference.png
 GUIDE.md
 LICENSE
 PROTOCOL.md

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "jdk": {
+    "distribution": "Eclipse Temurin",
+    "version": "17.0.20.1+1",
+    "archive": "OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz",
+    "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_linux_hotspot_17.0.20.1_1.tar.gz",
+    "sha256": "3808d1d15e3ec6bd5b84057fb5d84c33d8a1536a258146bcea2e603fc726e08e"
+  },
+  "gradle": {
+    "version": "8.11.1",
+    "archive": "gradle-8.11.1-bin.zip",
+    "url": "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip",
+    "sha256": "f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6"
+  },
+  "android_command_line_tools": {
+    "version": "22.0",
+    "archive": "commandlinetools-linux-15859902_latest.zip",
+    "url": "https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip",
+    "sha256": "4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583"
+  },
+  "android_sdk_packages": {
+    "platform-tools": "37.0.1",
+    "platforms;android-35": "2",
+    "build-tools;35.0.0": "35.0.0"
+  },
+  "android_gradle_plugin": "8.9.2"
+}

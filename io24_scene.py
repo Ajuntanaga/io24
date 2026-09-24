@@ -871,7 +871,7 @@ def export_snapshot(snapshot, host_features=None, solo=None, presets=None):
     if host_delay is not None:
         host_delay = io24_voicefx_delay.validate_host_feature(host_delay)
         # The device shadow deliberately retains the user's last native Delay
-        # intent while hardware block 201 is quiesced.  At 96 kHz this Host
+        # intent while hardware block 201 is quiesced. Above 48 kHz this Host
         # feature is newer and authoritative, including its input owner.
         for channel in (1, 2):
             scene["line"]["ch%d" % channel].pop("voicefx", None)

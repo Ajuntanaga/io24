@@ -16,6 +16,7 @@ from unittest import mock
 import warnings
 
 import io24
+import io24_alt_eq
 import io24_mbc
 import io24_presets
 import io24_scene
@@ -163,7 +164,10 @@ class ReverbAudiblePathTests(unittest.TestCase):
 
         io24gtk.Win._push_reverb(host)
 
-        self.assertEqual(device.calls, [("reverb_off", (), {})])
+        self.assertEqual(device.calls, [("set_reverb", (), {
+            "on": False, "size": 0.5, "mix": 0.35,
+            "hp_freq": 200.0, "predelay": 0.02, "fs": 48000.0,
+        })])
 
 
 class PhonesSourceTests(unittest.TestCase):
@@ -301,6 +305,8 @@ class FactoryPresetDispatchTests(unittest.TestCase):
         self.assertEqual(bands[0]["shape"], "lowshelf")
         self.assertEqual(bands[3]["shape"], "peaking")
 
+    @unittest.skipUnless(io24_alt_eq.designer_status()[0],
+                         "exact UC 4.7.2 EQ designer is unavailable")
     def test_alternate_eq_dispatches_exactly_without_standard_flattening(self):
         for class_id, model in (
                 ("{C0730CBB-5135-4558-9222-C40BDBA036ED}", "Passive"),
@@ -452,6 +458,8 @@ class FactoryPresetDispatchTests(unittest.TestCase):
         self.assertEqual(io24_scene.VINTAGE_HIMID_HZ, (3200.0, 4800.0, 7200.0))
         self.assertEqual(io24_scene.VINTAGE_HIGH_HZ, 12000.0)
 
+    @unittest.skipUnless(io24_alt_eq.designer_status()[0],
+                         "exact UC 4.7.2 EQ designer is unavailable")
     def test_scene_vintage_uses_exact_alternate_eq_not_standard_biquads(self):
         scene = {"line": {"ch1": {"eq": {
             "__classid": io24_scene.EQ_VINTAGE,
@@ -1371,12 +1379,14 @@ class HostRefinementTests(unittest.TestCase):
         self.assertEqual(widgets["comp_curve"].draws, 2)
 
     def test_host_file_worker_uses_its_serialized_device_argument(self):
-        source = inspect.getsource(io24gtk.Win._pick)
+        picker = inspect.getsource(io24gtk.Win._pick)
+        loader = inspect.getsource(io24gtk.Win._load_full_host_setup)
 
-        self.assertIn("dev.save_preset(", source)
-        self.assertIn("dev.load_preset(", source)
-        self.assertNotIn("self.ctl.dev.save_preset(", source)
-        self.assertNotIn("self.ctl.dev.load_preset(", source)
+        self.assertIn("dev.save_preset(", picker)
+        self.assertIn("self._load_full_host_setup(dev, path)", picker)
+        self.assertIn("dev.load_preset(", loader)
+        self.assertNotIn("self.ctl.dev.save_preset(", picker)
+        self.assertNotIn("self.ctl.dev.load_preset(", picker + loader)
 
     def test_multiband_chain_start_failure_cleans_private_config(self):
         with tempfile.TemporaryDirectory() as parent:

@@ -401,8 +401,9 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 Vendor installers, DLLs, firmware, extracted factory preset bodies, decompiler
 output, local captures, personal paths, device serials, VMs, and agent work
 records are not part of the public repository or Python wheel. Optional factory
-data and exact alternate-EQ coefficients must be recovered from your own lawful
-Universal Control copy. The Host remains useful without that optional catalog.
+data and exact alternate-EQ coefficients must be recovered from your own local
+Universal Control installation. The Host remains useful without that optional
+catalog.
 
 [PUBLICATION.md](PUBLICATION.md) records the complete clean-source boundary and
 the release checks used before publishing.

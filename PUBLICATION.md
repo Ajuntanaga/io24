@@ -61,7 +61,7 @@ field and includes only a separately supported Voice FX leaf.
 The independent Android controller and its own release boundary live at
 [`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android). Users
 who want optional factory data or exact alternate-EQ coefficients must recover
-the required data from their own lawful Universal Control copy. The Host
+the required data from their own local Universal Control installation. The Host
 remains usable without factory preset data and reports that catalog as
 unavailable.
 
@@ -108,4 +108,4 @@ python3 tools/export_public.py /path/to/clean/io24-checkout --check
 Live USB, audio, firmware, or device-preset checks are separate authorized
 campaigns. They are intentionally never a CI requirement. Tests that compare
 against privately retained vendor evidence report an explicit skip when that
-lawful local evidence is absent.
+required local evidence is absent.

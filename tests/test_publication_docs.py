@@ -188,12 +188,16 @@ class PublicationDocumentationTests(unittest.TestCase):
         for workflow in workflows:
             text = workflow.read_text()
             with self.subTest(workflow=workflow.name):
-                self.assertIn("runs-on: ubuntu-26.04", text)
+                self.assertIn("ubuntu-26.04", text)
                 self.assertNotIn("ubuntu-latest", text)
                 refs = re.findall(r"uses:\s*[^@\s]+@([^\s#]+)", text)
                 self.assertTrue(refs)
                 self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", ref)
                                     for ref in refs))
+
+        ci = workflows[0].read_text()
+        self.assertIn('python-version: "3.8"', ci)
+        self.assertIn("runner: ubuntu-24.04", ci)
 
         codeql = workflows[1].read_text()
         self.assertIn("language: python", codeql)

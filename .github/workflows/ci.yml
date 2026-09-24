@@ -14,12 +14,16 @@ permissions:
 jobs:
   python-compatibility:
     name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-26.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.14"]
+        include:
+          - python-version: "3.8"
+            runner: ubuntu-24.04
+          - python-version: "3.14"
+            runner: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

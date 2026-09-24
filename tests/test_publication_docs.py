@@ -142,6 +142,10 @@ class PublicationDocumentationTests(unittest.TestCase):
                 "tests/test_io24_voicefx_preset_apply.py"):
             self.assertIn(required, referenced)
         self.assertIn("testDebugUnitTest", workflow_text)
+        self.assertIn(
+            '"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"',
+            workflow_text,
+        )
         self.assertEqual(
             [path for path in referenced if not (ROOT / path).is_file()], [])
 

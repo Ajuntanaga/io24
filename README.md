@@ -205,9 +205,11 @@ shadow would select the unsafe model. Scene export lets that Host state replace
 any stale device-shadow copy. A high-rate restore validates the Delay
 component but emits no hardware model-5 transaction.
 
-Some UC fields have no proven io24 command: mono-source pan, stereo width,
-independent `FXA` sends, `dawpostdsp`, and output mono fold-down. The importer
-reports those fields instead of quietly mapping them to a different control.
+UC scenes also contain generic mixer fields the io24 fixes in hardware. A
+centred mono `pan`, disabled independent `FXA` send, post-DSP DAW tap, and
+stereo output are accepted as already satisfied. A scene asking for any other
+value is reported explicitly; the Host never maps it to an unrelated control.
+Stereo width still has no proven io24 command.
 
 ### Device Presets and the front-panel buttons
 
@@ -306,7 +308,10 @@ them.
 - Voice FX is confirmed on Input 1. Input 2 is confirmed for models 1–5;
   Transformer/Doubler remains the isolated model-0 exception.
 - Passive and Vintage EQ use exact UC 4.7.2 designers and packet routes. Their
-  dedicated audible A/B check is still pending.
+  dedicated audible A/B check is still pending. Their editable rack panels use
+  original project artwork documented in
+  [`docs/design`](docs/design/README.md), with every knob and graph driven by
+  the exact decoded controls.
 - The compressor knee interpretation remains inferred.
 
 These limits are tracked in [PROTOCOL.md](PROTOCOL.md). That file preserves old

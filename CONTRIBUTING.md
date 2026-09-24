@@ -17,8 +17,8 @@ python3 -m venv --system-site-packages .venv
 
 Once those pass, run the focused tests for the code you changed. The complete
 release command is in [PUBLICATION.md](PUBLICATION.md). Tests that compare
-against lawfully retained vendor evidence skip clearly when that local evidence
-is absent.
+against locally retained Universal Control evidence skip clearly when that
+local evidence is absent.
 
 Live tests belong in a separately authorized local campaign. Record the exact
 device, route, stimulus, restoration, and result boundary. Live hardware is

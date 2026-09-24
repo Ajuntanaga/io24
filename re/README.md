@@ -19,8 +19,8 @@ public source release:
 
 The default public-source boundary excludes these files. The runtime works
 without them; the factory-preset browser reports unavailable until a user
-regenerates its optional data from a lawfully obtained installer. See the
-license section of the top-level README and `PUBLICATION.md`.
+regenerates its optional data from a local Universal Control installer. See
+the top-level README and `PUBLICATION.md`.
 
 
 `dspusbdevice.dll` is not committed here (it is PreSonus's binary). Recover it

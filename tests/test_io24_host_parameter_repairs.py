@@ -263,7 +263,7 @@ class PhonesSourceTests(unittest.TestCase):
 
 @unittest.skipUnless(
     Path(io24_presets.PRESET_JSON).is_file(),
-    "requires factory data recovered from the maintainer's lawful UC copy",
+    "requires factory data recovered from the maintainer's local UC install",
 )
 class FactoryPresetDispatchTests(unittest.TestCase):
     @classmethod

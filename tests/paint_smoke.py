@@ -170,6 +170,9 @@ def main():
 
     def paint_win_init(self, app, ctl):
         original_win_init(self, app, ctl)
+        # Captures compare layout, not the transient toast generated while the
+        # harness programmatically changes models and sample-rate fixtures.
+        self.say = lambda _message: None
         self.set_default_size(
             int(os.environ.get("IO24_PAINT_WIDTH", "1040")),
             int(os.environ.get("IO24_PAINT_HEIGHT", "800")))
@@ -228,6 +231,18 @@ def main():
                     raise RuntimeError(
                         "IO24_PAINT_EQ_MODEL must be standard, passive, or vintage")
                 win.w[1]["eq_model"].set_selected(model_index)
+                if os.environ.get("IO24_PAINT_EQ_ON") == "1":
+                    win.w[1]["eq_on"].set_active(True)
+                values = json.loads(os.environ.get(
+                    "IO24_PAINT_EQ_PARAMS", "{}"))
+                view = win._alt_eq(1)
+                unknown = set(values) - set((view or {}).get("eq", {}))
+                if unknown:
+                    raise RuntimeError(
+                        "unknown %s EQ parameter(s): %s" % (
+                            model_name, ", ".join(sorted(unknown))))
+                for field, value in values.items():
+                    win._alternate_eq_set(1, field, value)
                 print("EQ MODEL -> %s" % model_name, flush=True)
             state["eq_model_set"] = True
         if not state["comp_model_set"]:

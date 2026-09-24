@@ -71,6 +71,48 @@ public final class PaeFrameTest {
     }
 
     @Test
+    public void emptyInput2MuteReplyIsAcceptedForTheMatchingWrite() throws Exception {
+        PaeFrame.parseInput2MuteReply(
+                hex("0800018111000000"), 17);
+    }
+
+    @Test
+    public void emptyInput2MuteReplyRejectsTheWrongUid() {
+        assertThrows(
+                PaeFrame.ProtocolException.class,
+                () -> PaeFrame.parseInput2MuteReply(
+                        hex("0800018112000000"), 17));
+    }
+
+    @Test
+    public void emptyInput2MuteReplyRejectsARequestDirection() {
+        assertThrows(
+                PaeFrame.ProtocolException.class,
+                () -> PaeFrame.parseInput2MuteReply(
+                        hex("0800010111000000"), 17));
+    }
+
+    @Test
+    public void nativeBlockWriteWrapsBlobWithoutChangingIt() {
+        byte[] blob = hex(
+                "78466f56100000000000000004000000");
+
+        byte[] frame = PaeFrame.buildBlockWrite(33, 201, 0, blob);
+
+        assertArrayEquals(hex(
+                "2400010121000000"
+                        + "50746553c900000000000000"
+                        + "78466f56100000000000000004000000"), frame);
+    }
+
+    @Test
+    public void nativeBlockWriteRejectsAnInconsistentBlobSize() {
+        assertThrows(IllegalArgumentException.class, () ->
+                PaeFrame.buildBlockWrite(1, 201, 0,
+                        hex("78466f56140000000000000004000000")));
+    }
+
+    @Test
     public void stateReplyDecodesOnlyTheInput2MuteFlag() throws Exception {
         byte[] frame = stateReply(9);
         ByteBuffer.wrap(frame)

@@ -11,7 +11,7 @@ import android.os.SystemClock;
 import java.io.ByteArrayOutputStream;
 
 /** Owns one explicit, bounded connection to io24 vendor interface 5. */
-public final class Io24UsbProbe implements AutoCloseable {
+public final class Io24UsbProbe implements Io24Control {
     static final int VENDOR_ID = 0x194f;
     static final int PRODUCT_ID = 0x0422;
     static final int CONTROL_INTERFACE = 5;
@@ -34,6 +34,7 @@ public final class Io24UsbProbe implements AutoCloseable {
     private UsbEndpoint endpointIn;
     private int maxResponseLength;
     private int nextUid = 1;
+    private Io24State currentState = Io24State.defaults();
 
     public Io24UsbProbe(UsbManager usbManager) {
         if (usbManager == null) {
@@ -127,6 +128,18 @@ public final class Io24UsbProbe implements AutoCloseable {
             this.endpointIn = endpointIn;
             this.maxResponseLength = maxResponseLength;
             nextUid = nextUid(uid);
+            currentState = Io24Protocol.decodeState(state, currentState)
+                    .buildUpon()
+                    .setConnection(
+                            Io24State.ConnectionStatus.CONNECTED,
+                            "Connected to Revelator io24",
+                            false)
+                    .setProtocolInfo(
+                            protocolVersion,
+                            maxCommandLength,
+                            maxResponseLength,
+                            state.stateSlotCount())
+                    .build();
             opened = null;
             claimed = false;
             return new ProbeResult(
@@ -152,36 +165,107 @@ public final class Io24UsbProbe implements AutoCloseable {
         return connection != null;
     }
 
+    @Override
+    public synchronized Io24State currentState() {
+        return currentState;
+    }
+
+    @Override
+    public synchronized Io24State refresh() throws ProbeException {
+        requireConnected();
+        currentState = readFreshState().buildUpon()
+                .setConnection(
+                        Io24State.ConnectionStatus.CONNECTED,
+                        "Connected to Revelator io24",
+                        false)
+                .setLastProof("Read back from io24")
+                .build();
+        return currentState;
+    }
+
+    @Override
+    public synchronized CommandResult execute(Io24Command command)
+            throws ProbeException {
+        requireConnected();
+        if (command == null) {
+            throw new ProbeException("A control command is required");
+        }
+        boolean retainedDelay = command.model() == Io24State.VoiceFxModel.DELAY
+                && !command.canRunNatively(currentState);
+        final Io24Protocol.Transaction transaction;
+        try {
+            transaction = Io24Protocol.encodeTransaction(
+                    command, currentState, nextUid);
+        } catch (IllegalArgumentException error) {
+            throw new ProbeException(error.getMessage(), error);
+        }
+        nextUid = transaction.nextUid();
+        for (Io24Protocol.EncodedWrite write : transaction.writes()) {
+            writeFrame(connection, endpointOut, write.frame(), write.label());
+            readOptionalSetpReply(
+                    connection, endpointIn, maxResponseLength, write.uid());
+            if (write.settleAfterMillis() > 0) {
+                SystemClock.sleep(write.settleAfterMillis());
+            }
+        }
+
+        Io24Command.Proof effectiveProof = command.proof();
+        boolean retainedInactiveEffect = transaction.writes().isEmpty()
+                && (command.kind() == Io24Command.Kind.SET_VOICE_FX_ON
+                || command.kind() == Io24Command.Kind.SET_VOICE_FX_PARAMETER);
+        if (retainedInactiveEffect) {
+            effectiveProof = Io24Command.Proof.LOCAL;
+        } else if (!transaction.writes().isEmpty()
+                && command.kind() == Io24Command.Kind.SET_SAMPLE_RATE) {
+            effectiveProof = Io24Command.Proof.SENT;
+        }
+
+        if (Io24Protocol.requiresFreshState(command)) {
+            SystemClock.sleep(MUTE_SETTLE_MS);
+            Io24State confirmed = readFreshState();
+            if (!matches(command, confirmed)) {
+                throw new ProbeException(
+                        "Fresh device state did not confirm " + command.kind());
+            }
+            currentState = confirmed.buildUpon()
+                    .setLastProof("Confirmed by fresh io24 state")
+                    .build();
+        } else {
+            currentState = Io24StateReducer.apply(currentState, command);
+            if (command.kind() == Io24Command.Kind.SAVE_DEVICE_BLOCK) {
+                currentState = currentState.buildUpon()
+                        .setLastProof(
+                                "WRITE_SENT_UNVERIFIED: the io24 cannot read the stored block body back")
+                        .build();
+            } else if (retainedInactiveEffect) {
+                currentState = currentState.buildUpon()
+                        .setLastProof(
+                                "Stored on this phone until the model is selected")
+                        .build();
+            } else if (retainedDelay) {
+                currentState = currentState.buildUpon()
+                        .setLastProof(
+                                "Delay kept on this phone; device Voice FX is safely off")
+                        .build();
+            } else if (command.kind() == Io24Command.Kind.SET_SAMPLE_RATE
+                    && !transaction.writes().isEmpty()) {
+                currentState = currentState.buildUpon()
+                        .setLastProof(
+                                "Rate confirmed; device Delay is off until explicitly enabled")
+                        .build();
+            }
+        }
+        return new CommandResult(
+                currentState, effectiveProof, currentState.lastProof());
+    }
+
     /**
      * Changes only Input 2 mute, waits at the old state boundary, then confirms
      * the result with a fresh full-state read.
      */
     public synchronized boolean setInput2Mute(boolean muted) throws ProbeException {
-        if (connection == null || endpointOut == null || endpointIn == null) {
-            throw new ProbeException("The io24 control interface is not connected");
-        }
-
-        int writeUid = claimUid();
-        byte[] write = PaeFrame.buildInput2MuteWrite(writeUid, muted);
-        writeFrame(connection, endpointOut, write, "Input 2 mute write");
-
-        SystemClock.sleep(MUTE_SETTLE_MS);
-
-        int readUid = claimUid();
-        byte[] request = PaeFrame.buildStateRead(readUid);
-        writeFrame(connection, endpointOut, request, "State verification request");
-        byte[] response = readOneResponse(
-                connection, endpointIn, maxResponseLength);
-        try {
-            PaeFrame.StateReply state = PaeFrame.parseStateReply(response, readUid);
-            if (state.input2Muted() != muted) {
-                throw new ProbeException(
-                        "Fresh device state did not confirm the requested value");
-            }
-            return state.input2Muted();
-        } catch (PaeFrame.ProtocolException error) {
-            throw new ProbeException(error.getMessage(), error);
-        }
+        return execute(Io24Command.setInputMute(2, muted))
+                .state().input(2).muted();
     }
 
     @Override
@@ -199,6 +283,61 @@ public final class Io24UsbProbe implements AutoCloseable {
         endpointIn = null;
         maxResponseLength = 0;
         nextUid = 1;
+        currentState = currentState.buildUpon()
+                .setConnection(
+                        Io24State.ConnectionStatus.DISCONNECTED,
+                        "Control released",
+                        false)
+                .build();
+    }
+
+    private void requireConnected() throws ProbeException {
+        if (connection == null || endpointOut == null || endpointIn == null) {
+            throw new ProbeException("The io24 control interface is not connected");
+        }
+    }
+
+    private Io24State readFreshState() throws ProbeException {
+        int uid = claimUid();
+        byte[] request = PaeFrame.buildStateRead(uid);
+        writeFrame(connection, endpointOut, request, "State verification request");
+        byte[] response = readOneResponse(
+                connection, endpointIn, maxResponseLength);
+        try {
+            return Io24Protocol.decodeState(
+                    PaeFrame.parseStateReply(response, uid), currentState);
+        } catch (PaeFrame.ProtocolException error) {
+            throw new ProbeException(error.getMessage(), error);
+        }
+    }
+
+    private static boolean matches(Io24Command command, Io24State state) {
+        switch (command.kind()) {
+            case SET_GAIN:
+                return close(state.input(command.channel()).gainDb(), command.value());
+            case SET_PHANTOM:
+                return state.input(command.channel()).phantom() == command.toggle();
+            case SET_INPUT_MUTE:
+                return state.input(command.channel()).muted() == command.toggle();
+            case SET_MAIN_VOLUME:
+                return close(state.mainVolume(), command.value());
+            case SET_HEADPHONE_VOLUME:
+                return close(state.headphoneVolume(), command.value());
+            case SET_MONITOR_BLEND:
+                return close(state.monitorBlend(), command.value());
+            case SET_PROCESSING_CHANNEL:
+            case SET_VOICE_FX_INPUT:
+                return state.voiceFxInput() == command.channel();
+            case SET_PRESET_SLOT:
+                return state.input(command.channel()).presetSlot()
+                        == Math.round(command.value());
+            default:
+                return true;
+        }
+    }
+
+    private static boolean close(float left, float right) {
+        return Math.abs(left - right) <= 0.001f;
     }
 
     private static UsbInterface findControlInterface(UsbDevice device)
@@ -278,6 +417,41 @@ public final class Io24UsbProbe implements AutoCloseable {
             UsbDeviceConnection connection,
             UsbEndpoint endpointIn,
             int maxResponseLength) throws ProbeException {
+        return readResponse(
+                connection,
+                endpointIn,
+                maxResponseLength,
+                false,
+                "the state reply");
+    }
+
+    private static void readOptionalSetpReply(
+            UsbDeviceConnection connection,
+            UsbEndpoint endpointIn,
+            int maxResponseLength,
+            int expectedUid) throws ProbeException {
+        byte[] response = readResponse(
+                connection,
+                endpointIn,
+                maxResponseLength,
+                true,
+                "the SetP acknowledgement");
+        if (response == null) {
+            return;
+        }
+        try {
+            PaeFrame.parseSetReply(response, expectedUid);
+        } catch (PaeFrame.ProtocolException error) {
+            throw new ProbeException(error.getMessage(), error);
+        }
+    }
+
+    private static byte[] readResponse(
+            UsbDeviceConnection connection,
+            UsbEndpoint endpointIn,
+            int maxResponseLength,
+            boolean optional,
+            String label) throws ProbeException {
         ByteArrayOutputStream response = new ByteArrayOutputStream(maxResponseLength);
         byte[] chunk = new byte[Math.min(maxResponseLength, 2_048)];
         int expectedLength = -1;
@@ -286,7 +460,7 @@ public final class Io24UsbProbe implements AutoCloseable {
         while (SystemClock.elapsedRealtime() < deadline) {
             int available = maxResponseLength - response.size();
             if (available <= 0) {
-                throw new ProbeException("State reply filled the response limit");
+                throw new ProbeException(label + " filled the response limit");
             }
             int remaining = expectedLength > 0
                     ? expectedLength - response.size()
@@ -303,7 +477,10 @@ public final class Io24UsbProbe implements AutoCloseable {
                     Math.min(chunk.length, Math.min(remaining, available)),
                     timeout);
             if (received <= 0) {
-                throw new ProbeException("Timed out waiting for the state reply");
+                if (optional && response.size() == 0) {
+                    return null;
+                }
+                throw new ProbeException("Timed out waiting for " + label);
             }
             response.write(chunk, 0, received);
             byte[] accumulated = response.toByteArray();
@@ -311,17 +488,17 @@ public final class Io24UsbProbe implements AutoCloseable {
                 expectedLength = (accumulated[0] & 0xff)
                         | ((accumulated[1] & 0xff) << 8);
                 if (expectedLength < 8 || expectedLength > maxResponseLength) {
-                    throw new ProbeException("State reply declares an invalid length");
+                    throw new ProbeException(label + " declares an invalid length");
                 }
             }
             if (expectedLength > 0 && accumulated.length > expectedLength) {
-                throw new ProbeException("State reply exceeded its declared length");
+                throw new ProbeException(label + " exceeded its declared length");
             }
             if (expectedLength > 0 && accumulated.length == expectedLength) {
                 return accumulated;
             }
         }
-        throw new ProbeException("State reply ended before its declared length");
+        throw new ProbeException(label + " ended before its declared length");
     }
 
     public static final class ProbeException extends Exception {

@@ -24,13 +24,5 @@
     "platforms;android-35": "2",
     "build-tools;35.0.0": "35.0.0"
   },
-  "android_gradle_plugin": "8.9.2",
-  "optional_transfer_tools": {
-    "cloudflared": {
-      "version": "2026.9.1",
-      "archive": "cloudflared-linux-amd64",
-      "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.9.1/cloudflared-linux-amd64",
-      "sha256": "03f1f25d1cc93b9ad6c60569d44060bc4f17ed97075760ed8cfca4b12dcd68cc"
-    }
-  }
+  "android_gradle_plugin": "8.9.2"
 }

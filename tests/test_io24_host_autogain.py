@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Hardware-free contracts for Host-side automatic preamp gain.
 
-Universal Control's Automatic Preamp Gain is a per-input switch, but the
-firmware has no descriptor behind it (re/UCNET_SHIM_SPEC.md 4c), so the Host
-keeps the gain itself while the switch is on. These pin the controller's
-decisions and the wiring that turns them into gain writes -- with no prompt
-and no message at any point.
+UC 4.7.2 explicitly removes its Auto Gain button and the firmware has no
+descriptor behind either Auto parameter (re/UCNET_SHIM_SPEC.md 4c). The Linux
+Host keeps its optional controller at the user's request. These pin its
+decisions and the wiring that turns them into gain writes, with no prompt or
+message at any point.
 
 Nothing here opens USB.
 """
 
+import math
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -19,9 +20,10 @@ from io24gtk import AutoGain
 
 
 TICK = 0.05
+FULL_WINDOW_SAMPLES = math.ceil(AutoGain.MIN_WINDOW_SPAN_S / TICK) + 1
 
 
-def _feed(controller, pattern, gains, start=0.0, count=AutoGain.MIN_READINGS):
+def _feed(controller, pattern, gains, start=0.0, count=FULL_WINDOW_SAMPLES):
     """Feed cycling readings; return (time, gain) of the first change."""
     for i in range(count):
         t = start + i * TICK
@@ -33,24 +35,70 @@ def _feed(controller, pattern, gains, start=0.0, count=AutoGain.MIN_READINGS):
 
 
 class AutoGainControllerTests(unittest.TestCase):
+    def test_a_full_three_second_window_precedes_any_correction(self):
+        controller = AutoGain((1,))
+        changes = []
+        for index in range(FULL_WINDOW_SAMPLES - 1):
+            changes.append(controller.step(
+                index * TICK,
+                {1: -24.0 if index % 2 == 0 else -45.0},
+                {1: 30.0}))
+
+        self.assertEqual(changes, [None] * (FULL_WINDOW_SAMPLES - 1))
+
+    def test_a_non_clip_correction_waits_for_a_quiet_gap(self):
+        controller = AutoGain((1,))
+        for index in range(FULL_WINDOW_SAMPLES):
+            self.assertIsNone(controller.step(
+                index * TICK, {1: -4.0}, {1: 30.0}))
+
+        changed = controller.step(
+            FULL_WINDOW_SAMPLES * TICK, {1: -30.0}, {1: 30.0})
+        self.assertIsNotNone(changed)
+        self.assertLess(changed, 30.0)
+
+    def test_a_recent_peak_blocks_an_upward_correction(self):
+        controller = AutoGain((1,))
+        pattern = [-2.0] + [-24.0, -45.0] * 30
+        changes = []
+        for index, level in enumerate(pattern):
+            changes.append(controller.step(
+                index * TICK, {1: level}, {1: 30.0}))
+
+        self.assertFalse(any(value is not None for value in changes))
+
+    def test_realistic_main_loop_jitter_still_completes_a_window(self):
+        controller = AutoGain((1,))
+        interval = 0.055
+        changed = None
+        for index in range(100):
+            changed = controller.step(
+                index * interval,
+                {1: -4.0 if index % 2 == 0 else -30.0},
+                {1: 30.0})
+            if changed is not None:
+                break
+
+        self.assertEqual(changed, 22.0)
+        self.assertGreaterEqual(index * interval, AutoGain.MIN_WINDOW_SPAN_S)
+
     def test_a_quiet_performance_is_lifted_gently(self):
         _t, new = _feed(AutoGain((1,)), {1: [-24.0, -45.0]}, {1: 30.0})
         self.assertEqual(new, 30.0 + AutoGain.MAX_RISE_DB)
 
     def test_a_hot_performance_comes_down_faster(self):
         _t, new = _feed(AutoGain((1,)), {1: [-4.0, -30.0]}, {1: 30.0})
-        self.assertEqual(new, 30.0 - AutoGain.MAX_FALL_DB)
+        self.assertEqual(new, 22.0)
 
     def test_a_level_inside_the_deadband_is_left_alone(self):
         _t, new = _feed(AutoGain((1,)), {1: [-13.5, -40.0]}, {1: 30.0},
                         count=200)
         self.assertIsNone(new)
 
-    def test_a_clip_drops_the_gain_at_once(self):
-        controller = AutoGain((1,))
-        self.assertEqual(controller.step(0.0, {1: -0.2}, {1: 30.0}), 24.0)
-        # still settling: the next reading belongs to the old gain
-        self.assertIsNone(controller.step(TICK, {1: -0.2}, {1: 30.0}))
+    def test_sustained_clip_is_measured_then_pulled_to_the_target(self):
+        _t, new = _feed(
+            AutoGain((1,)), {1: [-0.2]}, {1: 30.0})
+        self.assertEqual(new, 18.2)
 
     def test_silence_and_steady_noise_are_never_lifted(self):
         for pattern in ([-99.0], [-50.0], [-48.0, -50.0]):
@@ -62,11 +110,11 @@ class AutoGainControllerTests(unittest.TestCase):
     def test_corrections_are_spaced_and_never_reuse_old_readings(self):
         controller = AutoGain((1,))
         t1, first = _feed(controller, {1: [-24.0, -45.0]}, {1: 30.0})
-        self.assertEqual(first, 32.0)
+        self.assertEqual(first, 36.0)
         self.assertTrue(all(not w for w in controller.readings.values()))
         t2, second = _feed(controller, {1: [-22.0, -43.0]}, {1: first},
                            start=t1 + TICK, count=200)
-        self.assertEqual(second, 34.0)
+        self.assertEqual(second, 42.0)
         self.assertGreaterEqual(t2 - t1, AutoGain.HOLD_S)
 
     def test_the_ends_of_the_range_stop_corrections_quietly(self):
@@ -79,7 +127,27 @@ class AutoGainControllerTests(unittest.TestCase):
         _t, new = _feed(AutoGain((1, 2)),
                         {1: [-40.0, -60.0], 2: [-4.0, -30.0]},
                         {1: 30.0, 2: 30.0})
-        self.assertEqual(new, 26.0)
+        self.assertEqual(new, 22.0)
+
+    def test_linked_inputs_wait_until_both_are_in_a_quiet_gap(self):
+        controller = AutoGain((1, 2))
+        for index in range(FULL_WINDOW_SAMPLES - 1):
+            self.assertIsNone(controller.step(
+                index * TICK,
+                {1: -15.0 if index % 2 == 0 else -40.0,
+                 2: -4.0 if index % 2 == 0 else -30.0},
+                {1: 30.0, 2: 30.0}))
+
+        # Input 2 is the channel setting the target and is quiet here, but a
+        # linked analog-gain write would still click Input 1 while it is live.
+        self.assertIsNone(controller.step(
+            (FULL_WINDOW_SAMPLES - 1) * TICK,
+            {1: -15.0, 2: -30.0},
+            {1: 30.0, 2: 30.0}))
+        self.assertEqual(controller.step(
+            FULL_WINDOW_SAMPLES * TICK,
+            {1: -40.0, 2: -30.0},
+            {1: 30.0, 2: 30.0}), 22.0)
 
     def test_non_finite_readings_are_ignored(self):
         controller = AutoGain((1,))
@@ -150,10 +218,12 @@ def _window(alive=True, gains=(30.0, 30.0), levels=(-99.0, -99.0),
     return window
 
 
-def _perform(window, loud, quiet, channel=1, ticks=AutoGain.MIN_READINGS):
-    for i in range(ticks):
-        window.ctl.snap["in"][channel - 1] = loud if i % 2 == 0 else quiet
-        window._autogain_tick()
+def _perform(window, loud, quiet, channel=1, ticks=FULL_WINDOW_SAMPLES):
+    clock = (i * TICK for i in range(ticks))
+    with mock.patch.object(io24gtk.time, "monotonic", side_effect=clock):
+        for i in range(ticks):
+            window.ctl.snap["in"][channel - 1] = loud if i % 2 == 0 else quiet
+            window._autogain_tick()
 
 
 class AutoGainHostTests(unittest.TestCase):
@@ -176,14 +246,14 @@ class AutoGainHostTests(unittest.TestCase):
         window = _window()
         window.autogain_toggles[1].set_active(True)
         _perform(window, -24.0, -45.0)
-        self.assertEqual(window.writes, [("gain", 1, 32.0)])
+        self.assertEqual(window.writes, [("gain", 1, 36.0)])
         self.assertEqual(window.messages, [])
 
-    def test_a_clip_is_pulled_down_on_the_next_tick(self):
+    def test_a_clip_is_measured_before_one_bounded_correction(self):
         window = _window(levels=(-0.1, -99.0))
         window.autogain_toggles[1].set_active(True)
-        window._autogain_tick()
-        self.assertEqual(window.writes, [("gain", 1, 24.0)])
+        _perform(window, -0.1, -0.1)
+        self.assertEqual(window.writes, [("gain", 1, 18.1)])
 
     def test_switching_off_unlocks_and_stops_the_timer(self):
         window = _window()
@@ -200,7 +270,7 @@ class AutoGainHostTests(unittest.TestCase):
         self.assertTrue(window.autogain_toggles[2].get_active())
         self.assertFalse(window.gain_faders[2].sensitive)
         _perform(window, -4.0, -30.0, channel=2)
-        self.assertEqual(window.writes, [("gain", 1, 26.0), ("gain", 2, 26.0)])
+        self.assertEqual(window.writes, [("gain", 1, 22.0), ("gain", 2, 22.0)])
 
     def test_nothing_is_heard_or_written_while_offline(self):
         window = _window(alive=False, levels=(-0.1, -0.1))

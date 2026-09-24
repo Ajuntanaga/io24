@@ -44,8 +44,7 @@ import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage 
 import io24_dsp                            # noqa: E402  (exact compressor models)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_mbc                            # noqa: E402  (host multiband)
-import io24_spring                         # noqa: E402  (host spring reverb)
-import io24_voicefx_delay                  # noqa: E402  (safe 96 kHz Delay)
+import io24_voicefx_delay                  # noqa: E402  (safe high-rate Delay)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 import io24_scene                          # noqa: E402  (UC scene import)
 from io24_preset_record import (           # noqa: E402
@@ -462,7 +461,7 @@ def voicefx_target_from_processing(processing):
 # the device.
 # --------------------------------------------------------------------------
 CARD = "R24"
-DEFAULT_SAMPLE_RATE = 96000
+DEFAULT_SAMPLE_RATE = 48000
 DEFAULT_QUANTUM = 512
 SUPPORTED_SAMPLE_RATES = (44100, 48000, 88200, 96000)
 SUPPORTED_QUANTA = (32, 64, 128, 256, 512, 1024, 2048)
@@ -1368,10 +1367,10 @@ class _SkewValue:
 class _SelectedFxPower:
     """Compatibility view of the selected model's own XML ``On`` control.
 
-    Universal Control does not define a container-level Voice FX enable. Each
-    mutable model component owns a storable ``on`` parameter instead. Keeping
-    this adapter lets preset/session plumbing address the selected model
-    without collapsing the six controls back into one shared switch.
+    Each mutable model component owns an ``on`` parameter in the UC XML, but
+    UC normalizes the rack to one active model.  This adapter retains every
+    model's settings while enforcing that single-active-model rule whenever a
+    selected model is adopted from a preset, scene, or Host setup.
     """
 
     def __init__(self, selector, controls, order):
@@ -1388,7 +1387,16 @@ class _SelectedFxPower:
         return bool(self._selected().get_value())
 
     def set_active(self, value):
-        self._selected().set_value(bool(value))
+        selected = self.order[max(0, min(len(self.order) - 1,
+                                        self.selector.get_selected()))]
+        self.set_model_active(selected, value)
+
+    def set_model_active(self, selected, value):
+        if selected not in self.controls:
+            raise ValueError("unknown Voice FX model %r" % selected)
+        active = bool(value)
+        for model in self.order:
+            self.controls[model].set_value(active and model == selected)
 
 
 # --------------------------------------------------------------------------
@@ -1798,9 +1806,10 @@ class VoiceFxRack(Canvas):
     """Six VoiceFX components as the same live rack language as Fat Channel.
 
     A click selects the XML mutable component. A double-click operates that
-    component's own ``on`` parameter. The full Model row remains immediately
-    below as the keyboard/screen-reader selector; this canvas is the compact
-    visual navigator and never invents a second model state.
+    component's own ``on`` parameter; enabling it turns every other model off.
+    The full Model row remains immediately below as the keyboard/screen-reader
+    selector; this canvas is the compact visual navigator and never invents a
+    second model state.
     """
 
     SHORT_TITLES = ("Doubler", "Detuner", "Vocoder", "Ring Mod", "Filters",
@@ -2958,35 +2967,40 @@ class Rack(ChannelBound, Canvas):
 class AutoGain:
     """Continuous Host-side automatic preamp gain for one input or a linked pair.
 
-    Universal Control's Automatic Preamp Gain is a per-input switch, but the
-    io24 firmware has no descriptor behind `autogain`, so writing it does
-    nothing (re/UCNET_SHIM_SPEC.md 4c): automatic gain is a host feature.
-    While the switch is on, this watches the JaSt input meter (slots 4 and 6)
-    and moves the preamp toward the target by itself, with no listening step
-    and nothing to confirm.
+    This is a Linux Host convenience, not recovered UC 4.7.2 behavior. The
+    exact UC skin comments out its Auto button ("JF-602 remove Auto Gain
+    button"), and the io24 firmware has no descriptor behind `autogain` or
+    `autogainmode`, so either write is inert (PROTOCOL.md §12E). It is
+    retained at the user's request. While the switch is on, this watches the
+    JaSt input meter (slots 4 and 6) and moves the preamp toward the target.
 
-    It steers the 95th percentile of the last few seconds of readings, so the
-    gaps between words do not count and one stray peak does not pull it
-    around. The meter reads the converter, after the analog preamp, so a dB of
-    gain moves it by a dB. It corrects only outside a small deadband, at most
-    once a second, rising slowly and falling faster, and a reading at clip
-    drops the gain at once. It never lifts silence or a steady noise floor: a
-    rise needs the spread between loud and quiet moments that real playing or
-    speech has. Every change clears the window, because those readings
-    describe the old gain. Linked inputs share one controller, and the louder
-    one sets the single gain for both.
+    It steers the 95th percentile of a full three-second window, so the gaps
+    between words do not count and one stray peak does not pull it around. The
+    meter reads the converter, after the analog preamp, so a dB of gain moves
+    it by a dB. Ordinary corrections wait for a quiet gap and are bounded;
+    sustained clipping can still pull the gain down without waiting. A recent
+    peak prevents an upward move that would erase the remaining headroom. It
+    never lifts silence or a steady noise floor: a rise needs the spread
+    between loud and quiet moments that real playing or speech has. Every
+    change clears the window, because those readings describe the old gain.
+    Linked inputs share one controller, and the louder one sets the single
+    gain for both.
     """
 
     TARGET_DB = -12.0        # about 12 dB of headroom above the performance
-    DEADBAND_DB = 3.0
+    DEADBAND_DB = 4.0
     WINDOW_S = 3.0
-    MIN_READINGS = 20
-    SETTLE_S = 0.4           # a change takes a moment to reach the meter
-    HOLD_S = 1.0             # minimum spacing between corrections
-    MAX_RISE_DB = 2.0
-    MAX_FALL_DB = 4.0
+    NOMINAL_TICK_S = 0.05
+    MIN_READINGS = 48        # tolerate a busy GLib loop without using thin data
+    MIN_WINDOW_SPAN_S = 2.94 # one nominal tick short of the three-second window
+    SETTLE_S = 0.5           # a change takes a moment to reach the meter
+    HOLD_S = 3.0             # never chase one phrase with another correction
+    MAX_RISE_DB = 6.0
+    MAX_FALL_DB = 9.0
     CLIP_DB = -0.5
-    CLIP_FALL_DB = 6.0
+    CLIP_FALL_DB = 12.0
+    PEAK_CEILING_DB = -3.0
+    QUIET_MARGIN_DB = 10.0   # apply ordinary analog moves between phrases
     SILENT_DB = -60.0
     MIN_SPREAD_DB = 10.0     # loud-versus-quiet spread a rise requires
     GAIN_MIN_DB, GAIN_MAX_DB = 0.0, 60.0
@@ -3013,9 +3027,6 @@ class AutoGain:
                  if levels.get(c) is not None and math.isfinite(levels[c])}
         if not heard:
             return None
-        loudest = max(sorted(heard), key=lambda c: heard[c])
-        if heard[loudest] >= self.CLIP_DB:
-            return self._change(now, gains[loudest], -self.CLIP_FALL_DB)
         horizon = now - self.WINDOW_S
         for c, value in heard.items():
             window = self.readings[c]
@@ -3026,7 +3037,8 @@ class AutoGain:
             return None
         levels95 = {c: self._percentile([v for _t, v in window], 0.95)
                     for c, window in self.readings.items()
-                    if len(window) >= self.MIN_READINGS}
+                    if len(window) >= self.MIN_READINGS and
+                    window[-1][0] - window[0][0] >= self.MIN_WINDOW_SPAN_S}
         if not levels95:
             return None
         loud = max(sorted(levels95), key=lambda c: levels95[c])
@@ -3036,11 +3048,32 @@ class AutoGain:
         error = self.target_db - level
         if abs(error) <= self.DEADBAND_DB:
             return None
+        # Preamp changes are discrete hardware operations. Applying them in a
+        # word or note is the click/pump the old one-second loop produced.
+        # Wait for a natural gap unless clipping dominates the whole window.
+        if level < self.CLIP_DB:
+            # A linked pair shares one analog-gain write.  Do not move it just
+            # because the channel setting the target is between phrases while
+            # its partner is still live.
+            for channel, reference in levels95.items():
+                if reference < self.SILENT_DB:
+                    continue
+                current = heard.get(channel)
+                if current is None or \
+                        current > reference - self.QUIET_MARGIN_DB:
+                    return None
         if error > 0:
             quiet = self._percentile([v for _t, v in self.readings[loud]], 0.10)
             if level - quiet < self.MIN_SPREAD_DB:
                 return None                  # steady noise or hum: never lift it
-        delta = max(-self.MAX_FALL_DB, min(self.MAX_RISE_DB, error))
+            peak = max(v for _t, v in self.readings[loud])
+            error = min(error, self.PEAK_CEILING_DB - peak)
+            if error <= self.DEADBAND_DB:
+                return None
+        if level >= self.CLIP_DB:
+            delta = max(-self.CLIP_FALL_DB, min(0.0, error))
+        else:
+            delta = max(-self.MAX_FALL_DB, min(self.MAX_RISE_DB, error))
         return self._change(now, gains[loud], delta)
 
     def _change(self, now, gain, delta):
@@ -3062,7 +3095,8 @@ class ProcessingMix:
     chain and any positive value is the amount. Universal Control's schema
     shows the same thing as two controls -- `dspAmount`, whose minimum sits just
     above zero, and a `bypassDSP` toggle -- and neither has a device binding of
-    its own (re/UCNET_SHIM_SPEC.md 4f). So the Host composes them: zero is
+    its own (PROTOCOL.md, "wire 4 is one processing scalar"). So the Host
+    composes them: zero is
     written while bypassed and the amount otherwise, and the amount survives a
     bypass instead of being lost to it.
 
@@ -3288,13 +3322,6 @@ class Win(Adw.ApplicationWindow):
         self._insert_default_input = False
         self._insert_stale = False
         self._insert_pending = 0
-        # A distinct Host spring tank: wet-only Input 1/2 capture returned on
-        # the best stereo pair exposed by the active io24 playback profile.
-        # This does not replace or relabel the unit's block-202 reverb.
-        self.spring = io24_spring.SpringChain()
-        self._spring_routing = None
-        self._spring_mute = False
-        self._spring_route_pending = False
         # Widget adoption is not a user edit.  Factory loads, band selection,
         # and per-channel page changes all populate controls programmatically;
         # without one shared guard those GTK signals enqueue fresh DSP writes
@@ -3314,12 +3341,12 @@ class Win(Adw.ApplicationWindow):
         # for every slider movement.
         self._fx_last_sent_device = None
         self._fx_last_sent_target = None
-        # Firmware model 5 is never selected at 96 kHz.  At that rate the
+        # Firmware model 5 is never selected above 48 kHz. At those rates the
         # visible Delay state is hosted by the same PipeWire insert as
         # Multiband; this remembers which attached unit has already had its
         # hardware Voice FX block safely bypassed.
         self._host_delay_quiesced_device = None
-        # A saved or newly selected 96 kHz clock is held at a known-safe old
+        # A saved or newly selected high-rate clock is held at a known-safe old
         # rate while the interface is absent. On attach, block 201 is
         # quiesced before the requested clock is allowed to move.
         self._audio_clock_restore_deferred = False
@@ -3373,8 +3400,8 @@ class Win(Adw.ApplicationWindow):
         self.status.add_css_class("dim-label")
         header.pack_start(self.status)
         menu = Gio.Menu()
-        menu.append("Save snapshot…", "win.save")
-        menu.append("Load snapshot…", "win.load")
+        menu.append("Save full Host setup…", "win.save")
+        menu.append("Load full Host setup…", "win.load")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",
                                        menu_model=menu))
         for nm, fn in (("save", self.on_save), ("load", self.on_load)):
@@ -3396,7 +3423,7 @@ class Win(Adw.ApplicationWindow):
         self._was_offline = self.ctl.dev is None
         # Reconnect recovery is intentionally not presented as a standing
         # question. The durable write-only shadow is replayed once per attach;
-        # Host snapshots remain the explicit named save/load path.
+        # Full Host setups remain the explicit named save/load path.
         tv.set_content(self.toasts)
         self.set_content(tv)
         # The spectrum is the only part of this app that opens an audio stream,
@@ -3415,7 +3442,6 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
         GLib.timeout_add(2000, self._insert_watchdog)
-        GLib.timeout_add(2000, self._spring_watchdog)
         GLib.idle_add(self._restore_audio_clock)
         GLib.timeout_add(5000, self._autosave_session)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
@@ -3752,7 +3778,8 @@ class Win(Adw.ApplicationWindow):
         self.gain_faders[ch] = self.live[-1]
         auto = Gtk.ToggleButton(label="Auto")
         auto.set_margin_start(6); auto.set_margin_end(6)
-        auto.set_tooltip_text("Set preamp gain automatically")
+        auto.set_tooltip_text(
+            "Measure full three-second windows and adjust in quiet gaps")
         auto.connect("toggled", self._autogain_toggled, ch)
         box.append(auto)
         self.autogain_toggles = getattr(self, "autogain_toggles", {})
@@ -4402,7 +4429,7 @@ class Win(Adw.ApplicationWindow):
                      and self.dyn_by_ch[ch]["comp"])
 
     def _host_delay_states(self):
-        """The selected 96 kHz VocalEcho state, keyed by its input."""
+        """The selected high-rate VocalEcho state, keyed by its input."""
         model_row = getattr(self, "fx_model", None)
         target_row = getattr(self, "fx_target", None)
         if model_row is None or target_row is None or not \
@@ -4420,7 +4447,7 @@ class Win(Adw.ApplicationWindow):
         return {target: io24_voicefx_delay.validate_state(state)}
 
     def _insert_wanted(self):
-        """Union of Multiband and the safe 96 kHz Delay insert channels."""
+        """Union of Multiband and the safe high-rate Delay insert channels."""
         return tuple(sorted(set(self._multiband_insert_wanted()) |
                             set(self._host_delay_states())))
 
@@ -4453,7 +4480,7 @@ class Win(Adw.ApplicationWindow):
                 capture = io24_mbc.find_io24_capture_source()
                 sink = io24_mbc.find_io24_sink()
                 if not capture or not sink:
-                    insert.stop()
+                    insert.stop(restore_playback=False)
                     waiting = "Waiting for audio"
                 else:
                     states = {ch: self._mbc_snapshot_state(ch)
@@ -4471,11 +4498,12 @@ class Win(Adw.ApplicationWindow):
                     if io24_mbc.set_default_input(io24_mbc.INSERT_SOURCE_NAME):
                         self._insert_default_input = True
         elif insert.running:
-            insert.stop()
+            # The input is still routed through this playback return until the
+            # controller job below gives its direct feed back.  Hold a mute we
+            # borrowed until that job completes, avoiding a silent gap/click.
+            insert.stop(restore_playback=False)
         running = insert.channels if insert.running else ()
         self._insert_sync_mixer(running)
-        if not running and waiting is None:
-            self._insert_restore_system()
         self._insert_show(waiting)
 
     def _insert_give_up(self, channels, message):
@@ -4489,9 +4517,8 @@ class Win(Adw.ApplicationWindow):
                 self.w[ch]["comp_curve"].queue_draw()
         finally:
             self._adopt_mute = prior
-        self.insert.stop()
+        self.insert.stop(restore_playback=False)
         self._insert_sync_mixer(())
-        self._insert_restore_system()
         self._insert_show()
         self.say(message)
 
@@ -4503,6 +4530,7 @@ class Win(Adw.ApplicationWindow):
         target = tuple(running)
         if not target and self._insert_routing is None and \
                 not self._insert_pending:
+            self._insert_restore_system()
             return
         self._insert_pending += 1
 
@@ -4523,6 +4551,8 @@ class Win(Adw.ApplicationWindow):
                     routing["moved"] or routing["return_prior"]) else None
                 self._insert_pending -= 1
             GLib.idle_add(self._sync_mix_widgets)
+            if not target:
+                GLib.idle_add(self._insert_restore_system)
         self.ctl.submit(work)
 
     def _insert_lower_quantum(self):
@@ -4539,6 +4569,9 @@ class Win(Adw.ApplicationWindow):
 
     def _insert_restore_system(self):
         """Give PipeWire back the buffer and default input the insert took."""
+        insert = getattr(self, "insert", None)
+        if insert is not None:
+            insert.restore_playback()
         if self._insert_quantum_before is not None:
             pw_set("clock.force-quantum", self._insert_quantum_before)
             self._insert_quantum_before = None
@@ -4585,7 +4618,7 @@ class Win(Adw.ApplicationWindow):
         insert = getattr(self, "insert", None)
         if insert is None:
             return
-        insert.stop()
+        insert.stop(restore_playback=False)
         self._insert_routing = release_insert_routing(
             getattr(self, "ctl", None), self._insert_routing)
         self._insert_restore_system()
@@ -4970,34 +5003,18 @@ class Win(Adw.ApplicationWindow):
                          self._repaint_reverb()))
         g.add(self.rev_on)
 
-        # Character presets. The device exposes one algorithm with size, input
-        # high-pass and pre-delay, so a "type" is a position in that space rather
-        # than a different reverb — which is worth saying plainly instead of
-        # implying the unit has a spring tank in it. Wet mix stays independent so
-        # switching character does not change how much you hear.
-        self.rev_type = Adw.ComboRow(
-            title="Character",
-            model=Gtk.StringList.new([n for n, _ in self.REVERB_TYPES]))
-        self.rev_type.connect("notify::selected", self._reverb_type_changed)
-        g.add(self.rev_type)
-
-        # Host-side augmentation. The device has one fixed algorithm, but the
-        # host owns the parameters and can move them over time — which is a real
-        # extra process, not a relabelling. Slowly modulating room size is how a
-        # static digital tail is made to breathe; on a spring it is most of the
-        # character. Costs one small control write per step, well under the rate
-        # the mixer sustains.
-        self.rev_mod = Adw.SwitchRow(title="Movement")
-        self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
-        g.add(self.rev_mod)
-        r, self.s_rmoddep = self._srow(
-            "Movement depth", 0.0, 0.30, 0.005, 0.08,
-            lambda v: ("off" if v < 0.005 else "±%.0f %%" % (v * 100)),
-            lambda v: None)
-        g.add(r)
         r, self.s_rsize = self._srow("Room size", 0, 1, 0.005, 0.5,
                                      lambda v: "%.0f %%" % (v * 100),
-                                     lambda v: (self._reverb_touched(), self._push_reverb(),
+                                     self._reverb_size_changed)
+        g.add(r)
+        r, self.s_rpre = self._srow("Pre-delay", 0.0001, 0.25, 0.0005, 0.02,
+                                    lambda v: "%.0f ms" % (v * 1000),
+                                    lambda v: (self._push_reverb(),
+                                              self._repaint_reverb()))
+        g.add(r)
+        r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
+                                   lambda v: ("off" if v < 1 else "%.0f Hz" % v),
+                                   lambda v: (self._push_reverb(),
                                               self._repaint_reverb()))
         g.add(r)
         # 100 %, as every Universal Control scene of the user's keeps it: the
@@ -5005,18 +5022,22 @@ class Win(Adw.ApplicationWindow):
         # is already in the bus. The return level sets how much reverb.
         r, self.s_rmix = self._srow("Reverb return blend", 0, 1, 0.005, 1.0,
                                     lambda v: "%.0f %%" % (v * 100),
-                                    lambda v: (self._reverb_touched(), self._push_reverb(),
+                                    lambda v: (self._push_reverb(),
                                               self._repaint_reverb()))
         g.add(r)
-        r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
-                                   lambda v: ("off" if v < 1 else "%.0f Hz" % v),
-                                    lambda v: (self._reverb_touched(), self._push_reverb(),
-                                              self._repaint_reverb()))
-        g.add(r)
-        r, self.s_rpre = self._srow("Pre-delay", 0.0001, 0.25, 0.0005, 0.02,
-                                    lambda v: "%.0f ms" % (v * 1000),
-                                    lambda v: (self._reverb_touched(), self._push_reverb(),
-                                              self._repaint_reverb()))
+
+        # The Host can slowly drift the real Room size parameter around its
+        # displayed centre. Unlike the retired Character presets, this adds an
+        # audible behavior rather than merely relabelling slider positions.
+        self.rev_mod = Adw.SwitchRow(
+            title="Size movement",
+            subtitle="Slow ± drift around the displayed Room size")
+        self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
+        g.add(self.rev_mod)
+        r, self.s_rmoddep = self._srow(
+            "Movement depth", 0.0, 0.30, 0.005, 0.08,
+            lambda v: ("off" if v < 0.005 else "±%.0f %%" % (v * 100)),
+            lambda v: None)
         g.add(r)
 
         page.add(g)          # added ONCE — adding it twice raised a GTK critical
@@ -5034,50 +5055,6 @@ class Win(Adw.ApplicationWindow):
             sg.add(r)
         page.add(sg)
 
-        # A real Host-side spring tank, not another character preset for the
-        # device's one shared digital reverb. The PipeWire graph is wet-only:
-        # Inputs 1/2 feed it after the Fat Channel and its stereo return joins
-        # the physical Main playback path.
-        spring = Adw.PreferencesGroup(title="Spring reverb")
-        self.spring_on = Adw.SwitchRow(
-            title="On", subtitle="Off")
-        self.spring_on.connect("notify::active", self._spring_toggled)
-        spring.add(self.spring_on)
-
-        lane = Adw.ActionRow(
-            title="Output", subtitle="Main 1–2")
-        spring.add(lane)
-
-        defaults = io24_spring.default_state()
-        self.spring_controls = {}
-        for key, title, lower, upper, step, formatter, note in (
-                ("input1_db", "Input 1 send", -60.0, 0.0, 0.1,
-                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v, None),
-                ("input2_db", "Input 2 send", -60.0, 0.0, 0.1,
-                 lambda v: "off" if v <= -59.9 else "%.1f dB" % v, None),
-                ("dwell", "Dwell", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100), None),
-                ("tone", "Tone", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100), None),
-                ("drip", "Drip", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100), None),
-                ("width", "Stereo width", 0.0, 1.0, 0.005,
-                 lambda v: "%.0f %%" % (v * 100), None),
-                ("predelay_s", "Pre-delay", 0.0, 0.1, 0.0005,
-                 lambda v: "%.0f ms" % (v * 1000), None),
-                ("output_db", "Spring return → Main 1–2", -60.0, 10.0, 0.1,
-                 lambda v: "%.1f dB" % v, None)):
-            row, control = self._srow(
-                title, lower, upper, step, defaults[key], formatter,
-                lambda _value: self._spring_controls_changed(), note)
-            self.spring_controls[key] = control
-            if key == "output_db":
-                self.spring_return_row = row
-                self.spring_return_control = control
-                control.set_sensitive(False)
-            spring.add(row)
-        page.add(spring)
-
         # UC exposes one block-201 processor and an explicit input assignment.
         ig = Adw.PreferencesGroup(title="Voice FX")
 
@@ -5093,9 +5070,9 @@ class Win(Adw.ApplicationWindow):
                                      model=Gtk.StringList.new(MODEL_TITLES))
         self.fx_model.connect("notify::selected", lambda *_a: self._fx_model_changed())
 
-        # Each mutable model owns its own storable `on` parameter as well as its
-        # own exact XML-ordered controls. There is no container-level Voice FX
-        # enable in the UC component model.
+        # Each mutable model owns an XML `on` field and exact XML-ordered
+        # controls. UC still exposes one active rack, so enabling a model
+        # clears every other model's `on` field while retaining its settings.
         self.fx_params = {}
         self.fx_power = {}
         self.fx_param_stack = Gtk.Stack()
@@ -5113,7 +5090,10 @@ class Win(Adw.ApplicationWindow):
                 if builder == "on":
                     power = Adw.SwitchRow(title=parameter["name"])
                     power.set_active(bool(parameter.get("default", False)))
-                    power.connect("notify::active", self._fx_power_changed)
+                    power.connect(
+                        "notify::active",
+                        lambda _row, _prop, model=key:
+                        self._fx_power_changed(model))
                     self.fx_power[key] = _SwitchValue(power)
                     grp.add(power)
                 elif builder is None:
@@ -5204,6 +5184,17 @@ class Win(Adw.ApplicationWindow):
     def _fx_model_changed(self):
         idx = max(0, min(len(self.FX_ORDER) - 1, self.fx_model.get_selected()))
         name = self.FX_ORDER[idx]
+        # Selecting an Off model already makes the device dry. Clear any stale
+        # On light from the formerly selected model so the rack never claims an
+        # effect is active after the selector has moved away from it.
+        if not getattr(self, "_fx_mute", False):
+            prior = getattr(self, "_fx_mute", False)
+            self._fx_mute = True
+            try:
+                self.fx_arm.set_model_active(
+                    name, bool(self.fx_power[name].get_value()))
+            finally:
+                self._fx_mute = prior
         v = getattr(self, "fx_visual", None)
         if v is not None:
             v.set_model(name)
@@ -5236,7 +5227,17 @@ class Win(Adw.ApplicationWindow):
         self._fx_last_sent_target = target
         return True
 
-    def _fx_power_changed(self, *_args):
+    def _fx_power_changed(self, model=None, *_args):
+        if self._fx_mute or getattr(self, "_adopt_mute", False):
+            return
+        if model in getattr(self, "fx_power", {}):
+            enabled = bool(self.fx_power[model].get_value())
+            prior = self._fx_mute
+            self._fx_mute = True
+            try:
+                self.fx_arm.set_model_active(model, enabled)
+            finally:
+                self._fx_mute = prior
         rack = getattr(self, "fx_rack", None)
         if rack is not None:
             rack.queue_draw()
@@ -5267,10 +5268,10 @@ class Win(Adw.ApplicationWindow):
     def _push_fx(self):
         """Apply the selected Voice FX on its safe processing path.
 
-        Models 0-4 and Delay below 96 kHz use block 201 in the unit. At 96 kHz
-        Delay uses the Host insert and block 201 is left on a bypassed,
-        lightweight model. This boundary is what prevents a model-5 selection
-        from resetting the interface.
+        Models 0-4 and Delay through 48 kHz use block 201 in the unit. At
+        88.2/96 kHz Delay uses the Host insert and block 201 is left on a
+        bypassed, lightweight model. This boundary avoids the unaccepted
+        high-rate model-5 path and the observed 96 kHz reset.
         """
         if self._fx_mute:
             return
@@ -5298,7 +5299,8 @@ class Win(Adw.ApplicationWindow):
             state = io24_voicefx_delay.validate_state(dict(params, on=on))
             subtitle = getattr(self.fx_model, "set_subtitle", None)
             if callable(subtitle):
-                subtitle("Host processing at 96 kHz")
+                subtitle("Host processing at %.4g kHz" %
+                         (Win._voicefx_effective_rate(self) / 1000.0))
 
             # Queue the hardware bypass before the mixer-route job generated by
             # _insert_reconcile. The processed return cannot become audible on
@@ -5329,8 +5331,8 @@ class Win(Adw.ApplicationWindow):
         subtitle = getattr(self.fx_model, "set_subtitle", None)
         if callable(subtitle):
             subtitle("")
-        # Moving away from the 96 kHz fallback removes only its Delay node; a
-        # Multiband node on either channel remains in the shared insert.
+        # Moving away from the high-rate fallback removes only its Delay node;
+        # a Multiband node on either channel remains in the shared insert.
         if Win._host_delay_states(self) or getattr(
                 getattr(self, "insert", None), "delay_channels", ()):
             self._insert_reconcile()
@@ -5371,46 +5373,6 @@ class Win(Adw.ApplicationWindow):
         self.ctl.submit(work)
 
 
-    # name -> (size, input high-pass Hz, pre-delay s)
-    # Chosen for what each name means acoustically: a small bright box, a large
-    # slow space, a plate's dense low-mid-shy tail, a spring's tight bandpassed
-    # boing, and a cathedral's long pre-delay and huge size.
-    # (size, input high-pass, pre-delay, movement depth or None). Movement is
-    # part of a character, not an extra: a static tail is what makes Spring or
-    # Cathedral sound like a preset instead of a space, so the characters that
-    # live on modulation bring it with them.
-    REVERB_TYPES = [
-        ("Custom",     None),
-        ("Room",       (0.28, 220.0, 0.008, None)),
-        ("Plate",      (0.52, 320.0, 0.014, None)),
-        ("Spring",     (0.34, 480.0, 0.004, 0.12)),
-        ("Hall",       (0.72, 160.0, 0.032, 0.05)),
-        ("Cathedral",  (0.94, 110.0, 0.070, 0.08)),
-    ]
-
-    def _reverb_type_changed(self, row, _p):
-        spec = self.REVERB_TYPES[row.get_selected()][1]
-        if spec is None:
-            return                       # "Custom" leaves the sliders alone
-        size, hp, pre, move = spec
-        self._rev_mute = True            # moving these must not re-select Custom
-        prior_adopt = self._adopt_mute    # and must not send three partial states
-        self._adopt_mute = True
-        try:
-            self.s_rsize.set_value(size)
-            self.s_rhp.set_value(hp)
-            self.s_rpre.set_value(pre)
-            self.s_rmix.set_value(1.0)     # every character is fully wet
-            if move is not None:
-                self.s_rmoddep.set_value(move)
-                self.rev_mod.set_active(True)
-            else:
-                self.rev_mod.set_active(False)
-        finally:
-            self._rev_mute = False
-            self._adopt_mute = prior_adopt
-        self._push_reverb()
-
     def _reverb_live_params(self):
         """Current reverb state for the room display."""
         return {"on": self.rev_on.get_active(),
@@ -5420,13 +5382,24 @@ class Win(Adw.ApplicationWindow):
                 "hp": self.s_rhp.get_value()}
 
     REV_MOD_HZ = 0.07                 # a slow drift, not a wobble
+    REV_MOD_INTERVAL_MS = 250         # four bounded device updates per second
+
+    def _reverb_size_changed(self, value):
+        """Treat a manual Room-size edit as the new movement centre."""
+        if not getattr(self, "_rev_mute", False) and \
+                getattr(self, "rev_mod", None) is not None and \
+                self.rev_mod.get_active():
+            self._rev_mod_base = float(value)
+        self._push_reverb()
+        self._repaint_reverb()
 
     def _reverb_mod_toggled(self, *_a):
         on = self.rev_mod.get_active()
         if on and getattr(self, "_rev_mod_id", None) is None:
             self._rev_mod_base = self.s_rsize.get_value()
             self._rev_mod_t = 0.0
-            self._rev_mod_id = GLib.timeout_add(120, self._reverb_mod_step)
+            self._rev_mod_id = GLib.timeout_add(
+                self.REV_MOD_INTERVAL_MS, self._reverb_mod_step)
             if getattr(self, "rev_visual", None) is not None:
                 self.rev_visual._moving = True
         elif not on and getattr(self, "_rev_mod_id", None) is not None:
@@ -5450,12 +5423,14 @@ class Win(Adw.ApplicationWindow):
         if not self.rev_mod.get_active():
             self._rev_mod_id = None
             return False
-        self._rev_mod_t += 0.12
+        if not self.rev_on.get_active():
+            return True
+        self._rev_mod_t += self.REV_MOD_INTERVAL_MS / 1000.0
         dep = self.s_rmoddep.get_value()
         base = getattr(self, "_rev_mod_base", 0.5)
         v = max(0.02, min(1.0, base + math.sin(
             2 * math.pi * self.REV_MOD_HZ * self._rev_mod_t) * dep))
-        self._rev_mute = True             # a drift is not the user choosing Custom
+        self._rev_mute = True
         try:
             self.s_rsize.set_value(v)
         finally:
@@ -5467,17 +5442,10 @@ class Win(Adw.ApplicationWindow):
         if v is not None:
             v.queue_draw()
 
-    def _reverb_touched(self):
-        """Any manual move drops the character back to Custom, so the label
-        never claims a preset that is no longer what is loaded."""
-        if getattr(self, "_rev_mute", False):
-            return
-        if getattr(self, "rev_type", None) is not None and self.rev_type.get_selected() != 0:
-            self.rev_type.set_selected(0)
-
     def _push_reverb(self, establish_path=False):
         if self._adopt_mute:
             return
+        transient = bool(getattr(self, "_rev_mute", False))
         on = self.rev_on.get_active()
         size, mix = self.s_rsize.get_value(), self.s_rmix.get_value()
         hp, pre = self.s_rhp.get_value(), self.s_rpre.get_value()
@@ -5489,279 +5457,68 @@ class Win(Adw.ApplicationWindow):
 
         def work(dev, enable=on, establish=establish_path,
                  channel_mix=processing_mix, return_db=main_return,
-                 fs=self._fs):
-            if not enable:
-                return dev.reverb_off()
-            if establish:
+                 fs=self._fs, transient_write=transient):
+            if establish and enable:
                 # Establish the feed and return before arming the engine. This
                 # is the device order that produces an audible shared reverb.
                 # UC 4.7.2 does not open this path for block 201 VoiceFX.
                 establish_effects_path(dev, channel_mix, return_db)
-            return dev.set_reverb(
-                on=True, size=size, mix=mix, hp_freq=hp,
+            setter = (dev.set_reverb_transient
+                      if transient_write else dev.set_reverb)
+            return setter(
+                on=enable, size=size, mix=mix, hp_freq=hp,
                 predelay=max(0.0001, pre), fs=fs)
 
         self.ctl.submit(work)
 
-    def _reverb_character_state(self):
-        """The Host-only half of the reverb, which the device has no parameter
-        for: the named character, and the slow size drift the Host applies.
-
-        Saving only the device parameters lost these on every load, and the
-        character combo was reset to Custom because exact numbers cannot imply
-        a name. Saving them explicitly is what makes a restored reverb the one
-        the user built.
-        """
-        if getattr(self, "rev_type", None) is None:
+    def _reverb_movement_state(self):
+        """The Host-only size movement applied around the native reverb."""
+        if getattr(self, "rev_mod", None) is None:
             return None
         return {
             "version": 1,
-            "type": int(self.rev_type.get_selected()),
-            "movement": bool(self.rev_mod.get_active()),
-            "movement_depth": float(self.s_rmoddep.get_value()),
+            "enabled": bool(self.rev_mod.get_active()),
+            "depth": float(self.s_rmoddep.get_value()),
         }
 
-    def _adopt_reverb_character(self, state):
-        """Restore the Host-only reverb character. Sends nothing to the device.
+    def _adopt_reverb_movement(self, state):
+        """Restore Host-side size movement. Sends nothing to the device.
 
         Returns a completed-load notice when saved values are rejected, so a
         bad file cannot quietly leave a control describing something else.
         """
-        if state is None or getattr(self, "rev_type", None) is None:
+        if state is None or getattr(self, "rev_mod", None) is None:
             return None
         if not isinstance(state, dict):
-            return "reverb character was not restored; it was not a mapping"
+            return "reverb Movement was not restored; it was not a mapping"
         try:
-            index = int(state["type"])
-            depth = float(state["movement_depth"])
-            movement = bool(state["movement"])
+            version = int(state["version"])
+            enabled = state["enabled"]
+            depth = float(state["depth"])
         except (KeyError, TypeError, ValueError):
-            return "reverb character was not restored; the saved values were " \
+            return "reverb Movement was not restored; the saved values were " \
                    "incomplete or unreadable"
-        if not 0 <= index < len(self.REVERB_TYPES):
-            return "reverb character was not restored; unknown character"
+        if version != 1:
+            return "reverb Movement was not restored; unknown version"
+        if not isinstance(enabled, bool) or not math.isfinite(depth):
+            return "reverb Movement was not restored; the saved values were " \
+                   "incomplete or unreadable"
         lower, upper = self.s_rmoddep.get_adjustment().get_lower(), \
             self.s_rmoddep.get_adjustment().get_upper()
         if not lower <= depth <= upper:
-            return "reverb character was not restored; movement depth was " \
+            return "reverb Movement was not restored; movement depth was " \
                    "outside the control's range"
         prior_rev = self._rev_mute
         prior_adopt = self._adopt_mute
-        # Selecting a character normally rewrites size/HP/pre-delay and sends.
-        # Adoption must move the controls only.
         self._rev_mute = True
         self._adopt_mute = True
         try:
-            self.rev_type.set_selected(index)
-            self.rev_mod.set_active(movement)
+            self.rev_mod.set_active(enabled)
             self.s_rmoddep.set_value(depth)
         finally:
             self._rev_mute = prior_rev
             self._adopt_mute = prior_adopt
         return None
-
-    # ------------------------------------------------------ Host spring tank
-    def _spring_state(self):
-        """Complete Host-only spring settings plus this session's route loan."""
-        controls = getattr(self, "spring_controls", None)
-        switch = getattr(self, "spring_on", None)
-        if not controls or switch is None:
-            return None
-        state = io24_spring.default_state(switch.get_active())
-        for name, control in controls.items():
-            state[name] = float(control.get_value())
-        state["routing"] = getattr(self, "_spring_routing", None)
-        return io24_spring.validate_state(state)
-
-    def _spring_show(self, detail=None):
-        row = getattr(self, "spring_on", None)
-        if row is None:
-            return False
-        wanted = bool(row.get_active())
-        chain = getattr(self, "spring", None)
-        if detail is not None:
-            subtitle = detail
-        elif wanted and chain is not None and chain.running and \
-                self._spring_routing is not None:
-            subtitle = "On"
-        elif wanted:
-            subtitle = "Starting"
-        else:
-            subtitle = "Off"
-        row.set_subtitle(subtitle)
-        control = getattr(self, "spring_return_control", None)
-        if control is not None:
-            control.set_sensitive(wanted)
-        return False
-
-    def _spring_toggled(self, *_args):
-        if self._spring_mute or self._adopt_mute:
-            return
-        self._spring_show()
-        self._spring_reconcile()
-
-    def _spring_controls_changed(self):
-        if self._spring_mute or self._adopt_mute:
-            return
-        chain = getattr(self, "spring", None)
-        state = self._spring_state()
-        if chain is not None and chain.running and state is not None and \
-                not chain.set_state(state):
-            self.say("Spring reverb update failed")
-
-    def _spring_return_changed(self, value):
-        _ = value
-        self._spring_controls_changed()
-
-    def _spring_route_main(self):
-        if self._spring_route_pending:
-            return
-        self._spring_route_pending = True
-
-        def work(dev):
-            try:
-                lane = getattr(self.spring, "return_lane", None)
-                if lane is None:
-                    raise RuntimeError("Spring reverb has no playback lane")
-                self._spring_routing = io24_spring.route_main_only(
-                    dev, self._spring_routing, lane=lane)
-                message = None
-            except Exception as error:
-                message = "Spring reverb output failed: %s" % error
-            finally:
-                self._spring_route_pending = False
-            GLib.idle_add(self._sync_mix_widgets)
-            GLib.idle_add(self._spring_show)
-            if message:
-                GLib.idle_add(self.say, message)
-
-        self.ctl.submit(work)
-
-    def _spring_restore_routes(self):
-        if self._spring_route_pending or self._spring_routing is None:
-            return
-        self._spring_route_pending = True
-
-        def work(dev):
-            try:
-                self._spring_routing = io24_spring.restore_routes(
-                    dev, self._spring_routing)
-                message = None
-            except Exception as error:
-                message = "Spring reverb cleanup failed: %s" % error
-            finally:
-                self._spring_route_pending = False
-            GLib.idle_add(self._sync_mix_widgets)
-            GLib.idle_add(self._spring_show)
-            if message:
-                GLib.idle_add(self.say, message)
-
-        self.ctl.submit(work)
-
-    def _spring_give_up(self, message):
-        prior, self._spring_mute = self._spring_mute, True
-        try:
-            self.spring_on.set_active(False)
-        finally:
-            self._spring_mute = prior
-        self.spring.stop()
-        self._spring_restore_routes()
-        self._spring_show("Off · %s" % message)
-        self.say(message)
-
-    def _spring_reconcile(self, restart=False):
-        """Match the PipeWire tank and borrowed Main-only route to the switch."""
-        chain = getattr(self, "spring", None)
-        switch = getattr(self, "spring_on", None)
-        if chain is None or switch is None:
-            return
-        wanted = bool(switch.get_active())
-        if not wanted:
-            chain.stop()
-            self._spring_restore_routes()
-            self._spring_show()
-            return
-        if self.ctl.dev is None:
-            chain.stop()
-            self._spring_route_pending = False
-            self._spring_show("Waiting for the io24")
-            return
-        missing = io24_spring.available()
-        if missing:
-            self._spring_give_up("Spring reverb %s" % missing)
-            return
-        capture = io24_mbc.find_io24_capture_source()
-        playback = io24_mbc.find_io24_sink()
-        if not capture or not playback:
-            chain.stop()
-            self._spring_show("Waiting for audio")
-            return
-        state = self._spring_state()
-        try:
-            if restart:
-                chain.stop()
-            started = chain.start(state, capture, playback)
-        except (OSError, ValueError, io24_spring.PluginBuildError) as error:
-            self._spring_give_up("Spring reverb did not start: %s" % error)
-            return
-        if not started:
-            self._spring_give_up(
-                "Spring reverb did not start: %s" %
-                (chain.last_error or "unknown PipeWire error"))
-            return
-        self._spring_route_main()
-        self._spring_show()
-
-    def _spring_watchdog(self):
-        chain = getattr(self, "spring", None)
-        switch = getattr(self, "spring_on", None)
-        if chain is None or switch is None:
-            return True
-        wanted = bool(switch.get_active())
-        if self.ctl.dev is None:
-            if chain.running:
-                chain.stop()
-            self._spring_route_pending = False
-            if wanted:
-                self._spring_show("Waiting for the io24")
-            return True
-        if (wanted and (not chain.running or self._spring_routing is None)) or \
-                (not wanted and (chain.running or
-                                 self._spring_routing is not None)):
-            self._spring_reconcile()
-        return True
-
-    def _adopt_spring_state(self, state):
-        if state is None:
-            return None
-        try:
-            state = io24_spring.validate_state(state)
-        except (TypeError, ValueError) as error:
-            return "Spring reverb was not restored: %s" % error
-        if not getattr(self, "spring_controls", None):
-            return "Spring reverb controls are unavailable"
-        if self._spring_routing is None and state["routing"] is not None:
-            self._spring_routing = state["routing"]
-        prior_adopt, prior_spring = self._adopt_mute, self._spring_mute
-        self._adopt_mute = True
-        self._spring_mute = True
-        try:
-            for name, control in self.spring_controls.items():
-                control.set_value(state[name])
-            self.spring_on.set_active(state["enabled"])
-        finally:
-            self._spring_mute = prior_spring
-            self._adopt_mute = prior_adopt
-        self._spring_reconcile()
-        return "Spring reverb restored%s" % (
-            " on Main 1–2" if state["enabled"] else " switched off")
-
-    def _spring_shutdown(self):
-        chain = getattr(self, "spring", None)
-        if chain is not None:
-            chain.stop()
-        self._spring_routing = release_spring_routing(
-            getattr(self, "ctl", None), self._spring_routing)
 
     def _mark_processing_mix_known(self, channel):
         self.processing_mix_rows[channel].set_subtitle("")
@@ -6752,8 +6509,8 @@ class Win(Adw.ApplicationWindow):
             self.say("Available rates: %s" % allowed.strip("[] "))
             return
 
-        # Model 5 must not survive a 96 kHz clock transition in the unit. Do
-        # the device transaction first, and only then ask PipeWire to change
+        # Model 5 must not survive a clock transition above 48 kHz in the unit.
+        # Do the device transaction first, and only then ask PipeWire to change
         # the clock. This also cleans a stale/dirty model selected outside the
         # Host; the visible model is re-applied on the new safe path when ALSA
         # reports the rate change.
@@ -6773,8 +6530,8 @@ class Win(Adw.ApplicationWindow):
             if callable(save):
                 save()
             self.say(
-                "%d kHz will be applied after the io24 connects safely" %
-                (want // 1000))
+                "%.4g kHz will be applied after the io24 connects safely" %
+                (want / 1000.0))
             return
 
         if io24_fx.delay_needs_host_fallback(want) and self.ctl.dev is not None:
@@ -6856,10 +6613,11 @@ class Win(Adw.ApplicationWindow):
         })
 
     def _safe_delay_transition_rate(self, available):
-        """Choose a below-96 kHz staging clock, preferring verified 48 kHz."""
+        """Choose a native-Delay-safe staging clock, preferring 48 kHz."""
         candidates = sorted(
             int(rate) for rate in (available or SUPPORTED_SAMPLE_RATES)
-            if 8000 <= int(rate) < io24_fx.DELAY_BLOCKED_RATE_HZ)
+            if 8000 <= int(rate) and
+            not io24_fx.delay_needs_host_fallback(rate))
         if 48000 in candidates:
             return 48000
         if not candidates:
@@ -7118,28 +6876,20 @@ class Win(Adw.ApplicationWindow):
         """User presets and factory presets, as two drop-downs.
 
         One list per origin and one way to load: click Load and the preset's
-        Fat Channel and Voice FX go to the channel chosen in Load into, or to
+        Fat Channel and Voice FX go to the chosen Preset input, or to
         both while the channels are linked. Presets the user saves live on this
         computer; storing a Fat Channel candidate in a device block is an
         action on the preset, not a section of its own.
         """
         page = wide_preferences_page()
-        g = Adw.PreferencesGroup(title="Presets")
+        g = Adw.PreferencesGroup(title="Channel presets")
 
         self.factory_target = Adw.ComboRow(
-            title="Load into",
+            title="Preset input",
+            subtitle="Where Load and Save to device apply",
             model=Gtk.StringList.new(["Channel 1", "Channel 2"]))
         self.factory_target.set_selected(0)
         g.add(self.factory_target)
-
-        self.device_preset_slot = Adw.ComboRow(
-            title="Device preset",
-            model=Gtk.StringList.new([
-                "Preset 1", "Preset 2", "Preset 3",
-                "Preset 4", "Preset 5", "Preset 6",
-            ]))
-        self.device_preset_slot.set_selected(0)
-        g.add(self.device_preset_slot)
 
         search_row = Adw.ActionRow(title="Find a preset")
         self.factory_search = Gtk.SearchEntry(
@@ -7166,8 +6916,10 @@ class Win(Adw.ApplicationWindow):
         g.add(self.factory_presets_row)
         page.add(g)
 
-        scenes = Adw.PreferencesGroup(title="Scenes")
-        scene_row = Adw.ActionRow(title="Scene")
+        setups = Adw.PreferencesGroup(title="Whole setup")
+        scene_row = Adw.ActionRow(
+            title="UC scene",
+            subtitle="Portable device and mixer setup (.scene)")
         scene_save = Gtk.Button(label="Save scene…", valign=Gtk.Align.CENTER)
         scene_save.add_css_class("flat")
         scene_save.connect("clicked", self._save_scene_clicked)
@@ -7176,8 +6928,24 @@ class Win(Adw.ApplicationWindow):
         scene_load.add_css_class("flat")
         scene_load.connect("clicked", self._load_scene_clicked)
         scene_row.add_suffix(scene_load)
-        scenes.add(scene_row)
-        page.add(scenes)
+        setups.add(scene_row)
+
+        host_row = Adw.ActionRow(
+            title="Full Host setup",
+            subtitle="Everything this Linux Host can restore")
+        host_save = Gtk.Button(label="Save setup…", valign=Gtk.Align.CENTER)
+        host_save.add_css_class("flat")
+        host_save.connect("clicked", self.on_save)
+        host_row.add_suffix(host_save)
+        host_load = Gtk.Button(label="Load setup…", valign=Gtk.Align.CENTER)
+        host_load.add_css_class("flat")
+        host_load.connect("clicked", self.on_load)
+        host_row.add_suffix(host_load)
+        setups.add(host_row)
+        setups.add(Adw.ActionRow(
+            title="Automatic recovery",
+            subtitle="Resumes the last Host session; no named file to manage"))
+        page.add(setups)
 
         # The module always serves the user's own presets; only the factory
         # list depends on the recovered installer data being present.
@@ -7460,8 +7228,9 @@ class Win(Adw.ApplicationWindow):
             return button
 
         button = item(
-            "Save to device",
-            lambda: self._put_in_device_library(name, record, source))
+            "Save to device…",
+            lambda: self._choose_device_preset_destination(
+                name, record, source))
         if PUT_ON_UNIT_UNAVAILABLE:
             button.set_sensitive(False)
             button.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE)
@@ -7472,6 +7241,55 @@ class Win(Adw.ApplicationWindow):
         menu.add_css_class("flat")
         menu.set_tooltip_text(PUT_ON_UNIT_UNAVAILABLE or "Preset actions")
         return menu
+
+    def _choose_device_preset_destination(self, name, record, source):
+        """Ask for the exact input and storage kind before any device write."""
+        dialog = Adw.MessageDialog.new(
+            self, "Save %s to the io24" % name,
+            "Preset-button blocks are recalled from the front panel. Device "
+            "library slots are the six-per-input collection used by UC.")
+        rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        target = Adw.ComboRow(
+            title="Input",
+            model=Gtk.StringList.new(["Input 1", "Input 2"]))
+        target.set_selected(self._factory_target_channel() - 1)
+        rows.append(target)
+        destination = Adw.ComboRow(
+            title="Destination",
+            model=Gtk.StringList.new([
+                "Preset-button block 1", "Preset-button block 2",
+                "Device library slot 1", "Device library slot 2",
+                "Device library slot 3", "Device library slot 4",
+                "Device library slot 5", "Device library slot 6",
+            ]))
+        # Block 2 is normally inactive on a default unit, making the safe
+        # front-panel path visible without silently choosing a library slot.
+        destination.set_selected(1)
+        rows.append(destination)
+        dialog.set_extra_child(rows)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("continue", "Continue")
+        dialog.set_close_response("cancel")
+        dialog.set_default_response("cancel")
+        dialog.connect(
+            "response", self._device_preset_destination_response,
+            name, record, source, target, destination)
+        dialog.present()
+
+    def _device_preset_destination_response(
+            self, _dialog, response, name, record, source,
+            target_row, destination_row):
+        if response != "continue":
+            return
+        target = int(target_row.get_selected()) + 1
+        destination = int(destination_row.get_selected())
+        if destination < 2:
+            self._put_on_unit(
+                name, record, destination, source, target=target)
+        else:
+            self._put_in_device_library(
+                name, record, source, target=target,
+                channel_slot=destination - 2)
 
     def _filter_presets(self):
         """Filter both drop-downs by name and description."""
@@ -7538,7 +7356,7 @@ class Win(Adw.ApplicationWindow):
         return "Broadcast" if "Broadcast" in names else names[0]
 
     def _save_user_preset_clicked(self, _button):
-        """Save the Load into channel's current sound as one of your presets."""
+        """Save the Preset input's current sound as one of your presets."""
         try:
             name = self._current_slot_name()
             target = self._factory_target_channel()
@@ -7600,13 +7418,18 @@ class Win(Adw.ApplicationWindow):
         self._populate_user_presets()
         self.say("Deleted %s" % name)
 
-    def _prepare_device_library_store(self, name, record, source):
+    def _prepare_device_library_store(
+            self, name, record, source, target=None, channel_slot=None):
         """Resolve one of UC's six per-input ``PrsM`` destinations."""
         if self.ctl.dev is None:
             raise io24.HostActionError("io24 is not connected")
-        channel = self._factory_target_channel()
-        row = getattr(self, "device_preset_slot", None)
-        channel_slot = int(row.get_selected()) if row is not None else 0
+        channel = self._factory_target_channel() if target is None else int(target)
+        if channel not in (1, 2):
+            raise io24.HostActionError("Device Presets input must be 1 or 2")
+        if channel_slot is None:
+            row = getattr(self, "device_preset_slot", None)
+            channel_slot = int(row.get_selected()) if row is not None else 0
+        channel_slot = int(channel_slot)
         if not 0 <= channel_slot < 6:
             raise io24.HostActionError(
                 "Device Presets destination must be Preset 1 through 6")
@@ -7619,11 +7442,17 @@ class Win(Adw.ApplicationWindow):
             "user_index": user_index,
         }
 
-    def _put_in_device_library(self, name, record, source):
+    def _put_in_device_library(
+            self, name, record, source, target=None, channel_slot=None):
         """Confirm and queue UC's actual Device Presets Store transaction."""
         try:
+            destination = {}
+            if target is not None:
+                destination["target"] = target
+            if channel_slot is not None:
+                destination["channel_slot"] = channel_slot
             plan = self._prepare_device_library_store(
-                name, record, source)
+                name, record, source, **destination)
         except Exception as error:
             self.say("%s was not sent to Device Presets: %s" % (name, error))
             return
@@ -7666,20 +7495,28 @@ class Win(Adw.ApplicationWindow):
         self.say(message)
         return False
 
-    def _prepare_record_slot_store(self, name, record, relative_slot, source):
-        """Plan writing one preset into a block of the Load into channel."""
-        plan = self._prepare_slot_store_target(relative_slot=relative_slot)
+    def _prepare_record_slot_store(
+            self, name, record, relative_slot, source, target=None):
+        """Plan writing one preset into a block for the chosen Preset input."""
+        destination = {"relative_slot": relative_slot}
+        if target is not None:
+            destination["target"] = target
+        plan = self._prepare_slot_store_target(**destination)
         body = complete_device_slot_record(record)
         body["preset_name"] = name
         plan.update({"name": name, "record": body, "source": source,
                      "activate": False})
         return plan
 
-    def _put_on_unit(self, name, record, relative_slot, source):
+    def _put_on_unit(
+            self, name, record, relative_slot, source, target=None):
         """Confirm, then send one firmware-native Fat Channel candidate."""
         try:
+            destination = {}
+            if target is not None:
+                destination["target"] = target
             plan = self._prepare_record_slot_store(
-                name, record, relative_slot, source)
+                name, record, relative_slot, source, **destination)
         except Exception as error:
             self.say("%s was not saved to the device: %s" % (name, error))
             return
@@ -7750,14 +7587,16 @@ class Win(Adw.ApplicationWindow):
                 "(127 bytes)")
         return text
 
-    def _prepare_slot_store_target(self, relative_slot=None):
+    def _prepare_slot_store_target(self, relative_slot=None, target=None):
         """Return one connected, live, inactive device-slot destination."""
         if self.ctl.dev is None:
             raise io24.HostActionError("io24 is not connected")
         if not self.ctl.snap.get("alive"):
             raise io24.HostActionError(
                 "live device slot state is not available yet")
-        target = self._factory_target_channel()
+        target = self._factory_target_channel() if target is None else int(target)
+        if target not in (1, 2):
+            raise io24.HostActionError("device slot input must be 1 or 2")
         if relative_slot is None:
             relative_slot = int(self.factory_device_slot.get_selected())
         if relative_slot not in (0, 1):
@@ -8085,7 +7924,8 @@ class Win(Adw.ApplicationWindow):
                 if fx_error:
                     message += "; FX not loaded: %s" % fx_error
                 elif fx_hosted:
-                    message += " · Voice FX hosted at 96 kHz"
+                    message += " · Voice FX hosted at %.4g kHz" % (
+                        Win._voicefx_effective_rate(self) / 1000.0)
                 elif fx_command_sent:
                     message += " · Voice FX updated"
                 self.say(message)
@@ -8143,7 +7983,7 @@ class Win(Adw.ApplicationWindow):
     AUTOGAIN_TICK_MS = 50
 
     def _autogain_toggled(self, button, ch):
-        """UC's per-input Automatic Preamp Gain switch; linked inputs share it.
+        """The Host's per-input Auto Gain switch; linked inputs share it.
 
         Silent by design: switching it on is the whole interaction, and the
         corrections that follow are shown only by the gain fader moving.
@@ -8740,13 +8580,9 @@ class Win(Adw.ApplicationWindow):
         insert = self._insert_state()
         if insert is not None:
             host_features["multiband_insert"] = insert
-        reverb_character = self._reverb_character_state()
-        if reverb_character is not None:
-            host_features["reverb_character"] = reverb_character
-        spring_state = getattr(self, "_spring_state", None)
-        spring = spring_state() if callable(spring_state) else None
-        if spring is not None:
-            host_features["spring_reverb"] = spring
+        reverb_movement = self._reverb_movement_state()
+        if reverb_movement is not None:
+            host_features["reverb_movement"] = reverb_movement
         autogain = sorted(c for c, on in
                           getattr(self, "_autogain_on", {}).items() if on)
         if autogain:
@@ -8754,7 +8590,7 @@ class Win(Adw.ApplicationWindow):
         return host_features
 
     def _host_delay_feature_state(self):
-        """Return the semantic Delay that replaces unsafe model 5 at 96 kHz.
+        """Return the semantic Delay that replaces high-rate model 5.
 
         The device shadow cannot carry edits made while Delay is hosted in
         PipeWire: writing those edits to block 201 would be the reset hazard
@@ -8956,6 +8792,15 @@ class Win(Adw.ApplicationWindow):
         if getattr(self, "_audio_clock_restore_deferred", False):
             self._restore_audio_clock()
             return
+        # Coefficients must follow the clock the interface is actually using,
+        # not a saved/default selection. The periodic Device refresh otherwise
+        # arrives up to 1.5 seconds after this 33 ms resume path.
+        if not getattr(self, "_fs_seen", False):
+            refresh = getattr(self, "_refresh_device_page", None)
+            if callable(refresh):
+                refresh()
+            if not getattr(self, "_fs_seen", False):
+                return
         generation = snap.get("attach_generation")
         previous = getattr(self, "_resumed_generation", None)
         if generation == previous:
@@ -8969,9 +8814,6 @@ class Win(Adw.ApplicationWindow):
         if previous is not None:
             # a new connection: the insert's streams went with the old one
             self._insert_reconcile(restart=True)
-            spring_reconcile = getattr(self, "_spring_reconcile", None)
-            if callable(spring_reconcile):
-                spring_reconcile(restart=True)
 
     def _resume_session(self, first=True, path=None):
         """Pick up where the last session left off.
@@ -8985,8 +8827,20 @@ class Win(Adw.ApplicationWindow):
         than replaced by an old cached route.
         """
         session = load_last_session(path) if first else None
+        host_feature_migrations = []
         if first:
-            host_features = (session or {}).get("host_features")
+            raw_host_features = (session or {}).get("host_features")
+            if raw_host_features is None:
+                host_features = None
+            else:
+                try:
+                    host_features, host_feature_migrations = \
+                        io24._normalise_host_features(raw_host_features)
+                except ValueError as error:
+                    host_features = None
+                    GLib.idle_add(
+                        self.say,
+                        "Host settings were not restored: %s" % error)
         else:
             # Reapply sends the effective EQ shadow.  If a complete EQ was
             # bypassed that shadow is four identity filters, so keep the live
@@ -9046,7 +8900,9 @@ class Win(Adw.ApplicationWindow):
                 return
             message = ("Picked up where you left off"
                        if report.get("applied") or host_features else None)
-            GLib.idle_add(self._after_load, mirror, host_features, [], message)
+            GLib.idle_add(
+                self._after_load, mirror, host_features,
+                host_feature_migrations, message)
 
         self.ctl.submit(work)
 
@@ -9056,10 +8912,16 @@ class Win(Adw.ApplicationWindow):
     def on_load(self, *_a):
         self._pick(False)
 
+    def _load_full_host_setup(self, dev, path):
+        """Load a setup against the conservative live/requested clock."""
+        result = dev.load_preset(
+            path, sample_rate_hz=Win._voicefx_effective_rate(self))
+        return result, getattr(dev, "_last_preset_load_report", {})
+
     def _pick(self, saving):
         dlg = Gtk.FileDialog(
-            title="Save snapshot" if saving else "Load snapshot",
-            initial_name="io24-host-snapshot.json")
+            title="Save full Host setup" if saving else "Load full Host setup",
+            initial_name="io24-host-setup.json")
 
         def done(d, res):
             try:
@@ -9089,12 +8951,9 @@ class Win(Adw.ApplicationWindow):
                         quarantined = snap.get(
                             "quarantined_device_preset_calls", 0)
                     else:
-                        n_live, n_calls = dev.load_preset(
-                            path, sample_rate_hz=getattr(
-                                self, "_fs", DEFAULT_SAMPLE_RATE))
+                        (n_live, n_calls), load_report = \
+                            self._load_full_host_setup(dev, path)
                         msg = "Loaded %s" % os.path.basename(path)
-                        load_report = getattr(
-                            dev, "_last_preset_load_report", {})
                         quarantined = load_report.get(
                             "quarantined_device_preset_calls", 0)
                         # Capture the exact post-load mirror while still on the
@@ -9227,7 +9086,6 @@ class Win(Adw.ApplicationWindow):
 
             reverb = state["reverb"]
             if reverb is not None:
-                self.rev_type.set_selected(0)
                 self.rev_on.set_active(bool(reverb.get("on", True)))
                 self.s_rsize.set_value(float(reverb.get("size", 0.5)))
                 self.s_rmix.set_value(float(reverb.get("mix", 0.3)))
@@ -9317,17 +9175,15 @@ class Win(Adw.ApplicationWindow):
                 host_features.get("multiband"))
             insert_message = self._adopt_insert_state(
                 host_features.get("multiband_insert"))
-            reverb_message = self._adopt_reverb_character(
-                host_features.get("reverb_character"))
-            spring_message = self._adopt_spring_state(
-                host_features.get("spring_reverb"))
+            reverb_message = self._adopt_reverb_movement(
+                host_features.get("reverb_movement"))
             autogain_message = self._adopt_autogain(
                 host_features.get("autogain"))
             host_delay_message = self._adopt_host_delay_feature(
                 host_features.get("voicefx_delay"))
             messages = (standard_eq_message, alternate_eq_message,
                         multiband_message, insert_message, reverb_message,
-                        spring_message, autogain_message, host_delay_message)
+                        autogain_message, host_delay_message)
             host_messages = [message for message in messages
                              if message and any(word in message.casefold()
                                                 for word in ("not restored",
@@ -9338,10 +9194,11 @@ class Win(Adw.ApplicationWindow):
             host_features and host_features.get("voicefx_delay") is not None
             and not (host_delay_message or "").casefold().startswith(
                 "host delay was not restored"))
-        if restored_host_delay or (str(
+        restored_delay_on_host = restored_host_delay or (str(
                 restored_voicefx.get("model", "")).lower() == "delay" and \
                 io24_fx.delay_needs_host_fallback(
-                    Win._voicefx_effective_rate(self))):
+                    Win._voicefx_effective_rate(self)))
+        if restored_delay_on_host:
             # reapply_shadow deliberately skipped/refused model 5. The mirror
             # has now repopulated the exact visible controls, so materialize
             # that intent on the Host path and quiesce hardware block 201.
@@ -9351,6 +9208,9 @@ class Win(Adw.ApplicationWindow):
         if completion_message is not None:
             completion_message = append_host_migration_notices(
                 completion_message, host_feature_migrations)
+            if restored_delay_on_host:
+                completion_message += " · Delay restored on Host at %.4g kHz" % (
+                    Win._voicefx_effective_rate(self) / 1000.0)
             if host_messages:
                 completion_message += "; " + "; ".join(host_messages)
             self.say(completion_message)
@@ -9676,20 +9536,6 @@ def release_insert_routing(ctl, routing):
     return routing if routing["moved"] or routing["return_prior"] else None
 
 
-def release_spring_routing(ctl, routing):
-    """Restore any dedicated Spring playback lane before Host exit."""
-    if not routing:
-        return None
-    dev = getattr(ctl, "dev", None)
-    if dev is None:
-        return routing
-    try:
-        with dev.lock:
-            return io24_spring.restore_routes(dev.dev, routing)
-    except Exception:
-        return routing
-
-
 def snapshot_host_features(features):
     """Host features as a snapshot file keeps them. What the Host changed in
     the unit's mixer and in PipeWire belongs to this session, not the file."""
@@ -9698,9 +9544,7 @@ def snapshot_host_features(features):
     if insert is not None:
         features["multiband_insert"] = dict(
             insert, routing=None, quantum_before=None)
-    spring = features.get("spring_reverb")
-    if spring is not None:
-        features["spring_reverb"] = dict(spring, routing=None)
+    features.pop("spring_reverb", None)
     return features
 
 
@@ -9716,8 +9560,6 @@ class App(Adw.Application):
         # input back, and no orphan process left behind
         if w is not None and getattr(w, "insert", None) is not None:
             w._insert_shutdown()
-        if w is not None and getattr(w, "spring", None) is not None:
-            w._spring_shutdown()
         if w is not None and getattr(w, "bus_sources", None) is not None:
             w.bus_sources.stop()
         # Remember this session for the next launch; a window that never

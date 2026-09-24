@@ -41,7 +41,8 @@ else
 fi
 
 cd "$ANDROID_DIR"
-"$GRADLE" --offline testDebugUnitTest lintDebug assembleDebug
+"$GRADLE" --offline --max-workers=1 --console=plain \
+    clean testDebugUnitTest lintDebug assembleDebug
 
 APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
 if [ ! -s "$APK" ]; then

@@ -11,6 +11,7 @@ Nothing here opens USB, audio, Wine, or a display.
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import unittest
 
@@ -50,12 +51,13 @@ class PassiveSchemaTests(unittest.TestCase):
             {"__classid", "eqallon", "bboost", "batten", "bfreq",
              "mboost", "bbwidth", "mfreq", "hatten", "hsfreq"})
 
-    def test_default_dll_path_names_the_retained_project_fixture(self):
+    def test_default_dll_path_uses_the_public_cache_or_explicit_override(self):
         self.assertEqual(
             Path(self.module.DEFAULT_DLL),
-            Path(".superpowers/sdd/2026-08-28-cp34-preset-effect-control/"
-                 "runs/20260906T001130-0700-uc472-official-reacquisition/"
-                 "extracted/hwaccess/dspusbdevice.dll"))
+            Path(os.environ.get(
+                "IO24_UC472_DSPUSBDEVICE",
+                Path.home() / ".cache" / "io24" / "re" /
+                "dspusbdevice.dll")))
 
     def test_eq_off_still_validates_semantics_then_returns_identity(self):
         disabled = dict(self.passive, eqallon=0)

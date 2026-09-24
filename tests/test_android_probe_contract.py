@@ -101,20 +101,21 @@ def test_input2_mute_vector_is_fixed_to_the_proven_parameter():
     )
 
 
-def test_android_protocol_core_exposes_read_and_only_the_bounded_write():
-    source = (PACKAGE / "PaeFrame.java").read_text()
+def test_android_protocol_core_exposes_bounded_native_framing():
+    frame = (PACKAGE / "PaeFrame.java").read_text()
+    protocol = (PACKAGE / "Io24Protocol.java").read_text()
+    commands = (PACKAGE / "Io24Command.java").read_text()
 
-    assert "buildStateRead" in source
-    assert "parseStateReply" in source
-    assert "0x47657450" in source  # GetP
-    assert "0x4170706c" in source  # Appl
-    assert "0x4a615374" in source  # JaSt
-    assert "0x52706c79" in source  # Rply
-    assert "buildInput2MuteWrite" in source
-    assert "0x53657450" in source  # SetP
-    assert "0x50617269" in source  # Pari
-    for forbidden in ("FRst", "setParam", "parameterId", "channelIndex"):
-        assert forbidden not in source
+    assert "buildStateRead" in frame
+    assert "parseStateReply" in frame
+    assert "buildBlockWrite" in frame
+    assert "parseSetReply" in frame
+    assert "encodeTransaction" in protocol
+    assert "VOICE_FX_REPLACE_SETTLE_MS = 60" in protocol
+    assert "enum Kind" in commands
+    assert "Map<String, Range> PROCESSING" in commands
+    for source in (frame, protocol, commands):
+        assert "FRst" not in source
 
 
 def test_manifest_has_usb_host_support_without_network_permission():
@@ -147,21 +148,44 @@ def test_usb_transport_claims_only_the_unforced_control_interface():
     assert "setInterface(controlInterface)" in source
     assert "setInput2Mute" in source
     assert "MUTE_SETTLE_MS = 350" in source
+    assert "Io24Protocol.encodeTransaction" in source
     for forbidden in ("claimInterface(controlInterface, true)", "FRst"):
         assert forbidden not in source
 
 
-def test_device_filter_matches_only_the_normal_io24_identity():
-    root = ElementTree.parse(
-        ANDROID / "app/src/main/res/xml/device_filter.xml"
-    ).getroot()
-    devices = root.findall("usb-device")
+def test_each_native_write_drains_its_reply_before_fresh_state():
+    source = (PACKAGE / "Io24UsbProbe.java").read_text()
+    method = source.split(
+        "public synchronized CommandResult execute", 1
+    )[1].split("public synchronized boolean setInput2Mute", 1)[0]
 
-    assert len(devices) == 1
-    assert devices[0].attrib == {
-        "vendor-id": "0x194f",
-        "product-id": "0x0422",
+    drain = method.index("readOptionalSetpReply")
+    state_read = method.index("readFreshState")
+    assert drain < state_read
+    assert "PaeFrame.parseSetReply" in source
+
+
+def test_usb_access_has_no_automatic_attach_entrypoint():
+    manifest = ElementTree.parse(
+        ANDROID / "app/src/main/AndroidManifest.xml"
+    ).getroot()
+    activity = manifest.find("application/activity")
+
+    assert activity is not None
+    actions = {
+        action.attrib[ANDROID_NS + "name"]
+        for action in activity.findall("intent-filter/action")
     }
+    metadata = {
+        item.attrib[ANDROID_NS + "name"]
+        for item in activity.findall("meta-data")
+    }
+    assert "android.hardware.usb.action.USB_DEVICE_ATTACHED" not in actions
+    assert "android.hardware.usb.action.USB_DEVICE_ATTACHED" not in metadata
+    assert not (ANDROID / "app/src/main/res/xml/device_filter.xml").exists()
+    assert "ACTION_USB_DEVICE_ATTACHED" not in (
+        PACKAGE / "MainActivity.java"
+    ).read_text()
 
 
 def test_legacy_receiver_branch_has_a_narrow_lint_suppression():
@@ -183,7 +207,6 @@ def test_front_facing_android_metadata_is_resource_backed():
         ANDROID / "app/src/main/res/values/strings.xml"
     ).getroot()
     names = {item.attrib["name"] for item in strings.findall("string")}
-    activity = (PACKAGE / "MainActivity.java").read_text()
 
     assert application is not None
     assert application.attrib[ANDROID_NS + "label"] == "@string/app_name"
@@ -195,22 +218,125 @@ def test_front_facing_android_metadata_is_resource_backed():
     assert application.attrib[ANDROID_NS + "fullBackupContent"] == "false"
     assert {
         "app_name",
-        "app_description",
-        "action_inspect",
-        "action_disconnect",
-        "action_mute_input2",
-        "action_unmute_input2",
-        "status_connected",
-        "status_input2_mute_writing",
-        "status_input2_mute_unverified",
-        "status_probe_failed",
+        "status_connect_device",
+        "status_device_ready",
+        "status_device_missing",
+        "status_permission_denied",
+        "status_waiting_permission",
+        "status_simulated_ready",
     } <= names
-    assert '.setText("' not in activity
 
 
-def test_input2_mute_is_an_explicit_disabled_until_connected_action():
+def test_five_screen_shell_has_no_browser_or_network_runtime():
     activity = (PACKAGE / "MainActivity.java").read_text()
 
-    assert "input2MuteButton" in activity
-    assert "setInput2Mute" in activity
-    assert "input2MuteButton.setEnabled(false)" in activity
+    for label in ("MIXER", "FAT_CHANNEL", "EFFECTS", "PRESETS", "DEVICE"):
+        assert label in activity
+    assert "WindowInsets.Type.systemBars()" in activity
+    assert "connectionDetail.setText(state.statusMessage())" in activity
+    assert "WebView" not in activity
+    assert "http://" not in activity
+    assert "https://" not in activity
+
+
+def test_native_dsp_surface_is_allowlisted_and_rate_guarded():
+    dsp = (PACKAGE / "NativeDsp.java").read_text()
+    protocol = (PACKAGE / "Io24Protocol.java").read_text()
+    command = (PACKAGE / "Io24Command.java").read_text()
+    effects = (PACKAGE / "EffectRackView.java").read_text()
+
+    for tag in (
+        "TAG_VOFX", "TAG_GODV", "TAG_MAY4", "TAG_BOTA", "TAG_BOTB",
+        "TAG_BOTC", "TAG_VECH", "TAG_VRVB", "TAG_CPXT", "TAG_GATE",
+    ):
+        assert tag in dsp
+    assert "twoAudioQuantaMillis" in protocol
+    assert "canRunNatively" in protocol
+    assert "sampleRateConfirmed" in command
+    assert "enabling it disables other Voice FX models" in effects
+    assert 'addWetDry(context)' in effects
+
+
+def test_android_preset_ui_maps_two_blocks_per_input_and_names_scene_scope():
+    presets = (PACKAGE / "PresetsView.java").read_text()
+    native = (PACKAGE / "NativePreset.java").read_text()
+
+    assert '"Whole-setup scenes"' in presets
+    assert '"Front-panel preset blocks"' in presets
+    assert 'new String[] {"Block 1", "Block 2"}' in presets
+    assert "deviceSlotIndex(" in presets
+    assert '"Save current input to this block"' in presets
+    assert "Io24Command.saveDeviceBlock(channel, block)" in presets
+    assert "WRITE_SENT_UNVERIFIED" in presets
+    assert "Native preset body is too large" in native
+    assert "Delay cannot be stored active in a device block" in native
+    assert '"Select block for front-panel use"' in presets
+    assert '"Load selected block"' not in presets
+    assert '"Slot 3"' not in presets
+    assert '"Slot 4"' not in presets
+
+
+def test_emulator_transport_is_debug_only_and_requires_an_explicit_extra():
+    activity = (PACKAGE / "MainActivity.java").read_text()
+    simulator = (PACKAGE / "SimulatedIo24Control.java").read_text()
+
+    assert "ApplicationInfo.FLAG_DEBUGGABLE" in activity
+    assert "EXTRA_SIMULATED_IO24" in activity
+    assert "getBooleanExtra(EXTRA_SIMULATED_IO24, false)" in activity
+    assert "SimulatedIo24Control" in activity
+    assert "android.hardware.usb" not in simulator
+    assert "DeviceState" in simulator
+
+
+def test_emulator_helper_targets_only_the_named_local_avd():
+    helper = (ANDROID / "emulator.sh").read_text()
+
+    assert "io24_blu_api35" in helper
+    assert "emulator-5556" in helper
+    assert "SIMULATED_IO24" in helper
+    assert "SIMULATED_READBACK_FAILURE" in helper
+    assert "SIMULATED_DELAY_96" in helper
+    assert "delay96" in helper
+    for forbidden in (
+        'adb devices',
+        '"$ADB" -d',
+        '"$ADB" -e',
+        'USB_DEVICE_ATTACHED',
+    ):
+        assert forbidden not in helper
+
+
+def test_voice_fx_input_assignment_uses_the_uc_owner_object():
+    protocol = (PACKAGE / "Io24Protocol.java").read_text()
+
+    assert "scalarNative(\n                        0, 12, command.channel() - 1" in protocol
+    assert "scalarNative(\n                        command.channel() - 1, 12" not in protocol
+
+
+def test_rate_confirmation_and_usb_permission_fail_safe():
+    state = (PACKAGE / "Io24State.java").read_text()
+    device = (PACKAGE / "DeviceView.java").read_text()
+    activity = (PACKAGE / "MainActivity.java").read_text()
+    manifest = ElementTree.parse(
+        ANDROID / "app/src/main/AndroidManifest.xml"
+    ).getroot()
+    android_activity = manifest.find("application/activity")
+
+    assert "sampleRateConfirmed" in state
+    assert '"Confirm current audio rate…"' in device
+    assert "PendingIntent.FLAG_MUTABLE" in activity
+    assert "usbManager.hasPermission(device)" in activity
+    assert android_activity is not None
+    config_changes = set(android_activity.attrib[
+        ANDROID_NS + "configChanges"].split("|"))
+    assert {
+        "density", "keyboardHidden", "orientation", "screenLayout",
+        "screenSize", "smallestScreenSize", "uiMode",
+    } <= config_changes
+
+
+def test_scene_planner_keeps_rate_and_front_panel_blocks_out_of_scene_apply():
+    planner = (PACKAGE / "Io24ScenePlanner.java").read_text()
+
+    assert "Io24Command.setSampleRate" not in planner
+    assert "Io24Command.setPresetSlot" not in planner

@@ -603,7 +603,7 @@ in `JaSt`, so a write is unverifiable from software — it needs one listening t
 
 For INERT, SHADOW, MIXER and BLOCKED routes: accept the `SetValue`, update shadow state so the
 plugin's UI stays self-consistent, emit **no** USB traffic, and log the disposition. `SetP` is
-fire-and-forget with no acknowledgement, so a shim that forwarded guesses would be indistinguishable
+semantically fire-and-forget with no data-bearing acknowledgement, so a shim that forwarded guesses would be indistinguishable
 from one that worked — which is precisely why guessing is not acceptable here. Every route in §4 is
 tagged with its disposition in the code, and `apply()` is the single choke point where that decision
 is made.

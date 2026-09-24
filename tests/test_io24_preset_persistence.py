@@ -801,7 +801,7 @@ class PresetPersistenceTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         gtk_source = (root / "io24gtk.py").read_text()
 
-        self.assertIn('menu.append("Save snapshot…"', gtk_source)
+        self.assertIn('menu.append("Save full Host setup…"', gtk_source)
         # 2026-09-11: presets on the unit are listed among User Presets,
         # tagged by where they live, rather than in a section of their own.
         self.assertIn('"Input %d · Preset button %d"', gtk_source)

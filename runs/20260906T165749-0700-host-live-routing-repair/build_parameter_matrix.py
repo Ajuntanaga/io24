@@ -909,6 +909,11 @@ def _safe_public_api() -> set[str]:
         for node in cls.body:
             if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
                 continue
+            # Host-only reverb movement deliberately bypasses the persistent
+            # shadow while using the same native reverb parameter route. It is
+            # not an additional user-facing device control row.
+            if node.name == "set_reverb_transient":
+                continue
             if (node.name.startswith(("set_", "save_", "load_", "read_", "clear_", "reapply_"))
                     or node.name in {
                         "close", "floats", "output_delay_off", "processing_channel",

@@ -3,9 +3,11 @@
 
 import importlib.util
 import hashlib
+import os
 from pathlib import Path
 import struct
 import unittest
+from unittest import mock
 
 import io24
 import io24_fx
@@ -31,16 +33,28 @@ from io24_native_stat import (
 )
 import io24_dsp
 import io24_native_strip
+import io24_uc472_vintage_eq
 from io24_preset_record import encode_preset_record
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UC472_DLL = (
-    ROOT / ".superpowers" / "sdd" /
-    "2026-08-28-cp34-preset-effect-control" / "runs" /
-    "20260906T001130-0700-uc472-official-reacquisition" / "extracted" /
-    "hwaccess" / "dspusbdevice.dll"
-)
+UC472_DLL = Path(os.environ.get(
+    "IO24_UC472_DSPUSBDEVICE",
+    Path.home() / ".cache" / "io24" / "re" / "dspusbdevice.dll",
+))
+
+
+def _has_exact_uc472_dll():
+    try:
+        if UC472_DLL.stat().st_size != io24_uc472_vintage_eq.DSP_SIZE:
+            return False
+        return hashlib.sha256(UC472_DLL.read_bytes()).hexdigest() == \
+            io24_uc472_vintage_eq.DSP_SHA256
+    except OSError:
+        return False
+
+
+HAS_EXACT_UC472_DLL = _has_exact_uc472_dll()
 
 
 def _native_record(include_voicefx=True):
@@ -178,7 +192,22 @@ class NativeStatTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "gate on must be boolean"):
             build_native_slot_record(scene, 1, sample_rate_hz=96000.0)
 
-    @unittest.skipUnless(UC472_DLL.is_file(), "exact UC EQ designer not retained")
+    def test_active_delay_is_never_embedded_in_a_device_resident_block(self):
+        scene = self._standard_scene()
+        scene["voicefx"] = {
+            "__classid": "{98A527BA-2D6E-4B35-BB26-251EC081A067}",
+            "on": 1,
+            "time": 0.19,
+            "feedback": 0.2,
+            "mix": 0.5,
+        }
+
+        with self.assertRaisesRegex(
+                ValueError, "active Delay.*device-resident"):
+            build_native_slot_record(scene, 1, sample_rate_hz=48000.0)
+
+    @unittest.skipUnless(HAS_EXACT_UC472_DLL,
+                         "exact UC EQ designer not retained")
     def test_complete_vintage_scene_builds_a_firmware_native_slot_body(self):
         scene = self._standard_scene()
         scene["eq"] = {
@@ -190,7 +219,10 @@ class NativeStatTests(unittest.TestCase):
             "higain": 0.96,
         }
 
-        raw = build_native_slot_record(scene, 1, sample_rate_hz=96000.0)
+        with mock.patch.dict(
+                "os.environ",
+                {"IO24_UC472_DSPUSBDEVICE": str(UC472_DLL)}):
+            raw = build_native_slot_record(scene, 1, sample_rate_hz=96000.0)
 
         self.assertEqual(validate_native_stat_record(raw, slot_index=1), raw)
         top = {chunk.key: chunk.payload
@@ -385,7 +417,8 @@ class NativeStatTests(unittest.TestCase):
         self.assertEqual(fake.payloads, [])
 
 
-@unittest.skipUnless(UC472_DLL.is_file(), "retained exact UC 4.7.2 DLL unavailable")
+@unittest.skipUnless(HAS_EXACT_UC472_DLL,
+                     "retained exact UC 4.7.2 DLL unavailable")
 class NativeStatFirmwareAttributionTests(unittest.TestCase):
     def test_exact_firmware_separates_four_native_slots_from_library(self):
         path = ROOT / "re" / "cp34_native_stat_layout.py"
@@ -534,13 +567,13 @@ class NativeDelayComponentTests(unittest.TestCase):
                     (NativeStatFormatError, ValueError)):
                 encode_native_delay_state(**kwargs)
 
-    def test_a_delay_scene_now_builds_instead_of_being_refused(self):
+    def test_an_active_delay_is_refused_at_96khz_too(self):
         scene = self._standard_scene()
         scene["voicefx"] = {"__classid": io24_fx.VOICEFX_CLASS_IDS["delay"],
                             "on": 1, "time": 0.2, "feedback": 0.6, "mix": 1.0}
-        record = build_native_slot_record(scene, 1, sample_rate_hz=96000.0)
-        summary = native_stat_summary(record, slot_index=1)
-        self.assertEqual(summary["voicefx"]["selected_model"], 5)
+        with self.assertRaisesRegex(
+                NativeStatFormatError, "active Delay.*device-resident"):
+            build_native_slot_record(scene, 1, sample_rate_hz=96000.0)
 
     def test_a_model_without_a_decoded_leaf_is_still_refused(self):
         with self.assertRaises(NativeStatFormatError):

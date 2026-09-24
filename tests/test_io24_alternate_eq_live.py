@@ -107,15 +107,15 @@ class AlternateEqSchemaTests(unittest.TestCase):
                                 for item in sections[1:]))
 
 
-@unittest.skipUnless(io24_alt_eq.DEFAULT_DLL.is_file(),
-                     "retained UC 4.7.2 DLL is not present")
+@unittest.skipUnless(io24_alt_eq.designer_status()[0],
+                     "exact UC 4.7.2 DLL is not present")
 class AlternateEqWireTests(unittest.TestCase):
     def test_uc_source_binds_every_designer_to_the_live_tag_and_index(self):
         spec = importlib.util.spec_from_file_location(
             "uc472_alt_eq_live_route", ROUTE_ANALYZER)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        report = module.analyze(io24_alt_eq.DEFAULT_DLL)
+        report = module.analyze(io24_alt_eq.resolve_dll())
         self.assertEqual(
             report["status"],
             "UC472_ALTERNATE_EQ_LIVE_ROUTE_SOURCE_BOUND")

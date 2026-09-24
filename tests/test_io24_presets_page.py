@@ -143,17 +143,47 @@ class PresetsPageShapeTests(unittest.TestCase):
 
     def test_uc_scenes_have_visible_validated_save_and_load_actions(self):
         page = _function("_presets_page")
-        self.assertIn('title="Scenes"', page)
-        self.assertIn('title="Scene"', page)
+        self.assertIn('title="Whole setup"', page)
+        self.assertIn('title="UC scene"', page)
+        self.assertIn('title="Full Host setup"', page)
+        self.assertIn('title="Automatic recovery"', page)
         self.assertIn('label="Save scene…"', page)
         self.assertIn('label="Load scene…"', page)
-        self.assertNotIn("device library", page)
         loader = _function("_load_scene_clicked")
         self.assertIn("io24_scene.plan", loader)
         self.assertIn("io24_scene.apply_transactional", loader)
         saver = _function("_save_scene_clicked")
         self.assertIn("io24_scene.capture", saver)
         self.assertIn("io24_scene.save", saver)
+
+    def test_save_to_device_asks_for_input_and_exact_storage_destination(self):
+        chooser = _function("_choose_device_preset_destination")
+        self.assertIn('"Preset-button block 1"', chooser)
+        self.assertIn('"Preset-button block 2"', chooser)
+        self.assertIn('"Device library slot 1"', chooser)
+        self.assertIn('"Device library slot 6"', chooser)
+        self.assertIn('title="Input"', chooser)
+        self.assertIn('title="Destination"', chooser)
+
+        calls = []
+        host = SimpleNamespace(
+            _put_on_unit=lambda *args, **kwargs:
+            calls.append(("block", args, kwargs)),
+            _put_in_device_library=lambda *args, **kwargs:
+            calls.append(("library", args, kwargs)),
+        )
+        row = lambda value: SimpleNamespace(get_selected=lambda: value)
+        io24gtk.Win._device_preset_destination_response(
+            host, None, "continue", "Warm", _record("Warm"), "user:Warm",
+            row(1), row(0))
+        io24gtk.Win._device_preset_destination_response(
+            host, None, "continue", "Warm", _record("Warm"), "user:Warm",
+            row(0), row(7))
+
+        self.assertEqual(calls[0][0], "block")
+        self.assertEqual(calls[0][2], {"target": 2})
+        self.assertEqual(calls[1][0], "library")
+        self.assertEqual(calls[1][2], {"target": 1, "channel_slot": 5})
 
     def test_every_loadable_row_has_a_visible_load_button(self):
         self.assertEqual(

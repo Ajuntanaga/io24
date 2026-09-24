@@ -8,10 +8,11 @@
     "sha256": "3808d1d15e3ec6bd5b84057fb5d84c33d8a1536a258146bcea2e603fc726e08e"
   },
   "gradle": {
-    "version": "8.11.1",
-    "archive": "gradle-8.11.1-bin.zip",
-    "url": "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip",
-    "sha256": "f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6"
+    "version": "9.7.1",
+    "archive": "gradle-9.7.1-bin.zip",
+    "url": "https://services.gradle.org/distributions/gradle-9.7.1-bin.zip",
+    "sha256": "acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a",
+    "wrapper_jar_sha256": "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d"
   },
   "android_command_line_tools": {
     "version": "22.0",
@@ -22,7 +23,7 @@
   "android_sdk_packages": {
     "platform-tools": "37.0.1",
     "platforms;android-35": "2",
-    "build-tools;35.0.0": "35.0.0"
+    "build-tools;36.0.0": "36.0.0"
   },
-  "android_gradle_plugin": "8.9.2"
+  "android_gradle_plugin": "9.4.1"
 }

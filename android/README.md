@@ -4,6 +4,11 @@ This is a direct, offline Android controller for the PreSonus Revelator io24.
 The phone talks to the interface over USB-C. It does not need the Linux laptop,
 a browser, a web server, or an Internet connection.
 
+This repository is intentionally independent from the
+[io24 Linux Host](https://github.com/Ajuntanaga/io24). Each project can mature
+and release on its own. Shared protocol work can be reconciled later without
+making either controller depend on the other at runtime.
+
 ```text
 Android phone -> USB-C -> Revelator io24
 ```
@@ -135,9 +140,9 @@ From this directory:
 ./verify.sh
 ```
 
-The script runs the host safety contracts, all Java tests, Android lint, and a
-clean offline debug build. It prints the APK SHA-256 when everything passes.
-Use `./verify.sh --host-only` for the fast source-contract check.
+The script runs the source and protocol contracts, all Java tests, Android
+lint, and a clean offline debug build. It prints the APK SHA-256 when
+everything passes. Use `./verify.sh --host-only` for the fast contract check.
 
 The installable artifact is:
 
@@ -146,12 +151,14 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 This is a debug-signed APK for direct testing, not a Play Store package. The
-project pins Temurin 17, Gradle 8.11.1, Android Gradle Plugin 8.9.2, Android
-Platform 35 revision 2, and Build Tools 35.0.0 in `toolchain.lock.json`.
+project pins Temurin 17, Gradle 9.7.1, Android Gradle Plugin 9.4.1, Android
+Platform 35 revision 2, and Build Tools 36.0.0 in `toolchain.lock.json`.
 
 See [EMULATOR.md](EMULATOR.md) for the local development loop,
 [BUILD_REPORT.md](BUILD_REPORT.md) for the exact artifact record, and
 [LIVE_TEST_REPORT.md](LIVE_TEST_REPORT.md) for the physical observations.
 The underlying protocol work builds on
 [Oddbear's Revelator.io24.Api](https://github.com/oddbear/Revelator.io24.Api),
-with the broader credit and protocol history in the repository root README.
+which established the UCNET model and made this broader interoperability work
+possible. The companion [io24 Linux Host](https://github.com/Ajuntanaga/io24)
+documents the desktop implementation and the longer protocol history.

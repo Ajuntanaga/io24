@@ -5,8 +5,8 @@ Clean offline build completed on 2026-09-24.
 ## Artifact
 
 - APK: `app/build/outputs/apk/debug/app-debug.apk`
-- SHA-256: `822b10fcf7f7a29ed81b031ef8814fa3a98501b23552cc0a32f97424b1a7c01e`
-- Size: 129,443 bytes
+- SHA-256: `9ccd9c9192b7da197a4c2f2087149e7004bd5d7fc89de030437b67815909b16c`
+- Size: 1,002,489 bytes
 - Package: `dev.ajuntanaga.io24`
 - Version: `0.3.4` (`versionCode` 9)
 - Android: API 23 minimum, API 35 target
@@ -14,10 +14,11 @@ Clean offline build completed on 2026-09-24.
 
 ## Automated verification
 
-- Host protocol and safety contracts: 17 passed
+- Standalone source, protocol, toolchain, and publication contracts: 22 passed
 - Java unit tests: 67 passed, 0 failed, 0 skipped
 - Android lint: no issues found
 - Clean debug APK assembly: passed
+- Toolchain: Gradle 9.7.1, Android Gradle Plugin 9.4.1, Temurin 17
 - Manifest: USB host feature only; no requested permissions
 - USB entry: launcher only; no automatic `USB_DEVICE_ATTACHED` activity
 - APK privacy scan: no home paths, workstation hostname, old transfer URL,

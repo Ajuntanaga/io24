@@ -1,9 +1,8 @@
 #!/bin/sh
 set -eu
 
-ANDROID_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-REPO_DIR=$(dirname -- "$ANDROID_DIR")
-TOOLCHAIN_DIR="$ANDROID_DIR/.toolchain"
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+TOOLCHAIN_DIR="$ROOT_DIR/.toolchain"
 
 if [ -x "$TOOLCHAIN_DIR/jdk-17/bin/java" ]; then
     JAVA_HOME="$TOOLCHAIN_DIR/jdk-17"
@@ -21,30 +20,31 @@ if [ -d "$TOOLCHAIN_DIR/gradle-home" ]; then
 fi
 
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
-    -q "$REPO_DIR/tests/test_android_probe_contract.py" \
+    -q "$ROOT_DIR/tests/test_android_contract.py" \
+    "$ROOT_DIR/tests/test_repository_contract.py" \
     -p no:cacheprovider
 
 if [ "${1:-}" = "--host-only" ]; then
     exit 0
 fi
 
-if [ -x "$TOOLCHAIN_DIR/gradle-8.11.1/bin/gradle" ]; then
-    GRADLE="$TOOLCHAIN_DIR/gradle-8.11.1/bin/gradle"
-elif [ -x "$ANDROID_DIR/gradlew" ]; then
-    GRADLE="$ANDROID_DIR/gradlew"
+if [ -x "$TOOLCHAIN_DIR/gradle-9.7.1/bin/gradle" ]; then
+    GRADLE="$TOOLCHAIN_DIR/gradle-9.7.1/bin/gradle"
+elif [ -x "$ROOT_DIR/gradlew" ]; then
+    GRADLE="$ROOT_DIR/gradlew"
 elif command -v gradle >/dev/null 2>&1; then
     GRADLE=$(command -v gradle)
 else
     echo "Android build unavailable: install the toolchain pinned in toolchain.lock.json." >&2
-    echo "The host protocol and safety contracts passed." >&2
+    echo "The source, protocol, and repository contracts passed." >&2
     exit 3
 fi
 
-cd "$ANDROID_DIR"
+cd "$ROOT_DIR"
 "$GRADLE" --offline --max-workers=1 --console=plain \
     clean testDebugUnitTest lintDebug assembleDebug
 
-APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+APK="$ROOT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 if [ ! -s "$APK" ]; then
     echo "Android build completed without producing $APK" >&2
     exit 4

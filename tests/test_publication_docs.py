@@ -88,7 +88,9 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn(
             "https://github.com/oddbear/Revelator.io24.Api", readme)
         self.assertIn("There is no browser service", readme)
-        self.assertIn("optional direct USB Android controller", readme)
+        self.assertIn(
+            "https://github.com/Ajuntanaga/io24-android", readme)
+        self.assertNotIn("lives under", readme)
         for filename in front_facing:
             with self.subTest(filename=filename):
                 self.assertNotIn("—", (ROOT / filename).read_text())
@@ -120,11 +122,11 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertIn("None of it is included", publication)
         self.assertIn("never a CI requirement", publication)
         self.assertIn("Ajuntanaga/io24", publication)
-        self.assertIn("Android controller source", publication)
+        self.assertIn("Ajuntanaga/io24-android", publication)
         self.assertIn("neutral 1,028-byte native-slot structural template",
                       publication)
 
-    def test_ci_names_only_existing_tests_and_covers_android(self):
+    def test_ci_names_only_existing_host_tests(self):
         workflow_path = ROOT / ".github/workflows/ci.yml"
         workflow_text = workflow_path.read_text()
         referenced = sorted(set(re.findall(
@@ -132,7 +134,7 @@ class PublicationDocumentationTests(unittest.TestCase):
 
         self.assertTrue(workflow_text.strip())
         self.assertNotIn("tests/test_io24_spring.py", referenced)
-        self.assertIn("tests/test_android_probe_contract.py", referenced)
+        self.assertNotIn("tests/test_android_probe_contract.py", referenced)
         for required in (
                 "tests/test_io24_host_autogain.py",
                 "tests/test_io24_host_delay_action.py",
@@ -141,11 +143,8 @@ class PublicationDocumentationTests(unittest.TestCase):
                 "tests/test_io24_presets_page.py",
                 "tests/test_io24_voicefx_preset_apply.py"):
             self.assertIn(required, referenced)
-        self.assertIn("testDebugUnitTest", workflow_text)
-        self.assertIn(
-            '"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"',
-            workflow_text,
-        )
+        self.assertNotIn("testDebugUnitTest", workflow_text)
+        self.assertNotIn("setup-java", workflow_text)
         self.assertEqual(
             [path for path in referenced if not (ROOT / path).is_file()], [])
 
@@ -170,11 +169,10 @@ class PublicationDocumentationTests(unittest.TestCase):
         self.assertEqual(len(paths), len(set(paths)))
         missing = [path for path in paths if not (ROOT / path).is_file()]
         self.assertEqual(missing, [])
-        self.assertIn("android/README.md", paths)
+        self.assertFalse(any(path.startswith("android/") for path in paths))
         self.assertIn(".github/dependabot.yml", paths)
         self.assertIn(".github/workflows/codeql.yml", paths)
-        self.assertIn("android/app/src/main/java/dev/ajuntanaga/io24/MainActivity.java",
-                      paths)
+        self.assertNotIn("tests/test_android_probe_contract.py", paths)
         self.assertIn("tests/test_io24_host_autogain.py", paths)
         self.assertNotIn("io24_spring.py", paths)
         self.assertFalse(any(path.startswith(("re/", "runs/", ".superpowers/"))
@@ -201,11 +199,12 @@ class PublicationDocumentationTests(unittest.TestCase):
 
         codeql = workflows[1].read_text()
         self.assertIn("language: python", codeql)
-        self.assertIn("language: java-kotlin", codeql)
+        self.assertNotIn("java-kotlin", codeql)
 
         dependabot = (ROOT / ".github/dependabot.yml").read_text()
-        for ecosystem in ("github-actions", "pip", "gradle"):
+        for ecosystem in ("github-actions", "pip"):
             self.assertIn("package-ecosystem: %s" % ecosystem, dependabot)
+        self.assertNotIn("package-ecosystem: gradle", dependabot)
 
     def test_release_metadata_targets_intended_github_repository(self):
         metadata = (ROOT / "pyproject.toml").read_text()

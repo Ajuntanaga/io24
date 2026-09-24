@@ -114,6 +114,12 @@ PAGE_TIGHTEN = 640
 # bus cells, each a fader, its value, a mute and a solo. Clamping it to
 # PAGE_WIDTH squeezed the faders, so it gets its own ceiling.
 ROUTING_WIDTH = 1500
+# A maximized Mixer should still read like four related console strips.  Past
+# this width the controls stop getting easier to use and the two input cards
+# merely become large empty fields, so keep a centred working surface while
+# allowing the ordinary 1040 px window to use every available pixel.
+MIXER_WIDTH = 1440
+MIXER_TIGHTEN = 1040
 
 
 def widen_page(root, maximum=PAGE_WIDTH, tighten=PAGE_TIGHTEN):
@@ -3282,6 +3288,18 @@ def fader(lo, hi, step, vertical=True):
     return sc
 
 
+def mixer_fader_bank(spacing, homogeneous=False):
+    """A Mixer fader row that grows with the window instead of ending early."""
+    row = Gtk.Box(
+        orientation=Gtk.Orientation.HORIZONTAL,
+        spacing=spacing,
+        homogeneous=homogeneous,
+        halign=Gtk.Align.FILL if homogeneous else Gtk.Align.CENTER)
+    row.set_size_request(-1, 260)
+    row.set_vexpand(True)
+    return row
+
+
 class Win(Adw.ApplicationWindow):
     def __init__(self, app, ctl):
         super().__init__(application=app, title="Revelator io24",
@@ -3757,10 +3775,7 @@ class Win(Adw.ApplicationWindow):
         self.preset_indicators = getattr(self, "preset_indicators", {})
         self.preset_indicators[ch] = indicator
         box = self._strip("Channel %d" % ch, title_suffix=indicator)
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
-                      halign=Gtk.Align.CENTER)
-        row.set_size_request(-1, 260)      # a floor, not the height:
-        row.set_vexpand(True)              # meters grow with the window
+        row = mixer_fader_bank(8)           # 260 px is a floor; it grows
         m = Meter()
         self.meters["in%d" % ch] = m
         row.append(m)
@@ -3826,9 +3841,11 @@ class Win(Adw.ApplicationWindow):
         box = self._strip("Buses")
         grid = Gtk.Grid(column_spacing=10, row_spacing=6,
                         column_homogeneous=True,
-                        halign=Gtk.Align.CENTER)
+                        halign=Gtk.Align.FILL)
         grid.set_size_request(228, 260)    # a floor, not the height
+        grid.set_hexpand(True)
         grid.set_vexpand(True)
+        grid.set_margin_start(10); grid.set_margin_end(10)
         for column, (key, visible_name, detail) in enumerate(
                 bus_meter_columns()):
             header = Gtk.Label(label=visible_name, halign=Gtk.Align.CENTER)
@@ -3873,9 +3890,8 @@ class Win(Adw.ApplicationWindow):
 
     def _master_strip(self):
         box = self._strip("Monitoring")
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14,
-                      halign=Gtk.Align.CENTER)
-        row.set_size_request(-1, 260)
+        row = mixer_fader_bank(14, homogeneous=True)
+        row.set_margin_start(16); row.set_margin_end(16)
         self.mon = {}
         for key, nm in (("mainvol", "Main"), ("hp", "Phones")):
             c = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -3951,19 +3967,23 @@ class Win(Adw.ApplicationWindow):
                                   prop="active"))
             self.mon[p] = self.live[-1]
             box.append(t)
-        box.append(Gtk.Box(vexpand=True))
+        box.append(Gtk.Box(height_request=8))
         return box
 
     def _mixer_page(self):
         b = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2,
-                    homogeneous=False)
+                    homogeneous=True)
         b.set_margin_start(6); b.set_margin_end(6)
         strips = (self._input_strip(1), self._input_strip(2),
                   self._bus_strip(), self._master_strip())
-        for index, w in enumerate(strips):
-            w.set_hexpand(index < 2)
+        for w in strips:
+            w.set_hexpand(True)
             b.append(w)
-        sc = Gtk.ScrolledWindow(); sc.set_child(b)
+        clamp = Adw.Clamp(maximum_size=MIXER_WIDTH,
+                          tightening_threshold=MIXER_TIGHTEN)
+        clamp.set_child(b)
+        clamp.set_hexpand(True)
+        sc = Gtk.ScrolledWindow(); sc.set_child(clamp)
         sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         return sc
 

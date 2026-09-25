@@ -59,6 +59,8 @@ class ReleasePackageTests(unittest.TestCase):
             design_dir.mkdir(parents=True)
             for filename in (
                     "passive-program-eq-reference.png",
+                    "standard-parametric-eq-faceplate.png",
+                    "standard-parametric-eq-reference.png",
                     "vintage-eq-reference.png"):
                 shutil.copy2(
                     ROOT / "docs" / "design" / filename,
@@ -137,7 +139,11 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(spring_source, [])
             self.assertEqual(len(delay_source), 1)
-            self.assertEqual(len(eq_reference_art), 2)
+            self.assertEqual(len(eq_reference_art), 3)
+            self.assertTrue(any(
+                name.endswith(
+                    "/share/io24/design/standard-parametric-eq-faceplate.png")
+                for name in names))
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

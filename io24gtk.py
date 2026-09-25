@@ -2397,18 +2397,149 @@ def alternate_eq_knob_angle(spec, fraction):
     return math.radians(start + fraction * (end - start))
 
 
-def standard_eq_rack_layout(width, height):
-    """Reference geometry for the Standard EQ's retro-futurist rack."""
+# Standard EQ faceplate geometry, measured in source pixels from the approved
+# 2172x724 ``standard-parametric-eq-reference.png``.  Its plate is Passive's
+# two-unit 2156x482 crop, so all three EQ models share one rack bay.  Knob
+# centres come from circle fits to the four band collars, the screen from the
+# cut, frame, gasket and glass edges.  Like the alternate racks, the Host
+# draws this as vectors and never composites the bitmap: every printed value
+# comes from the Standard contract (``io24_presets.STANDARD_EQ_*``) and the
+# plot's fixed +/-18 dB, 20 Hz..24 kHz response scale.
+STANDARD_EQ_REFERENCE_ART = {
+    "filename": "standard-parametric-eq-reference.png",
+    "rack_crop": (8, 121, 2156, 482),
+    "ear": 80,
+    "slot_rows": (150, 574),
+    "screws": ((128, 152), (2044, 152), (128, 572)),
+    "heading_y": 158,
+    "screen": (620, 186, 932, 384),
+    "frame": (626, 192, 920, 372),
+    "gasket": (640, 206, 892, 358),
+    "glass": (646, 212, 880, 332),
+    "plot": (662, 224, 848, 308),
+    "knob_y": 350,
+    "knob_x": (232, 482, 1690, 1940),
+    "knob_radius": 88,
+    "lamp": (2040, 562, 20),
+}
+# Band accents shared by each knob's collar, value arc, heading and node.
+STANDARD_EQ_BAND_TONES = ((.91, .45, .39), (.95, .70, .32),
+                          (.42, .83, .60), (.50, .62, .98))
+STANDARD_EQ_KNOB_DEGREES = (-225.0, 45.0)
+STANDARD_EQ_LIGHT = math.radians(-125.0)
+_STANDARD_EQ_FACEPLATE_TEXTURE = None
+
+
+def standard_eq_knob_angle(gain):
+    """Map one band's exact gain onto its knob's printed -15..+15 dB arc."""
+    low, high = io24_presets.STANDARD_EQ_GAIN_RANGE
+    gain = max(low, min(high, float(gain)))
+    start, end = STANDARD_EQ_KNOB_DEGREES
+    return math.radians(start + (gain - low) / (high - low) * (end - start))
+
+
+def standard_eq_faceplate_path():
+    """Return the generated, value-free faceplate in source or install trees."""
+    filename = "standard-parametric-eq-faceplate.png"
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = (
+        os.path.join(module_dir, "docs", "design", filename),
+        os.path.join(sys.prefix, "share", "io24", "design", filename),
+        os.path.join(os.path.expanduser("~/.local/share"),
+                     "io24", "design", filename),
+    )
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Standard EQ faceplate is missing; checked " + ", ".join(candidates))
+
+
+def standard_eq_faceplate_texture():
+    """Load the deterministic faceplate once; live values remain GTK vectors."""
+    global _STANDARD_EQ_FACEPLATE_TEXTURE
+    if _STANDARD_EQ_FACEPLATE_TEXTURE is None:
+        _STANDARD_EQ_FACEPLATE_TEXTURE = Gdk.Texture.new_from_filename(
+            standard_eq_faceplate_path())
+    return _STANDARD_EQ_FACEPLATE_TEXTURE
+
+
+def standard_eq_arc_points(cx, cy, radius, start, end):
+    """Sample a faceplate arc densely enough to stay smooth at any rack size."""
+    distance = abs(float(end) - float(start))
+    steps = max(2, int(math.ceil(distance * max(1.0, radius) / 4.0)))
+    return tuple((cx + radius * math.cos(start + distance * index / steps),
+                  cy + radius * math.sin(start + distance * index / steps))
+                 for index in range(steps + 1))
+
+
+def standard_eq_mode_text(band):
+    """The rack's compact label for one existing Standard band shape."""
+    shape = band.get("shape", "off")
+    if shape == "off":
+        return "OFF"
+    if shape in ("lowshelf", "highshelf"):
+        return "SHELF"
+    return "PEAK"
+
+
+def standard_eq_rack_bounds(width, height):
+    """Fit the Standard reference plate's aspect inside the canvas."""
+    _x, _y, crop_width, crop_height = \
+        STANDARD_EQ_REFERENCE_ART["rack_crop"]
+    aspect = float(crop_width) / crop_height
     width, height = float(width), float(height)
-    ear = max(25.0, width * .034)
+    rack_height = width / aspect
+    if rack_height <= height:
+        return 0.0, (height - rack_height) / 2.0, width, rack_height
+    rack_width = height * aspect
+    return (width - rack_width) / 2.0, 0.0, rack_width, height
+
+
+def standard_eq_canvas_height(width):
+    """The Standard rack's bay; the same one Passive and Vintage occupy."""
+    _x, _y, crop_width, crop_height = \
+        STANDARD_EQ_REFERENCE_ART["rack_crop"]
+    width = max(1.0, float(width))
+    return int(math.ceil(width * crop_height / crop_width +
+                         ALTERNATE_EQ_RACK_SHADOW_ROOM))
+
+
+def standard_eq_rack_layout(width, height):
+    """Scale the measured reference geometry into one fitted rack."""
+    art = STANDARD_EQ_REFERENCE_ART
+    rack_x, rack_y, rack_width, rack_height = standard_eq_rack_bounds(
+        width, height)
+    crop_x, crop_y, crop_width, crop_height = art["rack_crop"]
+    scale_x = rack_width / crop_width
+    scale_y = rack_height / crop_height
+
+    def point(x, y):
+        return (rack_x + (x - crop_x) * scale_x,
+                rack_y + (y - crop_y) * scale_y)
+
+    def rectangle(key):
+        x, y, rect_width, rect_height = art[key]
+        left, top = point(x, y)
+        return (left, top, rect_width * scale_x, rect_height * scale_y)
+
+    lamp_x, lamp_y, lamp_radius = art["lamp"]
+    scale = min(scale_x, scale_y)
     return {
-        "panel": (0.0, 0.0, width, height),
-        "display": (.075 * width, .140 * height,
-                    .850 * width, .560 * height),
-        "encoders": tuple((fraction * width, .840 * height)
-                          for fraction in (.20, .40, .60, .80)),
-        "power": (width - ear - max(24.0, width * .018),
-                  height * .835, max(9.0, min(12.0, height * .045))),
+        "panel": (rack_x, rack_y, rack_width, rack_height),
+        "scale": scale,
+        "ear": art["ear"] * scale_x,
+        "slots": tuple(point(crop_x, row)[1] for row in art["slot_rows"]),
+        "screws": tuple(point(x, y) for x, y in art["screws"]),
+        "heading_y": point(crop_x, art["heading_y"])[1],
+        "screen": rectangle("screen"),
+        "frame": rectangle("frame"),
+        "gasket": rectangle("gasket"),
+        "display": rectangle("glass"),
+        "graph": rectangle("plot"),
+        "encoders": tuple(point(x, art["knob_y"]) for x in art["knob_x"]),
+        "knob_radius": art["knob_radius"] * scale,
+        "power": point(lamp_x, lamp_y) + (lamp_radius * scale,),
     }
 
 
@@ -2794,11 +2925,14 @@ class EQCurve(ChannelBound, Canvas):
     """Retro-futurist Standard EQ rack with a live editable response."""
 
     def __init__(self, win, channel=1):
-        super().__init__(-1, 260)
+        # Height follows the reference faceplate's aspect, in the same bay as
+        # the Passive and Vintage racks, so switching models never jumps.
+        super().__init__()
         self.win = win
         self.channel = channel
         self.set_hexpand(True)
         self.set_focusable(True)
+        self._static_nodes = None
         self.drag_band = None
         self._drag_pending_enable = False
         self._drag_thr = Throttle(
@@ -2825,16 +2959,24 @@ class EQCurve(ChannelBound, Canvas):
         self.hover = None
         self.hover_power = False
 
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            return (560, FAT_CHANNEL_WIDTH, -1, -1)
+        width = FAT_CHANNEL_TIGHTEN if for_size < 0 else for_size
+        height = standard_eq_canvas_height(width)
+        return (height, height, -1, -1)
+
     def _x(self, f, w):
         return math.log10(max(f, 20) / 20.0) / math.log10(24000 / 20.0) * w
 
     def _graph_bounds(self, w=None, h=None):
+        """The plot inside the screen glass, exactly as the reference."""
         w = float(w if w is not None else (self.get_width() or 1))
         h = float(h if h is not None else (self.get_height() or 1))
-        x, y, width, height = standard_eq_rack_layout(w, h)["display"]
-        inset_x, inset_y = max(12.0, width * .014), max(10.0, height * .08)
-        return (x + inset_x, y + inset_y,
-                width - inset_x * 2, height - inset_y * 2)
+        return standard_eq_rack_layout(w, h)["graph"]
 
     def _node_y(self, band, gy, gh):
         """A band node's drawn height, clamped inside the screen as painted.
@@ -2850,21 +2992,30 @@ class EQCurve(ChannelBound, Canvas):
     def _band_at(self, x, y):
         layout = standard_eq_rack_layout(
             self.get_width() or 1, self.get_height() or 1)
-        _gx, gy, _gw, gh = self._graph_bounds()
-        if y > gy + gh:
-            return min(range(4),
-                       key=lambda index: abs(layout["encoders"][index][0] - x))
+        gx, gy, gw, gh = self._graph_bounds()
+        if not (gx <= x <= gx + gw and gy <= y <= gy + gh):
+            return min(range(4), key=lambda index: math.hypot(
+                layout["encoders"][index][0] - x,
+                layout["encoders"][index][1] - y))
         return self._nearest(x, y)
 
+    def _knob_at(self, x, y, width=None, height=None):
+        """The band whose physical knob, skirt included, is under x, y."""
+        layout = standard_eq_rack_layout(
+            width or self.get_width() or 1, height or self.get_height() or 1)
+        reach = max(14.0, layout["knob_radius"] * 1.08)
+        for index, (cx, cy) in enumerate(layout["encoders"]):
+            if math.hypot(float(x) - cx, float(y) - cy) <= reach:
+                return index
+        return None
+
     def _hit_band(self, x, y):
-        """Return a band only when the pointer is on a visible node or pod."""
+        """Return a band only when the pointer is on a visible node or knob."""
         width = self.get_width() or 1
         height = self.get_height() or 1
-        layout = standard_eq_rack_layout(width, height)
-        pod_radius = max(19.0, min(27.0, height * .10))
-        for index, (cx, cy) in enumerate(layout["encoders"]):
-            if math.hypot(float(x) - cx, float(y) - cy) <= pod_radius:
-                return index
+        knob = self._knob_at(x, y, width, height)
+        if knob is not None:
+            return knob
         gx, gy, gw, gh = self._graph_bounds(width, height)
         if not (gx <= x <= gx + gw and gy <= y <= gy + gh):
             return None
@@ -2945,7 +3096,11 @@ class EQCurve(ChannelBound, Canvas):
             self.drag_band = None
             return
         gx, gy, gw, gh = self._graph_bounds()
-        self._drag_encoder = y > gy + gh
+        # The reference places two large knobs on either side of the screen,
+        # vertically inside the graph's span.  Hit the knob itself rather than
+        # assuming every encoder lives below the graph; otherwise a gain drag
+        # also rewrites frequency.
+        self._drag_encoder = self._knob_at(x, y) is not None
         self.drag_band = self._hit_band(x, y)
         if self.drag_band is None:
             return
@@ -3030,83 +3185,28 @@ class EQCurve(ChannelBound, Canvas):
         acc = chan_col(self.channel)
         box(sn, 0, 0, w, h, pal(GROUND))
         layout = standard_eq_rack_layout(w, h)
-        # A dark anodized face with warm engraved accents gives Standard its
-        # own identity while retaining the physical rack language of the two
-        # recovered vintage models.
-        rounded_vgrad(sn, 3, 7, w - 6, h - 14, 8, (
-            (0.0, (.100, .145, .185, 1)),
-            (.42, (.055, .090, .125, 1)),
-            (1.0, (.027, .050, .078, 1))), rgba(.18, .46, .58, .88))
-        for row in range(11, max(12, int(h - 10)), 3):
-            alpha = .018 + .012 * (1 + math.sin(row * .41))
-            polyline(sn, [(5, row), (w - 5, row)],
-                     rgba(.62, .78, .86, alpha), .5)
-        for index in range(120):
-            sx = 14 + ((index * 97) % max(17, int(w - 30)))
-            sy = 12 + ((index * 53) % max(11, int(h - 25)))
-            polyline(sn, [(sx, sy), (min(w - 8, sx + 2 + index % 8), sy)],
-                     rgba(.78, .88, .91, .025), .45)
+        # The blank faceplate comes from the same deterministic renderer as the
+        # approved reference, so metal, grain, rack ears, fluted knobs and the
+        # screen frame stay pixel-identical.  Only state-bearing marks are
+        # drawn below: no illustrative value from the reference can leak into
+        # the live Host.
+        px, py, pw, ph = layout["panel"]
+        try:
+            texture = standard_eq_faceplate_texture()
+        except (FileNotFoundError, GLib.Error):
+            texture = None
+        if texture is not None:
+            sn.append_texture(texture, Graphene.Rect().init(px, py, pw, ph))
+        else:
+            rounded_vgrad(sn, px, py, pw, ph, 7, (
+                (0.0, (.20, .238, .296, 1)),
+                (.45, (.118, .146, .190, 1)),
+                (1.0, (.060, .075, .102, 1))), rgba(.35, .44, .54, .8))
 
-        ear = max(25.0, w * .034)
-        for left in (True, False):
-            ex = 3 if left else w - ear - 3
-            rounded_vgrad(sn, ex, 7, ear, h - 14, 5, (
-                (0.0, (.070, .100, .125, 1)),
-                (.50, (.030, .052, .070, 1)),
-                (1.0, (.015, .028, .040, 1))), rgba(.12, .28, .34, 1))
-            for sy in (h * .095, h * .825):
-                rounded_box(sn, ex + ear * .18, sy, ear * .64,
-                            max(8.0, ear * .27), 5,
-                            rgba(.002, .006, .010, 1),
-                            rgba(.30, .48, .54, .55))
-        for sx, sy in ((ear + 12, h * .10), (w - ear - 12, h * .10),
-                       (ear + 12, h * .84), (w - ear - 12, h * .84)):
-            dot(sn, sx + 1.3, sy + 1.7, 7.0, rgba(0, 0, 0, .55))
-            dot(sn, sx, sy, 6.2, rgba(.065, .080, .086, 1))
-            dot(sn, sx - 1.0, sy - 1.2, 3.7, rgba(.38, .43, .44, 1))
-            polyline(sn, [(sx - 2.7, sy), (sx + 2.7, sy)],
-                     rgba(.015, .018, .019, .9), 1.0)
-
-        centred_faceplate_label(
-            self, sn, "S P E C T R A L   E Q", w / 2, 9,
-            rgba(.88, .91, .88, .92), 10.0, Pango.Weight.MEDIUM)
-        faceplate_label(self, sn, "FOUR BAND PARAMETRIC", ear + 26, 13,
-                        rgba(.33, .72, .77, .68), 6.4)
-        faceplate_label(self, sn, "ANALOG CONTROL / DIGITAL CORE",
-                        w - ear - 191, 13, rgba(.84, .63, .27, .62), 6.4)
-
-        dx, dy, dw, dh = layout["display"]
-        rounded_box(sn, dx - 8, dy - 7, dw + 16, dh + 15, 12,
-                    rgba(0, 0, 0, .56))
-        rounded_vgrad(sn, dx - 5, dy - 5, dw + 10, dh + 10, 10, (
-            (0.0, (.24, .31, .33, 1)),
-            (.20, (.045, .066, .075, 1)),
-            (1.0, (.012, .023, .032, 1))), rgba(.34, .53, .57, .75))
         gx, gy, gw, gh = self._graph_bounds(w, h)
-        rounded_box(sn, gx - 3, gy - 3, gw + 6, gh + 6, 4,
-                    rgba(.004, .011, .017, 1), rgba(.06, .18, .23, 1))
-        box(sn, gx, gy, gw, gh, rgba(.006, .025, .036, 1))
 
         # The screen is the authoritative response: all four band controls,
         # spectrum context and marker positions share these exact bounds.
-        for db in (-12, -6, 0, 6, 12):
-            py = gy + gh / 2 - db / 18.0 * (gh / 2)
-            polyline(sn, [(gx, py), (gx + gw, py)],
-                     rgba(.28, .62, .68, .30 if db == 0 else .13), 1.0)
-            faceplate_label(self, sn, "%+d" % db, gx + 4, py - 7,
-                            rgba(.48, .72, .75, .56), 5.6,
-                            Pango.Weight.NORMAL)
-        for frequency in (50, 100, 200, 500, 1000, 2000, 5000, 10000):
-            px = gx + self._x(frequency, gw)
-            polyline(sn, [(px, gy), (px, gy + gh)],
-                     rgba(.28, .62, .68, .12), 1.0)
-        for frequency, text in ((100, "100"), (1000, "1k"),
-                                (10000, "10k")):
-            px = gx + self._x(frequency, gw)
-            centred_faceplate_label(self, sn, text, px, gy + gh - 11,
-                                    rgba(.48, .72, .75, .55), 5.7,
-                                    Pango.Weight.NORMAL)
-
         sp = self.win.spectrum
         mag = sp.mag[self.channel - 1] if sp else None
         if sp is None:
@@ -3118,9 +3218,11 @@ class EQCurve(ChannelBound, Canvas):
         else:
             peak = max(mag)
             spectrum_note = "INPUT %d  PEAK %.0f dB" % (self.channel, peak)
+        scale = layout["scale"]
         centred_faceplate_label(
-            self, sn, spectrum_note, gx + gw - 72, gy + 5,
-            rgba(.54, .72, .75, .52), 6.2, Pango.Weight.NORMAL)
+            self, sn, spectrum_note, gx + gw - 82.0 * scale,
+            gy + 5.0 * scale, rgba(.54, .72, .75, .52),
+            max(5.7, 15.0 * scale), Pango.Weight.NORMAL)
         if mag:
             top, bot = -6.0, -108.0
             poly = [(gx, gy + gh)]
@@ -3146,90 +3248,161 @@ class EQCurve(ChannelBound, Canvas):
         for i, b in enumerate(self.bands):
             if b["shape"] == "off":
                 continue
+            tone = STANDARD_EQ_BAND_TONES[i]
             px = gx + self._x(b["freq"], gw)
             py = self._node_y(b, gy, gh)
             sel = (i == self.cur_band)
             hov = (i == self.hover)
-            r = 8 if sel else (7 if hov else 5)
+            r = max(4.5, (12.5 if sel else (10.5 if hov else 9.5)) * scale)
             polyline(sn, [(px, gy), (px, gy + gh)],
-                     pal(acc, 0.32 if sel else 0.12), 1.0)
-            dot(sn, px, py, r + 3, rgba(0, 0, 0, 0.35))
-            if sel:
-                glow(sn, lambda x=px, y=py, radius=r:
-                     dot(sn, x, y, radius, pal(AMBER)), radius=6.0)
-            else:
-                dot(sn, px, py, r, pal(acc, 0.95 if hov else 0.8))
-            dot(sn, px, py, max(1.5, r - 3), rgba(1, 1, 1, 0.9))
+                     rgba(*tone, .30 if sel else .12), max(.8, scale))
+            glow(sn, lambda x=px, y=py, radius=r, colour=tone:
+                 dot(sn, x, y, radius + 2.0 * scale,
+                     rgba(*colour, .88 if sel else .52)),
+                 radius=max(3.0, 8.0 * scale))
+            dot(sn, px, py, r + 2.5 * scale, rgba(0, .02, .03, .75))
+            radial_dot(sn, px, py, r, (
+                (0.0, (min(1.0, tone[0] * 1.25 + .15),
+                       min(1.0, tone[1] * 1.25 + .15),
+                       min(1.0, tone[2] * 1.25 + .15), 1)),
+                (.60, (*tone, 1)),
+                (1.0, (tone[0] * .55, tone[1] * .55,
+                       tone[2] * .55, 1))))
+            dot(sn, px, py, max(1.4, 3.2 * scale), rgba(1, 1, .97, .95))
             if sel or hov:
+                tag = "%s   %.0f Hz   %+.1f dB   Q %.2f" % (
+                    BAND_NAMES[i], b["freq"], b["gain"], b["q"])
+                tag_size = max(5.8, 15.0 * scale)
+                tag_width = min(gw - 16.0 * scale,
+                                len(tag) * tag_size * .58 + 26.0 * scale)
+                tag_height = max(18.0, 26.0 * scale)
+                tag_x = min(gx + gw - tag_width - 8.0 * scale,
+                            px + 22.0 * scale)
+                tag_y = max(gy + 8.0 * scale,
+                            py - 50.0 * scale)
+                rounded_box(sn, tag_x, tag_y, tag_width, tag_height,
+                            max(3.0, 5.0 * scale), rgba(.01, .05, .06, .86),
+                            rgba(*tone, .58))
+                polyline(sn, [(tag_x + 7.0 * scale,
+                               tag_y + 7.0 * scale),
+                              (tag_x + 7.0 * scale,
+                               tag_y + tag_height - 7.0 * scale)],
+                         rgba(*tone, 1), max(1.4, 3.0 * scale))
                 faceplate_label(
-                    self, sn, "%s  %.0f Hz  %+.1f dB  Q %.2f"
-                    % (BAND_NAMES[i], b["freq"], b["gain"], b["q"]),
-                    min(gx + gw - 150, px + 10), max(gy + 3, py - 17),
-                    rgba(.84, .91, .92, .92), 6.3)
+                    self, sn, tag, tag_x + 16.0 * scale,
+                    tag_y + (tag_height - tag_size) / 2.0,
+                    rgba(.84, .91, .92, .94), tag_size)
 
-        # Four low-profile encoder pods make the physical four-band structure
-        # visible and selectable without duplicating the detailed rows below.
-        tones = ((.68, .25, .25), (.80, .58, .20),
-                 (.43, .61, .34), (.28, .52, .75))
-        radius = max(13.0, min(18.0, h * .067))
+        # The base image owns the physical knobs.  These overlays are exactly
+        # the state that can move: gain arc and pointer, selected-band halo,
+        # gain/frequency/mode readouts, and each band's independent lamp.
+        radius = layout["knob_radius"]
+        zero_angle = standard_eq_knob_angle(0.0)
         for index, ((cx, cy), tone, band) in enumerate(zip(
-                layout["encoders"], tones, self.bands)):
+                layout["encoders"], STANDARD_EQ_BAND_TONES, self.bands)):
             selected = index == self.cur_band
-            if selected:
-                glow(sn, lambda x=cx, y=cy:
-                     dot(sn, x, y, radius + 6, pal(AMBER, .24)), radius=7.0)
-            dot(sn, cx + 1.5, cy + 2.5, radius + 4,
-                rgba(0, 0, 0, .55))
-            dot(sn, cx, cy, radius + 2, rgba(.015, .023, .029, 1))
-            for ridge in range(14):
-                angle = math.tau * ridge / 14.0
-                polyline(sn, [
-                    (cx + radius * .92 * math.cos(angle),
-                     cy + radius * .92 * math.sin(angle)),
-                    (cx + radius * 1.10 * math.cos(angle),
-                     cy + radius * 1.10 * math.sin(angle)),
-                ], rgba(.30, .36, .37, .75), .8)
-            dot(sn, cx, cy, radius * .78,
-                rgba(tone[0] * .72, tone[1] * .72, tone[2] * .72, 1))
-            dot(sn, cx - radius * .12, cy - radius * .18, radius * .56,
-                rgba(tone[0], tone[1], tone[2], .92))
-            angle = math.radians(-225 +
-                                 (band["gain"] + 15.0) / 30.0 * 270.0)
-            polyline(sn, [
-                (cx + radius * .12 * math.cos(angle),
-                 cy + radius * .12 * math.sin(angle)),
-                (cx + radius * .70 * math.cos(angle),
-                 cy + radius * .70 * math.sin(angle)),
-            ], rgba(1, 1, .92, .95), 1.6)
-            centred_faceplate_label(
-                self, sn, BAND_NAMES[index].upper(), cx, cy - radius - 14,
-                rgba(.78, .84, .87, .86), 6.2)
-            centred_faceplate_label(
-                self, sn, "%.0f Hz  %+.1f" % (band["freq"], band["gain"]),
-                cx, cy + radius + 3, rgba(.56, .72, .76, .72), 5.9,
-                Pango.Weight.NORMAL)
+            hovered = index == self.hover
+            band_on = band["shape"] != "off"
+            angle = standard_eq_knob_angle(band["gain"])
+            tone_alpha = 1.0 if band_on and active else (
+                .62 if band_on else .28)
 
-        # The rack itself owns bypass, matching the two alternate faceplates.
-        # Its state is deliberately visible even when the detailed rows below
-        # are folded away.
+            if selected or hovered:
+                ring_radius = radius * (.69 if selected else 1.02)
+                ring = standard_eq_arc_points(
+                    cx, cy, ring_radius, 0.0, math.tau)
+                glow(sn, lambda points=ring, colour=tone:
+                     polyline(sn, points, rgba(*colour,
+                                               .82 if selected else .50),
+                              max(1.2, 4.0 * scale)),
+                     radius=max(4.0, 12.0 * scale))
+
+            arc_start, arc_end = sorted((zero_angle, angle))
+            if abs(arc_end - arc_start) > 1e-6:
+                value_arc = standard_eq_arc_points(
+                    cx, cy, radius * 1.05, arc_start, arc_end)
+                glow(sn, lambda points=value_arc, colour=tone,
+                     alpha=tone_alpha: polyline(
+                         sn, points, rgba(*colour, alpha),
+                         max(1.0, 4.0 * scale)),
+                     radius=max(2.0, 5.0 * scale))
+
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            cap_radius = radius * .605
+            polyline(sn, [
+                (cx + cap_radius * .16 * cos_a + scale * .8,
+                 cy + cap_radius * .16 * sin_a + scale * 1.2),
+                (cx + cap_radius * .92 * cos_a + scale * .8,
+                 cy + cap_radius * .92 * sin_a + scale * 1.2),
+            ], rgba(1, 1, 1, .50), max(1.0, 2.0 * scale))
+            polyline(sn, [
+                (cx + cap_radius * .16 * cos_a,
+                 cy + cap_radius * .16 * sin_a),
+                (cx + cap_radius * .92 * cos_a,
+                 cy + cap_radius * .92 * sin_a),
+            ], rgba(.08, .09, .11, .95), max(1.6, 4.2 * scale))
+            polyline(sn, [
+                (cx + radius * .70 * cos_a + scale,
+                 cy + radius * .70 * sin_a + scale * 1.5),
+                (cx + radius * .96 * cos_a + scale,
+                 cy + radius * .96 * sin_a + scale * 1.5),
+            ], rgba(0, 0, 0, .64), max(2.2, 6.4 * scale))
+            polyline(sn, [
+                (cx + radius * .70 * cos_a,
+                 cy + radius * .70 * sin_a),
+                (cx + radius * .96 * cos_a,
+                 cy + radius * .96 * sin_a),
+            ], rgba(.98, .97, .93, .98 if band_on else .58),
+                max(1.8, 5.2 * scale))
+
+            gain_size = max(7.0, 21.0 * scale)
+            gain_center_y = cy + radius + 30.0 * scale
+            centred_faceplate_label(
+                self, sn, "%+.1f dB" % band["gain"], cx,
+                gain_center_y - gain_size * .55,
+                rgba(.94, .95, .92, .96 if selected else .86), gain_size)
+
+            detail_size = max(6.0, 16.0 * scale)
+            detail_y = cy + radius + 60.0 * scale
+            detail = "%.0f Hz   %s" % (
+                band["freq"], standard_eq_mode_text(band))
+            led_x = cx - radius * .54
+            led_r = max(2.2, 4.6 * scale)
+            if band_on:
+                glow(sn, lambda x=led_x, y=detail_y, colour=tone:
+                     dot(sn, x, y, led_r, rgba(*colour, .95)),
+                     radius=max(2.0, 5.0 * scale))
+                radial_dot(sn, led_x, detail_y, led_r, (
+                    (0.0, (1, 1, .95, 1)),
+                    (.45, (*tone, 1)),
+                    (1.0, (tone[0] * .55, tone[1] * .55,
+                           tone[2] * .55, 1))))
+            else:
+                dot(sn, led_x, detail_y, led_r,
+                    rgba(.15, .18, .20, .92))
+            centred_faceplate_label(
+                self, sn, detail, cx + radius * .07,
+                detail_y - detail_size * .55,
+                rgba(.66, .74, .78, .86), detail_size)
+
+        # The faceplate owns global bypass, matching the alternate racks.
+        # Its state stays visible even when the detailed rows are folded away.
         px, py, power_radius = layout["power"]
         if self.hover_power:
             glow(sn, lambda: dot(sn, px, py, power_radius + 5,
                                  pal(ACCENT, .24)), radius=6.0)
-        dot(sn, px + 1.0, py + 1.7, power_radius + 2.4,
-            rgba(0, 0, 0, .52))
-        dot(sn, px, py, power_radius + 1.0, rgba(.012, .020, .024, 1))
-        dot(sn, px, py, power_radius * .72, rgba(.24, .21, .12, .90))
         if active:
-            glow(sn, lambda: dot(sn, px, py, power_radius * .48,
+            glow(sn, lambda: dot(sn, px, py, power_radius * .62,
                                  pal(AMBER)), radius=7.0)
-            dot(sn, px - 1.0, py - 1.2, power_radius * .20,
+            radial_dot(sn, px, py, power_radius * .62, (
+                (0.0, (1.0, .95, .72, 1)),
+                (.45, (1.0, .68, .18, 1)),
+                (1.0, (.62, .30, .05, 1))))
+            dot(sn, px - power_radius * .13, py - power_radius * .17,
+                power_radius * .16,
                 rgba(1, 1, .84, .92))
         else:
-            dot(sn, px, py, power_radius * .42, pal(GRID, .68))
-        centred_faceplate_label(
-            self, sn, "POWER", px, py - power_radius - 12,
-            rgba(.78, .84, .87, .80), 6.2, Pango.Weight.MEDIUM)
+            dot(sn, px, py, power_radius * .48, rgba(.015, .020, .026, .96))
 
 
 class AlternateEqRack(ChannelBound, Canvas):

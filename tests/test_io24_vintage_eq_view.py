@@ -585,6 +585,7 @@ class AlternateEqRackContractTests(unittest.TestCase):
             curve, b, gy, gh)
         curve._graph_bounds = lambda w=None, h=None: \
             io24gtk.EQCurve._graph_bounds(curve, w, h)
+        curve._knob_at = lambda _x, _y, _w=None, _h=None: None
         gx, gy, gw, _gh = curve._graph_bounds()
         drawn_x = gx + curve._x(band["freq"], gw)
 
@@ -611,6 +612,7 @@ class AlternateEqRackContractTests(unittest.TestCase):
             drag_band=None,
             bands=[band],
             _hit_band=lambda _x, _y: 0,
+            _knob_at=lambda _x, _y: None,
             _band_at=lambda _x, _y: 0,
             _power_at=lambda _x, _y: False,
             _graph_bounds=lambda: (0.0, 0.0, 100.0, 50.0),
@@ -621,6 +623,29 @@ class AlternateEqRackContractTests(unittest.TestCase):
 
         self.assertEqual(calls, [("select", 0, 1)])
         self.assertEqual((band["shape"], band["on"]), ("off", False))
+
+    def test_standard_side_knob_drag_changes_gain_without_frequency(self):
+        band = {"shape": "peaking", "on": True, "mode": "peaking",
+                "freq": 2400.0, "gain": 4.5, "q": 1.2}
+        curve = SimpleNamespace(
+            win=SimpleNamespace(
+                _alt_eq=lambda _channel: None,
+                select_band=lambda _index, _channel: None,
+                eq_enabled=lambda _channel: True),
+            channel=1,
+            bands=[band],
+            drag_band=None,
+            _power_at=lambda _x, _y: False,
+            _knob_at=lambda _x, _y: 0,
+            _hit_band=lambda _x, _y: 0,
+            _graph_bounds=lambda: (400.0, 80.0, 500.0, 180.0),
+        )
+
+        io24gtk.EQCurve._drag_begin(curve, None, 150.0, 170.0)
+
+        self.assertTrue(curve._drag_encoder)
+        self.assertEqual(curve.drag_band, 0)
+        self.assertEqual(curve._start, (150.0, 170.0, 2400.0, 4.5))
 
     def test_standard_rack_has_its_own_power_control(self):
         layout = io24gtk.standard_eq_rack_layout(1200, 240)
@@ -644,14 +669,30 @@ class AlternateEqRackContractTests(unittest.TestCase):
         io24gtk.EQCurve._clicked(curve, None, 1, px, py)
         self.assertEqual(changes, [(1, True)])
 
-    def test_standard_rack_reserves_a_display_and_four_encoder_pods(self):
-        layout = io24gtk.standard_eq_rack_layout(1200, 240)
-        self.assertEqual(layout["panel"], (0.0, 0.0, 1200.0, 240.0))
-        self.assertEqual(layout["display"], (90.0, 33.6, 1020.0, 134.4))
-        self.assertEqual(
-            tuple((round(x), round(y)) for x, y in layout["encoders"]),
-            ((240, 202), (480, 202), (720, 202), (960, 202)),
-        )
+    def test_standard_rack_uses_the_measured_reference_geometry(self):
+        art = io24gtk.STANDARD_EQ_REFERENCE_ART
+        self.assertEqual(art["rack_crop"], (8, 121, 2156, 482))
+        self.assertEqual(art["screen"], (620, 186, 932, 384))
+        self.assertEqual(art["glass"], (646, 212, 880, 332))
+        self.assertEqual(art["plot"], (662, 224, 848, 308))
+
+        layout = io24gtk.standard_eq_rack_layout(2156, 482)
+        self.assertEqual(layout["panel"], (0.0, 0.0, 2156.0, 482.0))
+        self.assertEqual(layout["display"], (638.0, 91.0, 880.0, 332.0))
+        self.assertEqual(layout["graph"], (654.0, 103.0, 848.0, 308.0))
+        self.assertEqual(layout["encoders"], (
+            (224.0, 229.0), (474.0, 229.0),
+            (1682.0, 229.0), (1932.0, 229.0)))
+        self.assertEqual(layout["power"], (2032.0, 441.0, 20.0))
+        self.assertTrue(os.path.isfile(io24gtk.standard_eq_faceplate_path()))
+
+    def test_standard_gain_pointer_uses_the_exact_existing_range(self):
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_knob_angle(-15.0), math.radians(-225.0))
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_knob_angle(0.0), math.radians(-90.0))
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_knob_angle(15.0), math.radians(45.0))
 
     def test_miniature_curve_offsets_the_same_live_response(self):
         window = SimpleNamespace(

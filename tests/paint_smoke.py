@@ -236,14 +236,42 @@ def main():
                     win.w[1]["eq_on"].set_active(True)
                 values = json.loads(os.environ.get(
                     "IO24_PAINT_EQ_PARAMS", "{}"))
-                view = win._alt_eq(1)
-                unknown = set(values) - set((view or {}).get("eq", {}))
-                if unknown:
-                    raise RuntimeError(
-                        "unknown %s EQ parameter(s): %s" % (
-                            model_name, ", ".join(sorted(unknown))))
-                for field, value in values.items():
-                    win._alternate_eq_set(1, field, value)
+                if model_name == "standard":
+                    unknown = set(values) - {"selected", "bands"}
+                    bands = values.get("bands", [])
+                    if unknown or not isinstance(bands, list) or len(bands) > 4:
+                        raise RuntimeError(
+                            "Standard EQ paint parameters are selected plus "
+                            "up to four band objects")
+                    updated = [dict(band) for band in win.bands_by_ch[1]]
+                    allowed = {"on", "mode", "shape", "freq", "gain", "q"}
+                    for index, changes in enumerate(bands):
+                        if not isinstance(changes, dict) or set(changes) - allowed:
+                            raise RuntimeError(
+                                "unknown Standard band paint parameter")
+                        updated[index].update(changes)
+                    standard_state = \
+                        G.io24_presets.validate_standard_eq_host_state({
+                        "version": 1,
+                        "channels": {"1": {"on": True, "bands": updated}},
+                    })
+                    win.bands_by_ch[1] = \
+                        standard_state["channels"]["1"]["bands"]
+                    selected = int(values.get("selected", 0))
+                    if not 0 <= selected < 4:
+                        raise RuntimeError("Standard selected band must be 0..3")
+                    win.cur_band_by_ch[1] = selected
+                    win._adopt_band(1)
+                    win.invalidate_curve()
+                else:
+                    view = win._alt_eq(1)
+                    unknown = set(values) - set((view or {}).get("eq", {}))
+                    if unknown:
+                        raise RuntimeError(
+                            "unknown %s EQ parameter(s): %s" % (
+                                model_name, ", ".join(sorted(unknown))))
+                    for field, value in values.items():
+                        win._alternate_eq_set(1, field, value)
                 print("EQ MODEL -> %s" % model_name, flush=True)
             state["eq_model_set"] = True
         if not state["comp_model_set"]:

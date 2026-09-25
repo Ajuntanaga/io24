@@ -200,6 +200,7 @@ def main():
     app.set_application_id('org.io24.PaintSmoke%d' % os.getpid())
 
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
+             "capture_retries": 0,
              "scroll_settled": False, "eq_model_set": False,
              "comp_model_set": False, "fx_model_set": False,
              "wheel_tested": False}
@@ -343,9 +344,18 @@ def main():
             if capture_dir:
                 path = capture_dir / (
                     "%02d-%s.png" % (page_number, page_name))
-                capture_window(win, path)
+                try:
+                    capture_window(win, path)
+                except RuntimeError as error:
+                    if str(error) == "GTK produced no render node" and \
+                            state["capture_retries"] < 4:
+                        state["capture_retries"] += 1
+                        win.queue_draw()
+                        return True
+                    raise
                 print("CAPTURE -> %s" % path, flush=True)
             state["capture_pending"] = None
+            state["capture_retries"] = 0
             state["scroll_settled"] = False
         i = state["i"]
         if i >= len(state["pages"]):

@@ -3013,6 +3013,11 @@ class Io24:
             else:
                 replies.append(self.set_biquad(
                     "eq  ", channel, coefficients, band=index))
+        if not hasattr(self, "_last_alternate_eq_sections"):
+            self._last_alternate_eq_sections = {}
+        self._last_alternate_eq_sections[channel] = tuple(
+            (kind, index, tuple(coefficients))
+            for kind, index, coefficients in sections)
         return replies
 
     def set_passive_eq(self, channel, eq, fs=48000.0, dll_path=None):

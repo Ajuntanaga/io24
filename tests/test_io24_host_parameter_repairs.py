@@ -868,9 +868,13 @@ class HostRefinementTests(unittest.TestCase):
             wid=lambda key: Value(host, key),
             get_width=lambda: 200,
             get_height=lambda: 100,
+            _graph_bounds=lambda: (0.0, 0.0, 200.0, 100.0),
+            _drag_encoder=False,
             _f_from_x=lambda x, _w: x * 10.0,
             queue_draw=lambda: None,
             _drag_push=lambda: host.pushes.append(dict(host.band)),
+            # The band is already on, so the drag has no enable pending.
+            _enable_dragged_band=lambda: None,
         )
 
         io24gtk.EQCurve._drag_update(curve, None, 20.0, -10.0)

@@ -84,7 +84,11 @@ class PageWidthTests(unittest.TestCase):
 
     def test_the_pages_that_clamp_themselves_use_the_same_width(self):
         self.assertEqual(
-            self.source.count("clamp = Adw.Clamp(maximum_size=PAGE_WIDTH"), 1)
+            self.source.count(
+                "clamp = Adw.Clamp(maximum_size=FAT_CHANNEL_WIDTH"), 1)
+        self.assertGreater(io24gtk.FAT_CHANNEL_WIDTH, io24gtk.PAGE_WIDTH)
+        self.assertGreaterEqual(
+            io24gtk.FAT_CHANNEL_WIDTH, io24gtk.FAT_CHANNEL_TIGHTEN)
         # the routing matrix is wider than the rest and says so
         self.assertIn("Adw.Clamp(maximum_size=ROUTING_WIDTH", self.source)
         self.assertGreater(io24gtk.ROUTING_WIDTH, io24gtk.PAGE_WIDTH)

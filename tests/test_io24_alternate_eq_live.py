@@ -3,9 +3,12 @@
 
 import json
 import importlib.util
+import os
 from pathlib import Path
 import struct
+import tempfile
 import unittest
+from unittest import mock
 
 import io24
 import io24_alt_eq
@@ -106,6 +109,63 @@ class AlternateEqSchemaTests(unittest.TestCase):
             self.assertTrue(all(item[2] == io24_alt_eq.IDENTITY
                                 for item in sections[1:]))
 
+    def test_default_resolution_skips_an_invalid_cache_copy(self):
+        with tempfile.TemporaryDirectory(prefix="io24-alt-eq-") as temp:
+            root = Path(temp)
+            invalid = root / "invalid.dll"
+            retained = root / "retained.dll"
+            invalid.write_bytes(b"wrong")
+            retained.write_bytes(b"right")
+
+            def validate(path):
+                if Path(path) == invalid:
+                    raise io24_alt_eq.AlternateEqUnavailable("wrong build")
+                return object()
+
+            with mock.patch.dict(os.environ, {}, clear=False), \
+                    mock.patch.object(io24_alt_eq, "DEFAULT_DLL", invalid), \
+                    mock.patch.object(
+                        io24_alt_eq, "PROJECT_RETAINED_DLL", retained), \
+                    mock.patch.object(
+                        io24_alt_eq, "_image", side_effect=validate):
+                os.environ.pop("IO24_UC472_DSPUSBDEVICE", None)
+                self.assertEqual(io24_alt_eq.resolve_dll(), retained.resolve())
+
+    def test_every_alternate_parameter_moves_the_responsive_preview(self):
+        frequencies = (25.0, 60.0, 100.0, 400.0, 1000.0, 4000.0,
+                       8000.0, 16000.0, 22000.0)
+        cases = {
+            "passive": dict(
+                io24_alt_eq.default_eq("passive", on=True),
+                bboost=3.0, batten=2.0, bfreq=1, mboost=4.0,
+                bbwidth=5.0, mfreq=3, hatten=2.0, hsfreq=1),
+            "vintage": dict(
+                io24_alt_eq.default_eq("vintage", on=True),
+                lowgain=4.0, lowfreq=1, lowmidgain=-4.0,
+                lowmidfreq=1, himidgain=5.0, himidfreq=1, higain=3.0),
+        }
+        changes = {
+            "passive": {
+                "bboost": 8.0, "batten": 7.0, "bfreq": 3,
+                "mboost": 8.0, "bbwidth": 9.0, "mfreq": 6,
+                "hatten": 7.0, "hsfreq": 2,
+            },
+            "vintage": {
+                "lowgain": -5.0, "lowfreq": 3,
+                "lowmidgain": 6.0, "lowmidfreq": 2,
+                "himidgain": -6.0, "himidfreq": 2, "higain": -4.0,
+            },
+        }
+        for model, base in cases.items():
+            reference = tuple(io24_alt_eq.preview_response_db(
+                base, frequency) for frequency in frequencies)
+            for field, value in changes[model].items():
+                changed = dict(base, **{field: value})
+                response = tuple(io24_alt_eq.preview_response_db(
+                    changed, frequency) for frequency in frequencies)
+                with self.subTest(model=model, field=field):
+                    self.assertNotEqual(response, reference)
+
 
 @unittest.skipUnless(io24_alt_eq.designer_status()[0],
                      "exact UC 4.7.2 DLL is not present")
@@ -139,6 +199,9 @@ class AlternateEqWireTests(unittest.TestCase):
         device = WireDevice()
         device.set_alternate_eq(2, eq, fs=48000.0)
         self.assertEqual(len(device.payloads), 4)
+        self.assertEqual(
+            device._last_alternate_eq_sections[2],
+            tuple(io24_alt_eq.design_live_sections(eq, 48000.0)))
         packets = [_packet(payload) for payload in device.payloads]
         self.assertEqual([(packet[3], packet[4], packet[6]) for packet in packets],
                          [(io24.LFDF, 0x2C, 0),

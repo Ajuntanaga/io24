@@ -44,6 +44,7 @@ probes/probe_setp.py
 pyproject.toml
 systemd/io24-startup.service
 systemd/io24d.service
+tests/test_eq_reference_diff.py
 tests/test_io24_fx_model_transition.py
 tests/test_io24_global_fx.py
 tests/test_io24_host_autogain.py
@@ -64,5 +65,6 @@ tests/test_io24_vintage_eq_view.py
 tests/test_io24_voicefx_delay.py
 tests/test_io24_voicefx_preset_apply.py
 tests/test_publication_docs.py
+tools/eq_reference_diff.py
 tools/export_public.py
 ucnet_shim.py

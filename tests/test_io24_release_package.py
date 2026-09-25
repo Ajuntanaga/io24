@@ -55,6 +55,14 @@ class ReleasePackageTests(unittest.TestCase):
             shutil.copy2(
                 ROOT / "io24_voicefx_delay.c",
                 stage / "io24_voicefx_delay.c")
+            design_dir = stage / "docs" / "design"
+            design_dir.mkdir(parents=True)
+            for filename in (
+                    "passive-program-eq-reference.png",
+                    "vintage-eq-reference.png"):
+                shutil.copy2(
+                    ROOT / "docs" / "design" / filename,
+                    design_dir / filename)
             wheel_dir = stage / "wheel"
             result = subprocess.run(
                 [
@@ -102,6 +110,11 @@ class ReleasePackageTests(unittest.TestCase):
                     name for name in names
                     if name.endswith("/share/io24/io24_voicefx_delay.c")
                 ]
+                eq_reference_art = [
+                    name for name in names
+                    if "/share/io24/design/" in name
+                    and name.endswith("-eq-reference.png")
+                ]
                 licenses = [
                     name for name in names
                     if name.endswith(".dist-info/licenses/LICENSE")
@@ -124,6 +137,7 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(spring_source, [])
             self.assertEqual(len(delay_source), 1)
+            self.assertEqual(len(eq_reference_art), 2)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

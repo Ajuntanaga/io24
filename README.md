@@ -311,7 +311,7 @@ them.
   dedicated audible A/B check is still pending. Their editable rack panels use
   original project artwork documented in
   [`docs/design`](docs/design/README.md), with every knob and graph driven by
-  the exact decoded controls.
+  the decoded semantic controls and exact device design kept off the UI thread.
 - The compressor knee interpretation remains inferred.
 
 These limits are tracked in [PROTOCOL.md](PROTOCOL.md). That file preserves old

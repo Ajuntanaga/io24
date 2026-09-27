@@ -55,6 +55,7 @@ def _has_exact_uc472_dll():
 
 
 HAS_EXACT_UC472_DLL = _has_exact_uc472_dll()
+EXACT_LAYOUT_ANALYZER = ROOT / "re" / "cp34_native_stat_layout.py"
 
 
 def _native_record(include_voicefx=True):
@@ -417,13 +418,14 @@ class NativeStatTests(unittest.TestCase):
         self.assertEqual(fake.payloads, [])
 
 
-@unittest.skipUnless(HAS_EXACT_UC472_DLL,
-                     "retained exact UC 4.7.2 DLL unavailable")
+@unittest.skipUnless(
+    HAS_EXACT_UC472_DLL and EXACT_LAYOUT_ANALYZER.is_file(),
+    "retained exact UC 4.7.2 DLL and private layout analyzer unavailable",
+)
 class NativeStatFirmwareAttributionTests(unittest.TestCase):
     def test_exact_firmware_separates_four_native_slots_from_library(self):
-        path = ROOT / "re" / "cp34_native_stat_layout.py"
         spec = importlib.util.spec_from_file_location(
-            "cp34_native_stat_layout_test", path)
+            "cp34_native_stat_layout_test", EXACT_LAYOUT_ANALYZER)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 

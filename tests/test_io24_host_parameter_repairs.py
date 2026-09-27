@@ -169,6 +169,50 @@ class ReverbAudiblePathTests(unittest.TestCase):
             "hp_freq": 200.0, "predelay": 0.02, "fs": 48000.0,
         })])
 
+    def test_reverb_edits_coalesce_without_losing_the_enable_route(self):
+        class LatestCtl:
+            def __init__(self):
+                self.pending = {}
+
+            def submit_latest(self, key, work):
+                self.pending[key] = work
+
+        device = CallDevice()
+        ctl = LatestCtl()
+        host = SimpleNamespace(
+            _adopt_mute=False,
+            _fs=48000.0,
+            rev_on=self.Value(True),
+            s_rsize=self.Value(0.72), s_rmix=self.Value(0.38),
+            s_rhp=self.Value(180.0), s_rpre=self.Value(0.027),
+            processing_mix_controls={1: self.Value(0.65)},
+            rev_return_controls={"main": self.Value(-3.0)},
+            ctl=ctl,
+        )
+
+        # A slider signal can follow the On signal before the worker consumes
+        # it. The newest job must still establish the audible route.
+        io24gtk.Win._push_reverb(host, establish_path=True)
+        io24gtk.Win._push_reverb(host)
+
+        self.assertEqual(len(ctl.pending), 1)
+        next(iter(ctl.pending.values()))(device)
+        self.assertEqual([call[0] for call in device.calls], [
+            "set_fx_mix", "set_send_db", "set_send_assigned", "set_reverb",
+        ])
+
+    def test_reverb_off_forces_zero_wet_on_the_wire_but_remembers_the_knob(self):
+        device = ProtocolDevice()
+
+        device.set_reverb(on=False, size=0.5, mix=0.73,
+                          hp_freq=200.0, predelay=0.02, fs=48000.0)
+
+        self.assertEqual(len(device.payloads), 1)
+        payload = device.payloads[0]
+        self.assertEqual(struct.unpack_from("<I", payload, 24)[0], 0)
+        self.assertEqual(struct.unpack_from("<f", payload, 28)[0], 0.0)
+        self.assertEqual(device._shadow["set_reverb"]["kwargs"]["mix"], 0.73)
+
 
 class PhonesSourceTests(unittest.TestCase):
     def test_public_setter_emits_exact_pari_11_and_is_shadowed(self):
@@ -868,9 +912,13 @@ class HostRefinementTests(unittest.TestCase):
             wid=lambda key: Value(host, key),
             get_width=lambda: 200,
             get_height=lambda: 100,
+            _graph_bounds=lambda: (0.0, 0.0, 200.0, 100.0),
+            _drag_encoder=False,
             _f_from_x=lambda x, _w: x * 10.0,
             queue_draw=lambda: None,
             _drag_push=lambda: host.pushes.append(dict(host.band)),
+            # The band is already on, so the drag has no enable pending.
+            _enable_dragged_band=lambda: None,
         )
 
         io24gtk.EQCurve._drag_update(curve, None, 20.0, -10.0)

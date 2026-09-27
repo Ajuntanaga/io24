@@ -146,14 +146,27 @@ def validate_eq(eq):
 
 
 def resolve_dll(path=None):
-    """Resolve the pinned UC artifact, supporting an explicit legal local copy."""
-    selected = path or os.environ.get("IO24_UC472_DSPUSBDEVICE") or DEFAULT_DLL
-    selected = Path(selected).expanduser().resolve()
+    """Resolve a validated UC 4.7.2 designer artifact.
+
+    An explicit path is strict.  Otherwise use the conventional user cache.
+    Existing files are not assumed to be the right UC build: the bounded image
+    parser must accept the candidate before it can become active.
+    """
+    explicit = path or os.environ.get("IO24_UC472_DSPUSBDEVICE")
+    selected = Path(explicit or DEFAULT_DLL).expanduser().resolve()
     if not selected.is_file():
-        raise AlternateEqUnavailable(
-            "exact Passive/Vintage EQ needs the retained UC 4.7.2 "
-            "dspusbdevice.dll; set IO24_UC472_DSPUSBDEVICE to your local copy")
-    return selected
+        detail = "%s is missing" % selected
+    else:
+        try:
+            _image(str(selected))
+        except AlternateEqUnavailable as error:
+            detail = "%s: %s" % (selected, error)
+        else:
+            return selected
+    raise AlternateEqUnavailable(
+        "exact Passive/Vintage EQ needs the pinned UC 4.7.2 "
+        "dspusbdevice.dll; set IO24_UC472_DSPUSBDEVICE to your local copy"
+        " (%s)" % detail)
 
 
 @functools.lru_cache(maxsize=4)
@@ -256,3 +269,60 @@ def response_db(sections, frequency_hz, rate_hz):
         response *= section_response(coefficients, frequency_hz, rate_hz)
     magnitude = abs(response)
     return -180.0 if magnitude <= 1e-9 else 20.0 * math.log10(magnitude)
+
+
+def _log_bell(frequency_hz, center_hz, width_octaves):
+    distance = math.log(max(1e-6, frequency_hz) / center_hz, 2.0)
+    width = max(.12, float(width_octaves))
+    return math.exp(-.5 * (distance / width) ** 2)
+
+
+def _low_shelf_weight(frequency_hz, center_hz):
+    ratio = max(1e-9, float(frequency_hz)) / float(center_hz)
+    return 1.0 / (1.0 + ratio ** 3.0)
+
+
+def _high_shelf_weight(frequency_hz, center_hz):
+    ratio = float(center_hz) / max(1e-9, float(frequency_hz))
+    return 1.0 / (1.0 + ratio ** 3.0)
+
+
+def preview_response_db(eq, frequency_hz, rate_hz=48000.0):
+    """Fast parameter-driven curve used while exact DSP work is queued.
+
+    This intentionally does not replace :func:`design_live_sections`; device
+    writes still use UC's exact designers.  It gives the GTK graph immediate,
+    continuous feedback without running the retained binary interpreter on
+    the UI thread.  Every semantic control has its own visible contribution.
+    """
+    eq = validate_eq(eq)
+    _rate(rate_hz)
+    frequency = max(1.0, float(frequency_hz))
+    if not eq["eqallon"]:
+        return 0.0
+    if model_of(eq) == "passive":
+        low_frequency = PASSIVE_LOW_HZ[eq["bfreq"]]
+        high_frequency = PASSIVE_HIGH_BOOST_HZ[eq["mfreq"]]
+        attenuation_frequency = PASSIVE_HIGH_ATTEN_HZ[eq["hsfreq"]]
+        bandwidth = .32 + 1.45 * (eq["bbwidth"] / 10.0)
+        response = (
+            1.45 * eq["bboost"] * _low_shelf_weight(
+                frequency, low_frequency * 2.1)
+            - 1.15 * eq["batten"] * _low_shelf_weight(
+                frequency, low_frequency * 3.2)
+            + 1.45 * eq["mboost"] * _log_bell(
+                frequency, high_frequency, bandwidth)
+            - 1.18 * eq["hatten"] * _high_shelf_weight(
+                frequency, attenuation_frequency)
+        )
+    else:
+        response = (
+            eq["lowgain"] * _low_shelf_weight(
+                frequency, VINTAGE_LOW_HZ[eq["lowfreq"]] * 2.0)
+            + eq["lowmidgain"] * _log_bell(
+                frequency, VINTAGE_LOWMID_HZ[eq["lowmidfreq"]], 1.05)
+            + eq["himidgain"] * _log_bell(
+                frequency, VINTAGE_HIMID_HZ[eq["himidfreq"]], .82)
+            + eq["higain"] * _high_shelf_weight(frequency, 9000.0)
+        )
+    return max(-36.0, min(36.0, float(response)))

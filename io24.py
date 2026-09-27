@@ -2903,7 +2903,12 @@ class Io24:
     def _send_reverb(self, on=True, size=0.5, mix=0.3, hp_freq=200.0,
                      predelay=0.02, fs=48000.0):
         M = _meters_mod()
-        blob = M.reverb_blob(on=on, size=size, mix=mix, hp_freq=hp_freq,
+        # Firmware exposes an On word, but the retained physical off controls
+        # also zero the wet field.  Do both on the wire so Off is unambiguous,
+        # while the shadow wrapper still remembers the caller's Mix value for
+        # the next On and for a Host setup round trip.
+        wire_mix = mix if bool(on) else 0.0
+        blob = M.reverb_blob(on=on, size=size, mix=wire_mix, hp_freq=hp_freq,
                              predelay=predelay, fs=fs)
         return self._dsp(SETP, self.REVERB_BLOCK, 0, blob)
 
@@ -3013,6 +3018,11 @@ class Io24:
             else:
                 replies.append(self.set_biquad(
                     "eq  ", channel, coefficients, band=index))
+        if not hasattr(self, "_last_alternate_eq_sections"):
+            self._last_alternate_eq_sections = {}
+        self._last_alternate_eq_sections[channel] = tuple(
+            (kind, index, tuple(coefficients))
+            for kind, index, coefficients in sections)
         return replies
 
     def set_passive_eq(self, channel, eq, fs=48000.0, dll_path=None):

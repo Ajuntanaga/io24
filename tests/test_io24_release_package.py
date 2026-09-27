@@ -28,6 +28,7 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_preset_record.py",
             "io24_presets.py",
             "io24_alt_eq.py",
+            "io24_eq_reference.py",
             "io24_uc472_passive_eq.py",
             "io24_uc472_vintage_eq.py",
             "io24_scene.py",
@@ -55,6 +56,24 @@ class ReleasePackageTests(unittest.TestCase):
             shutil.copy2(
                 ROOT / "io24_voicefx_delay.c",
                 stage / "io24_voicefx_delay.c")
+            design_dir = stage / "docs" / "design"
+            design_dir.mkdir(parents=True)
+            for filename in (
+                    "passive-program-eq-calibration-nodes.png",
+                    "passive-program-eq-calibration-underlay.png",
+                    "passive-program-eq-faceplate.png",
+                    "passive-program-eq-reference.png",
+                    "standard-parametric-eq-calibration-nodes.png",
+                    "standard-parametric-eq-calibration-underlay.png",
+                    "standard-parametric-eq-faceplate.png",
+                    "standard-parametric-eq-reference.png",
+                    "vintage-eq-calibration-nodes.png",
+                    "vintage-eq-calibration-underlay.png",
+                    "vintage-eq-faceplate.png",
+                    "vintage-eq-reference.png"):
+                shutil.copy2(
+                    ROOT / "docs" / "design" / filename,
+                    design_dir / filename)
             wheel_dir = stage / "wheel"
             result = subprocess.run(
                 [
@@ -102,6 +121,11 @@ class ReleasePackageTests(unittest.TestCase):
                     name for name in names
                     if name.endswith("/share/io24/io24_voicefx_delay.c")
                 ]
+                eq_reference_art = [
+                    name for name in names
+                    if "/share/io24/design/" in name
+                    and name.endswith("-eq-reference.png")
+                ]
                 licenses = [
                     name for name in names
                     if name.endswith(".dist-info/licenses/LICENSE")
@@ -124,6 +148,22 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(len(compressor_source), 1)
             self.assertEqual(spring_source, [])
             self.assertEqual(len(delay_source), 1)
+            self.assertEqual(len(eq_reference_art), 3)
+            for filename in (
+                    "passive-program-eq-faceplate.png",
+                    "standard-parametric-eq-faceplate.png",
+                    "vintage-eq-faceplate.png"):
+                self.assertTrue(any(
+                    name.endswith("/share/io24/design/" + filename)
+                    for name in names), filename)
+            self.assertEqual(sum(
+                "/share/io24/design/" in name and
+                name.endswith("-calibration-underlay.png")
+                for name in names), 3)
+            self.assertEqual(sum(
+                "/share/io24/design/" in name and
+                name.endswith("-calibration-nodes.png")
+                for name in names), 3)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

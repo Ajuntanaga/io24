@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""Exact pixel-diff gate for the alternate-EQ reference compositor.
+"""Exact pixel-diff gate for the three EQ reference calibrations.
 
 Render the same midpoint state once with
 ``IO24_EQ_REFERENCE_CALIBRATION=backdrop`` and once normally. Scope the check
-to the rack, then pass the plot and lamp rectangles plus only the moving knob
-cores as allowed dynamic regions. Any scoped change outside those regions is
-a stationary faceplate, engraved scale, or rack-bay regression.
+to the fitted rack. ``--model`` derives every allowed live region from the
+same measured manifest as GTK; manual rectangles/circles remain available for
+one-off checks. Any other change is a static faceplate or rack-bay regression.
 """
 
 import argparse
 import json
+from pathlib import Path
+import sys
 
 import numpy as np
 from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+import io24_eq_reference  # noqa: E402
 
 
 def rectangle(text):
@@ -84,6 +91,43 @@ def diff_images(baseline_path, actual_path, allowed_rectangles=(),
     }, changed, allowed, unexpected
 
 
+def model_regions(model, rack_rectangle):
+    """Translate one measured rack manifest into screenshot coordinates."""
+    art = io24_eq_reference.rack(model)
+    rack_x, rack_y, rack_width, rack_height = rack_rectangle
+    _source_x, _source_y, source_width, source_height = art["rack_crop"]
+
+    def scale_rect(rect, padding=0):
+        x, y, width, height = rect
+        x = max(0, x - padding)
+        y = max(0, y - padding)
+        width = min(source_width - x, width + padding * 2)
+        height = min(source_height - y, height + padding * 2)
+        return (round(rack_x + x / source_width * rack_width),
+                round(rack_y + y / source_height * rack_height),
+                round(width / source_width * rack_width),
+                round(height / source_height * rack_height))
+
+    dynamic_plot = art.get("glass", art["plot"]) \
+        if model == "standard" else art["plot"]
+    # The production layers intentionally feather cleared artwork and glow
+    # live curves.  Twelve source pixels is the measured maximum reach of
+    # those effects; it is dynamic allowance, not static-faceplate tolerance.
+    dynamic_padding = 12
+    rectangles = [scale_rect(dynamic_plot, dynamic_padding)]
+    rectangles.extend(scale_rect(region, dynamic_padding)
+                      for region in art["control_clear_regions"])
+    lamp_x, lamp_y, lamp_radius = art["lamp"]
+    radius_scale = min(rack_width / source_width,
+                       rack_height / source_height)
+    circles = [(
+        round(rack_x + lamp_x / source_width * rack_width),
+        round(rack_y + lamp_y / source_height * rack_height),
+        max(1, round(lamp_radius * 2.75 * radius_scale)),
+    )]
+    return rectangles, circles
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("baseline")
@@ -91,6 +135,12 @@ def main(argv=None):
     parser.add_argument(
         "--scope-rect", type=rectangle, metavar="X,Y,W,H",
         help="compare only this rack rectangle")
+    parser.add_argument(
+        "--model", choices=("standard", "passive", "vintage"),
+        help="derive dynamic allowances from the measured rack manifest")
+    parser.add_argument(
+        "--rack-rect", type=rectangle, metavar="X,Y,W,H",
+        help="fitted rack bounds in both captures; required with --model")
     parser.add_argument(
         "--allow-rect", action="append", default=[], type=rectangle,
         metavar="X,Y,W,H", help="dynamic plot/lamp rectangle; repeatable")
@@ -104,9 +154,22 @@ def main(argv=None):
         help="ignore per-channel render noise up to this value")
     args = parser.parse_args(argv)
 
+    if bool(args.model) != bool(args.rack_rect):
+        parser.error("--model and --rack-rect must be used together")
+    allowed_rectangles = list(args.allow_rect)
+    allowed_circles = list(args.allow_circle)
+    scope_rectangle = args.scope_rect
+    if args.model:
+        model_rectangles, model_circles = model_regions(
+            args.model, args.rack_rect)
+        allowed_rectangles.extend(model_rectangles)
+        allowed_circles.extend(model_circles)
+        if scope_rectangle is None:
+            scope_rectangle = args.rack_rect
+
     result, changed, allowed, unexpected = diff_images(
-        args.baseline, args.actual, args.allow_rect, args.allow_circle,
-        args.scope_rect, args.tolerance)
+        args.baseline, args.actual, allowed_rectangles, allowed_circles,
+        scope_rectangle, args.tolerance)
     if args.heatmap:
         heatmap = np.zeros((*changed.shape, 3), dtype=np.uint8)
         heatmap[changed & allowed] = (20, 235, 255)

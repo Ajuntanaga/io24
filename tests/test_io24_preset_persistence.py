@@ -679,7 +679,7 @@ class PresetPersistenceTests(unittest.TestCase):
         self.assertEqual(first.assignments, [1, 2])
         self.assertEqual(second.assignments, [2])
 
-    def test_factory_device_store_refuses_the_currently_selected_slot(self):
+    def test_factory_device_store_can_replace_the_currently_selected_slot(self):
         class Selected:
             def __init__(self, value):
                 self.value = value
@@ -700,9 +700,10 @@ class PresetPersistenceTests(unittest.TestCase):
         window.factory_target = Selected(0)
         window.factory_device_slot = Selected(0)
 
-        with self.assertRaisesRegex(io24.HostActionError,
-                                    "currently selected"):
-            window._prepare_factory_slot_store("Reverb")
+        plan = window._prepare_factory_slot_store("Reverb")
+
+        self.assertEqual((plan["target"], plan["slot"],
+                          plan["relative_slot"]), (1, 0, 0))
 
     def test_confirmed_factory_device_store_writes_only_body_and_registry(self):
         class Selected:

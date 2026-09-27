@@ -185,6 +185,35 @@ class PresetsPageShapeTests(unittest.TestCase):
         self.assertEqual(calls[1][0], "library")
         self.assertEqual(calls[1][2], {"target": 1, "channel_slot": 5})
 
+    def test_save_destination_combo_rows_have_an_activating_list_parent(self):
+        chooser = _function("_choose_device_preset_destination")
+        self.assertIn("rows = Adw.PreferencesGroup()", chooser)
+        self.assertIn("rows.add(target)", chooser)
+        self.assertIn("rows.add(destination)", chooser)
+        self.assertNotIn("rows = Gtk.Box", chooser)
+        self.assertNotIn("rows.append(target)", chooser)
+        self.assertNotIn("rows.append(destination)", chooser)
+
+    def test_each_input_and_preset_button_block_reaches_the_writer(self):
+        calls = []
+        host = SimpleNamespace(
+            _put_on_unit=lambda *args, **kwargs:
+            calls.append((args[2], kwargs["target"])),
+            _put_in_device_library=lambda *_args, **_kwargs: None,
+        )
+        row = lambda value: SimpleNamespace(get_selected=lambda: value)
+
+        for target_index in (0, 1):
+            for block_index in (0, 1):
+                io24gtk.Win._device_preset_destination_response(
+                    host, None, "continue", "Warm", _record("Warm"),
+                    "user:Warm", row(target_index), row(block_index))
+
+        self.assertEqual(calls, [
+            (0, 1), (1, 1),
+            (0, 2), (1, 2),
+        ])
+
     def test_every_loadable_row_has_a_visible_load_button(self):
         self.assertEqual(
             _function("_populate_user_presets").count(
@@ -298,6 +327,35 @@ class SavingTests(unittest.TestCase):
         host._save_user_preset_clicked(None)
         self.assertEqual(events, [("confirm", "Warm")])
 
+    def test_current_sound_can_go_directly_to_the_device_chooser(self):
+        events = []
+        host = SimpleNamespace(
+            factory_target=_Selected(1),
+            slot_name_row=SimpleNamespace(get_text=lambda: "  Warm  "),
+            _slot_base_name=lambda: "Broadcast",
+            _current_slot_record=(
+                lambda base, target, name, strict_voicefx=True:
+                {"preset_name": name, "base": base, "target": target,
+                 "strict": strict_voicefx}),
+            _choose_device_preset_destination=lambda name, record, source:
+            events.append((name, record, source)),
+            say=events.append,
+        )
+        _bind(host, "_current_slot_name", "_factory_target_channel",
+              "_save_current_to_device_clicked")
+
+        host._save_current_to_device_clicked(None)
+
+        self.assertEqual(events, [("Warm", {
+            "preset_name": "Warm", "base": "Broadcast", "target": 2,
+            "strict": False,
+        }, "current:Warm")])
+
+    def test_presets_page_exposes_the_direct_device_save_action(self):
+        page = _function("_presets_page")
+        self.assertIn('label="Save to device…"', page)
+        self.assertIn("self._save_current_to_device_clicked", page)
+
 
 class GlobalFxPresetTests(unittest.TestCase):
     def _host(self, armed=True):
@@ -361,15 +419,33 @@ class PutOnUnitTests(unittest.TestCase):
         self.assertEqual(plan["record"]["preset_name"], "Warm")
         self.assertEqual(plan["source"], "user:Warm")
 
-    def test_the_block_now_playing_is_refused(self):
+    def test_the_block_now_playing_can_be_chosen_for_replacement(self):
         host = SimpleNamespace(
             ctl=SimpleNamespace(dev=object(),
-                                snap={"alive": True, "preset_slot": [0, 2]}),
-            factory_target=_Selected(0),
+                                snap={"alive": True, "preset_slot": [0, 2],
+                                      "preset_off": [False, False]}),
+            factory_target=_Selected(1),
             PRESET_BASE=io24gtk.Win.PRESET_BASE)
         _bind(host, "_prepare_slot_store_target", "_factory_target_channel")
-        with self.assertRaises(io24.HostActionError):
-            host._prepare_slot_store_target(relative_slot=0)
+
+        plan = host._prepare_slot_store_target(relative_slot=0)
+
+        self.assertEqual((plan["target"], plan["slot"], plan["relative_slot"]),
+                         (2, 2, 0))
+
+    def test_a_bypassed_channel_can_replace_its_dormant_selected_block(self):
+        host = SimpleNamespace(
+            ctl=SimpleNamespace(dev=object(),
+                                snap={"alive": True, "preset_slot": [0, 2],
+                                      "preset_off": [False, True]}),
+            factory_target=_Selected(1),
+            PRESET_BASE=io24gtk.Win.PRESET_BASE)
+        _bind(host, "_prepare_slot_store_target", "_factory_target_channel")
+
+        plan = host._prepare_slot_store_target(relative_slot=0)
+
+        self.assertEqual((plan["target"], plan["slot"], plan["relative_slot"]),
+                         (2, 2, 0))
 
 
 class PlayingMarkerTests(unittest.TestCase):
@@ -383,6 +459,19 @@ class PlayingMarkerTests(unittest.TestCase):
                          "Host-written candidate · Channel 1, block 2 · Playing")
         self.assertEqual(rows[0][0].subtitle,
                          "Host-written candidate · Channel 1, block 1")
+
+    def test_a_bypassed_channels_dormant_selection_is_not_marked_playing(self):
+        rows = {0: (_Row(), "Input 1 · Preset button 1"),
+                2: (_Row(), "Input 2 · Preset button 1")}
+        host = _bind(SimpleNamespace(_unit_preset_rows=rows),
+                     "_mark_playing_unit_blocks")
+
+        host._mark_playing_unit_blocks([0, 2], [False, True])
+
+        self.assertEqual(rows[0][0].subtitle,
+                         "Input 1 · Preset button 1 · Playing")
+        self.assertEqual(rows[2][0].subtitle,
+                         "Input 2 · Preset button 1")
 
 
 if __name__ == "__main__":

@@ -43,6 +43,7 @@ import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
 import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage EQ)
 import io24_dsp                            # noqa: E402  (exact compressor models)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
+import io24_eq_reference                   # noqa: E402  (measured EQ artwork)
 import io24_mbc                            # noqa: E402  (host multiband)
 import io24_voicefx_delay                  # noqa: E402  (safe high-rate Delay)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
@@ -2287,84 +2288,34 @@ def _voicefx_ui_fields():
 VOICEFX_UI_FIELDS = _voicefx_ui_fields()
 
 
-# Alternate EQ faceplate geometry and value vocabularies.  These ratios and
-# normalized positions are measured from the approved 2172x724 references.
-# Passive is the taller two-unit plate; Vintage is the slimmer one-unit plate.
-# Values and switch labels remain the exact io24/UC fields rather than the
-# illustrative numbers painted into the reference artwork.
-#
-# The Passive plate runs from y=123 to y=605 in its reference (482 px).  An
-# earlier 454 px crop stopped at y=571, which cut off the two stepped
-# selectors and the lower rack ears and squashed the whole faceplate.
-ALTERNATE_EQ_REFERENCE_GEOMETRY = {
-    "passive": {
-        "aspect": 2156.0 / 482.0,
-        "graph": (.299, .181, .282, .593),
-        "group_y": .056,
-        "lamp": (.942, .886),
-    },
-    "vintage": {
-        "aspect": 2156.0 / 377.0,
-        "graph": (.391, .205, .259, .630),
-        "group_y": .105,
-        "lamp": (.915, .875),
-    },
-}
-
-
-# Control placement measured from the approved references.  Coordinates are
-# in the original 2172x724 images, while ``plot`` is relative to the cropped
-# rack.  The faceplates are drawn as vectors: the reference bitmaps engrave
-# illustrative scale values (a -10..+10 boost, a 20..400 Hz low selector)
-# that contradict the UC contract, and painting over them left doubled and
-# clumped numbers.  Every printed value now comes from ALTERNATE_EQ_RACK_SPECS.
+# Alternate EQ faceplate geometry.  The pure-data module is also consumed by
+# the deterministic asset renderer, so the reference overlay, production
+# faceplate, pointer geometry, and hit regions cannot drift independently.
+# Passive and Vintage retain their measured source landmarks, but the live
+# Host presents every EQ in one common 2U rack rectangle.  In particular,
+# Vintage must not float as a shorter strip or leave exposed bay background.
 ALTERNATE_EQ_REFERENCE_ART = {
-    "passive": {
-        "filename": "passive-program-eq-reference.png",
-        "rack_crop": (8, 123, 2156, 482),
-        "plot": (663, 110, 591, 261),
-        "controls": {
-            "bboost": (251, 336, 66),
-            "batten": (475, 336, 66),
-            "bfreq": (368, 545, 58),
-            "mboost": (1429, 336, 66),
-            "bbwidth": (1615, 336, 66),
-            "mfreq": (1793, 336, 66),
-            "hatten": (1972, 336, 66),
-            "hsfreq": (1866, 545, 58),
-        },
-    },
-    "vintage": {
-        "filename": "vintage-eq-reference.png",
-        "rack_crop": (8, 174, 2156, 377),
-        "plot": (858, 102, 557, 175),
-        "controls": {
-            "lowgain": (190, 360, 55),
-            "lowfreq": (350, 362, 55),
-            "lowmidgain": (522, 360, 55),
-            "lowmidfreq": (673, 360, 55),
-            "himidgain": (1585, 360, 55),
-            "himidfreq": (1745, 361, 55),
-            "higain": (1947, 360, 55),
-        },
-    },
+    model: io24_eq_reference.rack(model)
+    for model in ("passive", "vintage")
+}
+ALTERNATE_EQ_REFERENCE_GEOMETRY = {
+    model: {
+        "aspect": float(art["rack_crop"][2]) / art["rack_crop"][3],
+        "graph": tuple(value / dimension for value, dimension in zip(
+            art["plot"],
+            (art["rack_crop"][2], art["rack_crop"][3],
+             art["rack_crop"][2], art["rack_crop"][3]))),
+        "group_y": art["group_centres"][0][1] / art["rack_crop"][3],
+        "lamp": (art["lamp"][0] / art["rack_crop"][2],
+                 art["lamp"][1] / art["rack_crop"][3]),
+    }
+    for model, art in ALTERNATE_EQ_REFERENCE_ART.items()
 }
 
 
 def alternate_eq_reference_control_layout(model, width, height):
     """Scale exact source-knob circles into one fitted rack rectangle."""
-    art = ALTERNATE_EQ_REFERENCE_ART[model]
-    rack_x, rack_y, rack_width, rack_height = art["rack_crop"]
-    scale_x = float(width) / rack_width
-    scale_y = float(height) / rack_height
-    radius_scale = min(scale_x, scale_y)
-    return {
-        field: ((source_x - rack_x) * scale_x,
-                (source_y - rack_y) * scale_y,
-                source_radius * radius_scale)
-        for field, (source_x, source_y, source_radius) in
-        art["controls"].items()
-    }
+    return io24_eq_reference.control_layout(model, width, height)
 
 
 ALTERNATE_EQ_DRAG_TRAVEL = 240.0
@@ -2397,37 +2348,17 @@ def alternate_eq_knob_angle(spec, fraction):
     return math.radians(start + fraction * (end - start))
 
 
-# Standard EQ faceplate geometry, measured in source pixels from the approved
-# 2172x724 ``standard-parametric-eq-reference.png``.  Its plate is Passive's
-# two-unit 2156x482 crop, so all three EQ models share one rack bay.  Knob
-# centres come from circle fits to the four band collars, the screen from the
-# cut, frame, gasket and glass edges.  Like the alternate racks, the Host
-# draws this as vectors and never composites the bitmap: every printed value
-# comes from the Standard contract (``io24_presets.STANDARD_EQ_*``) and the
-# plot's fixed +/-18 dB, 20 Hz..24 kHz response scale.
-STANDARD_EQ_REFERENCE_ART = {
-    "filename": "standard-parametric-eq-reference.png",
-    "rack_crop": (8, 121, 2156, 482),
-    "ear": 80,
-    "slot_rows": (150, 574),
-    "screws": ((128, 152), (2044, 152), (128, 572)),
-    "heading_y": 158,
-    "screen": (620, 186, 932, 384),
-    "frame": (626, 192, 920, 372),
-    "gasket": (640, 206, 892, 358),
-    "glass": (646, 212, 880, 332),
-    "plot": (662, 224, 848, 308),
-    "knob_y": 350,
-    "knob_x": (232, 482, 1690, 1940),
-    "knob_radius": 88,
-    "lamp": (2040, 562, 20),
-}
+# Standard uses the same measured authority and a deterministic, value-free
+# faceplate generated alongside its full reference.  All state-bearing marks
+# remain live GTK vectors sourced from the Standard EQ contract.
+STANDARD_EQ_REFERENCE_ART = io24_eq_reference.rack("standard")
 # Band accents shared by each knob's collar, value arc, heading and node.
 STANDARD_EQ_BAND_TONES = ((.91, .45, .39), (.95, .70, .32),
                           (.42, .83, .60), (.50, .62, .98))
 STANDARD_EQ_KNOB_DEGREES = (-225.0, 45.0)
 STANDARD_EQ_LIGHT = math.radians(-125.0)
-_STANDARD_EQ_FACEPLATE_TEXTURE = None
+STANDARD_EQ_Q_DRAG_TRAVEL = 240.0
+_EQ_REFERENCE_TEXTURES = {}
 
 
 def standard_eq_knob_angle(gain):
@@ -2438,9 +2369,37 @@ def standard_eq_knob_angle(gain):
     return math.radians(start + (gain - low) / (high - low) * (end - start))
 
 
-def standard_eq_faceplate_path():
-    """Return the generated, value-free faceplate in source or install trees."""
-    filename = "standard-parametric-eq-faceplate.png"
+def standard_eq_q_fraction(value):
+    """Map the exact 0.1..10 Q range onto usable logarithmic knob travel."""
+    low, high = io24_presets.STANDARD_EQ_Q_RANGE
+    value = max(low, min(high, float(value)))
+    return math.log(value / low) / math.log(high / low)
+
+
+def standard_eq_q_value(fraction):
+    """Map a Q knob fraction back to the unchanged protocol value range."""
+    low, high = io24_presets.STANDARD_EQ_Q_RANGE
+    fraction = max(0.0, min(1.0, float(fraction)))
+    return low * (high / low) ** fraction
+
+
+def standard_eq_q_angle(value):
+    """Pointer angle for one Standard Q knob."""
+    start, end = STANDARD_EQ_KNOB_DEGREES
+    fraction = standard_eq_q_fraction(value)
+    return math.radians(start + fraction * (end - start))
+
+
+def standard_eq_q_drag_value(start_value, delta_y,
+                             travel=STANDARD_EQ_Q_DRAG_TRAVEL):
+    """Turn Q vertically without coupling it to Gain or Frequency."""
+    travel = max(1.0, float(travel))
+    fraction = standard_eq_q_fraction(start_value) - float(delta_y) / travel
+    return standard_eq_q_value(fraction)
+
+
+def eq_reference_asset_path(filename):
+    """Resolve one generated/reference EQ asset in source or install trees."""
     module_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = (
         os.path.join(module_dir, "docs", "design", filename),
@@ -2452,16 +2411,57 @@ def standard_eq_faceplate_path():
         if os.path.isfile(candidate):
             return candidate
     raise FileNotFoundError(
-        "Standard EQ faceplate is missing; checked " + ", ".join(candidates))
+        "EQ reference asset is missing; checked " + ", ".join(candidates))
+
+
+def eq_reference_texture(filename):
+    """Load and cache one static EQ bitmap; no device state enters assets."""
+    texture = _EQ_REFERENCE_TEXTURES.get(filename)
+    if texture is None:
+        texture = Gdk.Texture.new_from_filename(
+            eq_reference_asset_path(filename))
+        _EQ_REFERENCE_TEXTURES[filename] = texture
+    return texture
+
+
+def eq_reference_calibration_mode():
+    """Return the opt-in visual calibration layer for paint-harness use."""
+    return io24_eq_reference.calibration_mode(
+        os.environ.get("IO24_EQ_REFERENCE_CALIBRATION"))
+
+
+def append_eq_reference_texture(snapshot, filename, rect, opacity=1.0):
+    """Append a measured rack layer, optionally as a translucent ghost."""
+    try:
+        texture = eq_reference_texture(filename)
+    except (FileNotFoundError, GLib.Error):
+        return False
+    x, y, width, height = rect
+    if opacity < 1.0:
+        snapshot.push_opacity(max(0.0, min(1.0, float(opacity))))
+    snapshot.append_texture(
+        texture, Graphene.Rect().init(x, y, width, height))
+    if opacity < 1.0:
+        snapshot.pop()
+    return True
+
+
+def standard_eq_faceplate_path():
+    """Return the generated, value-free faceplate in source or install trees."""
+    return eq_reference_asset_path(
+        STANDARD_EQ_REFERENCE_ART["faceplate_filename"])
 
 
 def standard_eq_faceplate_texture():
     """Load the deterministic faceplate once; live values remain GTK vectors."""
-    global _STANDARD_EQ_FACEPLATE_TEXTURE
-    if _STANDARD_EQ_FACEPLATE_TEXTURE is None:
-        _STANDARD_EQ_FACEPLATE_TEXTURE = Gdk.Texture.new_from_filename(
-            standard_eq_faceplate_path())
-    return _STANDARD_EQ_FACEPLATE_TEXTURE
+    return eq_reference_texture(
+        STANDARD_EQ_REFERENCE_ART["faceplate_filename"])
+
+
+def alternate_eq_faceplate_texture(model):
+    """Load one value-free Passive/Vintage faceplate derived from its source."""
+    return eq_reference_texture(
+        ALTERNATE_EQ_REFERENCE_ART[model]["faceplate_filename"])
 
 
 def standard_eq_arc_points(cx, cy, radius, start, end):
@@ -2510,13 +2510,13 @@ def standard_eq_rack_layout(width, height):
     art = STANDARD_EQ_REFERENCE_ART
     rack_x, rack_y, rack_width, rack_height = standard_eq_rack_bounds(
         width, height)
-    crop_x, crop_y, crop_width, crop_height = art["rack_crop"]
+    _crop_x, _crop_y, crop_width, crop_height = art["rack_crop"]
     scale_x = rack_width / crop_width
     scale_y = rack_height / crop_height
 
     def point(x, y):
-        return (rack_x + (x - crop_x) * scale_x,
-                rack_y + (y - crop_y) * scale_y)
+        return (rack_x + x * scale_x,
+                rack_y + y * scale_y)
 
     def rectangle(key):
         x, y, rect_width, rect_height = art[key]
@@ -2529,9 +2529,9 @@ def standard_eq_rack_layout(width, height):
         "panel": (rack_x, rack_y, rack_width, rack_height),
         "scale": scale,
         "ear": art["ear"] * scale_x,
-        "slots": tuple(point(crop_x, row)[1] for row in art["slot_rows"]),
-        "screws": tuple(point(x, y) for x, y in art["screws"]),
-        "heading_y": point(crop_x, art["heading_y"])[1],
+        "slots": tuple(point(0, row)[1] for row in art["slot_rows"]),
+        "screws": tuple(point(x, y) for x, y, _radius in art["screws"]),
+        "heading_y": point(0, art["heading_y"])[1],
         "screen": rectangle("screen"),
         "frame": rectangle("frame"),
         "gasket": rectangle("gasket"),
@@ -2539,6 +2539,17 @@ def standard_eq_rack_layout(width, height):
         "graph": rectangle("plot"),
         "encoders": tuple(point(x, art["knob_y"]) for x in art["knob_x"]),
         "knob_radius": art["knob_radius"] * scale,
+        "q_encoders": tuple(
+            point(x, art["q_knob_y"]) for x in art["q_knob_x"]),
+        "q_radius": art["q_knob_radius"] * scale,
+        "band_power": tuple(
+            point(x, y) + (radius * scale,)
+            for x, y, radius in art["band_power"]),
+        "band_mode": tuple(
+            (point(x, y)[0], point(x, y)[1],
+             rect_width * scale_x, rect_height * scale_y)
+            for x, y, rect_width, rect_height in art["band_mode"]),
+        "flatten": rectangle("flatten"),
         "power": point(lamp_x, lamp_y) + (lamp_radius * scale,),
     }
 
@@ -2550,13 +2561,14 @@ def eq_miniature_points(window, channel, x, y, width, height):
 
 
 def alternate_eq_rack_bounds(model, width, height):
-    """Fit the approved faceplate aspect inside the available canvas."""
-    geometry = ALTERNATE_EQ_REFERENCE_GEOMETRY[model]
+    """Fit every alternate EQ into the same Passive-height rack rectangle."""
+    if model not in ALTERNATE_EQ_REFERENCE_GEOMETRY:
+        raise ValueError("alternate EQ model must be passive or vintage")
     width, height = float(width), float(height)
-    rack_height = width / geometry["aspect"]
+    rack_height = width / ALTERNATE_EQ_COMMON_ASPECT
     if rack_height <= height:
         return 0.0, (height - rack_height) / 2.0, width, rack_height
-    rack_width = height * geometry["aspect"]
+    rack_width = height * ALTERNATE_EQ_COMMON_ASPECT
     return (width - rack_width) / 2.0, 0.0, rack_width, height
 
 
@@ -2572,68 +2584,79 @@ def alternate_eq_canvas_height(model, width):
 ALTERNATE_EQ_RACK_SPECS = {
     "passive": (
         {"field": "bboost", "label": "BOOST", "group": "LOW",
-         "x": .116, "y": .475, "lo": 0.0, "hi": 10.0, "step": .1,
+         "x": 243 / 2156, "y": 213 / 482,
+         "lo": 0.0, "hi": 10.0, "step": .1,
          "angle_degrees": (-225.0, 45.0)},
         {"field": "batten", "label": "ATTEN", "group": "LOW",
-         "x": .220, "y": .475, "lo": 0.0, "hi": 10.0, "step": .1,
+         "x": 467 / 2156, "y": 213 / 482,
+         "lo": 0.0, "hi": 10.0, "step": .1,
          "angle_degrees": (-225.0, 45.0)},
         # The stepped selectors print their positions beside and above the
         # knob only (reference: -185..+5 and -150..-30 degrees), which is
         # what keeps them clear of the rack's bottom edge.
         {"field": "bfreq", "label": "FREQUENCY", "group": "LOW",
-         "x": .167, "y": .875, "radius": .78, "style": "selector",
+         "x": 360 / 2156, "y": 422 / 482,
+         "radius": .78, "style": "selector",
          "angle_degrees": (-185.0, 5.0),
          "choices": ("20 Hz", "30 Hz", "60 Hz", "100 Hz")},
         {"field": "mboost", "label": "BOOST", "group": "HIGH",
-         "x": .657, "y": .475, "lo": 0.0, "hi": 10.0, "step": .1,
+         "x": 1421 / 2156, "y": 213 / 482,
+         "lo": 0.0, "hi": 10.0, "step": .1,
          "angle_degrees": (-225.0, 45.0)},
         # The four HIGH knobs sit only 2.7 radii apart.  Bandwidth keeps the
         # reference's -205..25 degree arc and the seven High Frequency
         # stops spread to -230..50, so no two neighbouring values print
         # side by side at the horizontal.
         {"field": "bbwidth", "label": "BANDWIDTH", "group": "HIGH",
-         "x": .744, "y": .475, "lo": 0.0, "hi": 10.0, "step": .1,
+         "x": 1607 / 2156, "y": 213 / 482,
+         "lo": 0.0, "hi": 10.0, "step": .1,
          "angle_degrees": (-205.0, 25.0)},
         {"field": "mfreq", "label": "FREQUENCY", "group": "HIGH",
-         "x": .825, "y": .475,
+         "x": 1785 / 2156, "y": 213 / 482,
          "angle_degrees": (-230.0, 50.0),
          "choices": ("3 kHz", "4 kHz", "5 kHz", "8 kHz", "10 kHz",
                      "12 kHz", "16 kHz")},
         {"field": "hatten", "label": "ATTEN", "group": "HIGH",
-         "x": .908, "y": .475, "lo": 0.0, "hi": 10.0, "step": .1,
+         "x": 1964 / 2156, "y": 213 / 482,
+         "lo": 0.0, "hi": 10.0, "step": .1,
          "angle_degrees": (-225.0, 45.0)},
         {"field": "hsfreq", "label": "ATTEN SELECT", "group": "HIGH",
-         "x": .860, "y": .875, "radius": .78, "style": "selector",
+         "x": 1858 / 2156, "y": 422 / 482,
+         "radius": .78, "style": "selector",
          "angle_degrees": (-150.0, -30.0),
          "choices": ("5 kHz", "10 kHz", "20 kHz")},
     ),
     "vintage": (
         {"field": "lowgain", "label": "GAIN", "group": "LOW",
-         "x": .084, "y": .500, "lo": -16.0, "hi": 16.0, "step": .1,
+         "x": 182 / 2156, "y": 186 / 377,
+         "lo": -16.0, "hi": 16.0, "step": .1,
          "tone": (0.58, 0.25, 0.25)},
         {"field": "lowfreq", "label": "FREQUENCY", "group": "LOW",
-         "x": .158, "y": .500,
+         "x": 342 / 2156, "y": 188 / 377,
          "angle_degrees": (-225.0, 45.0),
          "choices": ("35 Hz", "60 Hz", "110 Hz", "220 Hz"),
          "tone": (0.58, 0.25, 0.25)},
         {"field": "lowmidgain", "label": "GAIN", "group": "LOW-MID",
-         "x": .238, "y": .500, "lo": -16.0, "hi": 16.0, "step": .1,
+         "x": 514 / 2156, "y": 186 / 377,
+         "lo": -16.0, "hi": 16.0, "step": .1,
          "tone": (0.66, 0.48, 0.16)},
         {"field": "lowmidfreq", "label": "FREQUENCY", "group": "LOW-MID",
-         "x": .309, "y": .500,
+         "x": 665 / 2156, "y": 186 / 377,
          "angle_degrees": (-225.0, 45.0),
          "choices": ("360 Hz", "700 Hz", "1.6 kHz"),
          "tone": (0.66, 0.48, 0.16)},
         {"field": "himidgain", "label": "GAIN", "group": "HI-MID",
-         "x": .732, "y": .500, "lo": -16.0, "hi": 16.0, "step": .1,
+         "x": 1577 / 2156, "y": 186 / 377,
+         "lo": -16.0, "hi": 16.0, "step": .1,
          "tone": (0.44, 0.55, 0.32)},
         {"field": "himidfreq", "label": "FREQUENCY", "group": "HI-MID",
-         "x": .805, "y": .500,
+         "x": 1737 / 2156, "y": 187 / 377,
          "angle_degrees": (-225.0, 45.0),
          "choices": ("3.2 kHz", "4.8 kHz", "7.2 kHz"),
          "tone": (0.44, 0.55, 0.32)},
         {"field": "higain", "label": "GAIN", "group": "HIGH",
-         "x": .898, "y": .500, "lo": -16.0, "hi": 16.0, "step": .1,
+         "x": 1939 / 2156, "y": 186 / 377,
+         "lo": -16.0, "hi": 16.0, "step": .1,
          "tone": (0.25, 0.42, 0.61)},
     ),
 }
@@ -2934,6 +2957,7 @@ class EQCurve(ChannelBound, Canvas):
         self.set_focusable(True)
         self._static_nodes = None
         self.drag_band = None
+        self._drag_control = None
         self._drag_pending_enable = False
         self._drag_thr = Throttle(
             lambda _value: self.win._push_band(self.channel), 0.012)
@@ -2957,7 +2981,11 @@ class EQCurve(ChannelBound, Canvas):
         mo.connect("leave", self._leave)
         self.add_controller(mo)
         self.hover = None
+        self.hover_q = None
+        self.hover_band_power = None
+        self.hover_mode = None
         self.hover_power = False
+        self.hover_flatten = False
 
     def do_get_request_mode(self):
         return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
@@ -3009,6 +3037,44 @@ class EQCurve(ChannelBound, Canvas):
                 return index
         return None
 
+    def _q_knob_at(self, x, y, width=None, height=None):
+        """The dedicated Q rotary under the pointer, if any."""
+        layout = standard_eq_rack_layout(
+            width or self.get_width() or 1, height or self.get_height() or 1)
+        reach = max(13.0, layout["q_radius"] * 1.30)
+        for index, (cx, cy) in enumerate(layout["q_encoders"]):
+            if math.hypot(float(x) - cx, float(y) - cy) <= reach:
+                return index
+        return None
+
+    @staticmethod
+    def _inside_rect(x, y, rectangle):
+        left, top, width, height = rectangle
+        return left <= float(x) <= left + width and \
+            top <= float(y) <= top + height
+
+    def _band_power_at(self, x, y):
+        layout = standard_eq_rack_layout(
+            self.get_width() or 1, self.get_height() or 1)
+        for index, (cx, cy, radius) in enumerate(layout["band_power"]):
+            if math.hypot(float(x) - cx, float(y) - cy) <= \
+                    max(12.0, radius * 1.65):
+                return index
+        return None
+
+    def _band_mode_at(self, x, y):
+        layout = standard_eq_rack_layout(
+            self.get_width() or 1, self.get_height() or 1)
+        for index, rectangle in enumerate(layout["band_mode"]):
+            if self._inside_rect(x, y, rectangle):
+                return index
+        return None
+
+    def _flatten_at(self, x, y):
+        layout = standard_eq_rack_layout(
+            self.get_width() or 1, self.get_height() or 1)
+        return self._inside_rect(x, y, layout["flatten"])
+
     def _hit_band(self, x, y):
         """Return a band only when the pointer is on a visible node or knob."""
         width = self.get_width() or 1
@@ -3016,6 +3082,9 @@ class EQCurve(ChannelBound, Canvas):
         knob = self._knob_at(x, y, width, height)
         if knob is not None:
             return knob
+        q_knob = self._q_knob_at(x, y, width, height)
+        if q_knob is not None:
+            return q_knob
         gx, gy, gw, gh = self._graph_bounds(width, height)
         if not (gx <= x <= gx + gw and gy <= y <= gy + gh):
             return None
@@ -3058,6 +3127,26 @@ class EQCurve(ChannelBound, Canvas):
                     self.channel, not self.win.eq_enabled(self.channel))
                 self.queue_draw()
             return
+        if self._flatten_at(x, y):
+            if presses == 1:
+                self.win._eq_flat(self.channel)
+            return
+        band_power = self._band_power_at(x, y)
+        if band_power is not None:
+            self.win.select_band(band_power, self.channel)
+            if presses == 1:
+                enabled = io24_presets.standard_band_enabled(
+                    self.bands[band_power])
+                self.win._set_standard_band_enabled(
+                    self.channel, band_power, not enabled)
+            return
+        band_mode = self._band_mode_at(x, y)
+        if band_mode is not None:
+            self.win.select_band(band_mode, self.channel)
+            if presses == 1:
+                self.win._toggle_standard_band_mode(
+                    self.channel, band_mode)
+            return
         band = self._hit_band(x, y)
         if band is not None:
             self.win.select_band(band, self.channel)
@@ -3065,21 +3154,45 @@ class EQCurve(ChannelBound, Canvas):
     def _motion(self, _c, x, y):
         if self.win._alt_eq(self.channel) is not None:
             self.hover = None
+            self.hover_q = None
+            self.hover_band_power = None
+            self.hover_mode = None
             self.hover_power = False
+            self.hover_flatten = False
             return
         n = self._hit_band(x, y)
+        q = self._q_knob_at(x, y)
+        band_power = self._band_power_at(x, y)
+        mode = self._band_mode_at(x, y)
         power = self._power_at(x, y)
-        if n != self.hover or power != self.hover_power:
+        flatten = self._flatten_at(x, y)
+        if (n != self.hover or q != self.hover_q or
+                band_power != self.hover_band_power or
+                mode != self.hover_mode or power != self.hover_power or
+                flatten != self.hover_flatten):
             self.hover = n
+            self.hover_q = q
+            self.hover_band_power = band_power
+            self.hover_mode = mode
             self.hover_power = power
+            self.hover_flatten = flatten
             self.set_cursor_from_name(
-                "pointer" if power or n is not None else None)
+                "pointer" if (power or flatten or n is not None or
+                              band_power is not None or mode is not None)
+                else None)
             self.queue_draw()
 
     def _leave(self, *_args):
-        if self.hover is not None or self.hover_power:
+        if (self.hover is not None or self.hover_q is not None or
+                self.hover_band_power is not None or
+                self.hover_mode is not None or self.hover_power or
+                self.hover_flatten):
             self.hover = None
+            self.hover_q = None
+            self.hover_band_power = None
+            self.hover_mode = None
             self.hover_power = False
+            self.hover_flatten = False
             self.set_cursor_from_name(None)
             self.queue_draw()
 
@@ -3091,24 +3204,36 @@ class EQCurve(ChannelBound, Canvas):
     def _drag_begin(self, g, x, y):
         if self.win._alt_eq(self.channel) is not None:
             self.drag_band = None
+            self._drag_control = None
             return
         if self._power_at(x, y):
             self.drag_band = None
+            self._drag_control = None
             return
         gx, gy, gw, gh = self._graph_bounds()
         # The reference places two large knobs on either side of the screen,
         # vertically inside the graph's span.  Hit the knob itself rather than
         # assuming every encoder lives below the graph; otherwise a gain drag
         # also rewrites frequency.
-        self._drag_encoder = self._knob_at(x, y) is not None
-        self.drag_band = self._hit_band(x, y)
+        q_band = self._q_knob_at(x, y)
+        gain_band = self._knob_at(x, y)
+        self._drag_encoder = gain_band is not None
+        if q_band is not None:
+            self.drag_band = q_band
+            self._drag_control = "q"
+        elif gain_band is not None:
+            self.drag_band = gain_band
+            self._drag_control = "gain"
+        else:
+            self.drag_band = self._hit_band(x, y)
+            self._drag_control = "node" if self.drag_band is not None else None
         if self.drag_band is None:
             return
         self.win.select_band(self.drag_band, self.channel)
         b = self.bands[self.drag_band]
         self._drag_pending_enable = (
             not self.win.eq_enabled(self.channel) or b["shape"] == "off")
-        self._start = (x, y, b["freq"], b["gain"])
+        self._start = (x, y, b["freq"], b["gain"], b["q"])
 
     def _enable_dragged_band(self):
         if not self._drag_pending_enable or self.drag_band is None:
@@ -3134,16 +3259,32 @@ class EQCurve(ChannelBound, Canvas):
         self._enable_dragged_band()
         self.win.invalidate_curve()
         gx, _gy, gw, gh = self._graph_bounds()
-        x0, y0, f0, g0 = self._start
         b = self.bands[self.drag_band]
-        if not self._drag_encoder:
+        if len(self._start) == 5:
+            x0, y0, f0, g0, q0 = self._start
+        else:
+            # Compatibility with an in-flight drag created before the Q-knob
+            # extension (and with lightweight downstream test doubles).
+            x0, y0, f0, g0 = self._start
+            q0 = b["q"]
+        drag_control = getattr(
+            self, "_drag_control",
+            "gain" if getattr(self, "_drag_encoder", False) else "node")
+        if drag_control == "q":
+            b["q"] = standard_eq_q_drag_value(q0, dy)
+        elif drag_control == "node":
             b["freq"] = self._f_from_x(x0 + dx - gx, gw)
-        b["gain"] = max(-15.0, min(15.0, g0 - dy / (gh / 2) * 18.0))
+            b["gain"] = max(
+                -15.0, min(15.0, g0 - dy / (gh / 2) * 18.0))
+        elif drag_control == "gain":
+            b["gain"] = max(
+                -15.0, min(15.0, g0 - dy / (gh / 2) * 18.0))
         prior = self.win._adopt_mute
         self.win._adopt_mute = True
         try:
             self.wid("freq").set_value(b["freq"])
             self.wid("gain").set_value(b["gain"])
+            self.wid("q").set_value(b["q"])
         finally:
             self.win._adopt_mute = prior
         self._drag_push()
@@ -3153,6 +3294,7 @@ class EQCurve(ChannelBound, Canvas):
 
     def _drag_end(self, g, dx, dy):
         self.drag_band = None
+        self._drag_control = None
         self._drag_pending_enable = False
 
     def _scroll(self, _c, _dx, dy):
@@ -3181,10 +3323,79 @@ class EQCurve(ChannelBound, Canvas):
         self.queue_draw()
         return True
 
+    def _draw_q_knob(self, sn, index, cx, cy, radius, band, tone, scale):
+        """Draw one compact physical Q rotary with independent live motion."""
+        selected = index == self.cur_band
+        hovered = index == self.hover_q
+        if selected or hovered:
+            glow(sn, lambda: dot(
+                sn, cx, cy, radius * 1.18,
+                rgba(*tone, .24 if selected else .16)),
+                radius=max(3.0, 7.0 * scale))
+
+        # Eleven fixed ticks, a fluted black skirt, and a brushed cap retain
+        # the same physical vocabulary as the larger Gain encoders.
+        for tick in range(11):
+            angle = math.radians(
+                STANDARD_EQ_KNOB_DEGREES[0] +
+                tick / 10.0 * (STANDARD_EQ_KNOB_DEGREES[1] -
+                               STANDARD_EQ_KNOB_DEGREES[0]))
+            inner = radius * 1.13
+            outer = radius * (1.27 if tick in (0, 5, 10) else 1.22)
+            polyline(sn, [
+                (cx + inner * math.cos(angle),
+                 cy + inner * math.sin(angle)),
+                (cx + outer * math.cos(angle),
+                 cy + outer * math.sin(angle)),
+            ], rgba(.78, .82, .83, .72), max(.65, 1.35 * scale))
+
+        dot(sn, cx + radius * .07, cy + radius * .11, radius * 1.06,
+            rgba(0, 0, 0, .58))
+        dot(sn, cx, cy, radius, rgba(.025, .030, .036, 1))
+        for ridge in range(20):
+            angle = math.tau * ridge / 20.0
+            polyline(sn, [
+                (cx + radius * .82 * math.cos(angle),
+                 cy + radius * .82 * math.sin(angle)),
+                (cx + radius * .98 * math.cos(angle),
+                 cy + radius * .98 * math.sin(angle)),
+            ], rgba(.22, .24, .27, .86), max(.55, 1.15 * scale))
+        radial_dot(sn, cx, cy, radius * .73, (
+            (0.0, (.78, .82, .84, 1)),
+            (.24, (.48, .52, .55, 1)),
+            (.72, (.17, .19, .22, 1)),
+            (1.0, (.055, .064, .075, 1)),
+        ))
+        dot(sn, cx, cy, radius * .58, rgba(*tone, .26))
+        angle = standard_eq_q_angle(band["q"])
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        polyline(sn, [
+            (cx + radius * .12 * cos_a, cy + radius * .12 * sin_a),
+            (cx + radius * .70 * cos_a, cy + radius * .70 * sin_a),
+        ], rgba(0, 0, 0, .70), max(2.0, 4.0 * scale))
+        polyline(sn, [
+            (cx + radius * .12 * cos_a - scale,
+             cy + radius * .12 * sin_a - scale),
+            (cx + radius * .70 * cos_a - scale,
+             cy + radius * .70 * sin_a - scale),
+        ], rgba(.98, .98, .94, .98), max(1.0, 2.1 * scale))
+        centred_faceplate_label(
+            self, sn, "Q %.2f" % band["q"], cx,
+            cy + radius + max(3.0, 6.0 * scale),
+            rgba(.78, .85, .87, .96), max(5.8, 14.0 * scale),
+            Pango.Weight.BOLD if hovered else Pango.Weight.MEDIUM)
+
     def paint(self, sn, w, h):
         acc = chan_col(self.channel)
         box(sn, 0, 0, w, h, pal(GROUND))
         layout = standard_eq_rack_layout(w, h)
+        calibration = eq_reference_calibration_mode()
+        panel = layout["panel"]
+        if calibration in ("backdrop", "underlay") and \
+                append_eq_reference_texture(
+                    sn, STANDARD_EQ_REFERENCE_ART[
+                        "calibration_underlay_filename"], panel):
+            return
         # The blank faceplate comes from the same deterministic renderer as the
         # approved reference, so metal, grain, rack ears, fluted knobs and the
         # screen frame stay pixel-identical.  Only state-bearing marks are
@@ -3355,19 +3566,24 @@ class EQCurve(ChannelBound, Canvas):
             ], rgba(.98, .97, .93, .98 if band_on else .58),
                 max(1.8, 5.2 * scale))
 
-            gain_size = max(7.0, 21.0 * scale)
-            gain_center_y = cy + radius + 30.0 * scale
+            gain_size = max(6.8, 18.0 * scale)
+            gain_center_y = cy + radius + 13.0 * scale
             centred_faceplate_label(
                 self, sn, "%+.1f dB" % band["gain"], cx,
                 gain_center_y - gain_size * .55,
                 rgba(.94, .95, .92, .96 if selected else .86), gain_size)
 
-            detail_size = max(6.0, 16.0 * scale)
-            detail_y = cy + radius + 60.0 * scale
-            detail = "%.0f Hz   %s" % (
-                band["freq"], standard_eq_mode_text(band))
-            led_x = cx - radius * .54
-            led_r = max(2.2, 4.6 * scale)
+            qx, qy = layout["q_encoders"][index]
+            self._draw_q_knob(
+                sn, index, qx, qy, layout["q_radius"], band, tone, scale)
+
+            detail_size = max(5.8, 14.0 * scale)
+            led_x, detail_y, led_r = layout["band_power"][index]
+            if self.hover_band_power == index:
+                glow(sn, lambda x=led_x, y=detail_y, r=led_r,
+                     colour=tone: dot(sn, x, y, r * 1.75,
+                                      rgba(*colour, .30)),
+                     radius=max(3.0, 6.0 * scale))
             if band_on:
                 glow(sn, lambda x=led_x, y=detail_y, colour=tone:
                      dot(sn, x, y, led_r, rgba(*colour, .95)),
@@ -3380,10 +3596,40 @@ class EQCurve(ChannelBound, Canvas):
             else:
                 dot(sn, led_x, detail_y, led_r,
                     rgba(.15, .18, .20, .92))
+            frequency_x = cx - 20.0 * scale if index < 2 else \
+                cx + 20.0 * scale
             centred_faceplate_label(
-                self, sn, detail, cx + radius * .07,
+                self, sn, "%.0f Hz" % band["freq"], frequency_x,
                 detail_y - detail_size * .55,
                 rgba(.66, .74, .78, .86), detail_size)
+
+            mode_x, mode_y, mode_w, mode_h = layout["band_mode"][index]
+            mode_hovered = self.hover_mode == index
+            outer = index in (0, 3)
+            rounded_box(
+                sn, mode_x, mode_y, mode_w, mode_h,
+                max(2.0, 4.0 * scale),
+                rgba(.025, .040, .052, .86),
+                rgba(*tone, .74 if mode_hovered and outer else .32))
+            centred_faceplate_label(
+                self, sn, standard_eq_mode_text(band),
+                mode_x + mode_w / 2.0,
+                mode_y + (mode_h - detail_size) / 2.0,
+                rgba(.82, .88, .88, .96 if outer else .62), detail_size,
+                Pango.Weight.BOLD if mode_hovered and outer
+                else Pango.Weight.MEDIUM)
+
+        flat_x, flat_y, flat_w, flat_h = layout["flatten"]
+        rounded_box(
+            sn, flat_x, flat_y, flat_w, flat_h,
+            max(2.0, 4.0 * scale),
+            rgba(.010, .038, .047, .88),
+            pal(ACCENT, .72 if self.hover_flatten else .30))
+        centred_faceplate_label(
+            self, sn, "FLAT", flat_x + flat_w / 2.0,
+            flat_y + max(2.0, 5.0 * scale),
+            rgba(.64, .82, .84, .94), max(5.6, 12.0 * scale),
+            Pango.Weight.BOLD)
 
         # The faceplate owns global bypass, matching the alternate racks.
         # Its state stays visible even when the detailed rows are folded away.
@@ -3404,6 +3650,18 @@ class EQCurve(ChannelBound, Canvas):
         else:
             dot(sn, px, py, power_radius * .48, rgba(.015, .020, .026, .96))
 
+        # Developer-only alignment layers. ``overlay`` ghosts the canonical
+        # populated reference over the live rack; ``nodes`` adds the measured
+        # crosshairs and bounds. Neither mode is enabled in ordinary Host use.
+        if calibration in ("overlay", "both"):
+            append_eq_reference_texture(
+                sn, STANDARD_EQ_REFERENCE_ART[
+                    "calibration_underlay_filename"], panel, .46)
+        if calibration in ("nodes", "both"):
+            append_eq_reference_texture(
+                sn, STANDARD_EQ_REFERENCE_ART[
+                    "calibration_nodes_filename"], panel)
+
 
 class AlternateEqRack(ChannelBound, Canvas):
     """Interactive Passive/Vintage faceplate with its response in the rack.
@@ -3417,8 +3675,8 @@ class AlternateEqRack(ChannelBound, Canvas):
     POWER_FIELD = "__power__"
 
     def __init__(self, win, channel=1):
-        # Height follows the reference faceplate's aspect; a small lower margin
-        # keeps the cast shadow visible without stretching the photographed rack.
+        # Every EQ occupies the same 2U bay. Source landmarks remain measured
+        # per model, while circular controls keep their undistorted radii.
         super().__init__()
         self.win = win
         self.channel = channel
@@ -3519,10 +3777,15 @@ class AlternateEqRack(ChannelBound, Canvas):
             return 0.0, 0.0, 0.0
         x, y, rack_w, rack_h = alternate_eq_rack_bounds(
             view["model"], w, h)
-        lamp_x, lamp_y = ALTERNATE_EQ_REFERENCE_GEOMETRY[
-            view["model"]]["lamp"]
-        return (x + lamp_x * rack_w, y + lamp_y * rack_h,
-                max(16.0, min(24.0, rack_h * .085)))
+        art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
+        _crop_x, _crop_y, crop_w, crop_h = art["rack_crop"]
+        lamp_x, lamp_y, lamp_radius = art["lamp"]
+        scale = min(rack_w / crop_w, rack_h / crop_h)
+        # The lamp remains a comfortable pointer target even when its exact
+        # photographed body scales below the 32 px desktop minimum.
+        return (x + lamp_x / crop_w * rack_w,
+                y + lamp_y / crop_h * rack_h,
+                max(16.0, lamp_radius * scale * 1.35))
 
     def _power_at(self, x, y):
         cx, cy, radius = self._power_geometry()
@@ -3806,53 +4069,60 @@ class AlternateEqRack(ChannelBound, Canvas):
                 alternate_eq_control_value_y(model, cy, radius),
                 pal(ACCENT, .98), max(6.0, size), Pango.Weight.BOLD)
 
-    def _draw_graph(self, sn, x, y, w, h, active, model):
+    def _draw_graph(self, sn, x, y, w, h, active, model,
+                    draw_static=True, draw_bezel=True, draw_labels=True):
         # Both approved units use a deep cast bezel, not a thin plot border.
         # Scale it from the plot height so the same photographed proportion is
         # retained at normal and maximized Host sizes.
         bezel_x = max(12.0, min(22.0, h * .16))
         bezel_y = max(11.0, min(18.0, h * .13))
-        rounded_box(sn, x - bezel_x, y - bezel_y,
-                    w + bezel_x * 2, h + bezel_y * 2, 13,
-                    rgba(0, 0, 0, .48))
-        rounded_vgrad(sn, x - bezel_x + 4, y - bezel_y + 3,
-                      w + (bezel_x - 4) * 2,
-                      h + (bezel_y - 3) * 2, 11, (
-            (0.0, (.24, .28, .29, 1)),
-            (.18, (.055, .065, .070, 1)),
-            (1.0, (.015, .020, .024, 1))), rgba(.42, .49, .50, .75))
-        rounded_box(sn, x - 3, y - 3, w + 6, h + 6, 6,
-                    rgba(.006, .012, .016, 1), rgba(.02, .025, .028, 1))
-        rounded_box(sn, x, y, w, h, 3, rgba(.012, .036, .048, 1),
-                    rgba(.22, .45, .54, .68))
         db_range = 18.0 if model == "passive" else 12.0
-        for db in alternate_eq_graph_levels(model):
-            gy = y + h / 2 - db / db_range * (h / 2)
-            polyline(sn, [(x, gy), (x + w, gy)],
-                     rgba(.30, .55, .64, .30 if db == 0 else .16), 1.0)
-            # The reference engraves the dB scale into the left bezel.  Keep
-            # the endpoint labels inside that bezel rather than letting -18
-            # collide with the first frequency label.
-            centred_faceplate_label(
-                self, sn, "%+d" % db, x - bezel_x / 2,
-                max(y - 4, min(y + h - 7, gy - 4)),
-                rgba(.55, .72, .78, .62), 5.2, Pango.Weight.NORMAL)
+        if draw_bezel:
+            rounded_box(sn, x - bezel_x, y - bezel_y,
+                        w + bezel_x * 2, h + bezel_y * 2, 13,
+                        rgba(0, 0, 0, .48))
+            rounded_vgrad(sn, x - bezel_x + 4, y - bezel_y + 3,
+                          w + (bezel_x - 4) * 2,
+                          h + (bezel_y - 3) * 2, 11, (
+                (0.0, (.24, .28, .29, 1)),
+                (.18, (.055, .065, .070, 1)),
+                (1.0, (.015, .020, .024, 1))), rgba(.42, .49, .50, .75))
+            rounded_box(sn, x - 3, y - 3, w + 6, h + 6, 6,
+                        rgba(.006, .012, .016, 1), rgba(.02, .025, .028, 1))
+            rounded_box(sn, x, y, w, h, 3, rgba(.012, .036, .048, 1),
+                        rgba(.22, .45, .54, .68))
+        if draw_static:
+            for db in alternate_eq_graph_levels(model):
+                gy = y + h / 2 - db / db_range * (h / 2)
+                polyline(sn, [(x, gy), (x + w, gy)],
+                         rgba(.30, .55, .64, .30 if db == 0 else .16), 1.0)
+                if draw_labels:
+                    # The vector fallback engraves the dB scale into the left
+                    # bezel; production underlays retain the source labels.
+                    centred_faceplate_label(
+                        self, sn, "%+d" % db, x - bezel_x / 2,
+                        max(y - 4, min(y + h - 7, gy - 4)),
+                        rgba(.55, .72, .78, .62), 5.2,
+                        Pango.Weight.NORMAL)
         frequencies = ((20, "20"), (50, "50"), (100, "100"),
                        (200, "200"), (500, "500"), (1000, "1k"),
                        (2000, "2k"), (5000, "5k"), (10000, "10k"),
                        (20000, "20k"))
-        for frequency, _text in frequencies:
-            gx = x + math.log10(frequency / 20.0) / math.log10(
-                24000 / 20.0) * w
-            polyline(sn, [(gx, y), (gx, y + h)],
-                     rgba(.30, .55, .64, .16), 1.0)
-        for frequency, text in frequencies:
-            gx = x + math.log10(frequency / 20.0) / math.log10(
-                24000 / 20.0) * w
-            label_x = max(x + 10, min(x + w - 10, gx))
-            centred_faceplate_label(
-                self, sn, text, label_x, y + h - 12,
-                rgba(.55, .72, .78, .60), 5.6, Pango.Weight.NORMAL)
+        if draw_static:
+            for frequency, _text in frequencies:
+                gx = x + math.log10(frequency / 20.0) / math.log10(
+                    24000 / 20.0) * w
+                polyline(sn, [(gx, y), (gx, y + h)],
+                         rgba(.30, .55, .64, .16), 1.0)
+            if draw_labels:
+                for frequency, text in frequencies:
+                    gx = x + math.log10(frequency / 20.0) / math.log10(
+                        24000 / 20.0) * w
+                    label_x = max(x + 10, min(x + w - 10, gx))
+                    centred_faceplate_label(
+                        self, sn, text, label_x, y + h - 12,
+                        rgba(.55, .72, .78, .60), 5.6,
+                        Pango.Weight.NORMAL)
         if active:
             points = [(x + px, y + py) for px, py in
                       self.win.curve_points(
@@ -3882,6 +4152,7 @@ class AlternateEqRack(ChannelBound, Canvas):
         view = self._view()
         if view is None:
             return
+        calibration = eq_reference_calibration_mode()
         bay = (((.125, .143, .154, 1), (.074, .087, .097, 1),
                 (.038, .047, .054, 1)) if view["model"] == "vintage" else
                ((.060, .092, .111, 1), (.029, .050, .064, 1),
@@ -3898,6 +4169,12 @@ class AlternateEqRack(ChannelBound, Canvas):
                     max(1.0, rack_w - 6), rack_h, 5,
                     rgba(0, 0, 0, .68))
         sn.pop()
+        art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
+        panel = (x, y, rack_w, rack_h)
+        if calibration in ("backdrop", "underlay") and \
+                append_eq_reference_texture(
+                    sn, art["calibration_underlay_filename"], panel):
+            return
         sn.save()
         sn.translate(Graphene.Point().init(x, y))
         self._paint_rack(sn, rack_w, rack_h, view)
@@ -3917,6 +4194,12 @@ class AlternateEqRack(ChannelBound, Canvas):
                 badge_y + 3, rgba(1.0, .82, .78, .98), 6.2,
                 Pango.Weight.BOLD)
         sn.restore()
+        if calibration in ("overlay", "both"):
+            append_eq_reference_texture(
+                sn, art["calibration_underlay_filename"], panel, .46)
+        if calibration in ("nodes", "both"):
+            append_eq_reference_texture(
+                sn, art["calibration_nodes_filename"], panel)
 
     def _paint_rack(self, sn, w, h, view):
         """Paint one reference-proportioned rack in local coordinates."""
@@ -3968,7 +4251,7 @@ class AlternateEqRack(ChannelBound, Canvas):
             rounded_vgrad(sn, ex, inset, ear, h - inset * 2, 5,
                           ear_stops, rgba(*edge, .9))
             slot_height = max(8.0, ear * .28)
-            slot_rows = (.036, .918) if passive else (.035, .820)
+            slot_rows = (.036, .918)
             for slot_y in (h * row for row in slot_rows):
                 rounded_box(sn, ex + ear * .17, slot_y, ear * .66,
                             slot_height, slot_height * .48,
@@ -3978,7 +4261,7 @@ class AlternateEqRack(ChannelBound, Canvas):
                             ear * .54, max(4.0, slot_height - 4),
                             max(2.0, slot_height * .32),
                             rgba(.018, .027, .031, 1))
-        screw_rows = (.079, .921) if passive else (.080, .820)
+        screw_rows = (.079, .921)
         for sx, sy in ((ear + 13, h * screw_rows[0]),
                        (w - ear - 13, h * screw_rows[0]),
                        (ear + 13, h * screw_rows[1]),
@@ -4029,8 +4312,29 @@ class AlternateEqRack(ChannelBound, Canvas):
             centred_faceplate_label(
                 self, sn, group, gx * w, geometry["group_y"] * h,
                 pal(group_colour, .86), max(6.5, min(9.0, w / 100)))
-        self._draw_graph(sn, *graph, active, view["model"])
-        if not passive:
+        # The value-free production underlay retains the source reference's
+        # metal, ears, screws, separators, typography and bezel pixel for
+        # pixel. Only parameter-bearing regions were removed by the asset
+        # generator; the live controls below remain protocol-authoritative.
+        # Passive already has the common 2U source aspect. Vintage's retained
+        # bitmap is the shorter original; stretching it would oval the bezel
+        # and typography. Its measured 2U recomposition therefore uses this
+        # vector plate while retaining the same control/source landmarks.
+        try:
+            faceplate = alternate_eq_faceplate_texture(view["model"]) \
+                if passive else None
+        except (FileNotFoundError, GLib.Error):
+            faceplate = None
+        if faceplate is not None:
+            sn.append_texture(faceplate, Graphene.Rect().init(0, 0, w, h))
+
+        art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
+        graph = io24_eq_reference.scaled_rect(
+            art["plot"], w, h, view["model"])
+        self._draw_graph(sn, *graph, active, view["model"],
+                         draw_static=True, draw_bezel=faceplate is None,
+                         draw_labels=faceplate is None)
+        if not passive and faceplate is None:
             gx, gy, gw, gh = graph
             for sx, sy in ((gx - 5, gy - 5), (gx + gw + 5, gy - 5),
                            (gx - 5, gy + gh + 5),
@@ -4044,22 +4348,26 @@ class AlternateEqRack(ChannelBound, Canvas):
             self._draw_knob(
                 sn, cx, cy, radius, spec, eq[field], active, view["model"])
         # The lamp is the model's independent, clickable EQ power control.
-        lamp_x, lamp_y = geometry["lamp"]
-        lx, ly = lamp_x * w, lamp_y * h
+        _crop_x, _crop_y, crop_w, crop_h = art["rack_crop"]
+        lamp_x, lamp_y, source_lamp_radius = art["lamp"]
+        lx, ly = lamp_x / crop_w * w, lamp_y / crop_h * h
+        lamp_radius = source_lamp_radius * min(w / crop_w, h / crop_h)
         if self.hover_power or self.selected_field == self.POWER_FIELD:
             glow(sn, lambda: dot(
-                sn, lx, ly, 11.5,
+                sn, lx, ly, lamp_radius * 1.15,
                 pal(ACCENT, .30 if self.selected_field == self.POWER_FIELD
                     else .20)), radius=7.0)
-        dot(sn, lx + 1, ly + 2, 11, rgba(0, 0, 0, .52))
-        dot(sn, lx, ly, 10, rgba(.020, .025, .024, 1))
-        dot(sn, lx, ly, 7.2, rgba(.28, .24, .13, .9))
+        dot(sn, lx + 1, ly + 2, lamp_radius * 1.05, rgba(0, 0, 0, .52))
+        dot(sn, lx, ly, lamp_radius, rgba(.020, .025, .024, 1))
+        dot(sn, lx, ly, lamp_radius * .72, rgba(.28, .24, .13, .9))
         lamp = AMBER if active else GRID
         if active:
-            glow(sn, lambda: dot(sn, lx, ly, 5.1, pal(lamp)), radius=8.0)
-            dot(sn, lx - 1.5, ly - 1.7, 2.1, rgba(1, 1, .82, .9))
+            glow(sn, lambda: dot(
+                sn, lx, ly, lamp_radius * .51, pal(lamp)), radius=8.0)
+            dot(sn, lx - lamp_radius * .15, ly - lamp_radius * .17,
+                lamp_radius * .21, rgba(1, 1, .82, .9))
         else:
-            dot(sn, lx, ly, 4.5, pal(lamp, .35))
+            dot(sn, lx, ly, lamp_radius * .45, pal(lamp, .35))
 
 
 class CompCurve(ChannelBound, Canvas):
@@ -5425,15 +5733,9 @@ class Win(Adw.ApplicationWindow):
     def _set_bus_source_status(self, bus, status, notify=False):
         previous = self._bus_source_status.get(bus, "unavailable")
         self._bus_source_status[bus] = status
-        if notify and status != previous:
-            if status == "failed":
-                self.say("%s source failed to start" %
-                         io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
-            elif status == "profile":
-                # not a failure: this card profile has no such capture channel
-                self.say("%s needs the io24's Pro Audio profile; this one has "
-                         "no such capture channel" %
-                         io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
+        if notify and status != previous and status == "failed":
+            self.say("%s source failed to start" %
+                     io24_mbc.BUS_SOURCE_DESCRIPTIONS[bus])
 
     def _bus_source_watchdog(self):
         """Slowly reconcile source visibility; ordinary transitions are quiet."""
@@ -5442,7 +5744,7 @@ class Win(Adw.ApplicationWindow):
         for bus in io24_mbc.BUS_SOURCE_KEYS:
             self._set_bus_source_status(
                 bus, statuses[bus],
-                notify=statuses[bus] in ("failed", "profile"))
+                notify=statuses[bus] == "failed")
         return True
 
     def _master_strip(self):
@@ -6236,7 +6538,10 @@ class Win(Adw.ApplicationWindow):
             model=Gtk.StringList.new(["Standard", "Passive", "Vintage"]))
         W["eq_model"].connect(
             "notify::selected", self._eq_model_changed, ch)
-        e.add(W["eq_model"])
+        # State-only selector: the signal-chain EQ module's right-click menu
+        # is the single visible model picker. Keeping this unparented preserves
+        # the existing adoption/signal path without duplicating UI below the
+        # rack or changing any saved-state semantics.
         W["eq_on"] = Adw.SwitchRow(title="EQ")
         W["eq_on"].connect("notify::active", self._eq_power_changed, ch)
         e.add(W["eq_on"])
@@ -6277,6 +6582,12 @@ class Win(Adw.ApplicationWindow):
         e.add(flat)
         W["eq_flat"] = flat
         W["_standard_eq_rows"].append(flat)
+        # These widgets remain the single state/signal conduit used by preset
+        # adoption and device writes.  Their duplicate list rows are never
+        # presented; every Standard EQ action now lives on the rack itself.
+        W["eq_on"].set_visible(False)
+        for row in W["_standard_eq_rows"]:
+            row.set_visible(False)
 
         # Passive Program EQ: exact fields, order, ranges, and defaults from
         # UC 4.7.2's embedded PassiveEQ parameter list.
@@ -7039,29 +7350,52 @@ class Win(Adw.ApplicationWindow):
             return
         transient = bool(getattr(self, "_rev_mute", False))
         on = self.rev_on.get_active()
+        if establish_path:
+            # Keep this requirement alive if a slider signal replaces the On
+            # signal in the coalescing queue before the worker consumes it.
+            self._reverb_establish_pending = bool(on)
+        establish = bool(on and getattr(
+            self, "_reverb_establish_pending", False))
         size, mix = self.s_rsize.get_value(), self.s_rmix.get_value()
         hp, pre = self.s_rhp.get_value(), self.s_rpre.get_value()
         # Read only when it is about to be sent: the Effects page is built
         # before the Device page that owns these controls.
         processing_mix = (self.processing_mix_controls[1].get_value()
-                          if establish_path else None)
+                          if establish else None)
         main_return = self.rev_return_controls["main"].get_value()
 
-        def work(dev, enable=on, establish=establish_path,
+        def work(dev, enable=on, open_path=establish,
                  channel_mix=processing_mix, return_db=main_return,
                  fs=self._fs, transient_write=transient):
-            if establish and enable:
-                # Establish the feed and return before arming the engine. This
-                # is the device order that produces an audible shared reverb.
-                # UC 4.7.2 does not open this path for block 201 VoiceFX.
-                establish_effects_path(dev, channel_mix, return_db)
-            setter = (dev.set_reverb_transient
-                      if transient_write else dev.set_reverb)
-            return setter(
-                on=enable, size=size, mix=mix, hp_freq=hp,
-                predelay=max(0.0001, pre), fs=fs)
+            try:
+                if open_path and enable:
+                    # Establish the feed and return before arming the engine.
+                    # This is the device order that produces audible reverb.
+                    establish_effects_path(dev, channel_mix, return_db)
+                    self._reverb_establish_pending = False
+                # A movement frame may never replace the durable On intent.
+                setter = (dev.set_reverb_transient
+                          if transient_write and not open_path
+                          else dev.set_reverb)
+                return setter(
+                    on=enable, size=size, mix=mix, hp_freq=hp,
+                    predelay=max(0.0001, pre), fs=fs)
+            except Exception as error:
+                say = getattr(self, "say", None)
+                if callable(say):
+                    GLib.idle_add(say, "Reverb send failed: %s" % error)
+                raise
 
-        self.ctl.submit(work)
+        # A reverb blob takes roughly one device transaction. Fader callbacks
+        # arrive much faster than that, so queue only the newest resting state
+        # instead of letting the On/Off write sit behind a gesture-sized
+        # backlog. Movement uses a separate lane and cannot replace user intent.
+        submit_latest = getattr(self.ctl, "submit_latest", None)
+        if submit_latest is None:
+            self.ctl.submit(work)
+        else:
+            submit_latest(("reverb", "movement" if transient else "intent"),
+                          work)
 
     def _reverb_movement_state(self):
         """The Host-only size movement applied around the native reverb."""
@@ -7717,7 +8051,7 @@ class Win(Adw.ApplicationWindow):
             if selector is not None:
                 selector.set_selected(self.EQ_MODELS.index(model))
             for row in W.get("_standard_eq_rows", ()):
-                row.set_visible(model == "standard")
+                row.set_visible(False)
             for row in W.get("_passive_eq_rows", ()):
                 row.set_visible(False)
             for row in W.get("_vintage_eq_rows", ()):
@@ -7730,7 +8064,7 @@ class Win(Adw.ApplicationWindow):
                 rack_row.set_visible(model != "standard")
             switch = W.get("eq_on")
             if switch is not None:
-                switch.set_visible(model == "standard")
+                switch.set_visible(False)
                 switch.set_active(
                     self.eq_on_by_ch.get(ch, False) if view is None
                     else bool(view["eq"]["eqallon"]))
@@ -8576,8 +8910,8 @@ class Win(Adw.ApplicationWindow):
         One list per origin and one way to load: click Load and the preset's
         Fat Channel and Voice FX go to the chosen Preset input, or to
         both while the channels are linked. Presets the user saves live on this
-        computer; storing a Fat Channel candidate in a device block is an
-        action on the preset, not a section of its own.
+        computer. The selected input's current sound can also go straight to
+        an explicitly chosen device destination.
         """
         page = wide_preferences_page()
         g = Adw.PreferencesGroup(title="Channel presets")
@@ -8606,6 +8940,20 @@ class Win(Adw.ApplicationWindow):
         save.connect("clicked", self._save_user_preset_clicked)
         self.slot_name_row.add_suffix(save)
         g.add(self.slot_name_row)
+
+        device_row = Adw.ActionRow(
+            title="Current sound",
+            subtitle="Save the selected input without making a local copy")
+        device_save = Gtk.Button(
+            label="Save to device…", valign=Gtk.Align.CENTER)
+        device_save.add_css_class("flat")
+        device_save.set_tooltip_text(
+            PUT_ON_UNIT_UNAVAILABLE or
+            "Choose an input and an exact device destination")
+        device_save.set_sensitive(not bool(PUT_ON_UNIT_UNAVAILABLE))
+        device_save.connect("clicked", self._save_current_to_device_clicked)
+        device_row.add_suffix(device_save)
+        g.add(device_row)
 
         self.user_presets_row = Adw.ExpanderRow(
             title="User Presets", expanded=True)
@@ -8860,7 +9208,9 @@ class Win(Adw.ApplicationWindow):
                 subtitle="Name the current sound above and press Save"))
         for row in rows:
             expander.add_row(row)
-        self._mark_playing_unit_blocks(self.ctl.snap.get("preset_slot"))
+        self._mark_playing_unit_blocks(
+            self.ctl.snap.get("preset_slot"),
+            self.ctl.snap.get("preset_off"))
         self._filter_presets()
 
     def _populate_factory_presets(self):
@@ -8946,12 +9296,15 @@ class Win(Adw.ApplicationWindow):
             self, "Save %s to the io24" % name,
             "Preset-button blocks are recalled from the front panel. Device "
             "library slots are the six-per-input collection used by UC.")
-        rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # ComboRow is a Gtk.ListBoxRow.  It needs the internal ListBox supplied
+        # by PreferencesGroup for pointer and keyboard activation; placing it
+        # directly in a Gtk.Box leaves the programmed defaults looking fixed.
+        rows = Adw.PreferencesGroup()
         target = Adw.ComboRow(
             title="Input",
             model=Gtk.StringList.new(["Input 1", "Input 2"]))
         target.set_selected(self._factory_target_channel() - 1)
-        rows.append(target)
+        rows.add(target)
         destination = Adw.ComboRow(
             title="Destination",
             model=Gtk.StringList.new([
@@ -8963,7 +9316,7 @@ class Win(Adw.ApplicationWindow):
         # Block 2 is normally inactive on a default unit, making the safe
         # front-panel path visible without silently choosing a library slot.
         destination.set_selected(1)
-        rows.append(destination)
+        rows.add(destination)
         dialog.set_extra_child(rows)
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("continue", "Continue")
@@ -9003,16 +9356,26 @@ class Win(Adw.ApplicationWindow):
                 if expander is not None:
                     expander.set_expanded(True)
 
-    def _mark_playing_unit_blocks(self, pslot):
+    def _mark_playing_unit_blocks(self, pslot, preset_off=None):
         """Mark each unit preset whose block its channel is playing."""
         if not isinstance(pslot, (list, tuple)) or len(pslot) != 2:
             return
-        if list(pslot) == getattr(self, "_marked_pslot", None):
+        # A channel keeps its last selector index while preset processing is
+        # bypassed.  That dormant index is not playing and must not make its
+        # block look active (or prevent the user from replacing that block).
+        if not isinstance(preset_off, (list, tuple)) or len(preset_off) != 2:
+            preset_off = (False, False)
+        marker_state = (tuple(pslot), tuple(bool(value)
+                                            for value in preset_off))
+        if marker_state == getattr(self, "_marked_pslot", None):
             return
-        self._marked_pslot = list(pslot)
+        self._marked_pslot = marker_state
+        playing = {slot for channel, slot in enumerate(pslot)
+                   if not preset_off[channel]}
         for slot, (row, subtitle) in getattr(
                 self, "_unit_preset_rows", {}).items():
-            row.set_subtitle(subtitle + (" · Playing" if slot in pslot else ""))
+            row.set_subtitle(
+                subtitle + (" · Playing" if slot in playing else ""))
 
     def _load_device_entry(self, entry):
         """Load a preset that lives on the unit.
@@ -9068,6 +9431,19 @@ class Win(Adw.ApplicationWindow):
             self._confirm_user_overwrite(name, record)
             return
         self._store_user_preset(name, record)
+
+    def _save_current_to_device_clicked(self, _button):
+        """Capture the selected input now, then ask for its destination."""
+        try:
+            name = self._current_slot_name()
+            target = self._factory_target_channel()
+            record = self._current_slot_record(
+                self._slot_base_name(), target, name, strict_voicefx=False)
+        except Exception as error:
+            self.say("Preset not ready for the device: %s" % error)
+            return
+        self._choose_device_preset_destination(
+            name, record, "current:%s" % name)
 
     def _store_user_preset(self, name, record):
         try:
@@ -9250,7 +9626,7 @@ class Win(Adw.ApplicationWindow):
         return 2 if row is not None and row.get_selected() == 1 else 1
 
     def _prepare_factory_slot_store(self, name):
-        """Validate one complete, currently inactive factory-slot write."""
+        """Validate one complete factory-slot replacement."""
         target_plan = self._prepare_slot_store_target()
         target = target_plan["target"]
         relative_slot = target_plan["relative_slot"]
@@ -9286,7 +9662,7 @@ class Win(Adw.ApplicationWindow):
         return text
 
     def _prepare_slot_store_target(self, relative_slot=None, target=None):
-        """Return one connected, live, inactive device-slot destination."""
+        """Return one connected, live device-slot destination."""
         if self.ctl.dev is None:
             raise io24.HostActionError("io24 is not connected")
         if not self.ctl.snap.get("alive"):
@@ -9300,14 +9676,6 @@ class Win(Adw.ApplicationWindow):
         if relative_slot not in (0, 1):
             raise io24.HostActionError("device slot must be Slot 1 or Slot 2")
         slot = self.PRESET_BASE[target] + relative_slot
-        selected = self.ctl.snap.get("preset_slot")
-        if not isinstance(selected, (list, tuple)) or len(selected) != 2:
-            raise io24.HostActionError("live device slot selection is unavailable")
-        if selected[target - 1] == slot:
-            raise io24.HostActionError(
-                "Channel %d device Slot %d is currently selected; choose the "
-                "other slot before overwriting a body" %
-                (target, relative_slot + 1))
         return {
             "target": target,
             "relative_slot": relative_slot,
@@ -9804,7 +10172,8 @@ class Win(Adw.ApplicationWindow):
             W["band_on"].set_title("%s band" % BAND_NAMES[index])
             W["band_on"].set_active(band_on)
             outer = index in (0, 3)
-            W["shelf"].set_visible(outer)
+            # State-only row: the rack's mode button is the visible control.
+            W["shelf"].set_visible(False)
             if outer:
                 shelf = "lowshelf" if index == 0 else "highshelf"
                 W["shelf"].set_title(
@@ -9826,6 +10195,37 @@ class Win(Adw.ApplicationWindow):
         band["on"] = bool(row.get_active())
         band["shape"] = mode if band["on"] else "off"
         self._push_band(ch)
+
+    def _set_standard_band_enabled(self, ch, index, on):
+        """Set one existing Standard band from its faceplate power lamp."""
+        if not 0 <= int(index) < len(self.bands_by_ch[ch]):
+            return False
+        index = int(index)
+        self.cur_band_by_ch[ch] = index
+        band = self.bands_by_ch[ch][index]
+        mode = io24_presets.standard_band_mode(band, index)
+        band["mode"] = mode
+        band["on"] = bool(on)
+        band["shape"] = mode if band["on"] else "off"
+        self._adopt_band(ch)
+        self._push_band(ch)
+        return True
+
+    def _toggle_standard_band_mode(self, ch, index):
+        """Toggle Peak/Shelf for an outer band without inventing a field."""
+        if int(index) not in (0, 3):
+            return False
+        index = int(index)
+        self.cur_band_by_ch[ch] = index
+        band = self.bands_by_ch[ch][index]
+        shelf = "lowshelf" if index == 0 else "highshelf"
+        current = io24_presets.standard_band_mode(band, index)
+        band["mode"] = "peaking" if current == shelf else shelf
+        if io24_presets.standard_band_enabled(band):
+            band["shape"] = band["mode"]
+        self._adopt_band(ch)
+        self._push_band(ch)
+        return True
 
     def _shelf_changed(self, row, _p, ch):
         if self._adopt_mute:
@@ -10984,7 +11384,7 @@ class Win(Adw.ApplicationWindow):
         self._follow_device_bypass(poff)
         pslot = s.get("preset_slot", [0, 0])
         self._observe_device_slot_recalls(pslot)
-        self._mark_playing_unit_blocks(pslot)
+        self._mark_playing_unit_blocks(pslot, poff)
         rows = getattr(self, "preset_rows", {})
         if rows:
             self._preset_sync = True          # suppress the write-back handlers

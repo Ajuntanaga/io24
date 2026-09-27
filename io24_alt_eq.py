@@ -63,11 +63,6 @@ VINTAGE_DEFAULT = {
 DEFAULT_DLL = Path(os.environ.get(
     "XDG_CACHE_HOME", str(Path.home() / ".cache")
 )) / "io24" / "re" / "dspusbdevice.dll"
-PROJECT_RETAINED_DLL = Path(__file__).resolve().parent / (
-    ".superpowers/sdd/2026-08-28-cp34-preset-effect-control/runs/"
-    "20260906T001130-0700-uc472-official-reacquisition/extracted/"
-    "hwaccess/dspusbdevice.dll"
-)
 
 
 class AlternateEqUnavailable(RuntimeError):
@@ -153,31 +148,25 @@ def validate_eq(eq):
 def resolve_dll(path=None):
     """Resolve a validated UC 4.7.2 designer artifact.
 
-    An explicit path is strict.  For the ordinary Host launch, prefer the
-    retained project acquisition and then the conventional cache location.
-    Existing files are not assumed to be the right UC build: the bounded
-    image parser must accept the candidate before it can become active.
+    An explicit path is strict.  Otherwise use the conventional user cache.
+    Existing files are not assumed to be the right UC build: the bounded image
+    parser must accept the candidate before it can become active.
     """
     explicit = path or os.environ.get("IO24_UC472_DSPUSBDEVICE")
-    candidates = ((Path(explicit),) if explicit else
-                  (PROJECT_RETAINED_DLL, DEFAULT_DLL))
-    errors = []
-    for candidate in candidates:
-        selected = Path(candidate).expanduser().resolve()
-        if not selected.is_file():
-            errors.append("%s is missing" % selected)
-            continue
+    selected = Path(explicit or DEFAULT_DLL).expanduser().resolve()
+    if not selected.is_file():
+        detail = "%s is missing" % selected
+    else:
         try:
             _image(str(selected))
         except AlternateEqUnavailable as error:
-            errors.append("%s: %s" % (selected, error))
-            continue
-        return selected
-    detail = "; ".join(errors)
+            detail = "%s: %s" % (selected, error)
+        else:
+            return selected
     raise AlternateEqUnavailable(
-        "exact Passive/Vintage EQ needs the retained UC 4.7.2 "
+        "exact Passive/Vintage EQ needs the pinned UC 4.7.2 "
         "dspusbdevice.dll; set IO24_UC472_DSPUSBDEVICE to your local copy"
-        + (" (%s)" % detail if detail else ""))
+        " (%s)" % detail)
 
 
 @functools.lru_cache(maxsize=4)

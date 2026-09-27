@@ -11,10 +11,13 @@ Nothing here opens USB.
 import math
 import os
 import queue
+import inspect
 import threading
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+
+from PIL import Image, ImageChops
 
 import io24
 import io24_alt_eq
@@ -192,7 +195,20 @@ def _eq_widgets():
 
 
 class AlternateEqRackContractTests(unittest.TestCase):
-    def test_reference_geometry_is_measured_and_drawn_as_vectors(self):
+    def test_calibration_layers_are_opt_in_and_invalid_values_fail_closed(self):
+        with mock.patch.dict(os.environ, {
+                "IO24_EQ_REFERENCE_CALIBRATION": "nodes"}):
+            self.assertEqual(io24gtk.eq_reference_calibration_mode(), "nodes")
+        with mock.patch.dict(os.environ, {
+                "IO24_EQ_REFERENCE_CALIBRATION": "typo"}):
+            self.assertEqual(io24gtk.eq_reference_calibration_mode(), "")
+
+    def test_model_combo_is_state_only_because_context_menu_is_the_picker(self):
+        source = inspect.getsource(io24gtk.Win._channel_column)
+        self.assertIn('W["eq_model"] = Adw.ComboRow', source)
+        self.assertNotIn('e.add(W["eq_model"])', source)
+
+    def test_reference_geometry_drives_underlays_controls_and_hit_regions(self):
         passive = io24gtk.ALTERNATE_EQ_REFERENCE_ART["passive"]
         vintage = io24gtk.ALTERNATE_EQ_REFERENCE_ART["vintage"]
 
@@ -201,20 +217,33 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(vintage["rack_crop"], (8, 174, 2156, 377))
         self.assertEqual(passive["plot"], (663, 110, 591, 261))
         self.assertEqual(vintage["plot"], (858, 102, 557, 175))
-        self.assertEqual(passive["controls"]["bfreq"], (368, 545, 58))
-        self.assertEqual(passive["controls"]["hsfreq"], (1866, 545, 58))
+        self.assertEqual(passive["controls"]["bfreq"], (360, 422, 58))
+        self.assertEqual(passive["controls"]["hsfreq"], (1858, 422, 58))
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         for art in (passive, vintage):
-            self.assertTrue(os.path.isfile(
-                os.path.join(root, "docs", "design", art["filename"])))
-        # The reference bitmaps engrave illustrative values that contradict
-        # the UC contract; the runtime must not composite them.
-        for name in ("alternate_eq_reference_texture",
-                     "ALTERNATE_EQ_REFERENCE_SOURCE_MARKS",
-                     "snapshot_texture_crop"):
-            self.assertFalse(hasattr(io24gtk, name), name)
-        self.assertFalse(hasattr(io24gtk.AlternateEqRack,
-                                 "_paint_reference_rack"))
+            for key in ("filename", "faceplate_filename",
+                        "calibration_underlay_filename",
+                        "calibration_nodes_filename"):
+                self.assertTrue(os.path.isfile(
+                    os.path.join(root, "docs", "design", art[key])),
+                    art[key])
+
+            # The developer underlay is an exact crop, while the production
+            # faceplate is value-free and therefore intentionally differs.
+            source = Image.open(os.path.join(
+                root, "docs", "design", art["filename"])).convert("RGB")
+            x, y, width, height = art["rack_crop"]
+            source = source.crop((x, y, x + width, y + height))
+            underlay = Image.open(os.path.join(
+                root, "docs", "design",
+                art["calibration_underlay_filename"])).convert("RGB")
+            faceplate = Image.open(os.path.join(
+                root, "docs", "design",
+                art["faceplate_filename"])).convert("RGB")
+            self.assertIsNone(ImageChops.difference(
+                source, underlay).getbbox())
+            self.assertIsNotNone(ImageChops.difference(
+                source, faceplate).getbbox())
 
     def test_passive_selectors_and_their_values_fit_inside_the_plate(self):
         _x, _y, width, height = io24gtk.ALTERNATE_EQ_REFERENCE_ART[
@@ -331,8 +360,10 @@ class AlternateEqRackContractTests(unittest.TestCase):
         vintage = io24gtk.ALTERNATE_EQ_REFERENCE_GEOMETRY["vintage"]
         self.assertEqual(passive["aspect"], 2156 / 482)
         self.assertEqual(vintage["aspect"], 2156 / 377)
-        self.assertEqual(passive["graph"], (.299, .181, .282, .593))
-        self.assertEqual(vintage["graph"], (.391, .205, .259, .630))
+        self.assertEqual(passive["graph"], (
+            663 / 2156, 110 / 482, 591 / 2156, 261 / 482))
+        self.assertEqual(vintage["graph"], (
+            858 / 2156, 102 / 377, 557 / 2156, 175 / 377))
 
         px, py, pw, ph = io24gtk.alternate_eq_rack_bounds(
             "passive", 950, 240)
@@ -340,11 +371,15 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertAlmostEqual(ph, 950 * 482 / 2156)
         self.assertAlmostEqual(py, (240 - ph) / 2)
 
-        vx, vy, vw, vh = io24gtk.alternate_eq_rack_bounds(
-            "vintage", 1144, 240)
-        self.assertEqual((vx, vw), (0.0, 1144.0))
-        self.assertAlmostEqual(vh, 1144 * 377 / 2156)
-        self.assertAlmostEqual(vy, (240 - vh) / 2)
+        # Runtime presentation is one common 2U bay. Vintage keeps its
+        # measured source landmarks, but its rack occupies the same outer
+        # rectangle as Passive instead of floating as a shorter strip.
+        vintage_bounds = io24gtk.alternate_eq_rack_bounds(
+            "vintage", 950, 240)
+        self.assertEqual(vintage_bounds, (px, py, pw, ph))
+        self.assertEqual(
+            io24gtk.standard_eq_rack_bounds(950, 240),
+            (px, py, pw, ph))
 
         self.assertEqual(
             io24gtk.alternate_eq_canvas_height("passive", 950),
@@ -357,16 +392,18 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(
             tuple((spec["x"], spec["y"])
                   for spec in io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]),
-            ((.116, .475), (.220, .475), (.167, .875),
-             (.657, .475), (.744, .475), (.825, .475),
-             (.908, .475), (.860, .875)),
+            ((243 / 2156, 213 / 482), (467 / 2156, 213 / 482),
+             (360 / 2156, 422 / 482), (1421 / 2156, 213 / 482),
+             (1607 / 2156, 213 / 482), (1785 / 2156, 213 / 482),
+             (1964 / 2156, 213 / 482), (1858 / 2156, 422 / 482)),
         )
         self.assertEqual(
             tuple((spec["x"], spec["y"])
                   for spec in io24gtk.ALTERNATE_EQ_RACK_SPECS["vintage"]),
-            ((.084, .500), (.158, .500), (.238, .500),
-             (.309, .500), (.732, .500), (.805, .500),
-             (.898, .500)),
+            ((182 / 2156, 186 / 377), (342 / 2156, 188 / 377),
+             (514 / 2156, 186 / 377), (665 / 2156, 186 / 377),
+             (1577 / 2156, 186 / 377), (1737 / 2156, 187 / 377),
+             (1939 / 2156, 186 / 377)),
         )
 
     def test_control_labels_follow_each_reference_faceplate(self):
@@ -586,6 +623,7 @@ class AlternateEqRackContractTests(unittest.TestCase):
         curve._graph_bounds = lambda w=None, h=None: \
             io24gtk.EQCurve._graph_bounds(curve, w, h)
         curve._knob_at = lambda _x, _y, _w=None, _h=None: None
+        curve._q_knob_at = lambda _x, _y, _w=None, _h=None: None
         gx, gy, gw, _gh = curve._graph_bounds()
         drawn_x = gx + curve._x(band["freq"], gw)
 
@@ -612,6 +650,7 @@ class AlternateEqRackContractTests(unittest.TestCase):
             drag_band=None,
             bands=[band],
             _hit_band=lambda _x, _y: 0,
+            _q_knob_at=lambda _x, _y: None,
             _knob_at=lambda _x, _y: None,
             _band_at=lambda _x, _y: 0,
             _power_at=lambda _x, _y: False,
@@ -636,6 +675,7 @@ class AlternateEqRackContractTests(unittest.TestCase):
             bands=[band],
             drag_band=None,
             _power_at=lambda _x, _y: False,
+            _q_knob_at=lambda _x, _y: None,
             _knob_at=lambda _x, _y: 0,
             _hit_band=lambda _x, _y: 0,
             _graph_bounds=lambda: (400.0, 80.0, 500.0, 180.0),
@@ -644,8 +684,69 @@ class AlternateEqRackContractTests(unittest.TestCase):
         io24gtk.EQCurve._drag_begin(curve, None, 150.0, 170.0)
 
         self.assertTrue(curve._drag_encoder)
+        self.assertEqual(curve._drag_control, "gain")
         self.assertEqual(curve.drag_band, 0)
-        self.assertEqual(curve._start, (150.0, 170.0, 2400.0, 4.5))
+        self.assertEqual(curve._start,
+                         (150.0, 170.0, 2400.0, 4.5, 1.2))
+
+    def test_standard_q_knob_drag_is_independent_of_gain_and_frequency(self):
+        band = {"shape": "peaking", "on": True, "mode": "peaking",
+                "freq": 2400.0, "gain": 4.5, "q": 1.2}
+        curve = SimpleNamespace(
+            win=SimpleNamespace(
+                _alt_eq=lambda _channel: None,
+                select_band=lambda _index, _channel: None,
+                eq_enabled=lambda _channel: True),
+            channel=1,
+            bands=[band],
+            drag_band=None,
+            _power_at=lambda _x, _y: False,
+            _q_knob_at=lambda _x, _y: 0,
+            _knob_at=lambda _x, _y: None,
+            _hit_band=lambda _x, _y: 0,
+            _graph_bounds=lambda: (400.0, 80.0, 500.0, 180.0),
+        )
+
+        io24gtk.EQCurve._drag_begin(curve, None, 150.0, 360.0)
+
+        self.assertFalse(curve._drag_encoder)
+        self.assertEqual(curve._drag_control, "q")
+        self.assertEqual(curve.drag_band, 0)
+        self.assertEqual(curve._start,
+                         (150.0, 360.0, 2400.0, 4.5, 1.2))
+        changed = io24gtk.standard_eq_q_drag_value(1.2, -90.0)
+        self.assertGreater(changed, 1.2)
+        self.assertEqual((band["freq"], band["gain"]), (2400.0, 4.5))
+
+    def test_standard_q_drag_writes_only_q_through_the_existing_band_path(self):
+        band = {"shape": "peaking", "on": True, "mode": "peaking",
+                "freq": 2400.0, "gain": 4.5, "q": 1.2}
+        rows = {key: _Widget() for key in ("freq", "gain", "q")}
+        pushes = []
+        curve = SimpleNamespace(
+            channel=1,
+            bands=[band],
+            drag_band=0,
+            _drag_control="q",
+            _start=(150.0, 360.0, 2400.0, 4.5, 1.2),
+            _enable_dragged_band=lambda: None,
+            _graph_bounds=lambda: (400.0, 80.0, 500.0, 180.0),
+            _drag_push=lambda: pushes.append("write"),
+            wid=rows.__getitem__,
+            queue_draw=lambda: None,
+        )
+        curve.win = SimpleNamespace(
+            invalidate_curve=lambda: None,
+            _adopt_mute=False,
+            racks={},
+        )
+
+        io24gtk.EQCurve._drag_update(curve, None, 80.0, -90.0)
+
+        self.assertEqual((band["freq"], band["gain"]), (2400.0, 4.5))
+        self.assertGreater(band["q"], 1.2)
+        self.assertAlmostEqual(rows["q"].value, band["q"])
+        self.assertEqual(pushes, ["write"])
 
     def test_standard_rack_has_its_own_power_control(self):
         layout = io24gtk.standard_eq_rack_layout(1200, 240)
@@ -672,9 +773,9 @@ class AlternateEqRackContractTests(unittest.TestCase):
     def test_standard_rack_uses_the_measured_reference_geometry(self):
         art = io24gtk.STANDARD_EQ_REFERENCE_ART
         self.assertEqual(art["rack_crop"], (8, 121, 2156, 482))
-        self.assertEqual(art["screen"], (620, 186, 932, 384))
-        self.assertEqual(art["glass"], (646, 212, 880, 332))
-        self.assertEqual(art["plot"], (662, 224, 848, 308))
+        self.assertEqual(art["screen"], (612, 65, 932, 384))
+        self.assertEqual(art["glass"], (638, 91, 880, 332))
+        self.assertEqual(art["plot"], (654, 103, 848, 308))
 
         layout = io24gtk.standard_eq_rack_layout(2156, 482)
         self.assertEqual(layout["panel"], (0.0, 0.0, 2156.0, 482.0))
@@ -683,8 +784,40 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(layout["encoders"], (
             (224.0, 229.0), (474.0, 229.0),
             (1682.0, 229.0), (1932.0, 229.0)))
+        self.assertEqual(layout["q_encoders"], (
+            (224.0, 376.0), (474.0, 376.0),
+            (1682.0, 376.0), (1932.0, 376.0)))
+        self.assertEqual(layout["q_radius"], 29.0)
+        self.assertEqual(len(layout["band_power"]), 4)
+        self.assertEqual(len(layout["band_mode"]), 4)
+        self.assertEqual(layout["flatten"], (1450.0, 72.0, 58.0, 24.0))
         self.assertEqual(layout["power"], (2032.0, 441.0, 20.0))
         self.assertTrue(os.path.isfile(io24gtk.standard_eq_faceplate_path()))
+
+    def test_standard_q_knobs_cover_the_exact_existing_range_logarithmically(self):
+        low, high = io24_presets.STANDARD_EQ_Q_RANGE
+        self.assertEqual(io24gtk.standard_eq_q_fraction(low), 0.0)
+        self.assertEqual(io24gtk.standard_eq_q_fraction(high), 1.0)
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_q_value(
+                io24gtk.standard_eq_q_fraction(0.6)),
+            0.6, places=6)
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_q_angle(low), math.radians(-225.0))
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_q_angle(high), math.radians(45.0))
+
+    def test_standard_q_knob_has_its_own_hit_target(self):
+        layout = io24gtk.standard_eq_rack_layout(2156, 482)
+        qx, qy = layout["q_encoders"][2]
+        curve = SimpleNamespace(
+            get_width=lambda: 2156,
+            get_height=lambda: 482,
+        )
+        self.assertEqual(
+            io24gtk.EQCurve._q_knob_at(curve, qx, qy), 2)
+        self.assertIsNone(
+            io24gtk.EQCurve._q_knob_at(curve, 1078, 241))
 
     def test_standard_gain_pointer_uses_the_exact_existing_range(self):
         self.assertAlmostEqual(
@@ -947,8 +1080,9 @@ class RecalledVintageBodyHostTests(unittest.TestCase):
         window.w = {1: _eq_widgets()}
         window._show_alternate_eq(1, None)
         self.assertEqual(window.w[1]["curve"].draws, 1)
-        self.assertTrue(all(row.visible
-                            for row in window.w[1]["_standard_eq_rows"]))
+        self.assertFalse(any(row.visible
+                             for row in window.w[1]["_standard_eq_rows"]))
+        self.assertFalse(window.w[1]["eq_on"].visible)
         self.assertTrue(window.w[1]["curve_row"].visible)
         self.assertFalse(window.w[1]["alternate_eq_rack_row"].visible)
 

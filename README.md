@@ -71,10 +71,12 @@ day:
 | Device settings | 44.1/48/88.2/96 kHz, buffer size, output delay, preset-button mode, Channel Mute Sync, and component names stored by the Host |
 | Metering | both inputs, Main, Mix A, Mix B, and gain reduction |
 
-The GTK app keeps both channel strips visible, includes draggable EQ nodes and
-a live response view, and uses the recovered rack artwork and component layout
-for Voice FX. The app can open before the interface is connected and attaches
-when the device appears.
+The GTK app keeps both channel strips visible and puts all EQ operation on the
+rack faceplates. Standard EQ has draggable response nodes, four Gain knobs,
+four dedicated Q knobs, per-band power and shape controls, and one global
+power lamp. Passive and Vintage use their exact recovered parameter sets in
+the same-size rack bay. The app can open before the interface is connected and
+attaches when the device appears.
 
 Only one process can own the USB control interface at a time. Run
 `io24-mixer`, `io24d`, or `io24-ucnet-shim`, not several of them together.

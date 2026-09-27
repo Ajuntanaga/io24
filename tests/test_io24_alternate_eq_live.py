@@ -109,13 +109,11 @@ class AlternateEqSchemaTests(unittest.TestCase):
             self.assertTrue(all(item[2] == io24_alt_eq.IDENTITY
                                 for item in sections[1:]))
 
-    def test_default_resolution_skips_an_invalid_cache_copy(self):
+    def test_default_resolution_rejects_an_invalid_cache_copy(self):
         with tempfile.TemporaryDirectory(prefix="io24-alt-eq-") as temp:
             root = Path(temp)
             invalid = root / "invalid.dll"
-            retained = root / "retained.dll"
             invalid.write_bytes(b"wrong")
-            retained.write_bytes(b"right")
 
             def validate(path):
                 if Path(path) == invalid:
@@ -125,11 +123,11 @@ class AlternateEqSchemaTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {}, clear=False), \
                     mock.patch.object(io24_alt_eq, "DEFAULT_DLL", invalid), \
                     mock.patch.object(
-                        io24_alt_eq, "PROJECT_RETAINED_DLL", retained), \
-                    mock.patch.object(
                         io24_alt_eq, "_image", side_effect=validate):
                 os.environ.pop("IO24_UC472_DSPUSBDEVICE", None)
-                self.assertEqual(io24_alt_eq.resolve_dll(), retained.resolve())
+                with self.assertRaisesRegex(
+                        io24_alt_eq.AlternateEqUnavailable, "wrong build"):
+                    io24_alt_eq.resolve_dll()
 
     def test_every_alternate_parameter_moves_the_responsive_preview(self):
         frequencies = (25.0, 60.0, 100.0, 400.0, 1000.0, 4000.0,

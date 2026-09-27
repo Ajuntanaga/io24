@@ -192,6 +192,36 @@ class ExactUcXmlContractTests(unittest.TestCase):
 
 
 class IndependentPowerRoutingTests(unittest.TestCase):
+    def test_faceplate_band_lamp_uses_the_existing_band_power_field(self):
+        window = _window()
+        window.eq_on_by_ch[1] = True
+        band = window.bands_by_ch[1][0]
+        band.update(on=True, mode="lowshelf", shape="lowshelf")
+
+        self.assertTrue(window._set_standard_band_enabled(1, 0, False))
+
+        self.assertEqual((band["on"], band["mode"], band["shape"]),
+                         (False, "lowshelf", "off"))
+        self.assertFalse(window.w[1]["band_on"].get_active())
+        device = _Device()
+        window.ctl.run(device)
+        self.assertEqual(
+            [call for call in device.calls if call[2] == 0][-1][3], "off")
+
+    def test_faceplate_mode_button_only_toggles_existing_outer_shapes(self):
+        window = _window()
+        window.eq_on_by_ch[1] = True
+        low = window.bands_by_ch[1][0]
+        low.update(on=True, mode="lowshelf", shape="lowshelf")
+
+        self.assertTrue(window._toggle_standard_band_mode(1, 0))
+        self.assertEqual((low["mode"], low["shape"]),
+                         ("peaking", "peaking"))
+        writes = len(window.ctl.jobs)
+
+        self.assertFalse(window._toggle_standard_band_mode(1, 1))
+        self.assertEqual(len(window.ctl.jobs), writes)
+
     def test_global_power_preserves_bands_and_replays_the_right_channel(self):
         window = _window()
         window.eq_on_by_ch[1] = True

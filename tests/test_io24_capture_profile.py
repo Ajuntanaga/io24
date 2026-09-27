@@ -154,13 +154,10 @@ class InsertProfileTests(unittest.TestCase):
 
 
 class HostNoticeTests(unittest.TestCase):
-    def test_the_profile_case_is_reported_and_is_not_called_a_failure(self):
+    def test_the_optional_profile_case_is_tracked_without_an_unsolicited_toast(self):
         said = []
         host = SimpleNamespace(_bus_source_status={"mixa": "ready"},
                                say=said.append)
         io24gtk.Win._set_bus_source_status(host, "mixa", "profile", notify=True)
-        self.assertEqual(len(said), 1)
-        self.assertIn("Pro Audio", said[0])
-        self.assertNotIn("failed", said[0])
-        io24gtk.Win._set_bus_source_status(host, "mixa", "profile", notify=True)
-        self.assertEqual(len(said), 1)          # said once, not every tick
+        self.assertEqual(host._bus_source_status["mixa"], "profile")
+        self.assertEqual(said, [])

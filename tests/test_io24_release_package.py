@@ -28,6 +28,7 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_preset_record.py",
             "io24_presets.py",
             "io24_alt_eq.py",
+            "io24_eq_reference.py",
             "io24_uc472_passive_eq.py",
             "io24_uc472_vintage_eq.py",
             "io24_scene.py",
@@ -58,9 +59,17 @@ class ReleasePackageTests(unittest.TestCase):
             design_dir = stage / "docs" / "design"
             design_dir.mkdir(parents=True)
             for filename in (
+                    "passive-program-eq-calibration-nodes.png",
+                    "passive-program-eq-calibration-underlay.png",
+                    "passive-program-eq-faceplate.png",
                     "passive-program-eq-reference.png",
+                    "standard-parametric-eq-calibration-nodes.png",
+                    "standard-parametric-eq-calibration-underlay.png",
                     "standard-parametric-eq-faceplate.png",
                     "standard-parametric-eq-reference.png",
+                    "vintage-eq-calibration-nodes.png",
+                    "vintage-eq-calibration-underlay.png",
+                    "vintage-eq-faceplate.png",
                     "vintage-eq-reference.png"):
                 shutil.copy2(
                     ROOT / "docs" / "design" / filename,
@@ -140,10 +149,21 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(spring_source, [])
             self.assertEqual(len(delay_source), 1)
             self.assertEqual(len(eq_reference_art), 3)
-            self.assertTrue(any(
-                name.endswith(
-                    "/share/io24/design/standard-parametric-eq-faceplate.png")
-                for name in names))
+            for filename in (
+                    "passive-program-eq-faceplate.png",
+                    "standard-parametric-eq-faceplate.png",
+                    "vintage-eq-faceplate.png"):
+                self.assertTrue(any(
+                    name.endswith("/share/io24/design/" + filename)
+                    for name in names), filename)
+            self.assertEqual(sum(
+                "/share/io24/design/" in name and
+                name.endswith("-calibration-underlay.png")
+                for name in names), 3)
+            self.assertEqual(sum(
+                "/share/io24/design/" in name and
+                name.endswith("-calibration-nodes.png")
+                for name in names), 3)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

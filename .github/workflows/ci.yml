@@ -58,6 +58,7 @@ jobs:
       - name: Run hardware-free release suite
         run: >-
           .venv/bin/python -m pytest -q
+          tests/test_eq_reference_diff.py
           tests/test_io24_fx_model_transition.py
           tests/test_io24_host_autogain.py
           tests/test_io24_host_delay_action.py

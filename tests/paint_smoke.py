@@ -18,6 +18,7 @@ regression test for that whole class of bug.
 """
 import os
 import json
+import math
 import struct
 import sys
 import threading
@@ -88,15 +89,40 @@ class FakeDev:
         pass
 
 
+REAL_SPECTRUM = G.Spectrum
+
+
 class FakeSpectrum:
     """Paint data without ever opening ALSA during a visual-only review."""
 
+    HISTORY_COLUMNS = REAL_SPECTRUM.HISTORY_COLUMNS
+    BINS = REAL_SPECTRUM.BINS
+
     def __init__(self, *_args, **_kwargs):
-        self.mag = [None, None]
-        self.ok = False
+        history = []
+        for column in range(self.HISTORY_COLUMNS):
+            phase = column / max(1, self.HISTORY_COLUMNS - 1)
+            frame = []
+            for row in range(self.BINS):
+                frequency = row / max(1, self.BINS - 1)
+                low = math.exp(-((frequency - (.18 + .035 * math.sin(
+                    phase * math.tau * 1.5))) / .035) ** 2)
+                middle = .78 * math.exp(-((frequency - (.48 + .055 * math.sin(
+                    phase * math.tau * 2.2 + .8))) / .050) ** 2)
+                high = .58 * math.exp(-((frequency - (.72 + .045 * math.sin(
+                    phase * math.tau * 3.1 + 1.7))) / .036) ** 2)
+                pulse = .58 + .42 * math.sin(phase * math.tau * 5.0) ** 2
+                frame.append(-104.0 + 83.0 * max(low, middle, high) * pulse)
+            history.append(tuple(frame))
+        self.history = [tuple(history), tuple(history)]
+        self.mag = [list(history[-1]), list(history[-1])]
+        self.ok = True
         self.error = None
         self.running = False
         self.last_data = 0.0
+
+    def history_snapshot(self, channel):
+        return self.history[channel - 1]
 
     def start(self):
         self.running = True

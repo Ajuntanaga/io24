@@ -199,6 +199,12 @@ def _rate(rate_hz):
     return rate
 
 
+def live_design_key(eq, rate_hz=48000.0):
+    """Immutable identity of the semantic state represented by live sections."""
+    normalized = validate_eq(eq)
+    return (_rate(rate_hz), tuple(normalized.items()))
+
+
 def design_live_sections(eq, rate_hz=48000.0, dll_path=None):
     """Return UC's exact live packet order as ``(kind, index, coefficients)``.
 
@@ -238,6 +244,88 @@ def design_live_sections(eq, rate_hz=48000.0, dll_path=None):
     )["coefficients"])
     return (("wide", 0, low), ("biquad", 1, high),
             ("biquad", 2, high_mid), ("biquad", 3, low_mid))
+
+
+def _normalized_live_sections(sections):
+    """Return a safe four-section live chain, or ``None`` if incomplete."""
+    expected = (("wide", 0, 7), ("biquad", 1, 5),
+                ("biquad", 2, 5), ("biquad", 3, 5))
+    try:
+        normalized = tuple(
+            (str(kind), int(index), tuple(float(value)
+                                         for value in coefficients))
+            for kind, index, coefficients in sections)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if len(normalized) != len(expected):
+        return None
+    for section, contract in zip(normalized, expected):
+        kind, index, coefficients = section
+        expected_kind, expected_index, expected_width = contract
+        if kind != expected_kind or index != expected_index or \
+                len(coefficients) != expected_width or \
+                not all(math.isfinite(value) for value in coefficients):
+            return None
+    return normalized
+
+
+def design_changed_live_sections(eq, field, previous_sections,
+                                 rate_hz=48000.0, dll_path=None):
+    """Recompute only the exact UC section affected by one semantic control.
+
+    Passive has one coupled low section and one coupled high section. Vintage
+    has four independent bands. Reusing the other already-exact sections makes
+    graph feedback fast enough for pointer motion while remaining bit-for-bit
+    identical to a complete :func:`design_live_sections` call.
+    """
+    eq = validate_eq(eq)
+    model = model_of(eq)
+    rate = _rate(rate_hz)
+    previous = _normalized_live_sections(previous_sections)
+    if field == "eqallon" or not eq["eqallon"] or previous is None:
+        return design_live_sections(eq, rate, dll_path)
+    image = _image(str(resolve_dll(dll_path)))
+
+    if model == "passive":
+        if field in ("bboost", "batten", "bfreq"):
+            replacement_index = 1
+            replacement = ("biquad", 1, tuple(passive.design_low(
+                image, eq["bfreq"], eq["bboost"], eq["batten"], rate
+            )["coefficients"]))
+        elif field in ("mboost", "bbwidth", "mfreq", "hatten", "hsfreq"):
+            replacement_index = 0
+            replacement = ("wide", 0, tuple(passive.design_high(
+                image, eq["mfreq"], eq["mboost"], eq["hatten"],
+                eq["hsfreq"], eq["bbwidth"], rate)["coefficients"]))
+        else:
+            raise ValueError("unknown Passive EQ field %r" % field)
+    else:
+        routes = {
+            "lowgain": (0, "wide", "low", "lowfreq", "lowgain"),
+            "lowfreq": (0, "wide", "low", "lowfreq", "lowgain"),
+            "higain": (1, "biquad", "high", None, "higain"),
+            "himidgain": (2, "biquad", "hi-mid",
+                           "himidfreq", "himidgain"),
+            "himidfreq": (2, "biquad", "hi-mid",
+                           "himidfreq", "himidgain"),
+            "lowmidgain": (3, "biquad", "low-mid",
+                            "lowmidfreq", "lowmidgain"),
+            "lowmidfreq": (3, "biquad", "low-mid",
+                            "lowmidfreq", "lowmidgain"),
+        }
+        try:
+            replacement_index, kind, band, frequency_field, gain_field = \
+                routes[field]
+        except KeyError as error:
+            raise ValueError("unknown Vintage EQ field %r" % field) from error
+        frequency_index = 0 if frequency_field is None else eq[frequency_field]
+        replacement = (kind, replacement_index, tuple(vintage.design(
+            image, band, frequency_index, eq[gain_field], rate
+        )["coefficients"]))
+
+    updated = list(previous)
+    updated[replacement_index] = replacement
+    return tuple(updated)
 
 
 def design_native_coefficients(eq, dll_path=None):

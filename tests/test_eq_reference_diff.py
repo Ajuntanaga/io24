@@ -31,7 +31,7 @@ class EqReferenceDiffTests(unittest.TestCase):
                     art["calibration_underlay_filename"]).convert("RGB"))
                 self.assertTrue(np.array_equal(source, underlay))
 
-    def test_alternate_faceplates_change_only_state_bearing_regions(self):
+    def test_alternate_faceplates_change_only_declared_dynamic_or_cleanup_regions(self):
         for model in ("passive", "vintage"):
             with self.subTest(model=model):
                 art = io24_eq_reference.rack(model)
@@ -53,6 +53,10 @@ class EqReferenceDiffTests(unittest.TestCase):
                             min(height, y + region_height + padding),
                             max(0, x - padding):
                             min(width, x + region_width + padding)] = True
+                for x, y, region_width, region_height in \
+                        art.get("faceplate_cleanup_regions", ()):
+                    allowed[y:y + region_height,
+                            x:x + region_width] = True
                 x, y, plot_width, plot_height = art["plot"]
                 allowed[y:y + plot_height, x:x + plot_width] = True
                 lamp_x, lamp_y, lamp_radius = art["lamp"]

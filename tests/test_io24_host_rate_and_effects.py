@@ -499,6 +499,108 @@ class ReverbMovementTests(unittest.TestCase):
         self.assertTrue(window._reverb_mod_step())
         self.assertAlmostEqual(window.s_rsize.get_value(), 0.6)
 
+    def test_room_movement_leaves_pre_delay_fixed(self):
+        window = self._reverb_window()
+        window.rev_mod.set_active(True)
+        window.rev_on = _Value(True)
+        window.s_rsize = _Value(0.6)
+        window.s_rpre = _Value(0.037)
+        window._rev_mod_t = 0.0
+        window._rev_mod_base = 0.6
+
+        self.assertTrue(window._reverb_mod_step())
+        self.assertNotAlmostEqual(window.s_rsize.get_value(), 0.6)
+        self.assertAlmostEqual(window.s_rpre.get_value(), 0.037)
+
+
+class ReverbRackTests(unittest.TestCase):
+    def test_layout_keeps_every_control_inside_the_faceplate(self):
+        for width in (600, 680, 1040):
+            layout = io24gtk.reverb_rack_layout(width, 220)
+            fx, fy, fw, fh = layout["face"]
+            for field in ("power", "predelay", "size", "hp", "mix",
+                          "movement", "motion_power"):
+                cx, cy, radius = layout[field]
+                self.assertGreaterEqual(cx - radius, fx)
+                self.assertLessEqual(cx + radius, fx + fw)
+                self.assertGreaterEqual(cy - radius, fy)
+                self.assertLessEqual(cy + radius, fy + fh)
+
+    def test_display_sits_between_the_left_and_right_knobs(self):
+        for width in (600, 680, 1040):
+            layout = io24gtk.reverb_rack_layout(width, 220)
+            dx, _dy, dw, _dh = layout["display"]
+            left_edge = layout["size"][0] + layout["size"][2]
+            right_edge = layout["hp"][0] - layout["hp"][2]
+            self.assertGreater(dx, left_edge)
+            self.assertLess(dx + dw, right_edge)
+            self.assertGreaterEqual(dw, 160)
+
+    def test_size_motion_switch_is_separate_from_its_depth_knob(self):
+        for width in (600, 680, 1040):
+            layout = io24gtk.reverb_rack_layout(width, 220)
+            tx, ty, tr = layout["motion_power"]
+            kx, ky, kr = layout["movement"]
+            self.assertEqual(tx, kx)
+            self.assertLess(ty + tr, ky - kr)
+
+    def test_rack_readouts_use_the_existing_control_units(self):
+        text = io24gtk.ReverbRack._value_text
+        self.assertEqual(text("predelay", .02), "20 ms")
+        self.assertEqual(text("size", .5), "50 %")
+        self.assertEqual(text("mix", 1.0), "100 %")
+        self.assertEqual(text("hp", 0.0), "OFF")
+        self.assertEqual(text("hp", 200.0), "200 Hz")
+        self.assertEqual(text("movement", .08), "±8 %")
+
+    def test_acoustic_field_keeps_pre_delay_as_a_fixed_ignition_gap(self):
+        still = io24gtk.reverb_field_profile(.5, .8, .04, 180, phase=0.0)
+        moving = io24gtk.reverb_field_profile(.5, .8, .04, 180, phase=2.0)
+        self.assertEqual(still["gap"], moving["gap"])
+        self.assertEqual(still["reflections"], moving["reflections"])
+        self.assertNotEqual(still["particles"], moving["particles"])
+
+    def test_acoustic_field_maps_room_and_high_pass_to_real_dimensions(self):
+        small = io24gtk.reverb_field_profile(.2, .8, .02, 60)
+        large = io24gtk.reverb_field_profile(.9, .8, .02, 420)
+        self.assertLess(small["decay"], large["decay"])
+        self.assertLess(len(small["reflections"]),
+                        len(large["reflections"]))
+        self.assertGreater(small["low_body"], large["low_body"])
+
+    def test_kinetic_mesh_propagates_without_moving_its_ignition(self):
+        profile = io24gtk.reverb_field_profile(.7, .8, .04, 180)
+        first = io24gtk.reverb_mesh_geometry(profile, phase=0.0)
+        later = io24gtk.reverb_mesh_geometry(profile, phase=1.0)
+        self.assertEqual(first["rows"][0][0][0], profile["gap"])
+        self.assertEqual(later["rows"][0][0][0], profile["gap"])
+        self.assertNotEqual(first["rows"], later["rows"])
+
+    def test_size_motion_adds_torsion_to_the_mesh(self):
+        profile = io24gtk.reverb_field_profile(.7, .8, .04, 180)
+        stable = io24gtk.reverb_mesh_geometry(
+            profile, phase=.6, movement_depth=0.0)
+        drifting = io24gtk.reverb_mesh_geometry(
+            profile, phase=.6, movement_depth=.20)
+        self.assertNotEqual(stable["rows"], drifting["rows"])
+        self.assertEqual(stable["rows"][0][0][0],
+                         drifting["rows"][0][0][0])
+
+    def test_mesh_is_a_connected_alternating_triangular_lattice(self):
+        profile = io24gtk.reverb_field_profile(.7, .8, .04, 180)
+        mesh = io24gtk.reverb_mesh_geometry(
+            profile, phase=.4, rows=7, columns=12)
+        triangles = io24gtk.reverb_mesh_triangles(mesh)
+        self.assertEqual(len(triangles), (7 - 1) * (12 - 1) * 2)
+        self.assertTrue(all(len(triangle) == 3 for triangle in triangles))
+        # Adjacent cells use opposite diagonals, preventing a directional fan.
+        first_cell = triangles[:2]
+        second_cell = triangles[2:4]
+        self.assertIn(mesh["rows"][0][0], first_cell[0])
+        self.assertIn(mesh["rows"][1][1], first_cell[0])
+        self.assertIn(mesh["rows"][0][2], second_cell[1])
+        self.assertIn(mesh["rows"][1][1], second_cell[1])
+
 
 if __name__ == "__main__":
     unittest.main()

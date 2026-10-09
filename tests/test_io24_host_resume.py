@@ -105,6 +105,74 @@ class LastSessionFileTests(unittest.TestCase):
         self.assertEqual(io24gtk.load_last_session(self.path),
                          {"version": 1, "host_features": features})
 
+    def test_session_round_trips_host_working_context(self):
+        presentation = {
+            "page": "fx", "channel": 2, "bands": {"1": 3, "2": 1},
+            "window": {"width": 1432, "height": 914, "maximized": False},
+        }
+        host = _bind(SimpleNamespace(
+            _host_features_state=lambda: {},
+            _host_presentation_state=lambda: presentation),
+            "_save_last_session")
+        self.assertTrue(host._save_last_session(self.path))
+        self.assertEqual(io24gtk.load_last_session(self.path)
+                         ["host_presentation"], presentation)
+
+    def test_host_presentation_rejects_bad_or_out_of_range_values(self):
+        self.assertEqual(io24gtk.host_presentation({
+            "host_presentation": {
+                "page": "not-a-page", "channel": 7,
+                "bands": {"1": 4, "2": 2},
+                "window": {"width": 10, "height": "large",
+                           "maximized": "yes"},
+            },
+        }), {"bands": {"2": 2}})
+
+    def test_debounced_checkpoint_coalesces_control_changes(self):
+        calls = []
+        host = _bind(SimpleNamespace(
+            _session_restore_mute=False,
+            _session_save_id=None,
+            _save_last_session=lambda: calls.append("save")),
+            "_schedule_session_save", "_flush_scheduled_session_save",
+            "_session_state_changed")
+        with mock.patch.object(io24gtk.GLib, "timeout_add",
+                               return_value=81) as timeout:
+            host._session_state_changed()
+            host._session_state_changed()
+        timeout.assert_called_once_with(
+            io24gtk.HOST_SESSION_DEBOUNCE_MS,
+            host._flush_scheduled_session_save)
+        self.assertEqual(host._session_save_id, 81)
+        self.assertFalse(host._flush_scheduled_session_save())
+        self.assertEqual(calls, ["save"])
+
+    def test_startup_restores_page_strip_band_and_window_without_device_io(self):
+        class Stack:
+            def __init__(self):
+                self.visible = None
+
+            def set_visible_child_name(self, name):
+                self.visible = name
+
+        calls = []
+        stack, channels = Stack(), Stack()
+        host = _bind(SimpleNamespace(
+            stack=stack, chan_stack=channels, cur_band_by_ch={1: 0, 2: 0},
+            set_default_size=lambda width, height:
+            calls.append(("size", width, height)),
+            maximize=lambda: calls.append(("maximize",)),
+            _host_presentation_state=lambda: {"page": "fx"}),
+            "_restore_host_presentation")
+        host._restore_host_presentation({"host_presentation": {
+            "page": "route", "channel": 2, "bands": {"1": 3},
+            "window": {"width": 1400, "height": 900, "maximized": True},
+        }})
+        self.assertEqual(calls, [("size", 1400, 900), ("maximize",)])
+        self.assertEqual(stack.visible, "route")
+        self.assertEqual(channels.visible, "2")
+        self.assertEqual(host.cur_band_by_ch, {1: 3, 2: 0})
+
     def test_an_unchanged_session_is_not_rewritten(self):
         host = self._host({"multiband": {"on": False}})
         self.assertTrue(host._save_last_session(self.path))

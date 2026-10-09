@@ -97,11 +97,36 @@ def _plate_fill(image, mask, model):
         prepared_image.filter(ImageFilter.GaussianBlur(7.0)),
         dtype=np.float32)
 
-    # Fine, seeded grain prevents the cleared areas reading as flat patches.
+    # Seeded material replaces the controls without leaving smooth blue
+    # islands. Passive uses a cool satin/brushed finish: broad low-contrast
+    # mottling, a restrained oblique sheen, and fine horizontal tooth. The
+    # texture is deterministic, so pixel diffs remain meaningful.
     seed = 20260925 if model == "passive" else 20260926
     rng = np.random.default_rng(seed)
-    grain = rng.normal(0.0, 1.35, source.shape[:2])[:, :, None]
-    fill = np.clip(smooth + grain, 0, 255)
+    grain_sigma = 1.05 if model == "passive" else 1.35
+    grain = rng.normal(0.0, grain_sigma, source.shape[:2])[:, :, None]
+    if model == "passive":
+        coarse_source = np.clip(
+            127.5 + rng.normal(0.0, 34.0, source.shape[:2]),
+            0, 255).astype(np.uint8)
+        coarse_image = Image.fromarray(coarse_source, "L").filter(
+            ImageFilter.GaussianBlur(15.0))
+        coarse = (np.asarray(coarse_image, dtype=np.float32) - 127.5)[
+            :, :, None] * .11
+        yy, xx = np.mgrid[:height, :width]
+        axis = xx / max(1.0, width - 1.0) + \
+            yy / max(1.0, height - 1.0) * .22
+        sheen = np.exp(-((axis - .52) / .19) ** 2)[:, :, None]
+        cool_sheen = sheen * np.array([.50, 1.25, 2.10],
+                                      dtype=np.float32)
+        row_brush = rng.normal(0.0, .52, (height, 1, 1))
+        hairline = (.24 * np.sin(yy * 2.73) +
+                    .13 * np.sin(yy * .43))[:, :, None]
+        fill = np.clip(
+            smooth + grain + coarse + cool_sheen + row_brush + hairline,
+            0, 255)
+    else:
+        fill = np.clip(smooth + grain, 0, 255)
     alpha = np.asarray(mask.filter(ImageFilter.GaussianBlur(3.0)),
                        dtype=np.float32)[:, :, None] / 255.0
     result = source * (1.0 - alpha) + fill * alpha
@@ -146,6 +171,30 @@ def _blank_reference_plot(image, art, model):
     result = source.copy()
     result[y:y + height, x:x + width] = cleaned
     return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8), "RGB")
+
+
+def _open_rack_slots(image, art):
+    """Normalize photographed white space to the Host's dark rack bay.
+
+    The Vintage source was photographed on white and Passive on charcoal.
+    Neither background belongs to the hardware. Replacing only near-white
+    source pixels inside the ears (plus the outer crop fringe) keeps the
+    photographed slot edges intact without exposing the vector fallback below
+    them at a slightly different scale.
+    """
+    image = image.convert("RGBA")
+    pixels = np.asarray(image, dtype=np.uint8).copy()
+    ear = int(art["ear"])
+    in_ears = np.zeros(pixels.shape[:2], dtype=bool)
+    in_ears[:, :ear] = True
+    in_ears[:, pixels.shape[1] - ear:] = True
+    photographed_background = np.min(pixels[:, :, :3], axis=2) > 175
+    yy = np.arange(pixels.shape[0])[:, None]
+    fringe = (yy < 8) | (yy >= pixels.shape[0] - 14)
+    replace = photographed_background & (in_ears | fringe)
+    pixels[:, :, :3][replace] = (3, 7, 10)
+    pixels[:, :, 3] = 255
+    return Image.fromarray(pixels, "RGBA")
 
 
 def _node_overlay(model, art):
@@ -280,6 +329,7 @@ def render_model(model, output_dir=DESIGN):
     if model in ("passive", "vintage"):
         faceplate = _plate_fill(cropped, _control_mask(model, art), model)
         faceplate = _blank_reference_plot(faceplate, art, model)
+        faceplate = _open_rack_slots(faceplate, art)
         faceplate_path = output_dir / art["faceplate_filename"]
         faceplate.save(faceplate_path, optimize=True)
         outputs.append(faceplate_path)

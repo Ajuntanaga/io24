@@ -36,15 +36,15 @@ EQ_REFERENCE_RACKS = {
         "glass": (638, 91, 880, 332),
         "plot": (654, 103, 848, 308),
         "controls": {
-            "low": (224, 229, 88),
-            "low_mid": (474, 229, 88),
-            "high_mid": (1682, 229, 88),
-            "high": (1932, 229, 88),
+            "low": (224, 205, 88),
+            "low_mid": (474, 205, 88),
+            "high_mid": (1682, 205, 88),
+            "high": (1932, 205, 88),
         },
         # Diff-only allowances: populated reference versus live GTK state.
         "control_clear_regions": ((88, 72, 520, 370),
                                   (1546, 72, 510, 370)),
-        "knob_y": 229,
+        "knob_y": 205,
         "knob_x": (224, 474, 1682, 1932),
         "knob_radius": 88,
         # Dedicated Q rotaries added to the production Standard rack.  They
@@ -98,6 +98,14 @@ EQ_REFERENCE_RACKS = {
         # Static headings, rules, rack hardware and the screen stay untouched.
         "control_clear_regions": ((86, 58, 478, 424),
                                   (1290, 58, 786, 424)),
+        # Static cleanup performed by ``_open_rack_slots``: source-photo
+        # whitespace may be normalized only in the two ears and narrow crop
+        # fringes.  Keep this explicit so the pixel-diff gate still rejects
+        # unrelated changes to the photographed faceplate.
+        "faceplate_cleanup_regions": ((0, 0, 80, 482),
+                                      (2076, 0, 80, 482),
+                                      (0, 0, 2156, 8),
+                                      (0, 468, 2156, 14)),
         "lamp": (2031, 427, 18),
         "group_centres": ((356, 30), (1695, 30)),
         "dividers": (),
@@ -133,6 +141,10 @@ EQ_REFERENCE_RACKS = {
                                   (432, 68, 322, 262),
                                   (1496, 68, 347, 262),
                                   (1844, 68, 232, 262)),
+        "faceplate_cleanup_regions": ((0, 0, 80, 377),
+                                      (2076, 0, 80, 377),
+                                      (0, 0, 2156, 8),
+                                      (0, 363, 2156, 14)),
         "lamp": (1973, 330, 17),
         "group_centres": ((264, 42), (594, 42),
                           (1638, 42), (1939, 42)),

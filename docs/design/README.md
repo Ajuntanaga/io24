@@ -17,6 +17,12 @@ knobs, illustrative scale values, response trace, and lamp are removed. GTK
 draws those state-bearing regions from the decoded UC fields, so no decorative
 value can contradict the actual control protocol.
 
+Knob bodies are separate transparent PNG assets generated from
+`eq-knob-reference-board.png` by `tools/render_eq_knob_assets.py`. Standard has
+separate Gain and Q bodies, Passive has continuous and selector bodies, and
+Vintage has one coloured body per band. GTK adds only live collars, pointers,
+focus, and values, so the faceplates never bake in a control position.
+
 - `passive-program-eq-reference.png` establishes the blue steel faceplate,
   low/high grouping, recessed response display, stepped selectors, screws and
   power lamp. The plate runs from y=123 to y=605 (482 px).
@@ -45,9 +51,9 @@ exact designed sections after a successful device write. The clickable lamp
 is that EQ model's independent on/off control.
 
 All three models occupy the same full-width, 2U outer rack rectangle. Vintage
-keeps its measured source control positions and circular knob radii, but its
-live plate is recomposed to fill the common height instead of floating as a
-short strip. Switching models therefore does not resize or jump the page.
+fits its cleaned source plate into that rectangle while keeping measured
+control positions and circular knob bodies as independent live layers.
+Switching models therefore does not resize or jump the page.
 
 Standard's list rows are state-only and remain hidden. Its faceplate provides
 four large Gain knobs, four smaller logarithmic Q knobs, per-band power and

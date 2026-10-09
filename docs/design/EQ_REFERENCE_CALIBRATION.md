@@ -15,7 +15,8 @@ Every rack is divided into two visual layers.
 1. The static faceplate owns the metal finish, edge highlights, rack ears,
    mounting slots, screws, group headings, divider rules, display bezel, and
    fixed axis inscriptions.
-2. GTK owns anything that can change: response curve, Standard nodes,
+2. Separate transparent knob assets own each model's physical knob body.
+3. GTK owns anything that can change: response curve, Standard nodes,
    spectrum trace, Gain and Q knob pointers, protocol-correct values and scale
    marks, per-band controls, selection/hover focus, error badge, and the
    independent EQ power lamp.
@@ -36,7 +37,7 @@ incorrect UC ranges.
 | Screen cut | `(612, 65, 932, 384)` |
 | Frame / gasket / glass | `(618, 71, 920, 372)` / `(632, 85, 892, 358)` / `(638, 91, 880, 332)` |
 | Live plot | `(654, 103, 848, 308)` |
-| Knob centres | Low `(224,229)`, Low Mid `(474,229)`, High Mid `(1682,229)`, High `(1932,229)` |
+| Knob centres | Low `(224,205)`, Low Mid `(474,205)`, High Mid `(1682,205)`, High `(1932,205)` |
 | Knob radius | `88` |
 | Q centres / radius | same four x centres at `y=376`, radius `29` |
 | Faceplate actions | four band lamps at `y=448`, four mode buttons, and Flatten `(1450,72,58,24)` |
@@ -84,9 +85,10 @@ The four cleared control fields follow the dividers exactly:
 `(82,68,349,262)`, `(432,68,322,262)`, `(1496,68,347,262)`, and
 `(1844,68,232,262)`.
 
-The source crop remains the measurement authority. At runtime its y landmarks
-are mapped into the common-height plate while knob radii use the smaller scale,
-so the controls stay circular instead of being vertically stretched.
+The source crop remains the measurement authority. At runtime its cleaned
+static plate and y landmarks are fitted into the common-height bay. Knob bodies
+are separate circular assets and use the smaller scale, so the controls and
+their hit regions are never vertically stretched with the plate.
 
 ## Calibration modes
 

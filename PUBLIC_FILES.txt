@@ -6,6 +6,9 @@
 CONTRIBUTING.md
 docs/design/README.md
 docs/design/EQ_REFERENCE_CALIBRATION.md
+docs/design/eq-knob-reference-board.png
+docs/design/passive-continuous-knob.png
+docs/design/passive-selector-knob.png
 docs/design/passive-program-eq-calibration-nodes.png
 docs/design/passive-program-eq-calibration-underlay.png
 docs/design/passive-program-eq-faceplate.png
@@ -14,10 +17,17 @@ docs/design/standard-parametric-eq-calibration-nodes.png
 docs/design/standard-parametric-eq-calibration-underlay.png
 docs/design/standard-parametric-eq-faceplate.png
 docs/design/standard-parametric-eq-reference.png
+docs/design/standard-gain-knob.png
+docs/design/standard-q-knob.png
+docs/design/vintage-high-knob.png
+docs/design/vintage-himid-knob.png
+docs/design/vintage-low-knob.png
+docs/design/vintage-lowmid-knob.png
 docs/design/vintage-eq-calibration-nodes.png
 docs/design/vintage-eq-calibration-underlay.png
 docs/design/vintage-eq-faceplate.png
 docs/design/vintage-eq-reference.png
+tools/render_eq_knob_assets.py
 GUIDE.md
 LICENSE
 PROTOCOL.md

@@ -195,6 +195,114 @@ def _eq_widgets():
 
 
 class AlternateEqRackContractTests(unittest.TestCase):
+    def test_standard_uses_smooth_sided_neutral_gain_and_q_bodies(self):
+        self.assertEqual(io24gtk.STANDARD_EQ_KNOB_ASSETS, {
+            "gain": "standard-gain",
+            "q": "standard-q",
+        })
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_knob_asset_diameter("gain", 50.0),
+            102.5)
+        self.assertAlmostEqual(
+            io24gtk.standard_eq_knob_asset_diameter("q", 50.0),
+            105.0)
+
+    def test_alternate_knobs_are_large_without_touching_the_rack_edges(self):
+        passive = {spec["field"]: spec for spec in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]}
+
+        self.assertAlmostEqual(
+            io24gtk.alternate_eq_knob_asset_diameter(
+                "passive", passive["bfreq"], 50.0), 76.0)
+        self.assertAlmostEqual(
+            io24gtk.alternate_eq_knob_asset_diameter(
+                "passive", passive["bboost"], 50.0), 91.0)
+        vintage = {spec["field"]: spec for spec in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["vintage"]}
+        self.assertAlmostEqual(
+            io24gtk.alternate_eq_knob_asset_diameter(
+                "vintage", vintage["lowgain"], 50.0), 105.0)
+
+        layout = io24gtk.alternate_eq_reference_control_layout(
+            "passive", 2156, 482)
+        for field in ("bfreq", "hsfreq"):
+            _cx, cy, radius = layout[field]
+            half_body = io24gtk.alternate_eq_knob_asset_diameter(
+                "passive", passive[field], radius) / 2.0
+            self.assertLess(cy + half_body, 482.0)
+
+        for model in ("passive", "vintage"):
+            specs = [spec for spec in
+                     io24gtk.ALTERNATE_EQ_RACK_SPECS[model]
+                     if spec.get("style") != "selector"]
+            controls = io24gtk.alternate_eq_reference_control_layout(
+                model, 2156, 482)
+            for left, right in zip(specs, specs[1:]):
+                lx, ly, lr = controls[left["field"]]
+                rx, ry, rr = controls[right["field"]]
+                if abs(ly - ry) > max(lr, rr):
+                    continue
+                clearance = math.hypot(rx - lx, ry - ly) - (
+                    io24gtk.alternate_eq_knob_asset_diameter(
+                        model, left, lr) +
+                    io24gtk.alternate_eq_knob_asset_diameter(
+                        model, right, rr)
+                ) / 2.0
+                self.assertGreater(clearance, 2.0, (model, left["field"],
+                                                    right["field"]))
+
+    def test_dense_passive_frequency_marks_use_the_reference_small_type(self):
+        passive = {spec["field"]: spec for spec in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]}
+
+        frequency_size = io24gtk.alternate_eq_mark_label_size(
+            "passive", passive["mfreq"], 40.0)
+        amount_size = io24gtk.alternate_eq_mark_label_size(
+            "passive", passive["mboost"], 40.0)
+        self.assertLess(frequency_size, amount_size)
+        self.assertLessEqual(frequency_size, 6.2)
+
+    def test_deferred_parent_scroll_restore_survives_relayout(self):
+        class Adjustment:
+            value = 137.0
+
+            def get_value(self):
+                return self.value
+
+            def get_lower(self):
+                return 0.0
+
+            def get_upper(self):
+                return 900.0
+
+            def get_page_size(self):
+                return 500.0
+
+            def set_value(self, value):
+                self.value = float(value)
+
+        class Widget:
+            def __init__(self, parent=None, adjustment=None):
+                self.parent = parent
+                self.adjustment = adjustment
+
+            def get_parent(self):
+                return self.parent
+
+            def get_vadjustment(self):
+                return self.adjustment
+
+        adjustment = Adjustment()
+        scroller = Widget(adjustment=adjustment)
+        rack = Widget(parent=Widget(parent=scroller))
+
+        restore = io24gtk.deferred_parent_scroll_restore(rack)
+        adjustment.value = 314.0       # GTK ensure-visible after relayout
+
+        self.assertIsNotNone(restore)
+        self.assertFalse(restore())
+        self.assertEqual(adjustment.value, 137.0)
+
     def test_calibration_layers_are_opt_in_and_invalid_values_fail_closed(self):
         with mock.patch.dict(os.environ, {
                 "IO24_EQ_REFERENCE_CALIBRATION": "nodes"}):
@@ -279,9 +387,12 @@ class AlternateEqRackContractTests(unittest.TestCase):
         boxes = []
         for field in ("mboost", "bbwidth", "mfreq", "hatten"):
             cx, cy, radius = layout[field]
-            size = max(5.6, min(9.5, radius * .20))
+            size = io24gtk.alternate_eq_mark_label_size(
+                "passive", specs[field], radius)
+            marks = io24gtk.alternate_eq_display_scale_marks(
+                "passive", specs[field])
             for mx, my, text in io24gtk.alternate_eq_mark_points(
-                    specs[field], cx, cy, radius):
+                    specs[field], cx, cy, radius, marks=marks):
                 half_w = len(text) * size * .26 + 1.0
                 half_h = size * .58
                 boxes.append((field, text, mx - half_w, my - half_h,
@@ -408,9 +519,9 @@ class AlternateEqRackContractTests(unittest.TestCase):
 
     def test_control_labels_follow_each_reference_faceplate(self):
         self.assertAlmostEqual(
-            io24gtk.alternate_eq_control_label_y("passive", 100, 20), 59)
+            io24gtk.alternate_eq_control_label_y("passive", 100, 20), 56.6)
         self.assertAlmostEqual(
-            io24gtk.alternate_eq_control_label_y("vintage", 100, 20), 137.6)
+            io24gtk.alternate_eq_control_label_y("vintage", 100, 20), 132)
         self.assertAlmostEqual(
             io24gtk.alternate_eq_control_value_y("passive", 100, 20), 130)
         self.assertAlmostEqual(
@@ -444,6 +555,22 @@ class AlternateEqRackContractTests(unittest.TestCase):
                 (0.0, "20"), (1 / 3, "30"), (2 / 3, "60"),
                 (1.0, "100")))
 
+    def test_large_analog_bodies_use_a_sparse_but_exact_printed_scale(self):
+        passive = {spec["field"]: spec for spec in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]}
+        vintage = {spec["field"]: spec for spec in
+                   io24gtk.ALTERNATE_EQ_RACK_SPECS["vintage"]}
+
+        self.assertEqual(io24gtk.alternate_eq_display_scale_marks(
+            "passive", passive["mboost"]),
+            ((0.0, "0"), (0.5, "5"), (1.0, "10")))
+        self.assertEqual(io24gtk.alternate_eq_display_scale_marks(
+            "vintage", vintage["lowgain"]),
+            ((0.0, "-16"), (0.5, "0"), (1.0, "+16")))
+        self.assertEqual(io24gtk.alternate_eq_display_scale_marks(
+            "passive", passive["mfreq"]),
+            io24gtk.alternate_eq_scale_marks(passive["mfreq"]))
+
     def test_each_reference_keeps_its_original_graph_scale(self):
         self.assertEqual(io24gtk.alternate_eq_graph_levels("passive"),
                          (-18, -12, -6, 0, 6, 12, 18))
@@ -475,6 +602,145 @@ class AlternateEqRackContractTests(unittest.TestCase):
             passive["bfreq"]), 165.0)
         self.assertEqual(io24gtk.alternate_eq_drag_travel(
             passive["hsfreq"]), 110.0)
+
+    def test_alternate_drag_previews_every_motion_before_the_write(self):
+        spec = next(spec for spec in
+                    io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]
+                    if spec["field"] == "bboost")
+        view = {
+            "model": "passive",
+            "eq": io24_alt_eq.default_eq("passive", on=True),
+            "sections": (("stale",),),
+            "error": "stale write",
+        }
+        redraws = []
+        rack = SimpleNamespace(
+            channel=1,
+            win=SimpleNamespace(
+                invalidate_curve=lambda: redraws.append("curve"),
+                racks={1: SimpleNamespace(
+                    queue_draw=lambda: redraws.append("chain"))}),
+            _spec=lambda field: spec if field == "bboost" else None,
+            _view=lambda: view,
+            queue_draw=lambda: redraws.append("rack"),
+        )
+
+        value = io24gtk.AlternateEqRack._preview_drag_value(
+            rack, "bboost", .73)
+
+        self.assertAlmostEqual(value, 7.3)
+        self.assertAlmostEqual(view["eq"]["bboost"], 7.3)
+        if EXACT_ALT_EQ_AVAILABLE:
+            self.assertEqual(
+                view["sections"],
+                io24_alt_eq.design_live_sections(view["eq"], 48000.0))
+        else:
+            self.assertIsNone(view["sections"])
+        self.assertIsNone(view["error"])
+        self.assertEqual(rack.win._eq_write_generation[1], 1)
+        self.assertEqual(redraws, ["curve", "rack", "chain"])
+
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a local UC 4.7.2 dspusbdevice.dll",
+    )
+    def test_incremental_exact_design_matches_a_complete_uc_design(self):
+        cases = (
+            ("passive", {
+                "bboost": 8.5, "batten": 3.2, "bfreq": 0,
+                "mboost": 7.4, "bbwidth": 2.5, "mfreq": 1,
+                "hatten": 6.1, "hsfreq": 0,
+            }),
+            ("vintage", {
+                "lowgain": 9.2, "lowfreq": 3,
+                "lowmidgain": -7.3, "lowmidfreq": 0,
+                "himidgain": 6.8, "himidfreq": 0, "higain": -5.4,
+            }),
+        )
+        for model, changes in cases:
+            base = io24_alt_eq.default_eq(model, on=True)
+            previous = io24_alt_eq.design_live_sections(base, 48000.0)
+            for field, value in changes.items():
+                with self.subTest(model=model, field=field):
+                    updated = dict(base)
+                    updated[field] = value
+                    incremental = io24_alt_eq.design_changed_live_sections(
+                        updated, field, previous, 48000.0)
+                    complete = io24_alt_eq.design_live_sections(
+                        updated, 48000.0)
+                    self.assertEqual(incremental, complete)
+
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a local UC 4.7.2 dspusbdevice.dll",
+    )
+    def test_drag_curve_is_identical_before_and_after_write_completion(self):
+        window = _window()
+        window.w = {1: _eq_widgets()}
+        window.racks = {1: _Widget()}
+        view = io24_presets.alternate_eq_view({
+            "eq": io24_alt_eq.default_eq("passive", on=True)})
+        window._show_alternate_eq(1, view)
+        window._alt_eq(1)["sections"] = io24_alt_eq.design_live_sections(
+            window._alt_eq(1)["eq"], 48000.0)
+        spec = next(spec for spec in
+                    io24gtk.ALTERNATE_EQ_RACK_SPECS["passive"]
+                    if spec["field"] == "bboost")
+        rack = SimpleNamespace(
+            channel=1,
+            win=window,
+            _spec=lambda field: spec if field == "bboost" else None,
+            _view=lambda: window._alt_eq(1),
+            queue_draw=lambda: None,
+        )
+
+        io24gtk.AlternateEqRack._preview_drag_value(
+            rack, "bboost", .85)
+        # The first throttled transport commit happens immediately. It must
+        # not discard the exact curve that was already designed for the same
+        # semantic value.
+        window._alternate_eq_set(1, "bboost", 8.5)
+        during_drag = window.curve_points(320, 120, 1)
+        final_sections = io24_alt_eq.design_live_sections(
+            window._alt_eq(1)["eq"], 48000.0)
+        generation = window._eq_write_generation[1]
+        window._alternate_eq_write_finished(
+            1, "passive", generation, final_sections, None)
+        after_write = window.curve_points(320, 120, 1)
+
+        self.assertEqual(during_drag, after_write)
+
+    @unittest.skipUnless(
+        EXACT_ALT_EQ_AVAILABLE,
+        "requires a local UC 4.7.2 dspusbdevice.dll",
+    )
+    def test_wheel_or_keyboard_turn_keeps_the_exact_curve(self):
+        window = _window()
+        window.w = {1: _eq_widgets()}
+        view = io24_presets.alternate_eq_view({
+            "eq": io24_alt_eq.default_eq("vintage", on=True)})
+        window._show_alternate_eq(1, view)
+        window._alt_eq(1)["sections"] = io24_alt_eq.design_live_sections(
+            window._alt_eq(1)["eq"], 48000.0)
+        spec = next(spec for spec in
+                    io24gtk.ALTERNATE_EQ_RACK_SPECS["vintage"]
+                    if spec["field"] == "himidgain")
+        rack = SimpleNamespace(
+            channel=1,
+            win=window,
+            _spec=lambda field: spec if field == "himidgain" else None,
+            _view=lambda: window._alt_eq(1),
+            queue_draw=lambda: None,
+        )
+        rack._preview_drag_value = lambda field, fraction: \
+            io24gtk.AlternateEqRack._preview_drag_value(
+                rack, field, fraction)
+
+        io24gtk.AlternateEqRack._set_fraction(rack, "himidgain", .75)
+
+        expected = io24_alt_eq.design_live_sections(
+            window._alt_eq(1)["eq"], 48000.0)
+        self.assertEqual(window._alt_eq(1)["sections"], expected)
 
     def test_knob_motion_follows_each_painted_control_arc(self):
         passive = {spec["field"]: spec for spec in
@@ -608,15 +874,15 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(curve.cur_band, 1)
         self.assertEqual(bands[0]["q"], .7)
 
-    def test_standard_node_pinned_to_the_screen_edge_can_be_grabbed(self):
+    def test_standard_node_height_comes_from_its_own_gain(self):
         band = {"shape": "peaking", "freq": 1000.0, "gain": 15.0, "q": 1.0}
         curve = SimpleNamespace(
             channel=1, bands=[band],
             get_width=lambda: 1200, get_height=lambda: 240,
             win=SimpleNamespace(
                 _fs=48000.0,
-                # A combined boost above the screen's +18 dB range.
-                response_for=lambda *_args, **_kwargs: 30.0))
+                response_for=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("aggregate response moved a band node"))))
         curve._x = lambda f, w: io24gtk.EQCurve._x(curve, f, w)
         curve._node_y = lambda b, gy, gh: io24gtk.EQCurve._node_y(
             curve, b, gy, gh)
@@ -624,11 +890,62 @@ class AlternateEqRackContractTests(unittest.TestCase):
             io24gtk.EQCurve._graph_bounds(curve, w, h)
         curve._knob_at = lambda _x, _y, _w=None, _h=None: None
         curve._q_knob_at = lambda _x, _y, _w=None, _h=None: None
-        gx, gy, gw, _gh = curve._graph_bounds()
+        gx, gy, gw, gh = curve._graph_bounds()
         drawn_x = gx + curve._x(band["freq"], gw)
+        drawn_y = curve._node_y(band, gy, gh)
 
         self.assertEqual(
-            io24gtk.EQCurve._hit_band(curve, drawn_x, gy + 7), 0)
+            io24gtk.EQCurve._hit_band(curve, drawn_x, drawn_y), 0)
+        self.assertAlmostEqual(
+            drawn_y, gy + gh / 2 - 15.0 / 18.0 * (gh / 2))
+
+    def test_standard_big_knob_double_click_toggles_its_band(self):
+        band = {"shape": "peaking", "mode": "peaking", "on": True,
+                "freq": 1000.0, "gain": 0.0, "q": 0.7}
+        calls = []
+        curve = SimpleNamespace(
+            channel=1,
+            bands=[band],
+            win=SimpleNamespace(
+                _alt_eq=lambda _channel: None,
+                select_band=lambda index, channel:
+                calls.append(("select", index, channel)),
+                _set_standard_band_enabled=lambda channel, index, enabled:
+                calls.append(("power", channel, index, enabled))),
+            _power_at=lambda _x, _y: False,
+            _flatten_at=lambda _x, _y: False,
+            _knob_at=lambda _x, _y: 0,
+            _band_power_at=lambda _x, _y: None,
+            _band_mode_at=lambda _x, _y: None,
+            _hit_band=lambda _x, _y: None,
+        )
+
+        io24gtk.EQCurve._clicked(curve, None, 1, 30.0, 30.0)
+        self.assertEqual(calls, [("select", 0, 1)])
+        io24gtk.EQCurve._clicked(curve, None, 2, 30.0, 30.0)
+        self.assertEqual(calls[-2:], [
+            ("select", 0, 1), ("power", 1, 0, False)])
+
+    def test_standard_band_lamp_is_an_indicator_not_a_hidden_toggle(self):
+        calls = []
+        curve = SimpleNamespace(
+            channel=1,
+            bands=[{"shape": "peaking", "on": True}],
+            win=SimpleNamespace(
+                _alt_eq=lambda _channel: None,
+                select_band=lambda index, channel:
+                calls.append(("select", index, channel))),
+            _power_at=lambda _x, _y: False,
+            _flatten_at=lambda _x, _y: False,
+            _knob_at=lambda _x, _y: None,
+            _band_power_at=lambda _x, _y: 0,
+            _band_mode_at=lambda _x, _y: None,
+            _hit_band=lambda _x, _y: None,
+        )
+
+        io24gtk.EQCurve._clicked(curve, None, 1, 30.0, 30.0)
+
+        self.assertEqual(calls, [("select", 0, 1)])
 
     def test_plain_standard_rack_click_does_not_enable_or_write_a_band(self):
         calls = []
@@ -782,8 +1099,8 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(layout["display"], (638.0, 91.0, 880.0, 332.0))
         self.assertEqual(layout["graph"], (654.0, 103.0, 848.0, 308.0))
         self.assertEqual(layout["encoders"], (
-            (224.0, 229.0), (474.0, 229.0),
-            (1682.0, 229.0), (1932.0, 229.0)))
+            (224.0, 205.0), (474.0, 205.0),
+            (1682.0, 205.0), (1932.0, 205.0)))
         self.assertEqual(layout["q_encoders"], (
             (224.0, 376.0), (474.0, 376.0),
             (1682.0, 376.0), (1932.0, 376.0)))
@@ -818,6 +1135,19 @@ class AlternateEqRackContractTests(unittest.TestCase):
             io24gtk.EQCurve._q_knob_at(curve, qx, qy), 2)
         self.assertIsNone(
             io24gtk.EQCurve._q_knob_at(curve, 1078, 241))
+
+    def test_large_standard_gain_skirt_is_clickable_to_its_visible_edge(self):
+        layout = io24gtk.standard_eq_rack_layout(2156, 482)
+        cx, cy = layout["encoders"][0]
+        radius = layout["knob_radius"]
+        curve = SimpleNamespace(
+            get_width=lambda: 2156,
+            get_height=lambda: 482,
+        )
+
+        self.assertEqual(io24gtk.EQCurve._knob_at(
+            curve, cx + radius * 1.20, cy), 0)
+        self.assertIsNone(io24gtk.EQCurve._knob_at(curve, 1078, 241))
 
     def test_standard_gain_pointer_uses_the_exact_existing_range(self):
         self.assertAlmostEqual(

@@ -884,6 +884,45 @@ class HostRefinementTests(unittest.TestCase):
             io24gtk.Spectrum._release_alpha(
                 io24gtk.Spectrum.RELEASE_TAU_S), math.exp(-1.0), places=7)
 
+    def test_spectrogram_history_is_bounded_and_copied_for_painting(self):
+        spectrum = io24gtk.Spectrum(autostart=False)
+        for index in range(spectrum.HISTORY_COLUMNS + 7):
+            spectrum.history[0].append((float(index),))
+
+        snapshot = spectrum.history_snapshot(1)
+
+        self.assertIsInstance(snapshot, tuple)
+        self.assertEqual(len(snapshot), spectrum.HISTORY_COLUMNS)
+        self.assertEqual(snapshot[0], (7.0,))
+        self.assertEqual(snapshot[-1],
+                         (float(spectrum.HISTORY_COLUMNS + 6),))
+        with self.assertRaises(ValueError):
+            spectrum.history_snapshot(3)
+
+    def test_spectrogram_palette_hides_silence_and_brightens_signal(self):
+        silent = io24gtk.spectrogram_colour(-120.0)
+        middle = io24gtk.spectrogram_colour(-58.0)
+        loud = io24gtk.spectrogram_colour(-10.0)
+
+        self.assertEqual(silent[3], 0.0)
+        self.assertGreater(middle[3], silent[3])
+        self.assertGreater(loud[3], middle[3])
+        self.assertGreater(loud[0], middle[0])
+
+    def test_spectrogram_raster_places_new_time_right_and_low_frequency_down(self):
+        pixels = io24gtk.spectrogram_pixels(
+            [(-20.0, -120.0), (-120.0, -20.0)],
+            column_count=3, row_count=2)
+
+        def alpha(row, column):
+            return pixels[(row * 3 + column) * 4 + 3]
+
+        self.assertEqual(alpha(0, 0), 0)       # unused history starts clear
+        self.assertGreater(alpha(1, 1), 0)     # old low energy at bottom
+        self.assertEqual(alpha(0, 1), 0)
+        self.assertGreater(alpha(0, 2), 0)     # newest high energy at top/right
+        self.assertEqual(alpha(1, 2), 0)
+
     def test_curve_drag_publishes_one_coherent_band_update(self):
         class Value:
             def __init__(self, host, key):

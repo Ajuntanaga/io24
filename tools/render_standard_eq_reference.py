@@ -39,7 +39,7 @@ FRAME_INSET = 6
 GASKET_INSET = 20
 GLASS_INSET = 26
 PLOT_INSET = (16, 12)
-KNOB_Y = 350
+KNOB_Y = 326
 KNOB_X = (232, 482, 1690, 1940)
 KNOB_RADIUS = 88
 HEADING_Y = 158
@@ -370,6 +370,28 @@ def draw_screw(ctx, sx, sy):
              (0.85, 0.88, 0.92, 0.18), 0.8)
 
 
+def draw_band_symbol(ctx, index, cx, cy, selected=False):
+    """Engrave one compact response-shape symbol instead of a word label."""
+    if index == 0:                       # low shelf
+        points = ((-25, -7), (-12, -7), (-7, -6), (0, 0),
+                  (7, 7), (25, 7))
+    elif index == 1:                     # low-mid bell
+        points = ((-25, 7), (-15, 7), (-9, 5), (-4, -5),
+                  (1, -7), (6, -4), (11, 5), (17, 7), (25, 7))
+    elif index == 2:                     # high-mid bell
+        points = ((-25, 7), (-17, 7), (-11, 5), (-6, -4),
+                  (-1, -7), (4, -5), (9, 5), (15, 7), (25, 7))
+    else:                                # high shelf
+        points = ((-25, 7), (-7, 7), (0, 0), (7, -7),
+                  (12, -7), (25, -7))
+    colour = (0.92, 0.94, 0.92, 0.96 if selected else 0.76)
+    line(ctx, [(cx + x, cy + y) for x, y in points], colour,
+         3.0 if selected else 2.2, cairo.LINE_CAP_ROUND)
+    # A centre datum makes each mark read as an EQ response icon rather than
+    # decorative trim, while keeping the faceplate free of four long labels.
+    circle(ctx, cx, cy, 2.2 if selected else 1.7, colour)
+
+
 def draw_heading(ctx, selected=SELECTED):
     x, _y, _w, _h = SCREEN_CUT
     title_x, title_w = label(
@@ -382,12 +404,9 @@ def draw_heading(ctx, selected=SELECTED):
              (0.0, 0.0, 0.0, 0.55), 1.6, cairo.LINE_CAP_BUTT)
         line(ctx, [(start, HEADING_Y + 1.4), (end, HEADING_Y + 1.4)],
              (0.78, 0.85, 0.92, 0.26), 1.0, cairo.LINE_CAP_BUTT)
-    for index, (cx, band) in enumerate(zip(KNOB_X, BANDS)):
-        tone = band["tone"]
-        is_selected = index == selected
-        label(ctx, band["name"], cx, HEADING_Y, 23,
-              (tone[0], tone[1], tone[2], 0.98 if is_selected else 0.80),
-              spacing=4.0)
+    for index, cx in enumerate(KNOB_X):
+        draw_band_symbol(ctx, index, cx, HEADING_Y,
+                         selected is not None and index == selected)
 
 
 def draw_screen(ctx, rng, dynamic=True):
@@ -659,6 +678,11 @@ def draw_knob(ctx, index, band, rng, dynamic=True):
             layer.stroke()
         paint_layer(ctx, blurred(ring, 12), 0.55)
 
+    # Production keeps scales and tracks on the faceplate, but knob bodies are
+    # independent transparent assets so their material can match every model.
+    if not dynamic:
+        return
+
     # Cast and contact shadows.
     def shadow(layer):
         circle(layer, cx + 7, cy + 14, R * 0.99, (0, 0, 0, 0.85))
@@ -813,9 +837,6 @@ def draw_knob(ctx, index, band, rng, dynamic=True):
         layer.restore()
 
     paint_layer(ctx, blurred(specular, 7), 0.8)
-
-    if not dynamic:
-        return
 
     # Readout: the knob's own gain first, its band's frequency and state below.
     label(ctx, "%+.1f dB" % band["gain"], cx, cy + R + 30, 21,

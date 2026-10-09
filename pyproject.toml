@@ -49,6 +49,14 @@ py-modules = [
 [tool.setuptools.data-files]
 "share/io24" = ["io24_uc_comp.c", "io24_voicefx_delay.c"]
 "share/io24/design" = [
+    "docs/design/standard-gain-knob.png",
+    "docs/design/standard-q-knob.png",
+    "docs/design/passive-continuous-knob.png",
+    "docs/design/passive-selector-knob.png",
+    "docs/design/vintage-low-knob.png",
+    "docs/design/vintage-lowmid-knob.png",
+    "docs/design/vintage-himid-knob.png",
+    "docs/design/vintage-high-knob.png",
     "docs/design/passive-program-eq-calibration-nodes.png",
     "docs/design/passive-program-eq-calibration-underlay.png",
     "docs/design/passive-program-eq-faceplate.png",

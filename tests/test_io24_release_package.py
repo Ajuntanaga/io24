@@ -59,6 +59,14 @@ class ReleasePackageTests(unittest.TestCase):
             design_dir = stage / "docs" / "design"
             design_dir.mkdir(parents=True)
             for filename in (
+                    "standard-gain-knob.png",
+                    "standard-q-knob.png",
+                    "passive-continuous-knob.png",
+                    "passive-selector-knob.png",
+                    "vintage-low-knob.png",
+                    "vintage-lowmid-knob.png",
+                    "vintage-himid-knob.png",
+                    "vintage-high-knob.png",
                     "passive-program-eq-calibration-nodes.png",
                     "passive-program-eq-calibration-underlay.png",
                     "passive-program-eq-faceplate.png",
@@ -162,8 +170,11 @@ class ReleasePackageTests(unittest.TestCase):
                 for name in names), 3)
             self.assertEqual(sum(
                 "/share/io24/design/" in name and
-                name.endswith("-calibration-nodes.png")
-                for name in names), 3)
+                    name.endswith("-calibration-nodes.png")
+                    for name in names), 3)
+            self.assertEqual(sum(
+                "/share/io24/design/" in name and name.endswith("-knob.png")
+                for name in names), 8)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

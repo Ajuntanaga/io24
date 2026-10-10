@@ -9,13 +9,22 @@ import numpy as np
 from PIL import Image
 
 import io24_eq_reference
-from tools.eq_reference_diff import diff_images, model_regions
+import io24_rack_reference
+from tools.eq_reference_diff import diff_images, model_regions, rack_regions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class EqReferenceDiffTests(unittest.TestCase):
+    def test_limiter_regions_come_from_the_rack_manifest(self):
+        spec = io24_rack_reference.rack("limiter")
+        rectangles, circles = rack_regions(spec, (10, 20, 700, 210))
+
+        self.assertEqual(len(rectangles), 1)
+        self.assertEqual(len(circles), 3)
+        self.assertEqual(circles[0][:2], (150, 132))
+
     def test_calibration_underlays_are_exact_reference_crops(self):
         for model in ("standard", "passive", "vintage"):
             with self.subTest(model=model):

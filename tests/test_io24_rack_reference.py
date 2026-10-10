@@ -10,6 +10,7 @@ import unittest
 from PIL import Image
 
 import io24_rack_reference
+from tools.eq_reference_diff import diff_images, rack_regions
 from tools import render_rack_assets
 
 
@@ -18,6 +19,19 @@ DESIGN = ROOT / "docs" / "design"
 
 
 class RackReferenceTests(unittest.TestCase):
+    def test_limiter_faceplate_changes_stay_in_live_or_cleanup_regions(self):
+        spec = io24_rack_reference.rack("limiter")
+        rectangles, circles = rack_regions(
+            spec, (0, 0) + tuple(spec["source_size"]))
+        result, _changed, _allowed, _unexpected = diff_images(
+            DESIGN / spec["source"], DESIGN / spec["output"],
+            allowed_rectangles=rectangles + list(spec["cleanup_regions"]),
+            allowed_circles=circles,
+            scope_rectangle=(0, 0) + tuple(spec["source_size"]))
+
+        self.assertGreater(result["changed_pixels"], 0)
+        self.assertEqual(result["unexpected_pixels"], 0)
+
     def test_compiler_outputs_every_declared_asset(self):
         with tempfile.TemporaryDirectory() as temp:
             receipt = render_rack_assets.compile_rack(

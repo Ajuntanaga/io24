@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact pixel-diff gate for the three EQ reference calibrations.
+"""Exact pixel-diff gate for measured reference rack calibrations.
 
 Render the same midpoint state once with
 ``IO24_EQ_REFERENCE_CALIBRATION=backdrop`` and once normally. Scope the check
@@ -91,41 +91,76 @@ def diff_images(baseline_path, actual_path, allowed_rectangles=(),
     }, changed, allowed, unexpected
 
 
-def model_regions(model, rack_rectangle):
-    """Translate one measured rack manifest into screenshot coordinates."""
-    art = io24_eq_reference.rack(model)
-    rack_x, rack_y, rack_width, rack_height = rack_rectangle
-    _source_x, _source_y, source_width, source_height = art["rack_crop"]
+def rack_regions(spec, rack_rectangle):
+    """Translate one rack manifest's live regions into screenshot coordinates.
 
-    def scale_rect(rect, padding=0):
+    The generic rack manifest describes a live display, control circles, and
+    a lamp circle in source-image pixels.  The EQ adapter below may also pass
+    rectangular controls to preserve its historical cleanup allowances.
+    """
+    rack_x, rack_y, rack_width, rack_height = rack_rectangle
+    source_width, source_height = spec["source_size"]
+
+    def scale_rect(rect):
         x, y, width, height = rect
-        x = max(0, x - padding)
-        y = max(0, y - padding)
-        width = min(source_width - x, width + padding * 2)
-        height = min(source_height - y, height + padding * 2)
         return (round(rack_x + x / source_width * rack_width),
                 round(rack_y + y / source_height * rack_height),
                 round(width / source_width * rack_width),
                 round(height / source_height * rack_height))
 
-    dynamic_plot = art.get("glass", art["plot"]) \
-        if model == "standard" else art["plot"]
+    def scale_circle(circle):
+        center_x, center_y, radius = circle
+        radius_scale = min(rack_width / source_width,
+                           rack_height / source_height)
+        return (
+            round(rack_x + center_x / source_width * rack_width),
+            round(rack_y + center_y / source_height * rack_height),
+            max(1, round(radius * radius_scale)),
+        )
+
+    rectangles = [scale_rect(spec["display"])]
+    circles = []
+    for control in spec["controls"].values():
+        geometry = control["geometry"]
+        if len(geometry) == 4:
+            rectangles.append(scale_rect(geometry))
+        else:
+            circles.append(scale_circle(geometry))
+    circles.append(scale_circle(spec["lamp"]))
+    return rectangles, circles
+
+
+def model_regions(model, rack_rectangle):
+    """Adapt one legacy EQ manifest to the generic rack-region scaler."""
+    art = io24_eq_reference.rack(model)
+    _source_x, _source_y, source_width, source_height = art["rack_crop"]
+
     # The production layers intentionally feather cleared artwork and glow
     # live curves.  Twelve source pixels is the measured maximum reach of
     # those effects; it is dynamic allowance, not static-faceplate tolerance.
     dynamic_padding = 12
-    rectangles = [scale_rect(dynamic_plot, dynamic_padding)]
-    rectangles.extend(scale_rect(region, dynamic_padding)
-                      for region in art["control_clear_regions"])
+
+    def padded(rect):
+        x, y, width, height = rect
+        x = max(0, x - dynamic_padding)
+        y = max(0, y - dynamic_padding)
+        return (x, y,
+                min(source_width - x, width + dynamic_padding * 2),
+                min(source_height - y, height + dynamic_padding * 2))
+
+    dynamic_display = art.get("glass", art["plot"]) \
+        if model == "standard" else art["plot"]
     lamp_x, lamp_y, lamp_radius = art["lamp"]
-    radius_scale = min(rack_width / source_width,
-                       rack_height / source_height)
-    circles = [(
-        round(rack_x + lamp_x / source_width * rack_width),
-        round(rack_y + lamp_y / source_height * rack_height),
-        max(1, round(lamp_radius * 2.75 * radius_scale)),
-    )]
-    return rectangles, circles
+    adapter = {
+        "source_size": (source_width, source_height),
+        "display": padded(dynamic_display),
+        "controls": {
+            str(index): {"geometry": padded(region)}
+            for index, region in enumerate(art["control_clear_regions"])
+        },
+        "lamp": (lamp_x, lamp_y, lamp_radius * 2.75),
+    }
+    return rack_regions(adapter, rack_rectangle)
 
 
 def main(argv=None):

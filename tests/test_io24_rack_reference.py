@@ -1,9 +1,87 @@
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 import io24_rack_reference
+from tools import render_rack_assets
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DESIGN = ROOT / "docs" / "design"
 
 
 class RackReferenceTests(unittest.TestCase):
+    def test_compiler_outputs_every_declared_asset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            receipt = render_rack_assets.compile_rack(
+                "limiter", DESIGN, Path(temp))
+            self.assertEqual(receipt["rack_id"], "limiter")
+            for filename in (
+                    "limiter-faceplate.png",
+                    "limiter-calibration-underlay.png",
+                    "limiter-calibration-nodes.png",
+                    "limiter-knob.png",
+                    "limiter-rack-assets.json"):
+                self.assertTrue((Path(temp) / filename).is_file())
+
+    def test_compiler_is_byte_deterministic(self):
+        with tempfile.TemporaryDirectory() as first:
+            with tempfile.TemporaryDirectory() as second:
+                render_rack_assets.compile_rack(
+                    "limiter", DESIGN, Path(first))
+                render_rack_assets.compile_rack(
+                    "limiter", DESIGN, Path(second))
+                for filename in io24_rack_reference.rack("limiter")["generated"]:
+                    self.assertEqual(
+                        (Path(first) / filename).read_bytes(),
+                        (Path(second) / filename).read_bytes())
+
+    def test_compiler_receipt_hashes_every_asset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            receipt = render_rack_assets.compile_rack(
+                "limiter", DESIGN, output)
+            persisted = json.loads(
+                (output / "limiter-rack-assets.json").read_text())
+            self.assertEqual(persisted, receipt)
+            self.assertEqual(set(receipt), {
+                "rack_id", "source_sha256", "outputs", "manifest_sha256"})
+            self.assertEqual(set(receipt["outputs"]), {
+                "limiter-faceplate.png",
+                "limiter-calibration-underlay.png",
+                "limiter-calibration-nodes.png",
+                "limiter-knob.png",
+            })
+            for filename, digest in receipt["outputs"].items():
+                self.assertEqual(
+                    digest,
+                    hashlib.sha256((output / filename).read_bytes()).hexdigest())
+
+    def test_check_mode_does_not_write_design_assets(self):
+        filenames = ("limiter-reference.png",) + tuple(
+            io24_rack_reference.rack("limiter")["generated"])
+        before = {
+            filename: ((DESIGN / filename).read_bytes(),
+                       (DESIGN / filename).stat().st_mtime_ns)
+            for filename in filenames
+        }
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "render_rack_assets.py"),
+             "limiter", "--check"],
+            cwd=ROOT, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("limiter assets match", result.stdout)
+        after = {
+            filename: ((DESIGN / filename).read_bytes(),
+                       (DESIGN / filename).stat().st_mtime_ns)
+            for filename in filenames
+        }
+        self.assertEqual(after, before)
+
     def test_limiter_contract_is_exact(self):
         spec = io24_rack_reference.rack("limiter")
         self.assertEqual(tuple(spec["controls"]), ("threshold", "release"))

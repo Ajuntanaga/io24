@@ -2383,6 +2383,7 @@ class ReferenceRack(Canvas):
         self.drag_fraction = 0.0
         self._asset_error_reported = False
         self._missing_assets = set()
+        self._connect_binding_redraws()
         self.set_hexpand(True)
         self.set_focusable(True)
         self.set_accessible_role(Gtk.AccessibleRole.GROUP)
@@ -2433,6 +2434,23 @@ class ReferenceRack(Canvas):
 
     def _widget(self, field):
         return self.bindings.get(field, {}).get("widget")
+
+    def _binding_changed(self, *_args):
+        self.queue_draw()
+
+    def _connect_binding_redraws(self):
+        """Repaint when an authoritative bound widget changes elsewhere."""
+        connected = set()
+        fields_and_signals = [
+            (field, "value-changed") for field in self._fields()
+        ] + [("power", "notify::active")]
+        for field, signal in fields_and_signals:
+            widget = self._widget(field)
+            key = (id(widget), signal)
+            if widget is None or key in connected:
+                continue
+            widget.connect(signal, self._binding_changed)
+            connected.add(key)
 
     def _state(self):
         state = {}
@@ -2608,6 +2626,13 @@ class ReferenceRack(Canvas):
             x, y, w, h = io24_rack_reference.scaled_rect(
                 rect, width, height, self.rack_id)
             box(sn, x, y, w, h, rgba(.025, .03, .032, 1.0))
+        for rect in self.spec["slots"]:
+            x, y, w, h = io24_rack_reference.scaled_rect(
+                rect, width, height, self.rack_id)
+            rounded_box(
+                sn, x, y, w, h, min(w, h) * .28,
+                rgba(.006, .008, .009, 1.0),
+                rgba(.21, .24, .24, .78))
         source_width, source_height = self.spec["source_size"]
         scale_x = float(width) / source_width
         scale_y = float(height) / source_height

@@ -41,6 +41,20 @@ class _Value:
         self.value = int(value)
 
 
+class _SignallingValue(_Value):
+    def __init__(self, value=0.0):
+        super().__init__(value)
+        self.callbacks = {}
+
+    def connect(self, signal, callback):
+        self.callbacks.setdefault(signal, []).append(callback)
+        return len(self.callbacks[signal])
+
+    def emit(self, signal):
+        for callback in self.callbacks.get(signal, ()):
+            callback(self)
+
+
 class _Adjustment:
     def __init__(self, lower, upper):
         self._lower, self._upper = lower, upper
@@ -642,6 +656,28 @@ class ReferenceRackTests(unittest.TestCase):
         self.assertAlmostEqual(
             rack.bindings["release"]["widget"].get_value(), 0.4)
 
+    def test_external_bound_widget_changes_schedule_one_redraw_per_signal(self):
+        rack = self._rack()
+        shared_numeric = _SignallingValue(-28.0)
+        power = _SignallingValue(False)
+        rack.bindings["threshold"]["widget"] = shared_numeric
+        rack.bindings["release"]["widget"] = shared_numeric
+        rack.bindings["power"]["widget"] = power
+        redraws = []
+        rack.queue_draw = lambda: redraws.append(True)
+
+        rack._connect_binding_redraws()
+        shared_numeric.value = -17.0
+        shared_numeric.emit("value-changed")
+        power.value = True
+        power.emit("notify::active")
+
+        self.assertEqual(len(shared_numeric.callbacks["value-changed"]), 1)
+        self.assertEqual(len(power.callbacks["notify::active"]), 1)
+        self.assertEqual(redraws, [True, True])
+        self.assertAlmostEqual(shared_numeric.get_value(), -17.0)
+        self.assertTrue(power.get_active())
+
     def test_double_click_restores_the_manifest_default(self):
         rack = self._rack(threshold=-6.0)
         layout = io24_rack_reference.control_layout(
@@ -734,6 +770,22 @@ class ReferenceRackTests(unittest.TestCase):
         rack._draw_fallback_faceplate.assert_called_once_with(
             snapshot, 700, 210)
         snapshot.append_texture.assert_not_called()
+
+    def test_vector_fallback_draws_every_manifest_rack_slot(self):
+        rack = self._rack()
+        snapshot = SimpleNamespace()
+
+        with mock.patch.object(io24gtk, "box"), \
+                mock.patch.object(io24gtk, "rounded_box") as rounded, \
+                mock.patch.object(io24gtk, "dot"):
+            rack._draw_fallback_faceplate(snapshot, 700, 210)
+
+        drawn_rects = [call.args[1:5] for call in rounded.call_args_list]
+        for slot in rack.spec["slots"]:
+            self.assertIn(
+                io24_rack_reference.scaled_rect(
+                    slot, 700, 210, "limiter"),
+                drawn_rects)
 
 
 if __name__ == "__main__":

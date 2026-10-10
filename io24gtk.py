@@ -58,6 +58,7 @@ import io24_dsp                            # noqa: E402  (exact compressor model
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_eq_reference                   # noqa: E402  (measured EQ artwork)
 import io24_mbc                            # noqa: E402  (host multiband)
+import io24_rack_reference                 # noqa: E402  (shared rack geometry)
 import io24_voicefx_delay                  # noqa: E402  (safe high-rate Delay)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 import io24_scene                          # noqa: E402  (UC scene import)
@@ -2357,6 +2358,340 @@ def reverb_mesh_triangles(mesh):
             else:
                 triangles.extend(((a, b, d), (a, d, c)))
     return tuple(triangles)
+
+
+class ReferenceRack(Canvas):
+    """Manifest-painted rack view over existing GTK controls.
+
+    The bound widgets remain authoritative.  This view owns only ephemeral
+    interaction state (focus, hover and drag origin) and never mirrors a DSP
+    parameter or creates a second write path.
+    """
+
+    DRAG_TRAVEL = 140.0
+
+    def __init__(self, win, rack_id, bindings, display_draw):
+        super().__init__(600, 180)
+        self.win = win
+        self.rack_id = rack_id
+        self.spec = io24_rack_reference.rack(rack_id)
+        self.bindings = bindings
+        self.display_draw = display_draw
+        self.selected_field = None
+        self.hover_field = None
+        self.drag_field = None
+        self.drag_fraction = 0.0
+        self._asset_error_reported = False
+        self._missing_assets = set()
+        self.set_hexpand(True)
+        self.set_focusable(True)
+        self.set_accessible_role(Gtk.AccessibleRole.GROUP)
+        self.set_tooltip_text(
+            "Drag or scroll knobs; arrows adjust the focused control")
+
+        click = Gtk.GestureClick()
+        click.set_button(1)
+        click.connect("released", self._clicked)
+        self.add_controller(click)
+        drag = Gtk.GestureDrag()
+        drag.set_button(1)
+        drag.connect("drag-begin", self._drag_begin)
+        drag.connect("drag-update", self._drag_update)
+        drag.connect("drag-end", self._drag_end)
+        self.add_controller(drag)
+        scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll.connect("scroll", self._scroll)
+        self.add_controller(scroll)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._motion)
+        motion.connect("leave", self._leave)
+        self.add_controller(motion)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key_pressed)
+        self.add_controller(keys)
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", self._focus_enter)
+        self.add_controller(focus)
+
+    def _fields(self):
+        return tuple(self.spec["controls"])
+
+    def _layout(self):
+        return io24_rack_reference.control_layout(
+            self.rack_id, self.get_width() or 600, self.get_height() or 180)
+
+    def _lamp_layout(self):
+        width = self.get_width() or 600
+        height = self.get_height() or 180
+        source_width, source_height = self.spec["source_size"]
+        scale_x = float(width) / source_width
+        scale_y = float(height) / source_height
+        x, y, radius = self.spec["lamp"]
+        return (x * scale_x, y * scale_y,
+                radius * min(scale_x, scale_y))
+
+    def _widget(self, field):
+        return self.bindings.get(field, {}).get("widget")
+
+    def _state(self):
+        state = {}
+        for field in self._fields():
+            widget = self._widget(field)
+            if widget is not None:
+                state[field] = float(widget.get_value())
+        power = self._widget("power")
+        state["power"] = bool(power is not None and power.get_active())
+        return state
+
+    def _fraction(self, field):
+        widget = self._widget(field)
+        control = self.spec["controls"][field]
+        value = control["range"][0] if widget is None else widget.get_value()
+        return io24_rack_reference.value_fraction(control, value)
+
+    def _set_fraction(self, field, fraction):
+        widget = self._widget(field)
+        control = self.spec["controls"].get(field)
+        if widget is None or control is None:
+            return False
+        widget.set_value(io24_rack_reference.fraction_value(
+            control, fraction))
+        self.queue_draw()
+        return True
+
+    def _reset(self, field):
+        control = self.spec["controls"].get(field)
+        if control is None:
+            return False
+        return self._set_fraction(
+            field,
+            io24_rack_reference.value_fraction(
+                control, control["default"]))
+
+    def _control_at(self, x, y):
+        x, y = float(x), float(y)
+        for field, (cx, cy, radius) in self._layout().items():
+            if math.hypot(x - cx, y - cy) <= radius + 10.0:
+                return field
+        cx, cy, radius = self._lamp_layout()
+        if math.hypot(x - cx, y - cy) <= radius + 10.0:
+            return "power"
+        return None
+
+    def _select(self, field):
+        if field not in (("power",) + self._fields()):
+            return False
+        self.selected_field = field
+        self.grab_focus()
+        self.queue_draw()
+        return True
+
+    def _toggle(self, field):
+        if field != "power":
+            return False
+        widget = self._widget("power")
+        if widget is None:
+            return False
+        widget.set_active(not widget.get_active())
+        self.queue_draw()
+        return True
+
+    def _clicked(self, gesture, presses, x, y):
+        field = self._control_at(x, y)
+        if not self._select(field):
+            return
+        if field == "power":
+            if presses == 1:
+                self._toggle(field)
+            return
+        if presses == 2 and self._reset(field):
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _drag_begin(self, _gesture, x, y):
+        field = self._control_at(x, y)
+        self.drag_field = field if field in self.spec["controls"] else None
+        if self.drag_field is not None:
+            self._select(self.drag_field)
+            self.drag_fraction = self._fraction(self.drag_field)
+
+    def _drag_update(self, _gesture, _dx, dy):
+        if self.drag_field is not None:
+            self._set_fraction(
+                self.drag_field,
+                self.drag_fraction - float(dy) / self.DRAG_TRAVEL)
+
+    def _drag_end(self, *_args):
+        self.drag_field = None
+        self.queue_draw()
+
+    def _motion(self, _controller, x, y):
+        field = self._control_at(x, y)
+        if field != self.hover_field:
+            self.hover_field = field
+            self.set_cursor_from_name("pointer" if field else None)
+            self.queue_draw()
+
+    def _leave(self, *_args):
+        if self.hover_field is not None:
+            self.hover_field = None
+            self.set_cursor_from_name(None)
+            self.queue_draw()
+
+    def _focus_enter(self, *_args):
+        if self.selected_field is None:
+            self.selected_field = "power"
+        self.queue_draw()
+
+    def _nudge(self, direction):
+        field = self.selected_field or self.hover_field
+        control = self.spec["controls"].get(field)
+        if control is None:
+            return False
+        lower, upper = control["range"]
+        return self._set_fraction(
+            field, self._fraction(field) +
+            float(direction) * control["step"] / (upper - lower))
+
+    def _scroll(self, _controller, _dx, dy):
+        if self.hover_field not in self.spec["controls"] or not dy:
+            return False
+        self._select(self.hover_field)
+        return self._nudge(-1 if dy > 0 else 1)
+
+    def _key_pressed(self, _controller, keyval, _keycode, _state):
+        if self.selected_field == "power" and keyval in (
+                Gdk.KEY_space, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return self._toggle("power")
+        if keyval in (Gdk.KEY_Up, Gdk.KEY_Page_Up):
+            return self._nudge(1)
+        if keyval in (Gdk.KEY_Down, Gdk.KEY_Page_Down):
+            return self._nudge(-1)
+        if keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
+            fields = ("power",) + self._fields()
+            try:
+                index = fields.index(self.selected_field)
+            except ValueError:
+                index = 0
+            direction = -1 if keyval == Gdk.KEY_Left else 1
+            self.selected_field = fields[(index + direction) % len(fields)]
+            self.queue_draw()
+            return True
+        return False
+
+    def _texture(self, filename):
+        if filename in getattr(self, "_missing_assets", ()):
+            return None
+        try:
+            return eq_reference_texture(filename)
+        except (FileNotFoundError, OSError, GLib.Error) as error:
+            missing = getattr(self, "_missing_assets", None)
+            if missing is None:
+                self._missing_assets = set()
+            self._missing_assets.add(filename)
+            if not getattr(self, "_asset_error_reported", False):
+                self._asset_error_reported = True
+                self.win.say(
+                    "%s reference rack asset unavailable (%s); "
+                    "using the vector faceplate" %
+                    (self.rack_id, error))
+            return None
+
+    def _draw_fallback_faceplate(self, sn, width, height):
+        box(sn, 0, 0, width, height, pal(FIELD))
+        px, py, pw, ph = io24_rack_reference.scaled_rect(
+            self.spec["panel"], width, height, self.rack_id)
+        rounded_box(sn, px, py, pw, ph, 4.0,
+                    rgba(.09, .085, .075, 1.0),
+                    rgba(.48, .43, .34, .94))
+        for rect in self.spec["ears"]:
+            x, y, w, h = io24_rack_reference.scaled_rect(
+                rect, width, height, self.rack_id)
+            box(sn, x, y, w, h, rgba(.025, .03, .032, 1.0))
+        source_width, source_height = self.spec["source_size"]
+        scale_x = float(width) / source_width
+        scale_y = float(height) / source_height
+        radius_scale = min(scale_x, scale_y)
+        for x, y, radius in self.spec["screws"]:
+            dot(sn, x * scale_x, y * scale_y,
+                radius * radius_scale, rgba(.32, .34, .32, 1.0))
+
+    def _draw_knob(self, sn, field, geometry, active, texture=None):
+        cx, cy, radius = geometry
+        selected = field == self.selected_field
+        hovered = field == self.hover_field
+        if selected or hovered:
+            dot(sn, cx, cy, radius + 7.0,
+                pal(ACCENT, .15 if selected else .09))
+        control = self.spec["controls"][field]
+        if texture is not None:
+            diameter = radius * 2.0
+            sn.append_texture(texture, Graphene.Rect().init(
+                cx - radius, cy - radius, diameter, diameter))
+        else:
+            dot(sn, cx + 2.0, cy + 3.0, radius + 1.0,
+                rgba(.0, .0, .0, .65))
+            dot(sn, cx, cy, radius, rgba(.54, .47, .34, .90))
+            dot(sn, cx, cy, max(1.0, radius - 1.5),
+                rgba(.10, .085, .065, 1.0))
+        value = self._widget(field).get_value()
+        angle = math.radians(
+            io24_rack_reference.pointer_angle(control, value))
+        lit = 1.0 if active else .48
+        polyline(sn, [
+            (cx + radius * .25 * math.cos(angle),
+             cy + radius * .25 * math.sin(angle)),
+            (cx + radius * .78 * math.cos(angle),
+             cy + radius * .78 * math.sin(angle)),
+        ], pal(IVORY, .96 * lit), max(1.2, radius * .045))
+        formatter = self.bindings[field].get("format")
+        text = (str(formatter(value)) if callable(formatter)
+                else control.get("format_string", "{}").format(value))
+        centred_faceplate_label(
+            self, sn, field.replace("_", " ").upper(),
+            cx, cy - radius - 18.0, pal(INK, .72 * lit),
+            7, Pango.Weight.SEMIBOLD)
+        centred_faceplate_label(
+            self, sn, text, cx, cy + radius + 13.0,
+            pal(INK, .94 * lit), 8, Pango.Weight.BOLD)
+
+    def paint(self, sn, width, height):
+        faceplate = self._texture(self.spec["output"])
+        knob_textures = {
+            field: self._texture(self.spec["controls"][field]["asset"])
+            for field in self._fields()
+        }
+        assets_ready = (faceplate is not None and
+                        all(texture is not None
+                            for texture in knob_textures.values()))
+        if not assets_ready:
+            self._draw_fallback_faceplate(sn, width, height)
+        else:
+            sn.append_texture(faceplate, Graphene.Rect().init(
+                0.0, 0.0, float(width), float(height)))
+
+        state = self._state()
+        active = state["power"]
+        layout = io24_rack_reference.control_layout(
+            self.rack_id, width, height)
+        for field in self._fields():
+            self._draw_knob(
+                sn, field, layout[field], active,
+                knob_textures[field] if assets_ready else None)
+
+        lx, ly, lr = self._lamp_layout()
+        selected = self.selected_field == "power"
+        hovered = self.hover_field == "power"
+        if selected or hovered:
+            dot(sn, lx, ly, lr + 6.0,
+                pal(ACCENT, .15 if selected else .09))
+        dot(sn, lx, ly, max(3.0, lr + 2.0), rgba(.02, .02, .018, .96))
+        dot(sn, lx, ly, max(2.0, lr),
+            pal(PHOS if active else GRID, .95 if active else .48))
+
+        display_rect = io24_rack_reference.scaled_rect(
+            self.spec["display"], width, height, self.rack_id)
+        self.display_draw(sn, display_rect, state, active)
 
 
 class ReverbRack(Canvas):

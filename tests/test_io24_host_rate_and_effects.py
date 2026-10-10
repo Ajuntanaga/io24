@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import io24gtk
+import io24_rack_reference
 
 
 class _Value:
@@ -600,6 +601,139 @@ class ReverbRackTests(unittest.TestCase):
         self.assertIn(mesh["rows"][1][1], first_cell[0])
         self.assertIn(mesh["rows"][0][2], second_cell[1])
         self.assertIn(mesh["rows"][1][1], second_cell[1])
+
+
+class ReferenceRackTests(unittest.TestCase):
+    def _rack(self, threshold=-28.0, release=0.4, power=False):
+        rack = io24gtk.ReferenceRack.__new__(io24gtk.ReferenceRack)
+        rack.win = SimpleNamespace(messages=[])
+        rack.win.say = rack.win.messages.append
+        rack.rack_id = "limiter"
+        rack.spec = io24_rack_reference.rack("limiter")
+        rack.bindings = {
+            "threshold": {
+                "widget": _Value(threshold),
+                "format": lambda value: "%.2f dB" % value,
+            },
+            "release": {
+                "widget": _Value(release),
+                "format": lambda value: "%.2f s" % value,
+            },
+            "power": {"widget": _Value(power)},
+        }
+        rack.selected_field = None
+        rack.hover_field = None
+        rack.drag_field = None
+        rack.drag_fraction = 0.0
+        rack._asset_error_reported = False
+        rack.queue_draw = lambda: None
+        rack.grab_focus = lambda: None
+        rack.get_width = lambda: 700
+        rack.get_height = lambda: 210
+        return rack
+
+    def test_drag_fraction_changes_only_the_backing_widget(self):
+        rack = self._rack(threshold=-28.0, release=0.4)
+
+        self.assertTrue(rack._set_fraction("threshold", 0.5))
+
+        self.assertAlmostEqual(
+            rack.bindings["threshold"]["widget"].get_value(), -20.0)
+        self.assertAlmostEqual(
+            rack.bindings["release"]["widget"].get_value(), 0.4)
+
+    def test_double_click_restores_the_manifest_default(self):
+        rack = self._rack(threshold=-6.0)
+        layout = io24_rack_reference.control_layout(
+            "limiter", rack.get_width(), rack.get_height())
+        x, y, _radius = layout["threshold"]
+
+        rack._clicked(SimpleNamespace(set_state=lambda _state: None),
+                      2, x, y)
+
+        self.assertAlmostEqual(
+            rack.bindings["threshold"]["widget"].get_value(), -28.0)
+
+    def test_hit_testing_and_focus_use_manifest_geometry(self):
+        rack = self._rack()
+        layout = io24_rack_reference.control_layout(
+            "limiter", rack.get_width(), rack.get_height())
+
+        self.assertEqual(rack._control_at(*layout["threshold"][:2]),
+                         "threshold")
+        self.assertEqual(rack._control_at(*layout["release"][:2]),
+                         "release")
+        lamp = rack._lamp_layout()
+        self.assertEqual(rack._control_at(*lamp[:2]), "power")
+        self.assertIsNone(rack._control_at(-100, -100))
+
+        rack._focus_enter()
+        self.assertEqual(rack.selected_field, "power")
+
+    def test_keyboard_wheel_and_drag_mutate_the_selected_live_widget(self):
+        rack = self._rack(threshold=-28.0, release=0.4)
+        rack.selected_field = "threshold"
+        self.assertTrue(rack._key_pressed(
+            None, io24gtk.Gdk.KEY_Up, None, None))
+        self.assertAlmostEqual(
+            rack.bindings["threshold"]["widget"].get_value(), -27.99)
+
+        rack.hover_field = "release"
+        self.assertTrue(rack._scroll(None, 0.0, -1.0))
+        self.assertAlmostEqual(
+            rack.bindings["release"]["widget"].get_value(), 0.41)
+
+        cx, cy, _radius = io24_rack_reference.control_layout(
+            "limiter", rack.get_width(), rack.get_height())["threshold"]
+        rack._drag_begin(None, cx, cy)
+        rack._drag_update(None, 0.0, -70.0)
+        self.assertAlmostEqual(
+            rack.bindings["threshold"]["widget"].get_value(), -7.99)
+        rack._drag_end()
+        self.assertIsNone(rack.drag_field)
+
+    def test_keyboard_navigation_and_power_use_the_bound_switch(self):
+        rack = self._rack(power=False)
+        rack.selected_field = "power"
+
+        self.assertTrue(rack._key_pressed(
+            None, io24gtk.Gdk.KEY_space, None, None))
+        self.assertTrue(rack.bindings["power"]["widget"].get_active())
+        self.assertTrue(rack._key_pressed(
+            None, io24gtk.Gdk.KEY_Right, None, None))
+        self.assertEqual(rack.selected_field, "threshold")
+
+    def test_asset_failure_reports_once_without_mutating_bound_state(self):
+        rack = self._rack(threshold=-17.0, release=0.73, power=True)
+        before = rack._state()
+
+        with mock.patch.object(
+                io24gtk, "eq_reference_texture",
+                side_effect=FileNotFoundError("missing generated asset")):
+            self.assertIsNone(rack._texture("limiter-faceplate.png"))
+            self.assertIsNone(rack._texture("limiter-knob.png"))
+
+        self.assertEqual(rack._state(), before)
+        self.assertEqual(len(rack.win.messages), 1)
+        self.assertIn("limiter", rack.win.messages[0].lower())
+
+    def test_any_missing_asset_uses_the_complete_vector_fallback(self):
+        rack = self._rack(power=True)
+        rack.display_draw = mock.Mock()
+        rack._texture = mock.Mock(
+            side_effect=lambda filename:
+            object() if filename == "limiter-faceplate.png" else None)
+        rack._draw_fallback_faceplate = mock.Mock()
+        snapshot = SimpleNamespace(append_texture=mock.Mock())
+
+        with mock.patch.object(io24gtk, "dot"), \
+                mock.patch.object(io24gtk, "polyline"), \
+                mock.patch.object(io24gtk, "centred_faceplate_label"):
+            rack.paint(snapshot, 700, 210)
+
+        rack._draw_fallback_faceplate.assert_called_once_with(
+            snapshot, 700, 210)
+        snapshot.append_texture.assert_not_called()
 
 
 if __name__ == "__main__":

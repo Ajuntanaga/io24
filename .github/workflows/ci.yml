@@ -55,6 +55,10 @@ jobs:
         run: |
           python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install --upgrade pip setuptools wheel '.[test]'
+      - name: Verify generated reference-rack assets
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          python3 tools/render_rack_assets.py limiter --check
       - name: Run hardware-free release suite
         run: >-
           .venv/bin/python -m pytest -q
@@ -75,6 +79,7 @@ jobs:
           tests/test_io24_native_stat.py
           tests/test_io24_preset_persistence.py
           tests/test_io24_presets_page.py
+          tests/test_io24_rack_reference.py
           tests/test_io24_voicefx_delay.py
           tests/test_io24_voicefx_preset_apply.py
           tests/test_publication_docs.py

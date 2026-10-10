@@ -32,6 +32,15 @@ def prose_without_fences(text):
 
 
 class PublicationDocumentationTests(unittest.TestCase):
+    def test_design_readme_documents_reference_rack_regeneration_and_check(self):
+        design_readme = (ROOT / "docs" / "design" / "README.md").read_text()
+
+        self.assertIn("python3 tools/render_rack_assets.py limiter", design_readme)
+        self.assertIn(
+            "python3 tools/render_rack_assets.py limiter --check",
+            design_readme,
+        )
+
     def test_local_markdown_links_resolve(self):
         missing = []
         for filename in PUBLIC_DOCS:

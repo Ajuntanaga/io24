@@ -9,9 +9,28 @@ import zipfile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+PUBLIC_FILES = frozenset(
+    line.strip()
+    for line in (ROOT / "PUBLIC_FILES.txt").read_text().splitlines()
+    if line.strip() and not line.lstrip().startswith("#")
+)
 
 
 class ReleasePackageTests(unittest.TestCase):
+    def test_reference_rack_runtime_and_assets_ship(self):
+        expected = {
+            "io24_rack_reference.py",
+            "tools/render_rack_assets.py",
+            "tests/test_io24_rack_reference.py",
+            "docs/design/limiter-reference.png",
+            "docs/design/limiter-faceplate.png",
+            "docs/design/limiter-calibration-underlay.png",
+            "docs/design/limiter-calibration-nodes.png",
+            "docs/design/limiter-knob.png",
+            "docs/design/limiter-rack-assets.json",
+        }
+        self.assertTrue(expected <= PUBLIC_FILES)
+
     def test_wheel_contains_and_imports_host_runtime_and_supported_cli_modules(self):
         """Removing or breaking a shipped Host dependency must break the wheel."""
         required_modules = {
@@ -27,6 +46,7 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_native_strip.py",
             "io24_preset_record.py",
             "io24_presets.py",
+            "io24_rack_reference.py",
             "io24_alt_eq.py",
             "io24_eq_reference.py",
             "io24_uc472_passive_eq.py",
@@ -78,7 +98,9 @@ class ReleasePackageTests(unittest.TestCase):
                     "vintage-eq-calibration-nodes.png",
                     "vintage-eq-calibration-underlay.png",
                     "vintage-eq-faceplate.png",
-                    "vintage-eq-reference.png"):
+                    "vintage-eq-reference.png",
+                    "limiter-faceplate.png",
+                    "limiter-knob.png"):
                 shutil.copy2(
                     ROOT / "docs" / "design" / filename,
                     design_dir / filename)
@@ -174,7 +196,11 @@ class ReleasePackageTests(unittest.TestCase):
                     for name in names), 3)
             self.assertEqual(sum(
                 "/share/io24/design/" in name and name.endswith("-knob.png")
-                for name in names), 8)
+                for name in names), 9)
+            for filename in ("limiter-faceplate.png", "limiter-knob.png"):
+                self.assertTrue(any(
+                    name.endswith("/share/io24/design/" + filename)
+                    for name in names), filename)
             self.assertEqual(len(licenses), 1)
             self.assertEqual(vendor_evidence, [])
 

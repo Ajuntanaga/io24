@@ -74,6 +74,22 @@ class RackReferenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 io24_rack_reference.validate_rack(broken)
 
+    def test_validation_rejects_nonfinite_step_geometry_and_sweep(self):
+        broken = io24_rack_reference.rack("limiter")
+        broken["controls"]["threshold"]["step"] = float("nan")
+        with self.assertRaises(ValueError):
+            io24_rack_reference.validate_rack(broken)
+
+        broken = io24_rack_reference.rack("limiter")
+        broken["display"] = (float("nan"), 0, 10, 10)
+        with self.assertRaises(ValueError):
+            io24_rack_reference.validate_rack(broken)
+
+        broken = io24_rack_reference.rack("limiter")
+        broken["controls"]["release"]["sweep"] = (135.0, float("inf"))
+        with self.assertRaises(ValueError):
+            io24_rack_reference.validate_rack(broken)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,6 +63,8 @@ def _rectangle(value, name, source_size, allow_circle=False):
         numbers = tuple(float(item) for item in value)
     except (TypeError, ValueError):
         raise ValueError("%s must contain numbers" % name)
+    if not all(math.isfinite(item) for item in numbers):
+        raise ValueError("%s must contain finite numbers" % name)
     dimensions = numbers[2:]
     if any(item <= 0 for item in dimensions):
         raise ValueError("%s dimensions must be positive" % name)
@@ -127,13 +129,15 @@ def validate_rack(spec, design_root=None):
                 not all(isinstance(item, (int, float)) and math.isfinite(item) for item in bounds) or
                 bounds[0] >= bounds[1]):
             raise ValueError("invalid range for control %s" % name)
-        if not isinstance(control["step"], (int, float)) or control["step"] <= 0:
+        if (not isinstance(control["step"], (int, float)) or
+                not math.isfinite(control["step"]) or control["step"] <= 0):
             raise ValueError("invalid step for control %s" % name)
         if not bounds[0] <= control["default"] <= bounds[1]:
             raise ValueError("default outside range for control %s" % name)
         sweep = control["sweep"]
         if (not isinstance(sweep, (tuple, list)) or len(sweep) != 2 or
-                sweep[0] >= sweep[1]):
+                not all(isinstance(item, (int, float)) and math.isfinite(item)
+                        for item in sweep) or sweep[0] >= sweep[1]):
             raise ValueError("invalid sweep for control %s" % name)
         _rectangle(control["geometry"], "control %s" % name, source_size, allow_circle=True)
     return copy.deepcopy(spec)

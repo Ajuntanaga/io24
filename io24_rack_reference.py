@@ -122,6 +122,7 @@ def validate_rack(spec, design_root=None):
         "source", "output", "material_source", "material_crop",
         "knob_source", "calibration_underlay", "calibration_nodes",
         "knob_output", "receipt", "generated", "cleanup_regions",
+        "ears", "slots", "screws",
     }
     missing = required.difference(spec)
     if missing:
@@ -152,6 +153,17 @@ def validate_rack(spec, design_root=None):
         raise ValueError("generated files do not match declared outputs")
     for field in _RECT_KEYS:
         _rectangle(spec[field], field, source_size)
+    for field in ("ears", "slots"):
+        values = spec[field]
+        if not isinstance(values, (tuple, list)) or not values:
+            raise ValueError("%s must be a non-empty sequence" % field)
+        for index, value in enumerate(values):
+            _rectangle(value, "%s %d" % (field, index), source_size)
+    screws = spec["screws"]
+    if not isinstance(screws, (tuple, list)) or not screws:
+        raise ValueError("screws must be a non-empty sequence")
+    for index, screw in enumerate(screws):
+        _rectangle(screw, "screw %d" % index, source_size, allow_circle=True)
     _rectangle(spec["material_crop"], "material_crop", (2172, 724))
     _rectangle(spec["lamp"], "lamp", source_size, allow_circle=True)
     for index, region in enumerate(spec["cleanup_regions"]):

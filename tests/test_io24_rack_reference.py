@@ -1,10 +1,13 @@
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+
+from PIL import Image
 
 import io24_rack_reference
 from tools import render_rack_assets
@@ -60,6 +63,16 @@ class RackReferenceTests(unittest.TestCase):
                 self.assertEqual(
                     digest,
                     hashlib.sha256((output / filename).read_bytes()).hexdigest())
+            self.assertEqual(
+                receipt["source_sha256"],
+                hashlib.sha256(
+                    (output / "limiter-reference.png").read_bytes()).hexdigest())
+            manifest_bytes = json.dumps(
+                io24_rack_reference.rack("limiter"), sort_keys=True,
+                separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            self.assertEqual(
+                receipt["manifest_sha256"],
+                hashlib.sha256(manifest_bytes).hexdigest())
 
     def test_check_mode_does_not_write_design_assets(self):
         filenames = ("limiter-reference.png",) + tuple(
@@ -81,6 +94,42 @@ class RackReferenceTests(unittest.TestCase):
             for filename in filenames
         }
         self.assertEqual(after, before)
+
+    def test_check_mode_mismatch_is_nonwriting_and_nonzero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            design = Path(temp)
+            for filename in ("vintage-eq-reference.png",
+                             "vintage-lowmid-knob.png"):
+                shutil.copyfile(DESIGN / filename, design / filename)
+            render_rack_assets.compile_rack("limiter", design)
+            mismatch = design / "limiter-faceplate.png"
+            mismatch.write_bytes(b"intentional mismatch")
+            filenames = ("limiter-reference.png",) + tuple(
+                io24_rack_reference.rack("limiter")["generated"])
+            before = {
+                filename: ((design / filename).read_bytes(),
+                           (design / filename).stat().st_mtime_ns)
+                for filename in filenames
+            }
+            returncode = render_rack_assets.main(
+                ["limiter", "--check"], design_root=design)
+            after = {
+                filename: ((design / filename).read_bytes(),
+                           (design / filename).stat().st_mtime_ns)
+                for filename in filenames
+            }
+            self.assertNotEqual(returncode, 0)
+            self.assertEqual(after, before)
+
+    def test_isolated_knob_rejects_opaque_rectangular_alpha(self):
+        with tempfile.TemporaryDirectory() as temp:
+            design = Path(temp)
+            Image.new("RGBA", (32, 32), (40, 50, 60, 255)).save(
+                design / "opaque.png")
+            spec = io24_rack_reference.rack("limiter")
+            spec["knob_source"] = "opaque.png"
+            with self.assertRaisesRegex(ValueError, "transparent"):
+                render_rack_assets._isolated_knob(spec, design)
 
     def test_limiter_contract_is_exact(self):
         spec = io24_rack_reference.rack("limiter")
@@ -121,7 +170,8 @@ class RackReferenceTests(unittest.TestCase):
         spec = io24_rack_reference.rack("limiter")
         self.assertEqual(io24_rack_reference.validate_rack(spec)["rack_id"], "limiter")
 
-        for key in ("source_size", "panel", "display", "lamp", "controls"):
+        for key in ("source_size", "panel", "display", "lamp", "controls",
+                    "ears", "slots", "screws"):
             broken = dict(spec)
             broken.pop(key)
             with self.assertRaises(ValueError):
@@ -132,6 +182,20 @@ class RackReferenceTests(unittest.TestCase):
         broken["controls"]["release"] = dict(spec["controls"]["threshold"])
         with self.assertRaises(ValueError):
             io24_rack_reference.validate_rack(broken)
+
+    def test_validation_rejects_bad_rack_hardware_geometry(self):
+        bad_values = {
+            "ears": (((0, 0, 38),), ((-1, 0, 38, 420),)),
+            "slots": (((9, 34, 0, 52),), ((1390, 34, 20, 52),)),
+            "screws": (((63, 37),), ((5, 37, 9),)),
+        }
+        for field, candidates in bad_values.items():
+            for value in candidates:
+                broken = io24_rack_reference.rack("limiter")
+                broken[field] = value
+                with self.subTest(field=field, value=value):
+                    with self.assertRaises(ValueError):
+                        io24_rack_reference.validate_rack(broken)
 
     def test_validation_rejects_paths_and_bad_geometry(self):
         spec = io24_rack_reference.rack("limiter")

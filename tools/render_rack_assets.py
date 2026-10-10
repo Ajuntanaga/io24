@@ -15,7 +15,7 @@ import tempfile
 from typing import Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +28,50 @@ import io24_rack_reference
 DESIGN = ROOT / "docs" / "design"
 _PNG_SAVE = {"format": "PNG", "compress_level": 9, "optimize": False}
 
+# Five-bit-wide, seven-row glyphs keep generated PNGs independent of host
+# fonts, Pillow's bundled font version, font discovery, and fallback behavior.
+_BITMAP_GLYPHS = {
+    " ": (0, 0, 0, 0, 0, 0, 0),
+    "-": (0, 0, 0, 31, 0, 0, 0),
+    ".": (0, 0, 0, 0, 0, 12, 12),
+    "0": (14, 17, 19, 21, 25, 17, 14),
+    "1": (4, 12, 4, 4, 4, 4, 14),
+    "2": (14, 17, 1, 2, 4, 8, 31),
+    "3": (30, 1, 1, 14, 1, 1, 30),
+    "4": (2, 6, 10, 18, 31, 2, 2),
+    "5": (31, 16, 16, 30, 1, 1, 30),
+    "6": (14, 16, 16, 30, 17, 17, 14),
+    "7": (31, 1, 2, 4, 8, 8, 8),
+    "8": (14, 17, 17, 14, 17, 17, 14),
+    "9": (14, 17, 17, 15, 1, 1, 14),
+    "A": (14, 17, 17, 31, 17, 17, 17),
+    "B": (30, 17, 17, 30, 17, 17, 30),
+    "C": (14, 17, 16, 16, 16, 17, 14),
+    "D": (30, 17, 17, 17, 17, 17, 30),
+    "E": (31, 16, 16, 30, 16, 16, 31),
+    "F": (31, 16, 16, 30, 16, 16, 16),
+    "G": (14, 17, 16, 23, 17, 17, 15),
+    "H": (17, 17, 17, 31, 17, 17, 17),
+    "I": (14, 4, 4, 4, 4, 4, 14),
+    "J": (7, 2, 2, 2, 2, 18, 12),
+    "K": (17, 18, 20, 24, 20, 18, 17),
+    "L": (16, 16, 16, 16, 16, 16, 31),
+    "M": (17, 27, 21, 21, 17, 17, 17),
+    "N": (17, 25, 21, 19, 17, 17, 17),
+    "O": (14, 17, 17, 17, 17, 17, 14),
+    "P": (30, 17, 17, 30, 16, 16, 16),
+    "Q": (14, 17, 17, 17, 21, 18, 13),
+    "R": (30, 17, 17, 30, 20, 18, 17),
+    "S": (15, 16, 16, 14, 1, 1, 30),
+    "T": (31, 4, 4, 4, 4, 4, 4),
+    "U": (17, 17, 17, 17, 17, 17, 14),
+    "V": (17, 17, 17, 17, 17, 10, 4),
+    "W": (17, 17, 17, 21, 21, 21, 10),
+    "X": (17, 17, 10, 4, 10, 17, 17),
+    "Y": (17, 17, 10, 4, 4, 4, 4),
+    "Z": (31, 1, 2, 4, 8, 16, 31),
+}
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -37,16 +81,27 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _font(size: int, bold: bool = False):
-    name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-    try:
-        return ImageFont.truetype(name, size=size)
-    except OSError:
-        return ImageFont.load_default(size=size)
-
-
 def _text(draw, xy, value, *, size, fill, bold=False, anchor="mm"):
-    draw.text(xy, value, font=_font(size, bold), fill=fill, anchor=anchor)
+    del bold
+    if anchor != "mm":
+        raise ValueError("bitmap text supports only the mm anchor")
+    value = str(value).upper()
+    unknown = set(value).difference(_BITMAP_GLYPHS)
+    if unknown:
+        raise ValueError("unsupported bitmap glyphs: %s" % "".join(sorted(unknown)))
+    scale = max(1, int(size) // 7)
+    width = max(0, (len(value) * 6 - 1) * scale)
+    height = 7 * scale
+    left = int(round(xy[0] - width / 2.0))
+    top = int(round(xy[1] - height / 2.0))
+    for character_index, character in enumerate(value):
+        for row, bits in enumerate(_BITMAP_GLYPHS[character]):
+            for column in range(5):
+                if bits & (1 << (4 - column)):
+                    x = left + (character_index * 6 + column) * scale
+                    y = top + row * scale
+                    draw.rectangle(
+                        (x, y, x + scale - 1, y + scale - 1), fill=fill)
 
 
 def _material(spec, design_root: Path, size: Tuple[int, int]) -> Image.Image:
@@ -106,8 +161,8 @@ def _render_limiter_base(spec: dict, design_root: Path) -> Image.Image:
         radius=8, outline=(154, 125, 78, 190), width=2)
     _text(draw, (700, 44), "VINTAGE LIMITER", size=25,
           fill=(225, 203, 157, 255), bold=True)
-    draw.line((515, 45, 590, 45), fill=(176, 143, 88, 220), width=2)
-    draw.line((810, 45, 885, 45), fill=(176, 143, 88, 220), width=2)
+    draw.line((515, 45, 550, 45), fill=(176, 143, 88, 220), width=2)
+    draw.line((850, 45, 885, 45), fill=(176, 143, 88, 220), width=2)
     _text(draw, (280, 82), "THRESHOLD", size=20,
           fill=(222, 209, 177, 255), bold=True)
     _text(draw, (1120, 82), "RELEASE", size=20,
@@ -135,14 +190,22 @@ def _render_limiter_base(spec: dict, design_root: Path) -> Image.Image:
 
 def _isolated_knob(spec: dict, design_root: Path) -> Image.Image:
     source = Image.open(design_root / spec["knob_source"]).convert("RGBA")
-    bounds = source.getchannel("A").getbbox()
+    source_alpha = source.getchannel("A")
+    source_extrema = source_alpha.getextrema()
+    if source_extrema[0] != 0 or source_extrema[1] == 0:
+        raise ValueError("knob source must contain transparent and visible pixels")
+    bounds = source_alpha.getbbox()
     if bounds is None:
         raise ValueError("empty knob mask")
     source = source.crop(bounds)
+    cropped_extrema = source.getchannel("A").getextrema()
+    if cropped_extrema[0] != 0 or cropped_extrema[1] == 0:
+        raise ValueError("cropped knob must contain transparent and visible pixels")
     diameter = int(spec["controls"]["threshold"]["geometry"][2] * 2)
     knob = source.resize((diameter, diameter), Image.Resampling.LANCZOS)
-    if knob.getchannel("A").getbbox() is None:
-        raise ValueError("empty compiled knob mask")
+    output_extrema = knob.getchannel("A").getextrema()
+    if output_extrema[0] != 0 or output_extrema[1] == 0:
+        raise ValueError("compiled knob must contain transparent and visible pixels")
     return knob
 
 
@@ -365,15 +428,15 @@ def _check_rack(rack_id: str, design_root: Path) -> bool:
     return True
 
 
-def main(argv=None) -> int:
+def main(argv=None, design_root=DESIGN) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rack_id")
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args(argv)
     try:
         if arguments.check:
-            return 0 if _check_rack(arguments.rack_id, DESIGN) else 1
-        receipt = compile_rack(arguments.rack_id, DESIGN)
+            return 0 if _check_rack(arguments.rack_id, design_root) else 1
+        receipt = compile_rack(arguments.rack_id, design_root)
     except (OSError, ValueError) as error:
         parser.error(str(error))
     print(json.dumps(receipt, sort_keys=True))

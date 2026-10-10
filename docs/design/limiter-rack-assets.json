@@ -1,11 +1,11 @@
 {
   "manifest_sha256": "f9e529d0b44dc9cbcf6c7dcee221ed4572ba4083867f97149890d4f0cb2929ff",
   "outputs": {
-    "limiter-calibration-nodes.png": "c83a9307f30bab31675619fdf337f5d82c1fc67e2a2d3ea1f8eea4ee6e8db961",
-    "limiter-calibration-underlay.png": "59f2801cc9d3acae2979084afc2ecb16ab91d08e349646c6b887584e7ba3218a",
-    "limiter-faceplate.png": "5d997c249e991e648da55ae7a50e9e354c272b834b7792af779a2f9018e29ba4",
+    "limiter-calibration-nodes.png": "51da9c9ee15f1a4a9d634813bb6033c1afd341e6e8db00fe00d028075d828769",
+    "limiter-calibration-underlay.png": "3c8daf0a72674dfc469ba3c827f6b2ab5b8cf9a3a7f63d98072c7347f7a9198b",
+    "limiter-faceplate.png": "6be626dda60ae52fbc781dc29da5a8b155b05a8289769eb6da37ed0d92da709a",
     "limiter-knob.png": "0da8479c24685eae5aa1df099132ed991a422bafc124a3b589bd39146415d70d"
   },
   "rack_id": "limiter",
-  "source_sha256": "59f2801cc9d3acae2979084afc2ecb16ab91d08e349646c6b887584e7ba3218a"
+  "source_sha256": "3c8daf0a72674dfc469ba3c827f6b2ab5b8cf9a3a7f63d98072c7347f7a9198b"
 }

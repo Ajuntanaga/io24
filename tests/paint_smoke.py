@@ -59,6 +59,10 @@ class FakeInner:
         return f
 
     def read_reduction(self, block, channel=1):
+        if block.strip() == "lim":
+            # The controller converts this amplitude ratio to -8.4 dB.  A
+            # non-zero limiter display is easier to inspect than an idle one.
+            return [10.0 ** (-8.4 / 20.0), 0.87]
         return [1.0, 0.87]
 
     def read_params(self):
@@ -195,13 +199,22 @@ def main():
     original_win_init = G.Win.__init__
 
     def paint_win_init(self, app, ctl):
-        original_win_init(self, app, ctl)
+        width = int(os.environ.get("IO24_PAINT_WIDTH", "1040"))
+        height = int(os.environ.get("IO24_PAINT_HEIGHT", "800"))
+        original_win_init(self, app, ctl, width, height)
         # Captures compare layout, not the transient toast generated while the
         # harness programmatically changes models and sample-rate fixtures.
         self.say = lambda _message: None
-        self.set_default_size(
-            int(os.environ.get("IO24_PAINT_WIDTH", "1040")),
-            int(os.environ.get("IO24_PAINT_HEIGHT", "800")))
+        if width < 1040:
+            # Adw.ViewStack measures every visible page, including the wide
+            # Mixer page, even when the capture selects only Fat channel. Hide
+            # non-captured pages in the harness so the selected rack can reach
+            # its declared 600 px minimum without changing production layout.
+            only_page = os.environ.get("IO24_PAINT_PAGE")
+            if only_page:
+                for page in list(self.stack.get_pages()):
+                    if page.get_name() != only_page:
+                        self.stack.remove(page.get_child())
 
     G.Win.__init__ = paint_win_init
     # PipeWire is the same problem by another route: the Mixer page's watchdog
@@ -228,7 +241,8 @@ def main():
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
              "capture_retries": 0,
              "scroll_settled": False, "eq_model_set": False,
-             "comp_model_set": False, "fx_model_set": False,
+             "comp_model_set": False, "module_set": False,
+             "fx_model_set": False,
              "wheel_tested": False}
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
@@ -313,6 +327,22 @@ def main():
                 win.show_module(1, "COMP")
                 print("COMP MODEL -> %s" % model_name, flush=True)
             state["comp_model_set"] = True
+        if not state["module_set"]:
+            module = os.environ.get("IO24_PAINT_MODULE", "").upper()
+            if module:
+                if module not in ("EQ", "GATE", "COMP", "LIM", "HPF"):
+                    raise RuntimeError(
+                        "IO24_PAINT_MODULE must be EQ, GATE, COMP, LIM, or HPF")
+                if module == "LIM" and \
+                        os.environ.get("IO24_PAINT_LIMITER_ON") == "1":
+                    win.w[1]["lim_on"].set_active(True)
+                win.show_module(1, module)
+                visible = win.mod_stacks[1].get_visible_child_name()
+                if visible != module or win.current_module != (1, module):
+                    raise RuntimeError(
+                        "%s module selection did not reach the capture" % module)
+                print("MODULE -> %s" % module, flush=True)
+            state["module_set"] = True
         if not state["fx_model_set"]:
             model_name = os.environ.get("IO24_PAINT_FX_MODEL", "").lower()
             if model_name:

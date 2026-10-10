@@ -2360,6 +2360,85 @@ def reverb_mesh_triangles(mesh):
     return tuple(triangles)
 
 
+def limiter_display_state(win, channel):
+    """Return the limiter's authoritative controls and live GR telemetry."""
+    controls = win.w[channel]
+    snap = getattr(getattr(win, "ctl", None), "snap", {}) or {}
+    telemetry = (snap.get("gr", {}).get(channel, {}) or {}).get("lim", 0.0)
+    try:
+        telemetry = float(telemetry)
+    except (TypeError, ValueError):
+        telemetry = 0.0
+    if not math.isfinite(telemetry):
+        telemetry = 0.0
+    reduction = min(20.0, abs(min(0.0, telemetry)))
+    return {
+        "reduction_db": reduction,
+        "threshold_db": float(controls["lth"].get_value()),
+        "release_s": float(controls["lrel"].get_value()),
+    }
+
+
+def draw_limiter_display(win, channel, sn, rect, _rack_state, active):
+    """Paint the limiter's recessed, telemetry-only 0..20 dB display."""
+    x, y, width, height = rect
+    radius = max(3.0, min(7.0, height * .06))
+    rounded_box(sn, x, y, width, height, radius,
+                rgba(.014, .018, .018, .98), rgba(.38, .35, .27, .86))
+    inset = max(5.0, min(10.0, height * .08))
+    ix, iy = x + inset, y + inset
+    iw, ih = width - 2.0 * inset, height - 2.0 * inset
+    rounded_box(sn, ix, iy, iw, ih, max(2.0, radius - 2.0),
+                rgba(.008, .016, .017, 1.0), rgba(.16, .25, .24, .72))
+
+    state = limiter_display_state(win, channel)
+    reduction = state["reduction_db"]
+    # Bypass dims the live ink without making the fixed 0..20 scale illegible.
+    # Values follow telemetry directly; there is no display animation state or
+    # independent timer to fight GTK's reduced-motion setting.
+    lit = 1.0 if active else .72
+    centred_faceplate_label(
+        win, sn, "GAIN REDUCTION", x + width * .5, iy + 2.0,
+        pal(INK, .58 * lit), max(6.0, min(8.0, height * .065)))
+
+    meter_top = iy + max(17.0, ih * .22)
+    meter_bottom = iy + ih - max(20.0, ih * .24)
+    meter_height = max(8.0, meter_bottom - meter_top)
+    scale_left = ix + max(19.0, iw * .13)
+    scale_right = ix + iw - max(8.0, iw * .06)
+    bar_width = max(8.0, min(18.0, iw * .09))
+    bar_x = scale_right - bar_width
+
+    for value in (0, 5, 10, 15, 20):
+        yy = meter_bottom - value / 20.0 * meter_height
+        major = value in (0, 10, 20)
+        polyline(sn, [(scale_left, yy), (bar_x - 4.0, yy)],
+                 pal(GRID, (.28 if major else .14) * lit),
+                 1.0 if major else .7)
+        if major:
+            faceplate_label(
+                win, sn, str(value), ix + 2.0, yy - 5.0,
+                pal(INK, .46 * lit), max(5.5, min(7.0, height * .055)))
+
+    rounded_box(sn, bar_x, meter_top, bar_width, meter_height, 2.0,
+                rgba(.018, .032, .031, 1.0), pal(GRID, .28 * lit))
+    if reduction > 0.0:
+        top = meter_bottom - reduction / 20.0 * meter_height
+        amount = meter_bottom - top
+        tone = PHOS if reduction < 10.0 else THERM
+        rounded_box(sn, bar_x + 2.0, top, bar_width - 4.0,
+                    max(1.0, amount), 1.0, pal(tone, .88 * lit))
+    else:
+        box(sn, bar_x + 2.0, meter_bottom - 1.0, bar_width - 4.0, 1.0,
+            pal(PHOS, .18 * lit))
+
+    value_alpha = (.88 if reduction > 0.05 else .38) * lit
+    centred_faceplate_label(
+        win, sn, "%.1f dB GR" % reduction, x + width * .5,
+        iy + ih - max(14.0, height * .12), pal(IVORY, value_alpha),
+        max(6.5, min(9.0, height * .074)), Pango.Weight.BOLD)
+
+
 class ReferenceRack(Canvas):
     """Manifest-painted rack view over existing GTK controls.
 
@@ -2418,6 +2497,11 @@ class ReferenceRack(Canvas):
     def _fields(self):
         return tuple(self.spec["controls"])
 
+    @property
+    def power_binding(self):
+        """Compatibility alias for the power entry in ``bindings``."""
+        return self.bindings["power"]
+
     def _layout(self):
         return io24_rack_reference.control_layout(
             self.rack_id, self.get_width() or 600, self.get_height() or 180)
@@ -2431,6 +2515,31 @@ class ReferenceRack(Canvas):
         x, y, radius = self.spec["lamp"]
         return (x * scale_x, y * scale_y,
                 radius * min(scale_x, scale_y))
+
+    def _knob_tick_segments(self, field, geometry):
+        """Return the 11 calibration marks along a control's manifest sweep."""
+        cx, cy, radius = geometry
+        start, end = self.spec["controls"][field]["sweep"]
+        segments = []
+        for index in range(11):
+            angle = math.radians(start + index / 10.0 * (end - start))
+            major = index in (0, 5, 10)
+            inner = radius * 1.21
+            outer = radius * (1.46 if major else 1.38)
+            segments.append((
+                (cx + inner * math.cos(angle),
+                 cy + inner * math.sin(angle)),
+                (cx + outer * math.cos(angle),
+                 cy + outer * math.sin(angle)),
+                major,
+            ))
+        return tuple(segments)
+
+    @staticmethod
+    def _lamp_color(active):
+        """Approved warm lamp when active; restrained warm grey when idle."""
+        return (rgba(1.0, .55, .12, .98) if active
+                else rgba(.34, .32, .27, .38))
 
     def _widget(self, field):
         return self.bindings.get(field, {}).get("widget")
@@ -2649,6 +2758,11 @@ class ReferenceRack(Canvas):
             dot(sn, cx, cy, radius + 7.0,
                 pal(ACCENT, .15 if selected else .09))
         control = self.spec["controls"][field]
+        tick_lit = 1.0 if active else .58
+        for inner, outer, major in self._knob_tick_segments(field, geometry):
+            polyline(sn, [inner, outer],
+                     rgba(.91, .82, .62, (.90 if major else .72) * tick_lit),
+                     max(1.0, radius * (.043 if major else .032)))
         if texture is not None:
             diameter = radius * 2.0
             sn.append_texture(texture, Graphene.Rect().init(
@@ -2672,10 +2786,14 @@ class ReferenceRack(Canvas):
         formatter = self.bindings[field].get("format")
         text = (str(formatter(value)) if callable(formatter)
                 else control.get("format_string", "{}").format(value))
-        centred_faceplate_label(
-            self, sn, field.replace("_", " ").upper(),
-            cx, cy - radius - 18.0, pal(INK, .72 * lit),
-            7, Pango.Weight.SEMIBOLD)
+        # Generated faceplates retain their engraved semantic labels.  The
+        # vector fallback has none, so only it needs a runtime label; drawing
+        # both produced a visibly doubled THRESHOLD / RELEASE legend.
+        if texture is None:
+            centred_faceplate_label(
+                self, sn, field.replace("_", " ").upper(),
+                cx, cy - radius - 18.0, pal(INK, .72 * lit),
+                7, Pango.Weight.SEMIBOLD)
         centred_faceplate_label(
             self, sn, text, cx, cy + radius + 13.0,
             pal(INK, .94 * lit), 8, Pango.Weight.BOLD)
@@ -2708,11 +2826,12 @@ class ReferenceRack(Canvas):
         selected = self.selected_field == "power"
         hovered = self.hover_field == "power"
         if selected or hovered:
-            dot(sn, lx, ly, lr + 6.0,
-                pal(ACCENT, .15 if selected else .09))
-        dot(sn, lx, ly, max(3.0, lr + 2.0), rgba(.02, .02, .018, .96))
-        dot(sn, lx, ly, max(2.0, lr),
-            pal(PHOS if active else GRID, .95 if active else .48))
+            dot(sn, lx, ly, lr + 5.0,
+                pal(THERM, .14 if selected else .08))
+        dot(sn, lx, ly, max(3.0, lr + 2.0),
+            rgba(.42, .25, .07, .96) if active
+            else rgba(.02, .02, .018, .96))
+        dot(sn, lx, ly, max(2.0, lr), self._lamp_color(active))
 
         display_rect = io24_rack_reference.scaled_rect(
             self.spec["display"], width, height, self.rack_id)
@@ -6472,9 +6591,10 @@ def mixer_fader_bank(spacing, homogeneous=False):
 
 
 class Win(Adw.ApplicationWindow):
-    def __init__(self, app, ctl):
+    def __init__(self, app, ctl, default_width=1040, default_height=800):
         super().__init__(application=app, title="Revelator io24",
-                         default_width=1040, default_height=800)
+                         default_width=default_width,
+                         default_height=default_height)
         # Ties the window to org.io24.Mixer.desktop, so the shell shows the
         # installed icon and groups the window under that entry rather than
         # inventing a second generic one.
@@ -6750,6 +6870,18 @@ class Win(Adw.ApplicationWindow):
             while child is not None:
                 pending.append(child)
                 child = child.get_next_sibling()
+        # Limiter rows deliberately stay unparented behind ReferenceRack, so
+        # the tree walk above cannot see their authoritative widgets. Preserve
+        # the same passive session-checkpoint listeners they had as list rows.
+        for controls in getattr(self, "w", {}).values():
+            for key, signal in (("lim_on", "notify::active"),
+                                ("lth", "value-changed"),
+                                ("lrel", "value-changed")):
+                widget = controls.get(key)
+                if widget is None or id(widget) in seen:
+                    continue
+                widget.connect(signal, self._session_state_changed)
+                seen.add(id(widget))
 
     def _watch_attach(self):
         """Track hotplug and report only connection-state transitions."""
@@ -7310,6 +7442,7 @@ class Win(Adw.ApplicationWindow):
         racks into one.
         """
         self.w = {1: {}, 2: {}}
+        self.limiter_racks = {}
         self.columns = {}
         self.col_titles = {}
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -8248,23 +8381,7 @@ class Win(Adw.ApplicationWindow):
                               lambda *_a, c=ch: self._dyn_push("comp", c))
         d.add(W["cklisten"])
 
-        lm = Adw.PreferencesGroup(title="Limiter")
-        W["lim_on"] = Adw.SwitchRow(title="Limiter")
-        W["lim_on"].connect("notify::active", self._dyn_toggle, "lim", ch)
-        lm.add(W["lim_on"])
-        r, W["lth"] = self._srow("Limiter threshold", -40, 0, 0.01, -28.0,
-                                 lambda v: "%.2f dB" % v,
-                                 lambda v, c=ch: self._dyn_push("lim", c))
-        lm.add(r)
-        # The device has always taken a release coefficient and the driver has
-        # always computed it exactly; the page simply never offered the
-        # control, so every limiter write in this Host's history used the 0.4 s
-        # default. UC keeps no release field in its preset record, so this is
-        # live Host state and rides the snapshot shadow, not the slot body.
-        r, W["lrel"] = self._srow("Limiter release", 0.05, 1.5, 0.01, 0.4,
-                                  lambda v: "%.0f ms" % (v * 1000.0),
-                                  lambda v, c=ch: self._dyn_push("lim", c))
-        lm.add(r)
+        lm = self._limiter_group(ch)
 
         # The digital HPF gets its own section: it is its own rack unit and is
         # separate from the fixed 80 Hz preamp switch on the mixer strip.
@@ -8306,6 +8423,50 @@ class Win(Adw.ApplicationWindow):
         page.append(stack)
         W["bands"][0].set_active(True)
         return page
+
+    def _limiter_group(self, ch):
+        """Build the limiter's existing controls and one visible rack view."""
+        W = self.w[ch]
+        lm = Adw.PreferencesGroup(title="Limiter")
+        W["lim_on"] = Adw.SwitchRow(title="Limiter")
+        W["lim_on"].connect("notify::active", self._dyn_toggle, "lim", ch)
+        threshold_row, W["lth"] = self._srow(
+            "Limiter threshold", -40, 0, 0.01, -28.0,
+            lambda v: "%.2f dB" % v,
+            lambda v, c=ch: self._dyn_push("lim", c))
+        # The device has always taken a release coefficient and the driver has
+        # always computed it exactly; the page simply never offered the
+        # control, so every limiter write in this Host's history used the 0.4 s
+        # default. UC keeps no release field in its preset record, so this is
+        # live Host state and rides the snapshot shadow, not the slot body.
+        release_row, W["lrel"] = self._srow(
+            "Limiter release", 0.05, 1.5, 0.01, 0.4,
+            lambda v: "%.0f ms" % (v * 1000.0),
+            lambda v, c=ch: self._dyn_push("lim", c))
+
+        # Retain the legacy rows for their widgets and signal paths, but leave
+        # them unparented: the rack is the limiter group's only visible child.
+        W["_limiter_rows"] = [W["lim_on"], threshold_row, release_row]
+        bindings = {
+            "threshold": {
+                "widget": W["lth"],
+                "format": lambda value: "%.2f dB" % value,
+            },
+            "release": {
+                "widget": W["lrel"],
+                "format": lambda value: "%.0f ms" % (value * 1000.0),
+            },
+            "power": {"widget": W["lim_on"]},
+        }
+        rack = ReferenceRack(
+            self, "limiter", bindings,
+            lambda sn, rect, state, active, c=ch:
+            draw_limiter_display(self, c, sn, rect, state, active))
+        if not hasattr(self, "limiter_racks"):
+            self.limiter_racks = {}
+        self.limiter_racks[ch] = rack
+        lm.add(rack)
+        return lm
 
 
     def _rebuild_chains(self):
@@ -12849,6 +13010,8 @@ class Win(Adw.ApplicationWindow):
             if self._half:                    # 15 fps is plenty for these
                 for r in self.racks.values():
                     r.queue_draw()
+                for rack in getattr(self, "limiter_racks", {}).values():
+                    rack.queue_draw()
                 for c in self.w:
                     self.w[c]["comp_curve"].queue_draw()
                     self.w[c]["curve"].queue_draw()

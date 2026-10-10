@@ -10,6 +10,7 @@ the limiter release the page never exposed, and Host-only reverb movement.
 Nothing here opens USB.
 """
 
+import math
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -739,6 +740,49 @@ class ReferenceRackTests(unittest.TestCase):
             None, io24gtk.Gdk.KEY_Right, None, None))
         self.assertEqual(rack.selected_field, "threshold")
 
+    def test_power_binding_is_a_read_only_alias_of_the_manifest_binding(self):
+        rack = self._rack(power=True)
+
+        self.assertIs(rack.power_binding, rack.bindings["power"])
+        with self.assertRaises(AttributeError):
+            rack.power_binding = {"widget": _Value(False)}
+
+    def test_knob_calibration_has_eleven_manifest_sweep_ticks_at_each_width(self):
+        rack = self._rack(power=True)
+        control = rack.spec["controls"]["threshold"]
+        for width in (600, 1040):
+            geometry = io24_rack_reference.control_layout(
+                "limiter", width, 180)["threshold"]
+            ticks = rack._knob_tick_segments("threshold", geometry)
+
+            self.assertEqual(len(ticks), 11)
+            expected_angles = [
+                control["sweep"][0] + index / 10.0 * (
+                    control["sweep"][1] - control["sweep"][0])
+                for index in range(11)
+            ]
+            cx, cy, _radius = geometry
+            for tick, expected in zip(ticks, expected_angles):
+                (inner_x, inner_y), (_outer_x, _outer_y), _major = tick
+                actual = math.degrees(math.atan2(inner_y - cy,
+                                                 inner_x - cx)) % 360.0
+                self.assertAlmostEqual(actual, expected % 360.0, places=5)
+            self.assertTrue(ticks[0][2])
+            self.assertTrue(ticks[5][2])
+            self.assertTrue(ticks[10][2])
+            self.assertFalse(ticks[1][2])
+
+    def test_active_power_lamp_palette_is_warm_amber_not_cyan(self):
+        rack = self._rack(power=True)
+
+        active = rack._lamp_color(True)
+        inactive = rack._lamp_color(False)
+
+        self.assertGreater(active.red, .9)
+        self.assertGreater(active.green, .35)
+        self.assertLess(active.blue, .25)
+        self.assertLess(inactive.alpha, active.alpha)
+
     def test_asset_failure_reports_once_without_mutating_bound_state(self):
         rack = self._rack(threshold=-17.0, release=0.73, power=True)
         before = rack._state()
@@ -786,6 +830,130 @@ class ReferenceRackTests(unittest.TestCase):
                 io24_rack_reference.scaled_rect(
                     slot, 700, 210, "limiter"),
                 drawn_rects)
+
+
+class LimiterRackIntegrationTests(unittest.TestCase):
+    def test_limiter_display_uses_clamped_gain_reduction_telemetry(self):
+        window = _window()
+        window.ctl.snap = {"gr": {1: {"lim": -8.4}}}
+        window.w[1]["lth"] = _Value(-6.0)
+        window.w[1]["lrel"] = _Value(.4)
+
+        self.assertEqual(io24gtk.limiter_display_state(window, 1), {
+            "reduction_db": 8.4,
+            "threshold_db": -6.0,
+            "release_s": .4,
+        })
+
+        window.ctl.snap["gr"][1]["lim"] = -80.0
+        self.assertEqual(
+            io24gtk.limiter_display_state(window, 1)["reduction_db"], 20.0)
+        window.ctl.snap["gr"][1]["lim"] = 3.0
+        self.assertEqual(
+            io24gtk.limiter_display_state(window, 1)["reduction_db"], 0.0)
+
+    def test_limiter_group_reuses_widgets_and_only_parents_the_rack(self):
+        class Group:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.children = []
+
+            def add(self, child):
+                self.children.append(child)
+
+        class Switch(_SignallingValue):
+            def __init__(self, title):
+                super().__init__(False)
+                self.title = title
+
+            def connect(self, signal, callback, *args):
+                self.callbacks.setdefault(signal, []).append(
+                    lambda widget: callback(widget, None, *args))
+                return len(self.callbacks[signal])
+
+        class Rack:
+            def __init__(self, win, rack_id, bindings, display_draw):
+                self.win = win
+                self.rack_id = rack_id
+                self.bindings = bindings
+                self.display_draw = display_draw
+
+            @property
+            def power_binding(self):
+                return self.bindings["power"]
+
+        window = io24gtk.Win.__new__(io24gtk.Win)
+        window.w = {1: {}}
+        window.limiter_racks = {}
+        window._dyn_toggle = mock.Mock()
+        window._dyn_push = mock.Mock()
+        made_rows = []
+
+        def scale_row(title, lower, upper, step, default, formatter,
+                      callback, subtitle=None):
+            row = SimpleNamespace(title=title, parent=None)
+            scale = _SignallingValue(default)
+            scale.connect("value-changed", lambda _widget: callback(default))
+            made_rows.append(row)
+            return row, scale
+
+        window._srow = scale_row
+        with mock.patch.object(io24gtk.Adw, "PreferencesGroup", Group), \
+                mock.patch.object(io24gtk.Adw, "SwitchRow", Switch), \
+                mock.patch.object(io24gtk, "ReferenceRack", Rack):
+            group = window._limiter_group(1)
+
+        rack = window.limiter_racks[1]
+        self.assertEqual(rack.rack_id, "limiter")
+        self.assertIs(rack.bindings["threshold"]["widget"],
+                      window.w[1]["lth"])
+        self.assertIs(rack.bindings["release"]["widget"],
+                      window.w[1]["lrel"])
+        self.assertIs(rack.power_binding["widget"], window.w[1]["lim_on"])
+        self.assertEqual(group.children, [rack])
+        self.assertEqual(window.w[1]["_limiter_rows"],
+                         [window.w[1]["lim_on"]] + made_rows)
+
+    def test_host_tick_repaints_limiter_from_existing_cadence(self):
+        window = io24gtk.Win.__new__(io24gtk.Win)
+        window.ctl = SimpleNamespace(snap={"alive": False})
+        window.stack = SimpleNamespace(
+            get_visible_child_name=lambda: "ch")
+        window.racks = {}
+        window.w = {
+            1: {"comp_curve": _Draws(), "curve": _Draws()},
+            2: {"comp_curve": _Draws(), "curve": _Draws()},
+        }
+        redraws = []
+        window.limiter_racks = {
+            1: SimpleNamespace(queue_draw=lambda: redraws.append(1)),
+            2: SimpleNamespace(queue_draw=lambda: redraws.append(2)),
+        }
+        window._half = False
+
+        self.assertTrue(window._tick())
+
+        self.assertEqual(redraws, [1, 2])
+
+    def test_unparented_limiter_widgets_keep_session_change_watchers(self):
+        window = io24gtk.Win.__new__(io24gtk.Win)
+        window._host_persistence_root = None
+        window._session_state_changed = mock.Mock()
+        window.w = {
+            1: {"lim_on": _SignallingValue(False),
+                "lth": _SignallingValue(-28.0),
+                "lrel": _SignallingValue(0.4)},
+            2: {"lim_on": _SignallingValue(False),
+                "lth": _SignallingValue(-28.0),
+                "lrel": _SignallingValue(0.4)},
+        }
+
+        window._watch_host_controls()
+        window.w[1]["lim_on"].emit("notify::active")
+        window.w[1]["lth"].emit("value-changed")
+        window.w[1]["lrel"].emit("value-changed")
+
+        self.assertEqual(window._session_state_changed.call_count, 3)
 
 
 if __name__ == "__main__":

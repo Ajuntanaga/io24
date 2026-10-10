@@ -11,6 +11,7 @@ Nothing here opens USB.
 """
 
 import math
+import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -619,6 +620,37 @@ class ReverbRackTests(unittest.TestCase):
 
 
 class ReferenceRackTests(unittest.TestCase):
+    def test_calibration_modes_select_generated_layers_and_live_paint(self):
+        for mode in ("", "backdrop", "underlay", "overlay", "nodes", "both"):
+            with self.subTest(mode=mode):
+                rack = self._rack()
+                rack._texture = mock.Mock(side_effect=lambda name: name)
+                rack._draw_knob = mock.Mock()
+                rack.display_draw = mock.Mock()
+                snapshot = SimpleNamespace(
+                    append_texture=mock.Mock(), push_opacity=mock.Mock(),
+                    pop=mock.Mock())
+                with mock.patch.dict(os.environ,
+                                     {"IO24_EQ_REFERENCE_CALIBRATION": mode}), \
+                        mock.patch.object(io24gtk, "dot"):
+                    rack.paint(snapshot, 700, 210)
+                layers = [call.args[0]
+                          for call in snapshot.append_texture.call_args_list]
+                if mode in ("backdrop", "underlay"):
+                    self.assertEqual(layers, [rack.spec["calibration_underlay"]])
+                    rack._draw_knob.assert_not_called()
+                    rack.display_draw.assert_not_called()
+                else:
+                    expected = [rack.spec["output"]]
+                    if mode in ("overlay", "both"):
+                        expected.append(rack.spec["calibration_underlay"])
+                        snapshot.push_opacity.assert_called_once_with(.46)
+                    if mode in ("nodes", "both"):
+                        expected.append(rack.spec["calibration_nodes"])
+                    self.assertEqual(layers, expected)
+                    self.assertEqual(rack._draw_knob.call_count, 2)
+                    rack.display_draw.assert_called_once()
+
     def _rack(self, threshold=-28.0, release=0.4, power=False):
         rack = io24gtk.ReferenceRack.__new__(io24gtk.ReferenceRack)
         rack.win = SimpleNamespace(messages=[])
@@ -804,7 +836,8 @@ class ReferenceRackTests(unittest.TestCase):
             side_effect=lambda filename:
             object() if filename == "limiter-faceplate.png" else None)
         rack._draw_fallback_faceplate = mock.Mock()
-        snapshot = SimpleNamespace(append_texture=mock.Mock())
+        snapshot = SimpleNamespace(append_texture=mock.Mock(),
+                                   push_clip=mock.Mock(), pop=mock.Mock())
 
         with mock.patch.object(io24gtk, "dot"), \
                 mock.patch.object(io24gtk, "polyline"), \
@@ -852,7 +885,7 @@ class LimiterRackIntegrationTests(unittest.TestCase):
         self.assertEqual(
             io24gtk.limiter_display_state(window, 1)["reduction_db"], 0.0)
 
-    def test_limiter_group_reuses_widgets_and_only_parents_the_rack(self):
+    def test_limiter_group_reuses_widgets_in_the_accessible_rack_overlay(self):
         class Group:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
@@ -877,6 +910,11 @@ class LimiterRackIntegrationTests(unittest.TestCase):
                 self.rack_id = rack_id
                 self.bindings = bindings
                 self.display_draw = display_draw
+
+            def with_native_controls(self, rows):
+                self.native_rows = rows
+                self.overlay = SimpleNamespace(rack=self, rows=rows)
+                return self.overlay
 
             @property
             def power_binding(self):
@@ -910,7 +948,8 @@ class LimiterRackIntegrationTests(unittest.TestCase):
         self.assertIs(rack.bindings["release"]["widget"],
                       window.w[1]["lrel"])
         self.assertIs(rack.power_binding["widget"], window.w[1]["lim_on"])
-        self.assertEqual(group.children, [rack])
+        self.assertEqual(group.children, [rack.overlay])
+        self.assertEqual(rack.native_rows, window.w[1]["_limiter_rows"])
         self.assertEqual(window.w[1]["_limiter_rows"],
                          [window.w[1]["lim_on"]] + made_rows)
 
@@ -954,6 +993,163 @@ class LimiterRackIntegrationTests(unittest.TestCase):
         window.w[1]["lrel"].emit("value-changed")
 
         self.assertEqual(window._session_state_changed.call_count, 3)
+
+
+class NativeReferenceRackTests(unittest.TestCase):
+    """Real GTK controls and render nodes; run under a hardware-free display."""
+
+    @classmethod
+    def setUpClass(cls):
+        io24gtk.Gtk.init()
+        if io24gtk.Gdk.Display.get_default() is None:
+            raise unittest.SkipTest("native GTK checks require a display")
+
+    def setUp(self):
+        Gtk, Adw = io24gtk.Gtk, io24gtk.Adw
+        settings = Gtk.Settings.get_default()
+        animations = settings.get_property("gtk-enable-animations")
+        settings.set_property("gtk-enable-animations", False)
+        self.addCleanup(settings.set_property, "gtk-enable-animations", animations)
+        self.rows, self.bindings = [], {}
+        self.changed = mock.Mock()
+        for field, control in io24_rack_reference.rack("limiter")["controls"].items():
+            scale = Gtk.Scale.new_with_range(
+                Gtk.Orientation.HORIZONTAL, *control["range"], control["step"])
+            scale.set_value(control["default"])
+            scale.connect("value-changed", self.changed)
+            row = Adw.ActionRow(title=field.title())
+            row.add_suffix(scale)
+            self.rows.append(row)
+            self.bindings[field] = {"widget": scale,
+                                    "format": control["format_string"].format}
+        power = Adw.SwitchRow(title="Limiter")
+        power.connect("notify::active", self.changed)
+        self.rows.insert(0, power)
+        self.bindings["power"] = {"widget": power}
+        self.host = SimpleNamespace(
+            say=lambda _message: None,
+            ctl=SimpleNamespace(snap={"gr": {1: {"lim": -8.4}}}),
+            w={1: {"lth": self.bindings["threshold"]["widget"],
+                   "lrel": self.bindings["release"]["widget"]}})
+        self.rack = io24gtk.ReferenceRack(
+            self.host, "limiter", self.bindings,
+            lambda sn, rect, state, active: io24gtk.draw_limiter_display(
+                self.rack, 1, sn, rect, state, active))
+        self.rack.ctl, self.rack.w = self.host.ctl, self.host.w
+        self.window = Gtk.Window()
+        self.window.set_child(self.rack.with_native_controls(self.rows))
+        self.window.present()
+        self.addCleanup(self.window.destroy)
+        self._settle()
+
+    @staticmethod
+    def _settle():
+        while io24gtk.GLib.MainContext.default().pending():
+            io24gtk.GLib.MainContext.default().iteration(False)
+
+    def test_native_accessibility_roles_names_values_and_actions(self):
+        # GTK's vararg assertion helpers are not introspectable. Call their
+        # exported test API to inspect the actual accessible context.
+        import ctypes
+        import ctypes.util
+        Gtk = io24gtk.Gtk
+        overlay = self.rack.get_parent()
+        for cx, cy, _radius in self.rack._layout().values():
+            self.assertIs(overlay.pick(cx, cy, Gtk.PickFlags.DEFAULT), self.rack)
+        library = ctypes.CDLL(ctypes.util.find_library("gtk-4"))
+        for name in ("property", "state"):
+            getattr(library, "gtk_test_accessible_check_" + name).restype = ctypes.c_char_p
+
+        def check(widget, kind, key, value):
+            if isinstance(value, str):
+                argument = ctypes.c_char_p(value.encode())
+            elif isinstance(value, float):
+                argument = ctypes.c_double(value)
+            else:
+                argument = ctypes.c_int(value)
+            failure = getattr(library, "gtk_test_accessible_check_" + kind)(
+                ctypes.c_void_p(hash(widget)), int(key), argument)
+            self.assertIsNone(failure, failure)
+
+        for field, binding in self.bindings.items():
+            widget = binding["widget"]
+            self.assertTrue(widget.get_mapped())
+            self.assertTrue(widget.get_visible())
+            check(widget, "state", Gtk.AccessibleState.HIDDEN, 0)
+            check(widget, "property", Gtk.AccessibleProperty.LABEL,
+                  "Limiter " + field)
+            if field == "power":
+                self.assertEqual(widget.get_accessible_role(), Gtk.AccessibleRole.SWITCH)
+                widget.activate()
+                self.assertTrue(widget.get_active())
+                check(widget, "state", Gtk.AccessibleState.CHECKED, 1)
+                self.assertTrue(self.rack._state()[field])
+            else:
+                self.assertEqual(widget.get_accessible_role(), Gtk.AccessibleRole.SLIDER)
+                control = self.rack.spec["controls"][field]
+                for prop, expected in ((Gtk.AccessibleProperty.VALUE_MIN, control["range"][0]),
+                                       (Gtk.AccessibleProperty.VALUE_MAX, control["range"][1]),
+                                       (Gtk.AccessibleProperty.VALUE_NOW, control["default"])):
+                    check(widget, "property", prop, float(expected))
+                widget.emit("move-slider", Gtk.ScrollType.STEP_UP)
+                expected = control["default"] + control["step"]
+                self.assertAlmostEqual(self.rack._state()[field], expected)
+                check(widget, "property", Gtk.AccessibleProperty.VALUE_NOW, expected)
+                check(widget, "property", Gtk.AccessibleProperty.VALUE_TEXT,
+                      binding["format"](expected))
+                widget.grab_focus()
+                self._settle()
+                self.assertEqual(self.rack.selected_field, field)
+        self.assertEqual(self.changed.call_count, 3)
+
+    def test_actual_runtime_pixels_stay_inside_manifest_allowances(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+        from tools.eq_reference_diff import diff_images, rack_regions
+        Gsk, Graphene, Gtk = io24gtk.Gsk, io24gtk.Graphene, io24gtk.Gtk
+        renderer = Gsk.Renderer.new_for_surface(self.window.get_surface())
+        self.addCleanup(renderer.unrealize)
+        with tempfile.TemporaryDirectory() as temp:
+            for width in (600, 1040):
+                # Match the rack's fixed-height desktop/minimum allocation.
+                self.rack.get_width = lambda w=width: w
+                self.rack.get_height = lambda: 180
+                bounds = (0, 0, width, 180)
+                rects, circles = rack_regions(self.rack.spec, bounds)
+
+                def capture(name, mode):
+                    snapshot = Gtk.Snapshot()
+                    with mock.patch.dict(os.environ,
+                                         {"IO24_EQ_REFERENCE_CALIBRATION": mode}):
+                        self.rack.paint(snapshot, width, 180)
+                    texture = renderer.render_texture(
+                        snapshot.to_node(), Graphene.Rect().init(*bounds))
+                    path = Path(temp) / (name + ".png")
+                    self.assertTrue(texture.save_to_png(str(path)))
+                    return path
+
+                baseline = capture("reference", "backdrop")
+                for field in ("power", "threshold", "release"):
+                    self.rack.selected_field = field
+                    self.rack.hover_field = field
+                    for fraction in (0.0, 1.0):
+                        self.bindings["power"]["widget"].set_active(bool(fraction))
+                        for knob in self.rack.spec["controls"]:
+                            self.rack._set_fraction(knob, fraction)
+                        actual = capture("runtime", "")
+                        result = diff_images(baseline, actual, rects, circles, bounds)[0]
+                        self.assertGreater(result["changed_pixels"], 0)
+                        self.assertEqual(result["unexpected_pixels"], 0, result)
+                # Prove the live mask still rejects a static hardware change.
+                x, y, _radius = self.rack.spec["screws"][0]
+                sw, sh = self.rack.spec["source_size"]
+                with Image.open(actual) as changed:
+                    changed.putpixel((round(x * width / sw), round(y * 180 / sh)),
+                                     (255, 0, 255, 255))
+                    changed.save(actual)
+                self.assertGreater(diff_images(
+                    baseline, actual, rects, circles, bounds)[0]["unexpected_pixels"], 0)
 
 
 if __name__ == "__main__":

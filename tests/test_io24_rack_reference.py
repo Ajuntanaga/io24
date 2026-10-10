@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -19,13 +20,50 @@ DESIGN = ROOT / "docs" / "design"
 
 
 class RackReferenceTests(unittest.TestCase):
+    def test_publication_failure_rolls_back_existing_and_new_targets(self):
+        spec = io24_rack_reference.rack("limiter")
+        names = (spec["source"],) + spec["generated"]
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            # The first target exists, the second is newly introduced, and
+            # the third replacement fails after both were published.
+            before = {name: ("old:" + name).encode() for name in names
+                      if name != spec["output"]}
+            for name, content in before.items():
+                (output / name).write_bytes(content)
+            replace = render_rack_assets.os.replace
+            published = []
+
+            def fail_third(source, target):
+                if Path(source).name == names[2]:
+                    raise OSError("injected publication failure")
+                replace(source, target)
+                published.append(Path(target).name)
+
+            with mock.patch.object(render_rack_assets.os, "replace",
+                                   side_effect=fail_third):
+                with self.assertRaisesRegex(OSError, "injected"):
+                    render_rack_assets.compile_rack("limiter", DESIGN, output)
+            self.assertEqual(published[:2], list(names[:2]))
+            self.assertEqual({path.name: path.read_bytes()
+                              for path in output.iterdir()}, before)
+
+    def test_receipt_is_published_last(self):
+        with tempfile.TemporaryDirectory() as temp:
+            replace = render_rack_assets.os.replace
+            with mock.patch.object(render_rack_assets.os, "replace",
+                                   wraps=replace) as publication:
+                render_rack_assets.compile_rack("limiter", DESIGN, Path(temp))
+            self.assertEqual(Path(publication.call_args.args[1]).name,
+                             io24_rack_reference.rack("limiter")["receipt"])
+
     def test_limiter_faceplate_changes_stay_in_live_or_cleanup_regions(self):
         spec = io24_rack_reference.rack("limiter")
         rectangles, circles = rack_regions(
             spec, (0, 0) + tuple(spec["source_size"]))
         result, _changed, _allowed, _unexpected = diff_images(
             DESIGN / spec["source"], DESIGN / spec["output"],
-            allowed_rectangles=rectangles + list(spec["cleanup_regions"]),
+            allowed_rectangles=rectangles,
             allowed_circles=circles,
             scope_rectangle=(0, 0) + tuple(spec["source_size"]))
 

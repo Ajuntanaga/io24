@@ -71,4 +71,6 @@ py-modules = [
     "docs/design/vintage-eq-reference.png",
     "docs/design/limiter-faceplate.png",
     "docs/design/limiter-knob.png",
+    "docs/design/limiter-calibration-underlay.png",
+    "docs/design/limiter-calibration-nodes.png",
 ]

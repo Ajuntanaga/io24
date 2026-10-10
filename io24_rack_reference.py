@@ -43,6 +43,24 @@ _LIMITER = {
                         (1010, 112, 220, 264),
                         (500, 119, 400, 211),
                         (1295, 322, 28, 28)),
+    # Radius multipliers scale with the knob; *_px dimensions stay in GTK
+    # logical pixels, as do the value font and focus halos. The same contract
+    # bounds runtime paint and reference/runtime screenshot comparisons.
+    "live_style": {
+        "tick_inner": 1.21,
+        "tick_major_outer": 1.46,
+        "tick_minor_outer": 1.38,
+        "tick_major_width": .043,
+        "tick_minor_width": .032,
+        "knob_focus_px": 7.0,
+        "lamp_focus_px": 5.0,
+        "lamp_border_px": 2.0,
+        "value_offset_px": 13.0,
+        "value_width_px": 96.0,
+        "value_height_px": 20.0,
+        "value_font_pt": 8.0,
+        "antialias_px": 2.0,
+    },
     "controls": {
         "threshold": {
             "range": (-40.0, 0.0),
@@ -122,7 +140,7 @@ def validate_rack(spec, design_root=None):
         "source", "output", "material_source", "material_crop",
         "knob_source", "calibration_underlay", "calibration_nodes",
         "knob_output", "receipt", "generated", "cleanup_regions",
-        "ears", "slots", "screws",
+        "ears", "slots", "screws", "live_style",
     }
     missing = required.difference(spec)
     if missing:
@@ -168,6 +186,12 @@ def validate_rack(spec, design_root=None):
     _rectangle(spec["lamp"], "lamp", source_size, allow_circle=True)
     for index, region in enumerate(spec["cleanup_regions"]):
         _rectangle(region, "cleanup region %d" % index, source_size)
+    style = spec["live_style"]
+    for key in _LIMITER["live_style"]:
+        value = style.get(key) if isinstance(style, dict) else None
+        if (not isinstance(value, (int, float)) or
+                not math.isfinite(value) or value <= 0):
+            raise ValueError("invalid live_style %s" % key)
     controls = spec["controls"]
     if not isinstance(controls, dict) or not controls:
         raise ValueError("controls must be a non-empty dictionary")
@@ -235,6 +259,21 @@ def control_layout(rack_id, width, height):
 def value_fraction(control, value):
     lower, upper = control["range"]
     return max(0.0, min(1.0, (float(value) - lower) / (upper - lower)))
+
+
+def control_live_regions(geometry, style):
+    """Return a knob's painted circle and clipped value box in GTK pixels."""
+    cx, cy, radius = geometry
+    reach = max(radius * style["tick_major_outer"] +
+                max(1.0, radius * style["tick_major_width"]) / 2.0,
+                radius * style["tick_minor_outer"] +
+                max(1.0, radius * style["tick_minor_width"]) / 2.0,
+                radius + style["knob_focus_px"])
+    value_width = style["value_width_px"]
+    return ((cx, cy, reach + style["antialias_px"]),
+            (cx - value_width / 2.0,
+             cy + radius + style["value_offset_px"],
+             value_width, style["value_height_px"]))
 
 
 def fraction_value(control, fraction):

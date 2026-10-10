@@ -100,6 +100,8 @@ class ReleasePackageTests(unittest.TestCase):
                     "vintage-eq-faceplate.png",
                     "vintage-eq-reference.png",
                     "limiter-faceplate.png",
+                    "limiter-calibration-underlay.png",
+                    "limiter-calibration-nodes.png",
                     "limiter-knob.png"):
                 shutil.copy2(
                     ROOT / "docs" / "design" / filename,
@@ -189,15 +191,17 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(sum(
                 "/share/io24/design/" in name and
                 name.endswith("-calibration-underlay.png")
-                for name in names), 3)
+                for name in names), 4)
             self.assertEqual(sum(
                 "/share/io24/design/" in name and
                     name.endswith("-calibration-nodes.png")
-                    for name in names), 3)
+                    for name in names), 4)
             self.assertEqual(sum(
                 "/share/io24/design/" in name and name.endswith("-knob.png")
                 for name in names), 9)
-            for filename in ("limiter-faceplate.png", "limiter-knob.png"):
+            for filename in ("limiter-faceplate.png", "limiter-knob.png",
+                             "limiter-calibration-underlay.png",
+                             "limiter-calibration-nodes.png"):
                 self.assertTrue(any(
                     name.endswith("/share/io24/design/" + filename)
                     for name in names), filename)

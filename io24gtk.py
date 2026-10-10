@@ -2494,6 +2494,49 @@ class ReferenceRack(Canvas):
         focus.connect("enter", self._focus_enter)
         self.add_controller(focus)
 
+    def with_native_controls(self, rows):
+        """Keep the authoritative controls mapped for GTK accessibility.
+
+        Opacity affects painting, not GTK's accessible hidden state. The
+        original rows remain visible/mapped in a real PreferencesGroup, so
+        their native switch/slider roles, range values, keyboard handling and
+        assistive-technology actions are retained. The overlay does not take
+        pointer events or participate in measuring the rack.
+        """
+        native = Adw.PreferencesGroup()
+        for row in rows:
+            native.add(row)
+        native.set_opacity(0.0)
+        native.set_can_target(False)
+        native.set_valign(Gtk.Align.START)
+        for field in ("power",) + self._fields():
+            widget = self._widget(field)
+            widget.update_property(
+                [Gtk.AccessibleProperty.LABEL],
+                [self.rack_id.title() + " " + field.replace("_", " ")])
+            focus = Gtk.EventControllerFocus()
+            focus.connect("enter", self._native_focus_enter, field)
+            widget.add_controller(focus)
+            if field != "power":
+                widget.connect("value-changed", self._accessible_value_changed, field)
+                self._accessible_value_changed(widget, field)
+        overlay = Gtk.Overlay()
+        overlay.set_child(self)
+        overlay.add_overlay(native)
+        overlay.set_measure_overlay(native, False)
+        return overlay
+
+    def _native_focus_enter(self, _controller, field):
+        self.selected_field = field
+        self.queue_draw()
+
+    def _accessible_value_changed(self, widget, field):
+        formatter = self.bindings[field].get("format")
+        value = widget.get_value()
+        text = (str(formatter(value)) if callable(formatter)
+                else self.spec["controls"][field].get("format_string", "{}").format(value))
+        widget.update_property([Gtk.AccessibleProperty.VALUE_TEXT], [text])
+
     def _fields(self):
         return tuple(self.spec["controls"])
 
@@ -2520,12 +2563,13 @@ class ReferenceRack(Canvas):
         """Return the 11 calibration marks along a control's manifest sweep."""
         cx, cy, radius = geometry
         start, end = self.spec["controls"][field]["sweep"]
+        style = self.spec["live_style"]
         segments = []
         for index in range(11):
             angle = math.radians(start + index / 10.0 * (end - start))
             major = index in (0, 5, 10)
-            inner = radius * 1.21
-            outer = radius * (1.46 if major else 1.38)
+            inner = radius * style["tick_inner"]
+            outer = radius * style["tick_major_outer" if major else "tick_minor_outer"]
             segments.append((
                 (cx + inner * math.cos(angle),
                  cy + inner * math.sin(angle)),
@@ -2754,15 +2798,17 @@ class ReferenceRack(Canvas):
         cx, cy, radius = geometry
         selected = field == self.selected_field
         hovered = field == self.hover_field
+        style = self.spec["live_style"]
         if selected or hovered:
-            dot(sn, cx, cy, radius + 7.0,
+            dot(sn, cx, cy, radius + style["knob_focus_px"],
                 pal(ACCENT, .15 if selected else .09))
         control = self.spec["controls"][field]
         tick_lit = 1.0 if active else .58
         for inner, outer, major in self._knob_tick_segments(field, geometry):
             polyline(sn, [inner, outer],
                      rgba(.91, .82, .62, (.90 if major else .72) * tick_lit),
-                     max(1.0, radius * (.043 if major else .032)))
+                     max(1.0, radius * style[
+                         "tick_major_width" if major else "tick_minor_width"]))
         if texture is not None:
             diameter = radius * 2.0
             sn.append_texture(texture, Graphene.Rect().init(
@@ -2794,11 +2840,23 @@ class ReferenceRack(Canvas):
                 self, sn, field.replace("_", " ").upper(),
                 cx, cy - radius - 18.0, pal(INK, .72 * lit),
                 7, Pango.Weight.SEMIBOLD)
+        _circle, value_rect = io24_rack_reference.control_live_regions(geometry, style)
+        # Bound font-fallback or unusually long values by the same rectangle
+        # used by the live-pixel gate, without guessing actual text extents.
+        sn.push_clip(Graphene.Rect().init(*value_rect))
         centred_faceplate_label(
-            self, sn, text, cx, cy + radius + 13.0,
-            pal(INK, .94 * lit), 8, Pango.Weight.BOLD)
+            self, sn, text, cx, value_rect[1],
+            pal(INK, .94 * lit), style["value_font_pt"], Pango.Weight.BOLD)
+        sn.pop()
 
     def paint(self, sn, width, height):
+        calibration = eq_reference_calibration_mode()
+        if calibration in ("backdrop", "underlay"):
+            underlay = self._texture(self.spec["calibration_underlay"])
+            if underlay is not None:
+                sn.append_texture(underlay, Graphene.Rect().init(
+                    0.0, 0.0, float(width), float(height)))
+                return
         faceplate = self._texture(self.spec["output"])
         knob_textures = {
             field: self._texture(self.spec["controls"][field]["asset"])
@@ -2825,10 +2883,11 @@ class ReferenceRack(Canvas):
         lx, ly, lr = self._lamp_layout()
         selected = self.selected_field == "power"
         hovered = self.hover_field == "power"
+        style = self.spec["live_style"]
         if selected or hovered:
-            dot(sn, lx, ly, lr + 5.0,
+            dot(sn, lx, ly, lr + style["lamp_focus_px"],
                 pal(THERM, .14 if selected else .08))
-        dot(sn, lx, ly, max(3.0, lr + 2.0),
+        dot(sn, lx, ly, max(3.0, lr + style["lamp_border_px"]),
             rgba(.42, .25, .07, .96) if active
             else rgba(.02, .02, .018, .96))
         dot(sn, lx, ly, max(2.0, lr), self._lamp_color(active))
@@ -2836,6 +2895,20 @@ class ReferenceRack(Canvas):
         display_rect = io24_rack_reference.scaled_rect(
             self.spec["display"], width, height, self.rack_id)
         self.display_draw(sn, display_rect, state, active)
+
+        for mode, key, opacity in (
+                ("overlay", "calibration_underlay", .46),
+                ("nodes", "calibration_nodes", 1.0)):
+            if calibration not in (mode, "both"):
+                continue
+            texture = self._texture(self.spec[key])
+            if texture is not None:
+                if opacity < 1.0:
+                    sn.push_opacity(opacity)
+                sn.append_texture(texture, Graphene.Rect().init(
+                    0.0, 0.0, float(width), float(height)))
+                if opacity < 1.0:
+                    sn.pop()
 
 
 class ReverbRack(Canvas):
@@ -6870,9 +6943,9 @@ class Win(Adw.ApplicationWindow):
             while child is not None:
                 pending.append(child)
                 child = child.get_next_sibling()
-        # Limiter rows deliberately stay unparented behind ReferenceRack, so
-        # the tree walk above cannot see their authoritative widgets. Preserve
-        # the same passive session-checkpoint listeners they had as list rows.
+        # Also cover controls before their rack overlay has been attached.
+        # Once parented, the tree walk finds them and `seen` prevents duplicate
+        # checkpoint listeners.
         for controls in getattr(self, "w", {}).values():
             for key, signal in (("lim_on", "notify::active"),
                                 ("lth", "value-changed"),
@@ -8444,8 +8517,8 @@ class Win(Adw.ApplicationWindow):
             lambda v: "%.0f ms" % (v * 1000.0),
             lambda v, c=ch: self._dyn_push("lim", c))
 
-        # Retain the legacy rows for their widgets and signal paths, but leave
-        # them unparented: the rack is the limiter group's only visible child.
+        # Keep the native controls mapped in a transparent overlay for their
+        # supported accessibility roles/actions and existing signal paths.
         W["_limiter_rows"] = [W["lim_on"], threshold_row, release_row]
         bindings = {
             "threshold": {
@@ -8465,7 +8538,7 @@ class Win(Adw.ApplicationWindow):
         if not hasattr(self, "limiter_racks"):
             self.limiter_racks = {}
         self.limiter_racks[ch] = rack
-        lm.add(rack)
+        lm.add(rack.with_native_controls(W["_limiter_rows"]))
         return lm
 
 

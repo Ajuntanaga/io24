@@ -10,6 +10,7 @@ one-off checks. Any other change is a static faceplate or rack-bay regression.
 
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import io24_eq_reference  # noqa: E402
+import io24_rack_reference  # noqa: E402
 
 
 def rectangle(text):
@@ -94,12 +96,48 @@ def diff_images(baseline_path, actual_path, allowed_rectangles=(),
 def rack_regions(spec, rack_rectangle):
     """Translate one rack manifest's live regions into screenshot coordinates.
 
-    The generic rack manifest describes a live display, control circles, and
-    a lamp circle in source-image pixels.  The EQ adapter below may also pass
-    rectangular controls to preserve its historical cleanup allowances.
+    Compiled racks include source-scaled cleanup regions plus the runtime
+    stroke/text/halo dimensions in ``live_style``. The legacy EQ adapter below
+    supplies its historical rectangular control allowances unchanged.
     """
     rack_x, rack_y, rack_width, rack_height = rack_rectangle
     source_width, source_height = spec["source_size"]
+
+    if "live_style" in spec:
+        style = spec["live_style"]
+        sx, sy = rack_width / source_width, rack_height / source_height
+        sr = min(sx, sy)
+        pad = style["antialias_px"]
+
+        def bounds(rect, padding=pad):
+            x, y, width, height = rect
+            left, top = math.floor(rack_x + x - padding), math.floor(rack_y + y - padding)
+            right = math.ceil(rack_x + x + width + padding)
+            bottom = math.ceil(rack_y + y + height + padding)
+            return left, top, right - left, bottom - top
+
+        rectangles = [bounds((x * sx, y * sy, w * sx, h * sy))
+                      for x, y, w, h in
+                      (spec["display"],) + tuple(spec["cleanup_regions"])]
+        circles = []
+
+        def circle_bounds(circle):
+            x, y, radius = circle
+            # Conservative rounding includes fractional centres and the
+            # renderer's antialias fringe at both supported allocations.
+            return round(rack_x + x), round(rack_y + y), math.ceil(radius + 1.0)
+
+        for control in spec["controls"].values():
+            x, y, radius = control["geometry"]
+            circle, value_rect = io24_rack_reference.control_live_regions(
+                (x * sx, y * sy, radius * sr), style)
+            circles.append(circle_bounds(circle))
+            rectangles.append(bounds(value_rect))
+        x, y, radius = spec["lamp"]
+        circles.append(circle_bounds((x * sx, y * sy,
+            max(radius * sr + style["lamp_focus_px"],
+                3.0, radius * sr + style["lamp_border_px"]) + pad)))
+        return rectangles, circles
 
     def scale_rect(rect):
         x, y, width, height = rect
@@ -173,9 +211,11 @@ def main(argv=None):
     parser.add_argument(
         "--model", choices=("standard", "passive", "vintage"),
         help="derive dynamic allowances from the measured rack manifest")
+    parser.add_argument("--rack", choices=("limiter",),
+                        help="derive live allowances from a compiled rack manifest")
     parser.add_argument(
         "--rack-rect", type=rectangle, metavar="X,Y,W,H",
-        help="fitted rack bounds in both captures; required with --model")
+        help="fitted rack bounds in both captures; required with --model/--rack")
     parser.add_argument(
         "--allow-rect", action="append", default=[], type=rectangle,
         metavar="X,Y,W,H", help="dynamic plot/lamp rectangle; repeatable")
@@ -189,14 +229,17 @@ def main(argv=None):
         help="ignore per-channel render noise up to this value")
     args = parser.parse_args(argv)
 
-    if bool(args.model) != bool(args.rack_rect):
-        parser.error("--model and --rack-rect must be used together")
+    if args.model and args.rack:
+        parser.error("choose --model or --rack")
+    if bool(args.model or args.rack) != bool(args.rack_rect):
+        parser.error("--model or --rack requires --rack-rect (and vice versa)")
     allowed_rectangles = list(args.allow_rect)
     allowed_circles = list(args.allow_circle)
     scope_rectangle = args.scope_rect
-    if args.model:
-        model_rectangles, model_circles = model_regions(
-            args.model, args.rack_rect)
+    if args.model or args.rack:
+        model_rectangles, model_circles = (
+            rack_regions(io24_rack_reference.rack(args.rack), args.rack_rect)
+            if args.rack else model_regions(args.model, args.rack_rect))
         allowed_rectangles.extend(model_rectangles)
         allowed_circles.extend(model_circles)
         if scope_rectangle is None:

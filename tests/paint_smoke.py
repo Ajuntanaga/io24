@@ -438,6 +438,19 @@ def main():
                         return True
                     raise
                 print("CAPTURE -> %s" % path, flush=True)
+                if page_name == "ch" and win.current_module == (1, "LIM"):
+                    rack = win.limiter_racks[1]
+                    located, bounds = rack.compute_bounds(win.get_content())
+                    if not located:
+                        raise RuntimeError("limiter rack bounds unavailable")
+                    rectangle = [round(bounds.get_x()), round(bounds.get_y()),
+                                 rack.get_width(), rack.get_height()]
+                    metadata = path.with_suffix(".limiter-rack.json")
+                    metadata.write_text(json.dumps({
+                        "rack": "limiter", "rack_rectangle": rectangle,
+                        "calibration": G.eq_reference_calibration_mode(),
+                    }, sort_keys=True, indent=2) + "\n")
+                    print("RACK -> %s" % rectangle, flush=True)
             state["capture_pending"] = None
             state["capture_retries"] = 0
             state["scroll_settled"] = False

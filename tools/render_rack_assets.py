@@ -409,8 +409,30 @@ def compile_rack(rack_id: str, design_root: Path,
             json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
         output_root.mkdir(parents=False, exist_ok=True)
-        for filename in (spec["source"],) + tuple(spec["generated"]):
-            os.replace(stage / filename, output_root / filename)
+        filenames = (spec["source"],) + tuple(spec["generated"])
+        # Save every previous target before publishing anything. On an I/O
+        # failure restore replaced targets and remove targets introduced by
+        # this transaction. The receipt remains the final successful replace.
+        backup = stage / "previous"
+        backup.mkdir()
+        for filename in filenames:
+            target = output_root / filename
+            if target.exists():
+                shutil.copy2(target, backup / filename)
+        published = []
+        try:
+            for filename in filenames:
+                os.replace(stage / filename, output_root / filename)
+                published.append(filename)
+        except OSError:
+            for filename in reversed(published):
+                target = output_root / filename
+                previous = backup / filename
+                if previous.exists():
+                    os.replace(previous, target)
+                else:
+                    target.unlink()
+            raise
         return receipt
 
 

@@ -14,7 +14,7 @@ _LIMITER = {
     "rack_id": "limiter",
     "source_size": (1400, 420),
     "panel": (38, 12, 1324, 396),
-    "display": (485, 104, 430, 241),
+    "display": (420, 100, 560, 260),
     "lamp": (1309, 336, 14),
     "source": "limiter-reference.png",
     "output": "limiter-faceplate.png",
@@ -41,7 +41,7 @@ _LIMITER = {
     # lamp state are removed inside these regions to make the faceplate.
     "cleanup_regions": ((170, 112, 220, 264),
                         (1010, 112, 220, 264),
-                        (500, 119, 400, 211),
+                        (420, 100, 560, 260),
                         (1295, 322, 28, 28)),
     # Radius multipliers scale with the knob; *_px dimensions stay in GTK
     # logical pixels, as do the value font and focus halos. The same contract

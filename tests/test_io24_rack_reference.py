@@ -211,9 +211,12 @@ class RackReferenceTests(unittest.TestCase):
 
     def test_scaled_rect_and_pointer_angle(self):
         self.assertEqual(
-            io24_rack_reference.scaled_rect((485, 104, 430, 241), 700, 210, "limiter"),
-            (242.5, 52.0, 215.0, 120.5),
+            io24_rack_reference.scaled_rect((420, 100, 560, 260), 700, 210, "limiter"),
+            (210.0, 50.0, 280.0, 130.0),
         )
+        display = io24_rack_reference.rack("limiter")["display"]
+        self.assertEqual(display, (420, 100, 560, 260))
+        self.assertEqual(display[2] / 1400.0, .40)
         control = io24_rack_reference.rack("limiter")["controls"]["threshold"]
         self.assertAlmostEqual(io24_rack_reference.pointer_angle(control, -40.0), 135.0)
         self.assertAlmostEqual(io24_rack_reference.pointer_angle(control, 0.0), 405.0)

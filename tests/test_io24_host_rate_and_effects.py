@@ -626,13 +626,19 @@ class ReferenceRackTests(unittest.TestCase):
                 rack = self._rack()
                 rack._texture = mock.Mock(side_effect=lambda name: name)
                 rack._draw_knob = mock.Mock()
+                rack._draw_power_switch = mock.Mock()
+                rack._append_production_faceplate = mock.Mock()
                 rack.display_draw = mock.Mock()
                 snapshot = SimpleNamespace(
                     append_texture=mock.Mock(), push_opacity=mock.Mock(),
-                    pop=mock.Mock())
+                    pop=mock.Mock(), save=mock.Mock(),
+                    translate=mock.Mock(), restore=mock.Mock())
                 with mock.patch.dict(os.environ,
                                      {"IO24_EQ_REFERENCE_CALIBRATION": mode}), \
-                        mock.patch.object(io24gtk, "dot"):
+                        mock.patch.object(io24gtk, "dot"), \
+                        mock.patch.object(io24gtk, "box"), \
+                        mock.patch.object(
+                            io24gtk, "centred_faceplate_label"):
                     rack.paint(snapshot, 700, 210)
                 layers = [call.args[0]
                           for call in snapshot.append_texture.call_args_list]
@@ -641,14 +647,16 @@ class ReferenceRackTests(unittest.TestCase):
                     rack._draw_knob.assert_not_called()
                     rack.display_draw.assert_not_called()
                 else:
-                    expected = [rack.spec["output"]]
+                    expected = []
                     if mode in ("overlay", "both"):
                         expected.append(rack.spec["calibration_underlay"])
                         snapshot.push_opacity.assert_called_once_with(.46)
                     if mode in ("nodes", "both"):
                         expected.append(rack.spec["calibration_nodes"])
                     self.assertEqual(layers, expected)
+                    rack._append_production_faceplate.assert_called_once()
                     self.assertEqual(rack._draw_knob.call_count, 2)
+                    rack._draw_power_switch.assert_called_once()
                     rack.display_draw.assert_called_once()
 
     def _rack(self, threshold=-28.0, release=0.4, power=False):
@@ -829,24 +837,71 @@ class ReferenceRackTests(unittest.TestCase):
         self.assertEqual(len(rack.win.messages), 1)
         self.assertIn("limiter", rack.win.messages[0].lower())
 
-    def test_any_missing_asset_uses_the_complete_vector_fallback(self):
+    def test_vector_controls_need_no_knob_asset_at_runtime(self):
         rack = self._rack(power=True)
         rack.display_draw = mock.Mock()
         rack._texture = mock.Mock(
             side_effect=lambda filename:
             object() if filename == "limiter-faceplate.png" else None)
-        rack._draw_fallback_faceplate = mock.Mock()
+        rack._append_production_faceplate = mock.Mock()
+        rack._draw_knob = mock.Mock()
+        rack._draw_power_switch = mock.Mock()
         snapshot = SimpleNamespace(append_texture=mock.Mock(),
-                                   push_clip=mock.Mock(), pop=mock.Mock())
+                                   push_clip=mock.Mock(), pop=mock.Mock(),
+                                   save=mock.Mock(), translate=mock.Mock(),
+                                   restore=mock.Mock())
 
         with mock.patch.object(io24gtk, "dot"), \
                 mock.patch.object(io24gtk, "polyline"), \
+                mock.patch.object(io24gtk, "glow"), \
+                mock.patch.object(io24gtk, "box"), \
                 mock.patch.object(io24gtk, "centred_faceplate_label"):
             rack.paint(snapshot, 700, 210)
 
-        rack._draw_fallback_faceplate.assert_called_once_with(
-            snapshot, 700, 210)
+        rack._append_production_faceplate.assert_called_once()
+        rack._texture.assert_not_called()
         snapshot.append_texture.assert_not_called()
+
+    def test_measured_rack_bounds_match_the_eq_rack_bay(self):
+        rack = self._rack()
+        _x, _y, eq_width, eq_height = \
+            io24gtk.STANDARD_EQ_REFERENCE_ART["rack_crop"]
+        eq_aspect = eq_width / eq_height
+        for width in (588, 1023):
+            total_height = io24gtk.standard_eq_canvas_height(width)
+            x, y, rack_width, rack_height = rack._rack_bounds(
+                width, total_height)
+            expected = io24gtk.standard_eq_rack_bounds(
+                width,
+                total_height - io24gtk.ALTERNATE_EQ_RACK_SHADOW_ROOM)
+
+            self.assertAlmostEqual(rack_width / rack_height, eq_aspect)
+            self.assertAlmostEqual(rack_width, width)
+            for actual, wanted in zip(
+                    (x, y, rack_width, rack_height), expected):
+                self.assertAlmostEqual(actual, wanted)
+            self.assertGreaterEqual(total_height - rack_height,
+                                    io24gtk.ALTERNATE_EQ_RACK_SHADOW_ROOM)
+
+    def test_static_faceplate_render_node_is_reused_until_size_changes(self):
+        rack = self._rack()
+        rack._faceplate_node = None
+        rack._draw_production_faceplate = mock.Mock()
+        first_node, second_node = object(), object()
+        static = mock.Mock()
+        static.to_node.side_effect = (first_node, second_node)
+        target = mock.Mock()
+
+        with mock.patch.object(io24gtk.Gtk, "Snapshot", return_value=static):
+            rack._append_production_faceplate(target, 700, 210)
+            rack._append_production_faceplate(target, 700, 210)
+            rack._append_production_faceplate(target, 701, 210)
+
+        self.assertEqual(rack._draw_production_faceplate.call_count, 2)
+        self.assertEqual(target.append_node.call_args_list, [
+            mock.call(first_node), mock.call(first_node),
+            mock.call(second_node),
+        ])
 
     def test_vector_fallback_draws_every_manifest_rack_slot(self):
         rack = self._rack()

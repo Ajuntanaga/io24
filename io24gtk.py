@@ -2379,6 +2379,24 @@ def limiter_display_state(win, channel):
     }
 
 
+def hpf_input_energy(win, channel):
+    """Normalize existing input-meter telemetry for HPF mesh motion.
+
+    The controller's disconnected/quiet value is -99 dB. Keeping everything
+    at or below -72 dB at exact zero preserves the designed idle animation;
+    only real input adds deformation and light to the display.
+    """
+    snap = getattr(getattr(win, "ctl", None), "snap", {}) or {}
+    try:
+        level_db = float(snap.get("in", ())[channel - 1])
+    except (IndexError, TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(level_db) or level_db <= -72.0:
+        return 0.0
+    normalized = min(1.0, (level_db + 72.0) / 63.0)
+    return normalized * normalized * (3.0 - 2.0 * normalized)
+
+
 def draw_limiter_display(win, channel, sn, rect, rack_state, active):
     """Paint the limiter's live future-retro transfer and reduction field."""
     x, y, width, height = rect
@@ -2542,6 +2560,113 @@ def draw_limiter_display(win, channel, sn, rect, rack_state, active):
                  rgba(.32, .80, .78, .026 * lit), .45)
 
 
+def draw_hpf_display(win, channel, sn, rect, rack_state, active):
+    """Paint a live spectral tunnel around the real second-order HPF curve."""
+    x, y, width, height = rect
+    cutoff = max(24.0, min(1000.0, float(
+        rack_state.get("cutoff", win.hpf_hz(channel)))))
+    lit = 1.0 if active else .30
+    phase = time.monotonic() * .72 if active else 0.0
+    input_energy = hpf_input_energy(win, channel) if active else 0.0
+    radius = max(4.0, min(9.0, height * .055))
+
+    # Deep optical stack: a physical bezel, black gasket and cyan-violet glass.
+    rounded_vgrad(sn, x, y, width, height, radius, (
+        (0.0, (.23, .27, .30, 1.0)), (.10, (.055, .072, .080, 1.0)),
+        (.76, (.012, .017, .024, 1.0)), (1.0, (.004, .007, .012, 1.0))),
+        rgba(.39, .56, .61, .78))
+    inset = max(6.0, height * .055)
+    ix, iy = x + inset, y + inset
+    iw, ih = width - inset * 2.0, height - inset * 2.0
+    rounded_box(sn, ix, iy, iw, ih, max(3.0, radius - 2.0),
+                rgba(.002, .008, .018, 1.0), rgba(.08, .55, .68, .70))
+
+    faceplate_label(win, sn, "HPF // SPECTRAL APERTURE", ix + iw * .035,
+                    iy + ih * .035, rgba(.60, .91, 1.0, .74 * lit),
+                    max(5.5, min(7.4, height * .046)), Pango.Weight.BOLD)
+    centred_faceplate_label(
+        win, sn, "%d" % round(cutoff), ix + iw * .865,
+        iy + ih * .005, rgba(.82, 1.0, 1.0, .94 * lit),
+        max(11.0, min(17.0, height * .108)), Pango.Weight.BOLD)
+    centred_faceplate_label(
+        win, sn, "Hz  /  12 dB OCT", ix + iw * .865,
+        iy + ih * .155, rgba(.39, .86, .94, .66 * lit),
+        max(4.8, min(6.7, height * .041)), Pango.Weight.BOLD)
+
+    gx, gy = ix + iw * .045, iy + ih * .225
+    gw, gh = iw * .91, ih * .575
+    horizon_y = gy + gh * .50
+    vanishing_x = gx + gw * .19
+
+    # Moving perspective mesh: the cutoff is a luminous aperture through a
+    # spectral tunnel, not a conventional line graph wearing neon colours.
+    for lane in range(9):
+        lane_t = lane / 8.0
+        end_y = gy + gh * lane_t
+        points = []
+        for column in range(33):
+            t = column / 32.0
+            depth = t ** 1.34
+            wave = math.sin(t * 13.0 + lane * .62 - phase) * gh * .010 * lit
+            # Real input excites a second, denser wave through the existing
+            # plane. At zero energy this term is exactly zero, leaving the
+            # original idle geometry unchanged.
+            wave += (math.sin(t * 26.0 + lane * 1.17 - phase * 3.1) *
+                     gh * .034 * input_energy * (.28 + depth * .72))
+            px = vanishing_x + (gx + gw - vanishing_x) * depth
+            py = horizon_y + (end_y - horizon_y) * depth + wave
+            points.append((px, py))
+        polyline(sn, points, rgba(
+            .10 + .14 * input_energy, .62 + .20 * input_energy, .76,
+            (.085 + lane_t * .045 + input_energy * .055) * lit),
+            .7 + input_energy * .38)
+    for column in range(15):
+        t = ((column / 14.0 + phase * .055) % 1.0) ** 1.34
+        px = vanishing_x + (gx + gw - vanishing_x) * t
+        reaction = (math.sin(t * 19.0 - phase * 2.6) * gh * .020 *
+                    input_energy * t)
+        top = horizon_y + (gy - horizon_y) * t + reaction
+        bottom = horizon_y + (gy + gh - horizon_y) * t - reaction
+        polyline(sn, [(px, top), (px, bottom)],
+                 rgba(.18, .72 + .18 * input_energy, .82,
+                      (.08 + t * .15 + input_energy * .045) * lit),
+                 .72 + input_energy * .30)
+
+    def graph_x(frequency):
+        return gx + math.log(frequency / 20.0) / math.log(20000.0 / 20.0) * gw
+
+    curve = []
+    for column in range(97):
+        frequency = 20.0 * (20000.0 / 20.0) ** (column / 96.0)
+        ratio = max(1e-6, frequency / cutoff)
+        magnitude = ratio * ratio / math.sqrt(1.0 + ratio ** 4)
+        db = max(-36.0, 20.0 * math.log10(max(1e-6, magnitude)))
+        px = gx + gw * column / 96.0
+        py = gy + gh * .84 - (db + 36.0) / 36.0 * gh * .66
+        curve.append((px, py))
+    fill = curve + [(gx + gw, gy + gh * .90), (gx, gy + gh * .90)]
+    fill_poly(sn, fill, rgba(.03, .72, .86, .075 * lit))
+    glow(sn, lambda: polyline(sn, curve, rgba(.30, .96, 1.0, .98 * lit), 2.0),
+         radius=max(4.0, height * .035))
+
+    node_x = graph_x(cutoff)
+    node_y = min(curve, key=lambda point: abs(point[0] - node_x))[1]
+    for ring in range(3, 0, -1):
+        pulse = 1.0 + .12 * math.sin(phase * 2.2 + ring)
+        dot(sn, node_x, node_y, (2.2 + ring * 2.2) * pulse,
+            rgba(.34, .98, 1.0, (.08 + ring * .035) * lit))
+    glow(sn, lambda: dot(sn, node_x, node_y, max(2.2, height * .016),
+                         rgba(.84, 1.0, 1.0, .98 * lit)), radius=6.0)
+
+    for frequency, label in ((24, "24"), (40, "40"), (80, "80"),
+                             (160, "160"), (1000, "1K"), (10000, "10K")):
+        px = graph_x(frequency)
+        polyline(sn, [(px, gy + gh * .88), (px, gy + gh * .93)],
+                 rgba(.42, .82, .88, .38 * lit), .8)
+        centred_faceplate_label(win, sn, label, px, gy + gh * .94,
+                                rgba(.52, .78, .82, .52 * lit),
+                                max(4.8, min(6.2, height * .038)))
+
 class ReferenceRack(Canvas):
     """Manifest-painted rack view over existing GTK controls.
 
@@ -2686,8 +2811,9 @@ class ReferenceRack(Canvas):
         scale_x = float(width) / source_width
         scale_y = float(height) / source_height
         x, y, radius = self.spec["lamp"]
+        minimum_radius = 15.0 if self.rack_id == "hpf" else 12.0
         return (x * scale_x, y * scale_y,
-                max(12.0, radius * min(scale_x, scale_y)))
+                max(minimum_radius, radius * min(scale_x, scale_y)))
 
     def _lamp_layout(self):
         x, y, width, height = self._rack_bounds()
@@ -2723,6 +2849,23 @@ class ReferenceRack(Canvas):
     def _widget(self, field):
         return self.bindings.get(field, {}).get("widget")
 
+    def _power_active(self):
+        binding = self.bindings.get("power", {})
+        getter = binding.get("get_active")
+        widget = binding.get("widget")
+        if callable(getter):
+            return bool(getter())
+        return bool(widget is not None and widget.get_active())
+
+    def _set_power_active(self, active):
+        binding = self.bindings.get("power", {})
+        setter = binding.get("set_active")
+        widget = binding.get("widget")
+        if callable(setter):
+            setter(bool(active))
+        elif widget is not None:
+            widget.set_active(bool(active))
+
     def _binding_changed(self, *_args):
         self.queue_draw()
 
@@ -2731,7 +2874,8 @@ class ReferenceRack(Canvas):
         connected = set()
         fields_and_signals = [
             (field, "value-changed") for field in self._fields()
-        ] + [("power", "notify::active")]
+        ] + [("power", self.bindings.get("power", {}).get(
+            "signal", "notify::active"))]
         for field, signal in fields_and_signals:
             widget = self._widget(field)
             key = (id(widget), signal)
@@ -2746,8 +2890,7 @@ class ReferenceRack(Canvas):
             widget = self._widget(field)
             if widget is not None:
                 state[field] = float(widget.get_value())
-        power = self._widget("power")
-        state["power"] = bool(power is not None and power.get_active())
+        state["power"] = self._power_active()
         return state
 
     def _fraction(self, field):
@@ -2796,10 +2939,9 @@ class ReferenceRack(Canvas):
     def _toggle(self, field):
         if field != "power":
             return False
-        widget = self._widget("power")
-        if widget is None:
+        if self._widget("power") is None:
             return False
-        widget.set_active(not widget.get_active())
+        self._set_power_active(not self._power_active())
         self.queue_draw()
         return True
 
@@ -2933,7 +3075,8 @@ class ReferenceRack(Canvas):
                 radius * radius_scale, rgba(.32, .34, .32, 1.0))
 
     def _draw_production_faceplate(self, sn, width, height):
-        """Build the limiter as a live rack surface, not a stretched poster."""
+        """Build a live rack surface, not a stretched poster."""
+        futuristic = self.rack_id == "hpf"
         scale = min(width / self.spec["source_size"][0],
                     height / self.spec["source_size"][1])
         box(sn, 0, 0, width, height, pal(FIELD))
@@ -2952,24 +3095,34 @@ class ReferenceRack(Canvas):
         # A multi-stop gunmetal plate establishes real top light and a dark
         # lower return. Fine directional brushing and sparse wear stop the
         # material reading as a single flat CSS colour.
-        rounded_vgrad(sn, px, py, pw, ph, 6.0, (
-            (0.0, (.245, .255, .250, 1.0)),
-            (.08, (.145, .151, .146, 1.0)),
-            (.48, (.092, .094, .087, 1.0)),
-            (.82, (.060, .061, .057, 1.0)),
-            (1.0, (.030, .032, .031, 1.0))),
-            rgba(.48, .45, .36, .92))
+        plate_stops = ((0.0, (.17, .205, .225, 1.0)),
+                       (.08, (.075, .105, .125, 1.0)),
+                       (.48, (.032, .050, .064, 1.0)),
+                       (.82, (.018, .029, .040, 1.0)),
+                       (1.0, (.007, .013, .021, 1.0))) if futuristic else (
+                           (0.0, (.245, .255, .250, 1.0)),
+                           (.08, (.145, .151, .146, 1.0)),
+                           (.48, (.092, .094, .087, 1.0)),
+                           (.82, (.060, .061, .057, 1.0)),
+                           (1.0, (.030, .032, .031, 1.0)))
+        rounded_vgrad(sn, px, py, pw, ph, 6.0, plate_stops,
+                      rgba(.30, .33, .33, .92) if futuristic else
+                      rgba(.48, .45, .36, .92))
         for row in range(int(py + 4), max(int(py + 5), int(py + ph - 4)), 2):
             phase = math.sin(row * .43)
-            tone = rgba(.90, .84, .68, .020 + .012 * (phase + 1.0))
+            tone = (rgba(.38, .82, .90, .018 + .011 * (phase + 1.0))
+                    if futuristic else
+                    rgba(.90, .84, .68, .020 + .012 * (phase + 1.0)))
             polyline(sn, [(px + 5, row), (px + pw - 5, row)], tone, .45)
         for index in range(760):
             gx = px + 13 + ((index * 97) % max(19, int(pw - 31)))
             gy = py + 8 + ((index * 53) % max(11, int(ph - 18)))
             length = 1 + ((index * 17) % 17)
             bright = index % 6 != 0
-            grain = (rgba(.92, .86, .70, .052) if bright else
-                     rgba(.005, .007, .007, .16))
+            grain = ((rgba(.54, .88, .94, .072) if bright else
+                      rgba(.002, .012, .018, .21)) if futuristic else
+                     (rgba(.92, .86, .70, .052) if bright else
+                      rgba(.005, .007, .007, .16)))
             polyline(sn, [(gx, gy), (min(px + pw - 7, gx + length), gy)],
                      grain, .42)
         # Sparse oxidation and hairline wear give the plate history without
@@ -2980,12 +3133,15 @@ class ReferenceRack(Canvas):
             wear = 7.0 + (index % 5) * 5.0
             polyline(sn, [(wx, wy),
                           (min(px + pw - 16, wx + wear), wy + (index % 3 - 1))],
-                     rgba(.72, .63, .45, .10 if index % 4 else .16), .55)
+                     (rgba(.44, .76, .82, .11 if index % 4 else .18)
+                      if futuristic else
+                      rgba(.72, .63, .45, .10 if index % 4 else .16)), .55)
         for index in range(48):
             ox = px + 19 + ((index * 89) % max(23, int(pw - 42)))
             oy = py + 13 + ((index * 43) % max(13, int(ph - 30)))
             dot(sn, ox, oy, .45 + (index % 3) * .18,
-                rgba(.08, .065, .045, .18))
+                (rgba(.012, .045, .055, .28) if futuristic else
+                 rgba(.08, .065, .045, .18)))
         # A few longer directional abrasions and burnished handling patches
         # make the short grain resolve as aged sheet metal rather than noise.
         for index in range(21):
@@ -2995,11 +3151,28 @@ class ReferenceRack(Canvas):
             polyline(sn, [(sx, sy),
                           (min(px + pw - 20, sx + span),
                            sy + (index % 3 - 1) * .65)],
-                     rgba(.90, .83, .65, .075), .48)
+                     (rgba(.55, .87, .92, .085) if futuristic else
+                      rgba(.90, .83, .65, .075)), .48)
             polyline(sn, [(sx + 2.0, sy + 1.0),
                           (min(px + pw - 20, sx + span * .72),
                            sy + 1.0)],
-                     rgba(.005, .006, .006, .18), .42)
+                     rgba(.005, .009, .012, .23 if futuristic else .18), .42)
+        if futuristic:
+            # Cross-brushed titanium: long vertical ghosting and fine oblique
+            # tool marks remain visible around the display without becoming a
+            # decorative grid.
+            for index in range(52):
+                tx = px + 15 + ((index * 149) % max(27, int(pw - 34)))
+                ty = py + 11 + ((index * 61) % max(19, int(ph - 26)))
+                span = 5.0 + (index % 7) * 2.2
+                polyline(sn, [(tx, ty), (tx + span * .28, ty + span)],
+                         rgba(.42, .81, .88,
+                              .050 if index % 3 else .085), .42)
+            for index in range(23):
+                tx = px + 25 + ((index * 211) % max(43, int(pw - 58)))
+                polyline(sn, [(tx, py + 9),
+                              (tx + (index % 3 - 1) * 1.2, py + ph - 9)],
+                         rgba(.15, .44, .51, .025), .38)
         for bx, by, br in (
                 (px + pw * .145, py + ph * .32, ph * .058),
                 (px + pw * .865, py + ph * .69, ph * .045),
@@ -3008,7 +3181,8 @@ class ReferenceRack(Canvas):
                 (0.0, (.34, .31, .24, .065)),
                 (1.0, (.06, .06, .055, 0.0))), focus=(0.0, 0.0))
         polyline(sn, [(px + 6, py + 3), (px + pw - 6, py + 3)],
-                 rgba(1, .92, .72, .28), 1.2)
+                 (rgba(.62, .64, .62, .24) if futuristic else
+                  rgba(1, .92, .72, .28)), 1.2)
         polyline(sn, [(px + 6, py + ph - 3),
                       (px + pw - 6, py + ph - 3)],
                  rgba(0, 0, 0, .76), 1.4)
@@ -3017,7 +3191,9 @@ class ReferenceRack(Canvas):
         display = io24_rack_reference.scaled_rect(
             self.spec["display"], width, height, self.rack_id)
         dx, dy, dw, dh = display
-        for cx in (width * .20, width * .80):
+        control_centres = ((width * .193,) if futuristic else
+                           (width * .20, width * .80))
+        for cx in control_centres:
             rounded_box(sn, cx - width * .115, py + ph * .215,
                         width * .23, ph * .655, 8.0,
                         rgba(.018, .020, .019, .18),
@@ -3068,13 +3244,15 @@ class ReferenceRack(Canvas):
                           (sx + sr * .48, sy - sr * .12)],
                      rgba(.015, .018, .017, .92), max(.8, sr * .15))
 
-        title_y = py + max(8.0, ph * .034)
+        title_y = py + max(8.0, ph * .032)
         centred_faceplate_label(
-            self, sn, "PEAK LIMITER", width * .5, title_y,
-            rgba(.93, .86, .69, .94), max(8.0, min(12.0, width / 82)),
+            self, sn, "HIGH-PASS FILTER" if futuristic else "PEAK LIMITER",
+            width * .5, title_y,
+            (rgba(.66, .94, 1.0, .96) if futuristic else
+             rgba(.93, .86, .69, .94)), max(8.0, min(12.0, width / 82)),
             Pango.Weight.BOLD)
-        if width >= 760.0:
-            descriptor_y = title_y + max(22.0, ph * .105)
+        if width >= 760.0 and not futuristic:
+            descriptor_y = py + max(34.0, ph * .132)
             centred_faceplate_label(
                 self, sn, "DISCRETE DYNAMICS  ·  20 dB REDUCTION RANGE",
                 width * .5, descriptor_y,
@@ -3097,6 +3275,7 @@ class ReferenceRack(Canvas):
 
     def _draw_knob(self, sn, field, geometry, active, texture=None):
         cx, cy, radius = geometry
+        futuristic = self.rack_id == "hpf"
         selected = field == self.selected_field
         hovered = field == self.hover_field
         style = self.spec["live_style"]
@@ -3116,29 +3295,38 @@ class ReferenceRack(Canvas):
         for offset, size, strength in (
                 (-.68, .56, .62), (-.34, .70, .84),
                 (0.0, .82, 1.0), (.34, .70, .84), (.68, .56, .62)):
-            dot(sn, cx + radius * offset, cy + radius * .94,
-                radius * size,
-                rgba(1.0, .49, .075, pool_alpha * strength))
+            dot(sn, cx + radius * offset, cy + radius * .94, radius * size,
+                (rgba(.05, .82, 1.0, pool_alpha * strength) if futuristic
+                 else rgba(1.0, .49, .075, pool_alpha * strength)))
         sn.pop()
         # A sharper reflected pool survives small allocations; the skirt masks
         # its upper half, leaving a convincing wash on the metal below.
         for offset, strength in ((-.42, .58), (0.0, 1.0), (.42, .58)):
+            pool = (((0.0, (.20, .93, 1.0,
+                            (.30 if active else .065) * strength)),
+                     (.48, (.02, .49, 1.0,
+                            (.15 if active else .032) * strength)),
+                     (1.0, (.015, .04, .30, 0.0))) if futuristic else (
+                    (0.0, (1.0, .56, .11,
+                           (.30 if active else .065) * strength)),
+                    (.48, (1.0, .37, .045,
+                           (.15 if active else .032) * strength)),
+                    (1.0, (.28, .055, .006, 0.0))))
             radial_dot(sn, cx + radius * offset, cy + radius * .88,
-                       radius * .64, (
-                (0.0, (1.0, .56, .11,
-                       (.30 if active else .065) * strength)),
-                (.48, (1.0, .37, .045,
-                       (.15 if active else .032) * strength)),
-                (1.0, (.28, .055, .006, 0.0))), focus=(0.0, .18))
+                       radius * .64, pool, focus=(0.0, .18))
         lower_arc = standard_eq_arc_points(
             cx, cy, radius * 1.015, math.radians(24), math.radians(156))
         sn.push_blur(max(3.0, radius * .14))
         polyline(sn, lower_arc,
-                 rgba(1.0, .58, .12, .86 if active else .18),
+                 (rgba(.08, .84, 1.0, .86 if active else .18)
+                  if futuristic else
+                  rgba(1.0, .58, .12, .86 if active else .18)),
                  max(3.6, radius * .15))
         sn.pop()
         polyline(sn, lower_arc,
-                 rgba(1.0, .76, .31, .78 if active else .16),
+                 (rgba(.62, .98, 1.0, .82 if active else .16)
+                  if futuristic else
+                  rgba(1.0, .76, .31, .78 if active else .16)),
                  max(1.0, radius * .028))
         for inner, outer, major in self._knob_tick_segments(field, geometry):
             polyline(sn, [inner, outer],
@@ -3221,26 +3409,57 @@ class ReferenceRack(Canvas):
         ], rgba(.035, .030, .023, .72), max(.55, radius * .012))
 
         cap_y = cy - radius * .035
-        radial_dot(sn, cx, cap_y, radius * .615, (
-            (0.00, (.96, .84, .59, 1.0)),
-            (0.20, (.78, .65, .40, 1.0)),
-            (0.52, (.54, .43, .25, 1.0)),
-            (0.78, (.72, .58, .33, 1.0)),
-            (1.00, (.30, .225, .12, 1.0))), focus=(-.34, -.38))
-        # Fine radial machining marks follow the cap rather than floating over
-        # it; the low contrast leaves room for the recessed pointer channel.
-        for index in range(36):
-            machining = angle + math.tau * index / 36.0
-            alpha = .11 if index % 3 else .19
-            polyline(sn, [
-                (cx + radius * .16 * math.cos(machining),
-                 cap_y + radius * .16 * math.sin(machining)),
-                (cx + radius * .56 * math.cos(machining),
-                 cap_y + radius * .56 * math.sin(machining)),
-            ], rgba(.98, .88, .64, alpha), max(.45, radius * .008))
+        cap_stops = ((0.00, (.90, .98, 1.0, 1.0)),
+                     (0.20, (.54, .67, .72, 1.0)),
+                     (0.52, (.24, .31, .35, 1.0)),
+                     (0.78, (.49, .62, .67, 1.0)),
+                     (1.00, (.10, .15, .18, 1.0))) if futuristic else (
+                         (0.00, (.96, .84, .59, 1.0)),
+                         (0.20, (.78, .65, .40, 1.0)),
+                         (0.52, (.54, .43, .25, 1.0)),
+                         (0.78, (.72, .58, .33, 1.0)),
+                         (1.00, (.30, .225, .12, 1.0)))
+        if futuristic:
+            # A shallow, flat-topped titanium insert over the retained
+            # rubberized scalloped skirt. Concentric machining reads as a
+            # planar face instead of the former rounded dome.
+            sn.push_blur(max(1.2, radius * .045))
+            dot(sn, cx + radius * .018, cap_y + radius * .035,
+                radius * .625, rgba(0, 0, 0, .64))
+            sn.pop()
+            dot(sn, cx, cap_y, radius * .605, rgba(.255, .335, .375, 1.0))
+            for factor, alpha in ((.56, .24), (.49, .14), (.40, .11),
+                                  (.30, .085), (.20, .07)):
+                polyline(sn, standard_eq_arc_points(
+                    cx, cap_y, radius * factor, 0.0, math.tau),
+                    rgba(.72, .92, .96, alpha), max(.42, radius * .008))
+            polyline(sn, standard_eq_arc_points(
+                cx, cap_y, radius * .585, math.radians(202),
+                math.radians(338)), rgba(.015, .035, .044, .70),
+                max(.85, radius * .018))
+            polyline(sn, standard_eq_arc_points(
+                cx, cap_y, radius * .585, math.radians(22),
+                math.radians(158)), rgba(.83, .98, 1.0, .44),
+                max(.65, radius * .013))
+        else:
+            radial_dot(sn, cx, cap_y, radius * .615, cap_stops,
+                       focus=(-.34, -.38))
+            # Fine radial machining marks follow the cap rather than floating
+            # over it; the low contrast leaves room for the pointer channel.
+            for index in range(36):
+                machining = angle + math.tau * index / 36.0
+                alpha = .11 if index % 3 else .19
+                polyline(sn, [
+                    (cx + radius * .16 * math.cos(machining),
+                     cap_y + radius * .16 * math.sin(machining)),
+                    (cx + radius * .56 * math.cos(machining),
+                     cap_y + radius * .56 * math.sin(machining)),
+                ], rgba(.98, .88, .64, alpha), max(.45, radius * .008))
         for factor, colour in (
-                (.575, rgba(1.0, .92, .72, .30)),
-                (.525, rgba(.19, .13, .065, .34))):
+                (.575, (rgba(.78, .96, 1.0, .34) if futuristic else
+                         rgba(1.0, .92, .72, .30))),
+                (.525, (rgba(.025, .075, .090, .48) if futuristic else
+                         rgba(.19, .13, .065, .34)))):
             polyline(sn, standard_eq_arc_points(
                 cx, cap_y, radius * factor, 0.0, math.tau), colour,
                 max(.55, radius * .013))
@@ -3401,7 +3620,7 @@ class ReferenceRack(Canvas):
             pal(INK, .72), max(5.5, 5.8 * scale), Pango.Weight.SEMIBOLD)
         centred_faceplate_label(
             self, sn, "ON" if active else "BYPASS", cx,
-            cy + 29.0 * scale,
+            cy + 20.0 * scale,
             pal(THERM if active else INK, .82 if active else .46),
             max(5.2, 5.5 * scale), Pango.Weight.BOLD)
 
@@ -6778,7 +6997,7 @@ class Rack(ChannelBound, Canvas):
                 mag = 20 * math.log10(max(r / math.sqrt(1 + r * r), 1e-3))
                 pts.append((x + i, y + h - max(0.0, min(1.0, (mag + 24) / 24.0)) * h))
             polyline(sn, pts, acc, 1.8)
-            t = "bypassed" if hz <= 25 else "%.0f Hz" % hz
+            t = "%.0f Hz" % hz if on else "bypassed"
             label(self, sn, t, x + w - len(t) * 5.2, y - 1,
                   pal(INK, 0.75 if on else 0.4), 8)
 
@@ -6787,7 +7006,7 @@ class Rack(ChannelBound, Canvas):
         n = len(self.order)
         uw = w / n
         gr = self.win.ctl.snap["gr"].get(self.channel, {})
-        state = {"HPF": self.win.hpf_hz(self.channel) > 25,
+        state = {"HPF": self.win.hpf_enabled(self.channel),
                  "GATE": self.win.dyn_for(self.channel)["gate"],
                  "COMP": self.win.dyn_for(self.channel)["comp"],
                  "EQ": (self.win._alt_eq(self.channel)["on"]
@@ -7749,8 +7968,9 @@ class Win(Adw.ApplicationWindow):
     def toggle_module(self, ch, mod):
         """Click a rack unit to switch that module in or out."""
         if mod == "HPF":
-            cur = self.hpf_by_ch.get(ch, 24.0)
-            self.set_hpf(ch, 24.0 if cur > 25 else 120.0)
+            live = getattr(self, "hpf_live", {}).get(ch)
+            if live is not None:
+                live.w.set_active(not live.w.get_active())
             return
         if mod == "EQ":
             self._set_eq_enabled(ch, not self.eq_enabled(ch))
@@ -7767,6 +7987,12 @@ class Win(Adw.ApplicationWindow):
 
     def hpf_hz(self, ch):
         return self.hpf_by_ch.get(ch, 24.0)
+
+    def hpf_enabled(self, ch):
+        live = getattr(self, "hpf_live", {}).get(ch)
+        if live is not None:
+            return bool(live.w.get_active())
+        return self.hpf_hz(ch) > 24.02
 
     def set_order(self, ch, eq_first):
         for c in ((1, 2) if self.link_both else (ch,)):
@@ -7867,7 +8093,7 @@ class Win(Adw.ApplicationWindow):
                 self.mute_live = getattr(self, "mute_live", {})
                 self.mute_live[ch] = self.live[-1]
             elif param == "hpf":
-                t.set_tooltip_text("80 Hz input filter")
+                t.set_tooltip_text("Channel high-pass filter power")
                 self.hpf_live = getattr(self, "hpf_live", {})
                 self.hpf_live[ch] = self.live[-1]
             box.append(t)
@@ -8054,6 +8280,7 @@ class Win(Adw.ApplicationWindow):
         """
         self.w = {1: {}, 2: {}}
         self.limiter_racks = {}
+        self.hpf_racks = {}
         self.columns = {}
         self.col_titles = {}
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -8998,21 +9225,7 @@ class Win(Adw.ApplicationWindow):
         # separate from the fixed 80 Hz preamp switch on the mixer strip.
         # Sharing a group with the limiter meant clicking either one landed you
         # in a page about the other.
-        hp = Adw.PreferencesGroup(title="HPF")
-        W["hpf_mode"] = Adw.ComboRow(
-            title="HPF",
-            model=Gtk.StringList.new(
-                ["Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
-        W["hpf_mode"].set_selected(0)
-        W["hpf_mode"].connect(
-            "notify::selected", self._hpf_mode_changed, ch)
-        hp.add(W["hpf_mode"])
-        r, W["hpf"] = self._srow(
-            "Exact cutoff", 24, 1000, 0.5, 24,
-            lambda v: ("bypassed" if v <= 25 else "%.0f Hz" % v),
-            lambda v, c=ch: self.set_hpf(c, v))
-        W["hpf"].set_sensitive(False)
-        hp.add(r)
+        hp = self._hpf_group(ch)
 
         # One section visible at a time, selected by the rack above. Stacking
         # every group defeated the rack: if all four are on screen already,
@@ -9078,6 +9291,41 @@ class Win(Adw.ApplicationWindow):
         self.limiter_racks[ch] = rack
         lm.add(rack.with_native_controls(W["_limiter_rows"]))
         return lm
+
+    def _hpf_group(self, ch):
+        """Build the HPF's existing controls into one futuristic rack view."""
+        W = self.w[ch]
+        hp = Adw.PreferencesGroup(title="HPF")
+        W["hpf_mode"] = Adw.ComboRow(
+            title="HPF",
+            model=Gtk.StringList.new(
+                ["24 Hz", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
+        W["hpf_mode"].set_selected(0)
+        W["hpf_mode"].connect(
+            "notify::selected", self._hpf_mode_changed, ch)
+        cutoff_row, W["hpf"] = self._srow(
+            "Exact cutoff", 24, 1000, 0.5, 24,
+            lambda v: "%.0f Hz" % v,
+            lambda v, c=ch: self.set_hpf(c, v))
+        W["hpf"].set_sensitive(False)
+        W["_hpf_rows"] = [W["hpf_mode"], cutoff_row]
+
+        bindings = {
+            "cutoff": {
+                "widget": W["hpf"],
+                "format": lambda value: "%d Hz" % round(value),
+            },
+            "power": {
+                "widget": self.hpf_live[ch].w,
+            },
+        }
+        rack = ReferenceRack(
+            self, "hpf", bindings,
+            lambda sn, rect, state, active, c=ch:
+            draw_hpf_display(self, c, sn, rect, state, active))
+        self.hpf_racks[ch] = rack
+        hp.add(rack.with_native_controls(W["_hpf_rows"]))
+        return hp
 
 
     def _rebuild_chains(self):
@@ -13375,8 +13623,8 @@ class Win(Adw.ApplicationWindow):
         self._preset_sync = True
         self._phones_source_mute = True
         try:
-            # The input-strip high-pass toggle is an Appl control, distinct
-            # from the Fat Channel's continuously variable low cut.
+            # The input-strip toggle is the HPF enable; the rack knob owns the
+            # same channel filter's separate ``filt`` cutoff coefficients.
             for ch, on in state["hpf_toggle"].items():
                 live = getattr(self, "hpf_live", {}).get(ch)
                 if live is not None:
@@ -13622,6 +13870,8 @@ class Win(Adw.ApplicationWindow):
                 for r in self.racks.values():
                     r.queue_draw()
                 for rack in getattr(self, "limiter_racks", {}).values():
+                    rack.queue_draw()
+                for rack in getattr(self, "hpf_racks", {}).values():
                     rack.queue_draw()
                 for c in self.w:
                     self.w[c]["comp_curve"].queue_draw()

@@ -46,7 +46,10 @@ class FakeInner:
 
     def floats(self, rsp):
         f = [0.0] * 512
-        f[4], f[6] = 0.06, 0.03                    # input meters
+        input_db = os.environ.get("IO24_PAINT_INPUT_DB")
+        input_level = (10.0 ** (float(input_db) / 20.0)
+                       if input_db is not None else 0.06)
+        f[4], f[6] = input_level, 0.03             # input meters
         f[12] = f[13] = 0.12                       # main L/R
         f[14] = f[15] = 0.09                       # mix A
         f[16] = f[17] = 0.02                       # mix B
@@ -336,6 +339,21 @@ def main():
                 if module == "LIM" and \
                         os.environ.get("IO24_PAINT_LIMITER_ON") == "1":
                     win.w[1]["lim_on"].set_active(True)
+                if module == "HPF" and \
+                        os.environ.get("IO24_PAINT_HPF_HZ"):
+                    live = win.hpf_live[1]
+                    live.mute = True
+                    try:
+                        live.w.set_active(
+                            os.environ.get("IO24_PAINT_HPF_ON") == "1")
+                    finally:
+                        live.mute = False
+                    win.set_hpf(1, float(os.environ["IO24_PAINT_HPF_HZ"]))
+                    print("HPF STATE -> %.1f Hz mode %d" % (
+                        win.hpf_hz(1),
+                        win.w[1]["hpf_mode"].get_selected()), flush=True)
+                    print("HPF RACK -> %s" %
+                          win.hpf_racks[1]._state(), flush=True)
                 win.show_module(1, module)
                 visible = win.mod_stacks[1].get_visible_child_name()
                 if visible != module or win.current_module != (1, module):
@@ -426,6 +444,10 @@ def main():
                 while GLib.MainContext.default().pending():
                     GLib.MainContext.default().iteration(False)
             if capture_dir:
+                if (page_name == "ch" and
+                        win.current_module == (1, "HPF")):
+                    print("HPF CAPTURE STATE -> %s" %
+                          win.hpf_racks[1]._state(), flush=True)
                 path = capture_dir / (
                     "%02d-%s.png" % (page_number, page_name))
                 try:

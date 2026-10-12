@@ -920,6 +920,25 @@ class ReferenceRackTests(unittest.TestCase):
                 drawn_rects)
 
 
+class HpfDisplayTelemetryTests(unittest.TestCase):
+    def test_silence_and_missing_input_preserve_the_idle_mesh(self):
+        for snap in ({}, {"in": [-99.0, -99.0]},
+                     {"in": [float("nan"), -99.0]}):
+            with self.subTest(snap=snap):
+                window = SimpleNamespace(ctl=SimpleNamespace(snap=snap))
+                self.assertEqual(io24gtk.hpf_input_energy(window, 1), 0.0)
+
+    def test_existing_meter_telemetry_drives_a_bounded_response(self):
+        window = SimpleNamespace(
+            ctl=SimpleNamespace(snap={"in": [-72.0, -36.0]}))
+        self.assertEqual(io24gtk.hpf_input_energy(window, 1), 0.0)
+        middle = io24gtk.hpf_input_energy(window, 2)
+        self.assertGreater(middle, 0.0)
+        self.assertLess(middle, 1.0)
+        window.ctl.snap["in"][1] = 3.0
+        self.assertEqual(io24gtk.hpf_input_energy(window, 2), 1.0)
+
+
 class LimiterRackIntegrationTests(unittest.TestCase):
     def test_limiter_display_uses_clamped_gain_reduction_telemetry(self):
         window = _window()

@@ -976,7 +976,7 @@ class HostRefinementTests(unittest.TestCase):
             _fs=48000.0,
             hpf_by_ch={1: 24.0, 2: 24.0},
             ctl=SimpleNamespace(submit=submitted.append),
-            _adopt_hpf_controls=lambda _ch, _hz: None,
+            _adopt_hpf_controls=lambda _ch, _hz, **_kwargs: None,
             racks={},
             say=messages.append,
         )
@@ -985,6 +985,52 @@ class HostRefinementTests(unittest.TestCase):
 
         self.assertEqual(len(submitted), 1)
         self.assertEqual(messages, [])
+
+    def test_hpf_cutoff_adoption_does_not_change_shared_power(self):
+        cutoff = SimpleNamespace(
+            value=None, sensitive=None,
+            set_value=lambda value: setattr(cutoff, "value", value),
+            set_sensitive=lambda value: setattr(cutoff, "sensitive", value))
+        mode = SimpleNamespace(
+            selected=None,
+            set_selected=lambda value: setattr(mode, "selected", value),
+            get_selected=lambda: mode.selected)
+        power = SimpleNamespace(
+            active=True,
+            get_active=lambda: power.active,
+            set_active=lambda value: setattr(power, "active", bool(value)))
+        host = SimpleNamespace(
+            hpf_by_ch={1: 80.0},
+            w={1: {"hpf": cutoff, "hpf_mode": mode}},
+            hpf_live={1: SimpleNamespace(w=power)},
+            _hpf_basic_index=io24gtk.Win._hpf_basic_index)
+
+        io24gtk.Win._adopt_hpf_controls(host, 1, 24.0)
+
+        self.assertEqual(cutoff.value, 24.0)
+        self.assertEqual(mode.selected, 0)
+        self.assertFalse(cutoff.sensitive)
+        self.assertTrue(io24gtk.Win.hpf_enabled(host, 1))
+
+        power.set_active(False)
+        self.assertFalse(io24gtk.Win.hpf_enabled(host, 1))
+        self.assertEqual(cutoff.value, 24.0)
+
+    def test_hpf_power_round_trip_preserves_cutoff(self):
+        power = SimpleNamespace(active=True)
+        power.get_active = lambda: power.active
+        power.set_active = lambda value: setattr(power, "active", bool(value))
+        host = SimpleNamespace(
+            hpf_by_ch={1: 347.0},
+            hpf_live={1: SimpleNamespace(w=power)})
+
+        io24gtk.Win.toggle_module(host, 1, "HPF")
+        self.assertFalse(power.active)
+        self.assertEqual(host.hpf_by_ch[1], 347.0)
+
+        io24gtk.Win.toggle_module(host, 1, "HPF")
+        self.assertTrue(power.active)
+        self.assertEqual(host.hpf_by_ch[1], 347.0)
 
     def test_preset_indicator_identifies_slot_and_respects_reduced_motion(self):
         visual = getattr(
@@ -1314,7 +1360,7 @@ class HostRefinementTests(unittest.TestCase):
             invalidate_curve=lambda: None, _adopt_mute=False,
             _insert_reconcile=lambda restart=False: None,
             _adopt_band=lambda _ch: None,
-            _adopt_hpf_controls=lambda _ch, _hz: None,
+            _adopt_hpf_controls=lambda _ch, _hz, **_kwargs: None,
             _adopt_dynamics=lambda _ch, _preset: None,
             _sync_order_row=lambda _ch: None,
             w={1: {"gate_on": toggle, "comp_on": toggle,

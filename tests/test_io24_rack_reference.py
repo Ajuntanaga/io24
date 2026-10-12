@@ -193,6 +193,20 @@ class RackReferenceTests(unittest.TestCase):
         self.assertEqual(spec["controls"]["release"]["step"], 0.01)
         self.assertEqual(spec["controls"]["release"]["default"], 0.4)
 
+    def test_hpf_contract_is_logarithmic_and_uses_the_common_rack_envelope(self):
+        spec = io24_rack_reference.rack("hpf")
+        self.assertEqual(spec["source_size"], (1400, 420))
+        self.assertEqual(spec["lamp"], (1305, 308, 18))
+        self.assertEqual(tuple(spec["controls"]), ("cutoff",))
+        cutoff = spec["controls"]["cutoff"]
+        self.assertEqual(cutoff["range"], (24.0, 1000.0))
+        self.assertEqual(cutoff["scale"], "log")
+        midpoint = io24_rack_reference.fraction_value(cutoff, .5)
+        self.assertAlmostEqual(midpoint, (24.0 * 1000.0) ** .5, delta=.5)
+        self.assertAlmostEqual(
+            io24_rack_reference.value_fraction(cutoff, midpoint), .5,
+            places=3)
+
     def test_geometry_scales_from_one_coordinate_authority(self):
         small = io24_rack_reference.control_layout("limiter", 600, 180)
         large = io24_rack_reference.control_layout("limiter", 1200, 360)

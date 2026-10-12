@@ -87,7 +87,30 @@ _LIMITER = {
     },
 }
 
-_RACKS = {"limiter": _LIMITER}
+_HPF = copy.deepcopy(_LIMITER)
+_HPF.update({
+    "rack_id": "hpf",
+    "display": (470, 82, 650, 292),
+    "lamp": (1305, 308, 18),
+    # HPF is painted entirely at runtime, but it deliberately shares the
+    # limiter's calibrated material assets and physical rack envelope.
+    "controls": {
+        "cutoff": {
+            "range": (24.0, 1000.0),
+            "step": 0.5,
+            "default": 80.0,
+            "scale": "log",
+            "sweep": (135.0, 405.0),
+            "asset": "limiter-knob.png",
+            "format": "frequency_hz",
+            "format_string": "{:.0f} Hz",
+            "widget": "hpf.cutoff",
+            "geometry": (270, 223, 82),
+        },
+    },
+})
+
+_RACKS = {"limiter": _LIMITER, "hpf": _HPF}
 _RECT_KEYS = ("panel", "display")
 
 
@@ -258,7 +281,10 @@ def control_layout(rack_id, width, height):
 
 def value_fraction(control, value):
     lower, upper = control["range"]
-    return max(0.0, min(1.0, (float(value) - lower) / (upper - lower)))
+    value = max(lower, min(upper, float(value)))
+    if control.get("scale") == "log":
+        return math.log(value / lower) / math.log(upper / lower)
+    return (value - lower) / (upper - lower)
 
 
 def control_live_regions(geometry, style):
@@ -278,7 +304,11 @@ def control_live_regions(geometry, style):
 
 def fraction_value(control, fraction):
     lower, upper = control["range"]
-    raw = lower + max(0.0, min(1.0, float(fraction))) * (upper - lower)
+    fraction = max(0.0, min(1.0, float(fraction)))
+    if control.get("scale") == "log":
+        raw = lower * (upper / lower) ** fraction
+    else:
+        raw = lower + fraction * (upper - lower)
     step = control["step"]
     return max(lower, min(upper, round(raw / step) * step))
 

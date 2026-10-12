@@ -607,18 +607,16 @@ class HostStateRepairTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, source)
 
-    def test_gtk_separates_fixed_preamp_hpf_from_fat_channel_cutoff(self):
+    def test_gtk_shares_channel_hpf_power_with_fat_channel_cutoff(self):
         source = (ROOT / "io24gtk.py").read_text()
 
         self.assertIn('("HPF", "hpf")', source)
         self.assertIn('HPF_BASIC_HZ = (24.0, 40.0, 80.0, 160.0)', source)
-        self.assertIn('"Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"',
+        self.assertIn('"24 Hz", "40 Hz", "80 Hz", "160 Hz", "Advanced"',
                       source)
         self.assertIn('title="HPF"', source)
         self.assertIn('"Exact cutoff"', source)
-        self.assertNotIn(
-            '(("48V", "phantom"), ("Mute", "mute"), ("Low cut", "hpf"))',
-            source)
+        self.assertIn('"widget": self.hpf_live[ch].w', source)
 
     def test_gtk_factory_load_uses_explicit_target_not_channel_one_literal(self):
         source = (ROOT / "io24gtk.py").read_text()

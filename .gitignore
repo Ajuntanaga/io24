@@ -12,6 +12,10 @@ re/scenes/
 io24_fw*
 dspusbdevice*
 
+# Local REA provider artifacts can embed the complete proprietary firmware
+# payload. Publish reports, hashes, and reproduction tools, not those images.
+re/rea-io24-firmware-v1/analysis/
+
 __pycache__/
 *.pyc
 .venv/

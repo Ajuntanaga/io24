@@ -1,0 +1,24 @@
+FROM ubuntu:24.04
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ca-certificates \
+       cargo \
+       libbz2-dev \
+       libfontconfig1-dev \
+       liblzma-dev \
+       pkg-config \
+       rustc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /tmp/binwalk
+RUN --mount=type=cache,target=/root/.cargo \
+    cd /tmp/binwalk \
+    && cargo update -p plotters --precise 0.3.6 \
+    && cargo build --release \
+    && cp target/release/binwalk /usr/local/bin/binwalk \
+    && rm -rf /tmp/binwalk
+
+USER ubuntu
+WORKDIR /tmp
+ENTRYPOINT ["/usr/local/bin/binwalk"]

@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+# REA applies a tight process/thread limit to this launcher. Keep the Go-based
+# Docker client within that budget; Binwalk is separately limited to one CPU.
+export GOMAXPROCS=1
+export DOCKER_CLI_HINTS=false
+
+# REA snapshots firmware below /tmp/rea-firmware-* before invoking Binwalk.
+# Give the isolated scanner that same path and no network access.
+exec docker run --rm \
+  --network none \
+  --memory 1g \
+  --cpus 1 \
+  --volume /tmp:/tmp \
+  --workdir "$PWD" \
+  io24-rea-binwalk:3.1.0 "$@"

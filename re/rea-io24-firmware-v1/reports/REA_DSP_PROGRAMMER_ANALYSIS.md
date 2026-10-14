@@ -115,6 +115,12 @@ Audit verdict: the decompiled firmware-programming and DSP-buffer claims agree w
 
 The architecture is now understood well enough to locate the responsibilities, follow the update flow, reproduce the major state machines, and connect named controls to the on-device DSP service. It is not a source-level reconstruction of every algorithm:
 
+The reverb network, all six Voice FX algorithm families, and the five-stage
+Fat Channel base structure have since been decoded in
+`REA_REVERB_EFFECTS_FAT_CHANNEL.md`. That report supersedes the broader
+algorithm-level limits below where it has exact evidence, while retaining the
+source-reconstruction and live-audibility boundaries.
+
 - the device-side DFU bootloader/ROM implementation has not been acquired;
 - several optimized or indirect DSP primitives retain generated names, and the exact source classes/types are unavailable;
 - every EQ, compressor, reverb, and limiter coefficient routine has not been semantically renamed or converted into maintainable source;

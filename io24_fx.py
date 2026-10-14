@@ -417,8 +417,10 @@ def set_fx_model(model):
 # those five dwords straight to the wire, so the wire order is
 #     [b0, -a1, b1, -a2, b2]
 # That order is triple-anchored:
-#   * the hardware-verified reverb 'vrvb'+0x24 reads designer+0x44.. the same way
-#     (reverb push 0x1800207f0: obj+0xa8..+0xb8 == designer_base(obj+0x64)+0x44..)
+#   * the hardware-verified reverb 'vrvb'+0x24 carries the same five-word order;
+#     REA confirms the device handler at 0x60076e70 and coefficient installer
+#     at 0x60076da8.  The historical host address 0x1800207f0 does not resolve
+#     as an instruction boundary in the exact current DLL and is not an anchor.
 #   * io24 firmware 'Bqdf' handler for model 1 (0x6007ba60) scatters
 #     blob c0->dev+0x340(b0) c1->+0x34c(-a1) c2->+0x344(b1) c3->+0x350(-a2)
 #     c4->+0x348(b2)

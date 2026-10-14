@@ -211,6 +211,11 @@ history, metering, and stage ordering.
 
 ## Corrected and remaining boundaries
 
+- The device-side persistence consequences are traced in
+  `REA_PRESET_EFFECT_PERSISTENCE.md`: a channel `Stat` record can restore a
+  compatible Voice FX model, including Transformer's private reverb core, but
+  does not contain shared reverb block 202.
+
 - A historical host note named `dspusbdevice.dll` address `0x1800207f0` as the
   reverb push routine. In the exact current DLL build that address is not an
   instruction boundary and has no REA xrefs. The nearby recovered function at

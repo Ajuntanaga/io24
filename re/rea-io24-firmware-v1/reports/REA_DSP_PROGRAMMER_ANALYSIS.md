@@ -121,6 +121,12 @@ Fat Channel base structure have since been decoded in
 algorithm-level limits below where it has exact evidence, while retaining the
 source-reconstruction and live-audibility boundaries.
 
+The firmware-native `MemP/Stat` write, stored-record read, conditional recall,
+and Voice FX state-application path is documented separately in
+`REA_PRESET_EFFECT_PERSISTENCE.md`. It also records the persistence boundary
+between Transformer's private reverb core and independent shared reverb block
+202.
+
 - the device-side DFU bootloader/ROM implementation has not been acquired;
 - several optimized or indirect DSP primitives retain generated names, and the exact source classes/types are unavailable;
 - every EQ, compressor, reverb, and limiter coefficient routine has not been semantically renamed or converted into maintainable source;

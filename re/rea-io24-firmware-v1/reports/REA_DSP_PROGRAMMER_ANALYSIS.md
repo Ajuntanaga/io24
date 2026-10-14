@@ -127,6 +127,13 @@ and Voice FX state-application path is documented separately in
 between Transformer's private reverb core and independent shared reverb block
 202.
 
+Firmware-extension placement, package-integrity constraints, and the unresolved
+nonvolatile provider are documented in
+`REA_FIRMWARE_EXTENSION_FEASIBILITY.md`. REA confirms one contiguous loaded
+segment with no relocations and no unused tail append area; a modified image
+therefore requires a proved internal placement or an accepted package-layout
+change plus regenerated integrity metadata.
+
 - the device-side DFU bootloader/ROM implementation has not been acquired;
 - several optimized or indirect DSP primitives retain generated names, and the exact source classes/types are unavailable;
 - every EQ, compressor, reverb, and limiter coefficient routine has not been semantically renamed or converted into maintainable source;

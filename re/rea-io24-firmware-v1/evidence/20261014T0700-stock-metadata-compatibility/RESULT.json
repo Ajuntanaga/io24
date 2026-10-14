@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-14",
+  "authorization": "One standard DFU detach, passive bootloader enumeration, the immutable stock 60-byte metadata header, one four-byte compatibility query, no DFU download, followed by cold-power recovery and runtime verification.",
+  "device": {
+    "serial": "AB7C22200355",
+    "runtime_vid_pid": "194f:0422",
+    "runtime_bcd_device": "1.28",
+    "bootloader_vid_pid": "194f:0405",
+    "bootloader_bcd_device": "1.15"
+  },
+  "stock_metadata": {
+    "package": "re/rea-io24-firmware-v1/originals/io24-uc472-vendor-package.bin",
+    "offset": "0x205e0",
+    "length": 60,
+    "sha256": "82f46b880862e5e36fc450dcba69ebf655e11575fba4857f5a9c6c7d89bb4353",
+    "hex": "3c000100deadbee1544c23494d47234d4554414441544123c00000001f00020007044f190100000001001c00000000008da612000000000003000400"
+  },
+  "preflight": {
+    "battery_percent": 99,
+    "runtime_identity_verified": true,
+    "runtime_dfu_interface": 6
+  },
+  "detach": {
+    "bm_request_type": "0x21",
+    "b_request": "0x00",
+    "w_value": 2000,
+    "w_index": 6,
+    "w_length": 0,
+    "result": "ACK"
+  },
+  "bootloader": {
+    "dfu_interface": 0,
+    "alternate_settings": [0, 1, 2],
+    "active_alternate_setting": 0
+  },
+  "metadata_transfer": {
+    "bm_request_type": "0x41",
+    "b_request": "0xd1",
+    "w_value": 0,
+    "w_index": 0,
+    "w_length": 60,
+    "transferred": 60,
+    "executed_count": 1
+  },
+  "compatibility_query": {
+    "bm_request_type": "0xc1",
+    "b_request": "0xd2",
+    "w_value": 1,
+    "w_index": 0,
+    "w_length": 4,
+    "executed_count": 1,
+    "reply_hex": "3e0000e0",
+    "reply_little_endian_u32": "0xe000003e",
+    "updater_mapped_status": "0xee00003e",
+    "symbolic_status": "TLSTATUS_NOT_COMPATIBLE"
+  },
+  "recovery": {
+    "method": "User removed device power and cold-reconnected it.",
+    "runtime_restored": true,
+    "serial_restored": true,
+    "audio_interfaces_bound": 5,
+    "bootloader_absent": true,
+    "native_status_read": "PASS",
+    "native_protocol": 1,
+    "max_command": 2048,
+    "max_response": 2048,
+    "battery_percent": 99
+  },
+  "negative_actions": {
+    "firmware_download": false,
+    "dfu_download_block": false,
+    "dfu_upload": false,
+    "modified_payload": false
+  },
+  "post_analysis": {
+    "status_resolution_evidence": "ev_639e37da82ea81f449df1fe8fcb3fe69ab0a2337fd12a869a30ce145f5d64ff9",
+    "select_target_evidence": "ev_ec9363af02b9923d66ba2a211fe54e8bb9f66a1da2fe3783405e716dcaf1311a",
+    "start_upgrade_evidence": "ev_1a8c55329da607277d1f7ddec1a80ac69226ab49bce8922c0f89a7e04e6dc25e",
+    "presonus_flags_evidence": "ev_c6b933ccb8508367743c336622ee4488455deef3d44ab11b2f5a6061fa5293c9",
+    "finding": "The stock path calls SelectTarget before storing metadata. PreSonus passes flags 0 or 2, so bit 0 is always clear and SelectTarget uses USB SET_INTERFACE for target 1. This run left alternate setting 0 active; its rejection is not the verdict for the complete stock sequence."
+  },
+  "acl": {
+    "temporary_bootloader_node_acl_added": true,
+    "removed_before_recovery": true,
+    "removal_verified": true
+  }
+}

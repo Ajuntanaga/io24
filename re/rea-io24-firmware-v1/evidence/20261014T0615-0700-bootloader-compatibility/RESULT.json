@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-14",
+  "authorization": "One standard DFU detach, passive bootloader enumeration and descriptor reads, one four-byte compatibility query, no firmware download, followed by cold-power recovery and runtime verification.",
+  "device": {
+    "serial": "AB7C22200355",
+    "runtime_vid_pid": "194f:0422",
+    "runtime_bcd_device": "1.28",
+    "bootloader_vid_pid": "194f:0405",
+    "bootloader_bcd_device": "1.15"
+  },
+  "preflight": {
+    "battery_percent": 100,
+    "battery_status": "Full",
+    "runtime_interfaces": 7,
+    "runtime_dfu_interface": 6
+  },
+  "detach": {
+    "bm_request_type": "0x21",
+    "b_request": "0x00",
+    "w_value": 2000,
+    "w_index": 6,
+    "w_length": 0,
+    "result": "ACK"
+  },
+  "bootloader": {
+    "interfaces": 1,
+    "dfu_interface": 0,
+    "alternate_settings": [0, 1, 2],
+    "dfu_version": "1.10",
+    "transfer_size": 4096,
+    "upload_supported": false,
+    "download_supported": true
+  },
+  "compatibility_query": {
+    "bm_request_type": "0xc1",
+    "b_request": "0xd2",
+    "w_value": 1,
+    "w_index": 0,
+    "w_length": 4,
+    "executed_count": 1,
+    "reply_hex": "620000e0",
+    "reply_little_endian_u32": "0xe0000062",
+    "updater_low_14_bit_status": "0x0062",
+    "updater_mapped_status": "0xee000062",
+    "symbolic_status": "TLSTATUS_MAGIC_MISMATCH"
+  },
+  "recovery": {
+    "method": "User removed device power and cold-reconnected it.",
+    "runtime_restored": true,
+    "serial_restored": true,
+    "audio_interfaces_bound": 5,
+    "bootloader_absent": true,
+    "native_status_read": "PASS",
+    "native_protocol": 1,
+    "max_command": 2048,
+    "max_response": 2048
+  },
+  "negative_actions": {
+    "interface_claim": false,
+    "kernel_driver_detach": false,
+    "firmware_download": false,
+    "dfu_upload": false,
+    "device_reset_command": false
+  },
+  "notes": [
+    "Two preliminary PyUSB scripts stopped before ctrl_transfer: one on a redundant string-descriptor read and one on usbfs EACCES.",
+    "A temporary user ACL was added only to /dev/bus/usb/003/004, the query ran once, and the ACL was removed before cold-power recovery.",
+    "The nonzero compatibility reply is a rejection/status result, not proof that a modified or stock package is accepted. Post-run REA analysis resolved it as TLSTATUS_MAGIC_MISMATCH.",
+    "Post-run REA analysis proved the stock updater first sends the image's 60-byte metadata header with vendor/interface control-OUT request 0x41/0xd1, then sends the 0xc1/0xd2 compatibility query. This authorized run intentionally omitted that write prerequisite, so status 0x62 cannot be treated as an image incompatibility verdict."
+  ]
+}

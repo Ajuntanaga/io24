@@ -37,15 +37,15 @@ REA decompiled the reset handler at `0x60020334`. It disables interrupts, instal
 
 The handoff function at `0x60084160` performs runtime initialization and calls application setup functions. REA flags bad/unreachable instruction data in this mixed startup area, so its high-level pseudocode is incomplete there; the instruction listing and direct call edges remain usable. Evidence: `ev_ab19edb4906687633450d10d26f60c9d7b7078cd46aa7baeafcff528002fbb00`.
 
-## DFU findings
+## DFU findings in the device image
 
 REA's defined-string inventory contains the exact product identity `Revelator IO 24 DFU` at `0x60087a84`. The broader DFU/boot/flash/erase/download/reboot/update search found no other defined DFU or firmware-programming strings. Evidence: `ev_0cbaf3667eb51573f867eaccae550c78b1c331e4d35d3490cd3e0a1ae277484e`.
 
-The application image therefore contains a DFU USB identity, but this pass did not recover a self-contained erase/program/download state machine from the application firmware. The strongest supported interpretation is:
+The application image therefore contains a DFU USB identity, but this pass did not recover a self-contained erase/program/download state machine from the application firmware. A later REA pass located and decompiled the host-side programmer in Universal Control's `dspusbdevice.dll`; see `REA_DSP_PROGRAMMER_ANALYSIS.md`. The device-image result remains:
 
 1. The application can request a controlled system reset.
 2. A mode value can influence that reset path.
-3. The actual DFU transfer/programming implementation is likely in a bootloader, ROM, or another separately delivered region, while this image supplies or shares the DFU identity.
+3. The host-side transfer/programming controller is in `dspusbdevice.dll`; the device-side DFU recipient still appears to live in a bootloader, ROM, or another separately delivered region, while this image supplies or shares the DFU identity.
 
 Item 3 is an inference, not proof. Packed code, indirect dispatch, or a non-string-based implementation could evade this defined-string and call-graph pass.
 
@@ -80,7 +80,7 @@ One direct audit was completed after analysis:
 - REA read the complete 16-byte literal pool at `0x6006472c`: `00800f40 ab354f17 00ed00e0 0400fa05`, decoding little-endian to `0x400f8000`, `0x174f35ab`, `0xe000ed00`, and `0x05fa0004`. Evidence: `ev_b956b50190d1a6e59734b061bc7214700d3dc292e036dcae4a1141b9e8dad1f5`.
 - The mapped payload digest in the provider equals the immutable source-package digest.
 
-Verdict: the architecture, entry point, reset routine, reset constants, callers, and DFU identity are internally consistent. The unresolved material boundary is the location and implementation of the actual DFU programmer, which is not established inside this application image.
+Verdict: the architecture, entry point, reset routine, reset constants, callers, and DFU identity are internally consistent. This report's original device-image boundary still holds, but the host-side programmer and the on-device DSP engine have since been located and decompiled with REA. Those superseding findings and their remaining limits are in `REA_DSP_PROGRAMMER_ANALYSIS.md`.
 
 ## Reproduction
 

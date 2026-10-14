@@ -62,6 +62,16 @@ into the block state, and calls `FUN_60076da8` to apply them. The payload is:
 Evidence: handler `ev_331b5f9b75295a7d3fd21f8f024b9e46d228688ed991e094f7e3480c7839cd6f`;
 state application `ev_546ad300bbcb18ebb2beb82543f067327680376a0596332ff55e036711b17a81`.
 
+The same eleven-word body also has a firmware-native structured-state pair.
+Vtable method `0x6006faa0` writes a `0x2c` length and then exports `0x2c` bytes
+from block offset `0x370`; `FUN_60076edc` requires that exact length, restores
+the body, and calls `FUN_60076da8`. This establishes a complete block-local
+save/load interface. The decoded DSP/audio reconfiguration lifecycle instead
+calls `FUN_60076e70` with `Setu`, restoring the block defaults, and the recovered
+root-settings writer does not include block 202. No device-resident global
+container or cold-boot invocation was recovered. The full persistence boundary
+and REA evidence IDs are recorded in `REA_PRESET_EFFECT_PERSISTENCE.md`.
+
 The constructor defaults are wet mix 0.25, pre-delay 0.25 seconds, size 0.2,
 identity high-pass coefficients, and a 44.1 kHz reference clock. Evidence:
 `ev_7569ea411c2bbcfcb23eebca88248407a669eb3e79277adb6167535630672570`.
@@ -214,7 +224,10 @@ history, metering, and stage ordering.
 - The device-side persistence consequences are traced in
   `REA_PRESET_EFFECT_PERSISTENCE.md`: a channel `Stat` record can restore a
   compatible Voice FX model, including Transformer's private reverb core, but
-  does not contain shared reverb block 202.
+  does not contain shared reverb block 202. Block 202 instead exposes its own
+  `0x2c`-byte structured writer/loader pair. The recovered root writer does not
+  invoke it, and DSP/audio reconfiguration actively reapplies default `Setu`
+  state, so Host/phone scene state must save and replay shared reverb.
 
 - A historical host note named `dspusbdevice.dll` address `0x1800207f0` as the
   reverb push routine. In the exact current DLL build that address is not an

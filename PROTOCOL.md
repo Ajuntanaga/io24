@@ -2081,7 +2081,7 @@ trap in this protocol.**
 | 2 | ignored | `mainVolume` | 0–1 |
 | **3** | **0/1** | **`input1Gain` / `input2Gain`** | **0–60 dB** |
 | 4 | 0/1 | `input1FxMix` / `input2FxMix` | 0–1 |
-| 10 | ignored | `monitorMix` | −1…1 |
+| 10 | ignored | `monitorMix` (stored only; the Host applies the blend to Main sends) | −1…1 |
 | 14 | ignored | `outputDelay` | 0–0.5 |
 | 5–9, 11–13 | — | **no-op** (jump-table byte `0x33` → epilogue) | |
 | 0, ≥15 | — | **rejected** before the table | |

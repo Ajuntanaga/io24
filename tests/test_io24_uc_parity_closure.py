@@ -95,6 +95,48 @@ class _MixerDevice(io24.Io24):
         return self.writes[-1]
 
 
+class MonitorBlendTests(unittest.TestCase):
+    def _device(self):
+        device = _MixerDevice()
+        device._blend = 0.0
+        device.params = []
+        device.set_param = lambda pid, value, **kw: device.params.append(
+            (pid, value))
+        return device
+
+    def test_blend_trims_main_sends_host_side(self):
+        device = self._device()
+        device.set_send_db("line/ch1", "main", -6.0)
+        device.set_send_db("return/ch1", "main", 0.0)
+        device.set_send_db("line/ch1", "mixa", -10.0)
+        device.writes.clear()
+
+        device.set_monitor_mix(-1.0)
+        self.assertEqual(device.params, [(10, -1.0)])
+        self.assertIn(("line/ch1", "main", None), device.writes)
+        self.assertIn(("return/ch1", "main", 0.0), device.writes)
+        self.assertFalse([w for w in device.writes if w[1] == "mixa"])
+
+        device.set_monitor_mix(0.5)
+        self.assertIn(("line/ch1", "main", -6.0), device.writes)
+        playback = [w for w in device.writes if w[0] == "return/ch1"][-1]
+        self.assertAlmostEqual(playback[2], -6.0206, places=3)
+
+        # Later fader moves keep the blend folded in.
+        device.set_send_db("return/ch1", "main", -3.0)
+        self.assertAlmostEqual(device.writes[-1][2], -9.0206, places=3)
+        device.set_send_db("line/ch1", "mixa", -4.0)
+        self.assertEqual(device.writes[-1], ("line/ch1", "mixa", -4.0))
+
+    def test_blend_materialises_untouched_inputs_but_not_fx_return(self):
+        device = self._device()
+        device.set_monitor_mix(-1.0)
+        self.assertIn(("line/ch1", "main", None), device.writes)
+        self.assertIn(("line/ch2", "main", None), device.writes)
+        self.assertFalse(device.has_send_level("fxreturn/ch1", "main"))
+        self.assertFalse(device.has_send_level("return/ch1", "main"))
+
+
 class PersistentMirrorTests(unittest.TestCase):
     def test_latch_follows_main_without_destroying_the_aux_mix(self):
         device = _MixerDevice()

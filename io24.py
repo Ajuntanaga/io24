@@ -1253,8 +1253,29 @@ class Io24:
         return self.set_output_delay_bus(0)
 
     def set_monitor_mix(self, value):
-        """Monitor blend, -1.0..1.0 ('Para' wire id 10)."""
-        self.set_param(10, max(-1.0, min(1.0, value)))
+        """Monitor blend, -1.0 (all playback) .. +1.0 (all direct).
+
+        'Para' wire id 10 only stores the value: the firmware keeps it in
+        ``monitorMix`` and reports it back, but no audio path reads it. UC
+        applies the blend host-side, folding it into each Main send
+        (``MixerLink::computeDb``, §9c), so the Host does the same here and
+        rewrites the Main sends after storing the value.
+        """
+        value = max(-1.0, min(1.0, float(value)))
+        result = self.set_param(10, value)
+        self._blend = value
+        sends = self._sends()
+        for source in self.SOLO_SOURCES:
+            if (source, "main") not in sends["level"]:
+                if source not in self.BLEND_MATERIALISE or \
+                        self.blend_db(source, value) == 0.0:
+                    continue
+                # An untouched cell still sounds at the displayed unity level;
+                # it must become a concrete send before the blend can trim it.
+                self.set_send_db(source, "main", self.DEFAULT_SEND_DB)
+                continue
+            self._push_send(source, "main")
+        return result
 
     def set_phantom(self, channel, on):
         """48V phantom power ('Pari' wire id 0)."""
@@ -1839,8 +1860,43 @@ class Io24:
         g = self.pan_gain(pan, side)
         return -144.0 if g <= 1e-9 else 20.0 * math.log10(g)
 
+    # Monitor blend, host-side as in UC: the inputs and their FX return are
+    # the direct side, the USB playback returns the playback side. Each side
+    # stays at unity up to the centre and fades linearly to off at its end.
+    # Only Main is blended; Mix A/B are stream mixes and keep their levels.
+    BLEND_DIRECT_SOURCES = ("line/ch1", "line/ch2", "line/ch3", "fxreturn/ch1")
+    BLEND_PLAYBACK_SOURCES = ("return/ch1", "return/ch2", "return/ch3")
+    # Cells the blend may materialise at unity. The FX return is left alone
+    # when unset, so moving the blend never switches a reverb return on.
+    BLEND_MATERIALISE = ("line/ch1", "line/ch2",
+                         "return/ch1", "return/ch2", "return/ch3")
+
+    @classmethod
+    def blend_db(cls, source, blend):
+        """dB the monitor blend adds to one Main send; None means off."""
+        d = max(-1.0, min(1.0, float(blend)))
+        if source in cls.BLEND_DIRECT_SOURCES:
+            g = min(1.0, 1.0 + d)
+        elif source in cls.BLEND_PLAYBACK_SOURCES:
+            g = min(1.0, 1.0 - d)
+        else:
+            return 0.0
+        if g <= 0.0:
+            return None
+        return 0.0 if g >= 1.0 else 20.0 * math.log10(g)
+
+    def _monitor_blend(self):
+        """The blend in effect, read once from the device's stored value."""
+        if getattr(self, "_blend", None) is None:
+            try:
+                p = self.read_params()
+                self._blend = max(-1.0, min(1.0, float(p["monitorMix"])))
+            except Exception:
+                self._blend = 0.0
+        return self._blend
+
     def _push_send(self, source, bus):
-        """Fold level + assign + master + pan into the one number the device takes."""
+        """Fold level + assign + master + pan + blend into the one number the device takes."""
         s = self._sends()
         state_bus = "main" if bus in ("mixa", "mixb") and \
             s["mirror"].get(bus, False) else bus
@@ -1867,8 +1923,14 @@ class Io24:
         pan_db = 0.0
         if pan is not None and source in self.STEREO_PAIRS:
             pan_db = self.pan_db(pan, self.STEREO_PAIRS[source][1])
+        blend_db = 0.0
+        if bus == "main":
+            blend_db = self.blend_db(source, self._monitor_blend())
+            if blend_db is None:
+                return self._write_mix(source, bus, None)
         return self._write_mix(source, bus,
-                               lvl + s["master"].get(bus, 0.0) + pan_db)
+                               lvl + s["master"].get(bus, 0.0) + pan_db
+                               + blend_db)
 
     def _push_send_and_mirrors(self, source, bus):
         """Write one cell, then every aux currently following its Main cell."""

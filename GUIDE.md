@@ -43,7 +43,12 @@ UC exposes `hardwareMute` display-only. **Main mute** is the separate writable
 Host bus mute. **Phones mute** controls the headphone output and is no longer
 mislabelled as a generic output mute.
 
-**Blend** sets playback against direct monitoring. Centre is an even mix.
+**Blend** sets playback against direct monitoring in Main. Centre is an even
+mix with both sides at their fader level; turning towards one side fades the
+other linearly to off at the end. The firmware only stores the blend value, so
+the Host applies it the way UC does, by trimming the Main sends: the inputs and
+the FX return are the direct side, the USB playback returns the playback side.
+Mix A and Mix B are not blended.
 
 **Auto** (under each input's fader) is a Linux Host preamp helper. It is not an
 active UC 4.7.2 control: that skin comments its Auto button out, and the two

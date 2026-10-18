@@ -44,6 +44,7 @@ dist/
 .context/
 .gstack/
 .pytest_cache/
+.worktrees/
 
 # Local VMs, agent work records, and hardware/audio capture runs. Some older
 # paths are already tracked in the private research history; ignore rules keep

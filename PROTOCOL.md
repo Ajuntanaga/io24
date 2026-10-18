@@ -1807,6 +1807,28 @@ Producing a package, staging or writing DFU, testing a restore, and evaluating
 audible or standalone persistence are all separate, explicit hardware-
 authorization gates.
 
+## 2026-10-17 firmware-extension boundary
+
+An offline comparison against Universal Control 5.1.1 found that its embedded
+Revelator io24 payload is still the complete stock 1.28 image already pinned by
+this project (exact-range SHA-256
+`790f668c6fb42f1da67d14541e40aa0e21b302dfcb963638274b2c1655cbc2d6`).
+The updater retains the same metadata-store and compatibility-query protocol:
+a four-byte zero reply is success for that gate, while the observed nonzero
+reply maps to `TLSTATUS_NOT_COMPATIBLE`. Both authentic stock 1.28 metadata and
+authentic historical 1.19 metadata were rejected by the current bootloader
+under the corrected request sequence. Direct driver-path attempts also stopped
+before any firmware body transfer.
+
+The newer installer therefore supplies neither an alternate io24 image nor a
+host-side compatibility bypass. No software-only recovery image, bootloader
+payload, or additional updater prerequisite was found. The next decisive
+firmware-extension step is physical, read-only acquisition through identified
+SWD/JTAG or external-flash access after board inspection. Without that hardware,
+the software investigation is complete; repeated DFU guesses would add device
+risk without adding information. No vendor binary, device capture, decompiler
+output, or custom firmware image is published here.
+
 ## 2026-08-31 controlling preset/Voice FX correction
 
 Firmware 1.28's native `Stat` application path reaches the block-201

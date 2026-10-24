@@ -10,6 +10,8 @@ the limiter release the page never exposed, and Host-only reverb movement.
 Nothing here opens USB.
 """
 
+import ast
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -435,6 +437,17 @@ class ReverbMovementTests(unittest.TestCase):
         window._adopt_reverb_movement(window._reverb_movement_state())
         self.assertFalse(window._rev_mute)
         self.assertFalse(window._adopt_mute)
+
+    def test_the_window_starts_with_the_reverb_mute_released(self):
+        # _window() seeds _rev_mute itself; a real window must too, or the
+        # first launch adoption of a saved movement raises AttributeError.
+        source = Path(io24gtk.__file__).read_text()
+        win = next(n for n in ast.walk(ast.parse(source))
+                   if isinstance(n, ast.ClassDef) and n.name == "Win")
+        init = next(n for n in win.body
+                    if isinstance(n, ast.FunctionDef) and n.name == "__init__")
+        self.assertIn("self._rev_mute = False",
+                      ast.get_source_segment(source, init))
 
     def test_an_unknown_version_is_refused_with_a_notice(self):
         window = self._reverb_window()

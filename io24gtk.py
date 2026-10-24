@@ -5193,6 +5193,7 @@ class Win(Adw.ApplicationWindow):
         self._order_mute = False
         self._fx_mute = False
         self._phones_source_mute = False
+        self._rev_mute = False
         self.device_slot_registry = DeviceSlotRegistry(
             DEVICE_SLOT_REGISTRY_PATH)
         self.device_preset_library_registry = DevicePresetLibraryRegistry(
@@ -5218,7 +5219,14 @@ class Win(Adw.ApplicationWindow):
         # time constants, reverb, the rate-dependent Voice FX filters — is a
         # function of the device clock. Nothing used to pass one, so all of it
         # was built for 48 kHz whatever the interface was actually running at.
-        clock = audio_clock_preference(load_last_session())
+        session = load_last_session()
+        clock = audio_clock_preference(session)
+        # Until the first resume has adopted the saved Host-only features,
+        # the controls hold first-launch defaults. Saving them then would
+        # replace the last session with a flat EQ and default features, and
+        # the next resume would adopt (and later send) those defaults.
+        self._session_restore_pending = bool(
+            session and session.get("host_features") is not None)
         self._selected_rate = clock["sample_rate"]
         self._selected_quantum = clock["quantum"]
         self._fs = float(self._selected_rate)
@@ -10853,7 +10861,11 @@ class Win(Adw.ApplicationWindow):
 
         The device half is already on disk: the driver keeps its mirror of
         every write in shadow.json. Returns True when the file was written.
+        Nothing is written while the last session is still waiting to be
+        adopted: the controls do not describe it yet.
         """
+        if getattr(self, "_session_restore_pending", False):
+            return False
         try:
             state = {"version": 1,
                      "host_features": self._host_features_state()}
@@ -11288,6 +11300,9 @@ class Win(Adw.ApplicationWindow):
                                                 for word in ("not restored",
                                                              "unavailable",
                                                              "unreadable"))]
+        # The controls now describe the resumed (or explicitly loaded) state,
+        # so the session file may follow them again.
+        self._session_restore_pending = False
         restored_voicefx = state.get("voicefx") or {}
         restored_host_delay = bool(
             host_features and host_features.get("voicefx_delay") is not None

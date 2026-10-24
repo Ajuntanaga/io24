@@ -707,7 +707,10 @@ The Host picks up where it left off, as Universal Control did. Everything it
 sends to the unit is kept on disk (`~/.cache/io24/shadow.json`), and its own
 features (both inputs' Multiband, reverb movement, and which
 inputs have Auto gain on, plus any high-rate Host Delay) are saved to
-`~/.config/io24/last-session.json` every few seconds and on exit.
+`~/.config/io24/last-session.json` every few seconds and on exit. Until the
+io24 has connected and that file has been picked up, it is left untouched, so
+opening the Host before the interface is ready does not replace it with
+first-launch defaults.
 
 Each time the io24 connects, the Host re-sends the settings the unit cannot
 keep through a power cycle (EQ, dynamics, mixer, source/output mutes, reverb,

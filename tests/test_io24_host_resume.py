@@ -31,6 +31,15 @@ def _function(name):
     return ast.get_source_segment(source, node)
 
 
+def _win_function(name):
+    source = (ROOT / "io24gtk.py").read_text()
+    win = next(n for n in ast.walk(ast.parse(source))
+               if isinstance(n, ast.ClassDef) and n.name == "Win")
+    node = next(n for n in win.body
+                if isinstance(n, ast.FunctionDef) and n.name == name)
+    return ast.get_source_segment(source, node)
+
+
 def _bind(host, *names):
     for name in names:
         setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
@@ -109,6 +118,31 @@ class LastSessionFileTests(unittest.TestCase):
         host = self._host({"multiband": {"on": False}})
         self.assertTrue(host._save_last_session(self.path))
         self.assertFalse(host._save_last_session(self.path))
+
+    def test_a_pending_restore_never_overwrites_the_last_session(self):
+        saved = {"version": 1, "host_features": {"standard_eq": "saved"}}
+        self.path.write_text(json.dumps(saved))
+        host = self._host({"standard_eq": "first-launch defaults"})
+        host._session_restore_pending = True
+
+        self.assertFalse(host._save_last_session(self.path))
+        self.assertEqual(json.loads(self.path.read_text()), saved)
+
+        host._session_restore_pending = False
+        self.assertTrue(host._save_last_session(self.path))
+
+    def test_the_window_waits_for_a_saved_session_before_saving(self):
+        init = _win_function("__init__")
+        self.assertIn("self._session_restore_pending = bool(", init)
+        self.assertLess(init.index("session = load_last_session()"),
+                        init.index("self._session_restore_pending"))
+
+    def test_adopting_the_resume_releases_the_session_file(self):
+        after_load = _function("_after_load")
+        release = after_load.index("self._session_restore_pending = False")
+        self.assertLess(after_load.index("_adopt_standard_eq_state("),
+                        release)
+        self.assertLess(after_load.index("_adopt_reverb_movement("), release)
 
     def test_a_missing_or_damaged_session_is_no_session(self):
         self.assertIsNone(io24gtk.load_last_session(self.path))

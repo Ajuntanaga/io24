@@ -12,20 +12,22 @@ assets, then run the focused visual tests.
 
 Every rack is divided into three visual layers.
 
-1. The static faceplate owns the metal finish, edge highlights, rack ears,
-   mounting slots, screws, divider rules, and display bezel. The declared
-   `material_region` permits a new finish without changing the landmarks.
-2. Cached procedural hardware owns each knob's flat nickel cap, rotating rubber
-   grip, and pointer inlay, rendered at the actual display resolution.
+1. The cached procedural chassis owns the black or porcelain finish, edge
+   highlights, rack ears, mounting slots, screws and recessed display bezel.
+   It follows the measured screen and rack geometry; dividers are live strokes.
+2. Cached procedural hardware owns each knob's flat ivory cap, rotating fluted
+   black grip and pointer, plus chrome power switches and orange pilot lamps,
+   rendered at the actual display resolution.
 3. GTK owns live headings and axis inscriptions as well as the response curve,
    textured fill, Standard nodes, spectrum trace, protocol-correct values and
    scale marks, per-band controls, selection/hover focus, error badge, and the
-   independent EQ power lamp. Text is separate from the metal and knob caches.
+   independent EQ power control. Text is separate from the metal and knob caches.
 
 The Passive and Vintage source references contain illustrative control values.
-Those areas are deliberately cleared from their production faceplates. A
+Those areas are deliberately cleared from their historical blank faceplates. A
 literal reference composite would show two pointers and, more importantly,
-incorrect UC ranges.
+incorrect UC ranges. Normal rendering now uses `io24_retro_rack.py` instead of
+those blank bitmaps. The original images remain geometry/calibration references.
 
 ## Measured landmarks
 
@@ -63,10 +65,11 @@ rotary uses logarithmic travel only to make the physical control usable.
 | High Atten Select | `(1858,422,r58)` |
 | Power lamp | `(2031,427)`, radius `18` |
 
-The two cleared control fields are `(86,58,478,424)` and
+In the historical blank asset, the cleared control fields are `(86,58,478,424)` and
 `(1290,58,786,424)`. Separate heading clears remove baked lettering. The
-material region `(80,8,1996,460)` provides the slate-blue finish while protecting
-the photographed screen bezel and screw heads.
+material region `(80,8,1996,460)` bounds that asset's finish transformation while
+protecting its photographed screen bezel and screw heads. Production instead
+draws a porcelain chassis and fresh hardware at the same control landmarks.
 
 ### Vintage EQ
 
@@ -87,9 +90,9 @@ The four cleared control fields follow the dividers exactly:
 `(82,68,349,262)`, `(432,68,322,262)`, `(1496,68,347,262)`, and
 `(1844,68,232,262)`.
 
-The source crop remains the measurement authority. At runtime its cleaned
-static plate and y landmarks are fitted into the common-height bay. Its material
-region `(80,8,1996,355)` provides the smoked-metal finish. Knob bodies
+The source crop remains the measurement authority. At runtime its y landmarks
+are fitted into the common-height bay, with a procedural porcelain chassis. The
+material region `(80,8,1996,355)` applies only to the historical blank asset. Knob bodies
 are separate circular renders and use the smaller scale, so the controls and
 their hit regions are never vertically stretched with the plate.
 
@@ -98,7 +101,7 @@ their hit regions are never vertically stretched with the plate.
 `IO24_EQ_REFERENCE_CALIBRATION` is read only by the painter:
 
 - `backdrop` or `underlay`: show the exact cropped reference instead of the
-  production rack. This is the baseline for pixel comparison.
+  production rack. This is a geometry reference, not a production pixel baseline.
 - `overlay`: ghost the reference over the live rack at 46% opacity.
 - `nodes`: show the transparent landmark grid over the live rack.
 - `both`: combine the ghost and landmark grid.
@@ -112,7 +115,7 @@ IO24_PAINT_CAPTURE_DIR=/tmp/io24-eq-nodes \
 python3 tests/paint_smoke.py
 ```
 
-Regenerate the production faceplates and calibration layers with:
+Regenerate the historical reference faceplates and calibration layers with:
 
 ```bash
 python3 tools/render_standard_eq_reference.py --faceplate

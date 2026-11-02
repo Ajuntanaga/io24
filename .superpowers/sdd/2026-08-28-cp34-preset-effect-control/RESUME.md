@@ -4916,3 +4916,44 @@ Public commit `45982f6` was pushed successfully to
 The user also requested regular compaction: keep this
 checkpoint current; compaction is automatic and cannot be scheduled by this
 session.
+
+### Complete black, porcelain and orange rack redesign, 2026-11-02
+
+Completed the user's new direction in the actual Host: HPF, Standard EQ,
+Passive Program EQ, Vintage EQ and Limiter now use procedural black or
+porcelain chassis, crisp orange accents, recessed glass, ivory amplifier knobs
+with rotating black grips, and chrome bat switches. The shared pure-Cairo
+renderer is `io24_retro_rack.py`; it is included in the public manifest and
+Python wheel. Rack dimensions, control positions and backing parameter widgets
+are preserved. There is no knob underlighting.
+
+Display meshes now have perspective and translucent depth following the actual
+response front edge. Depth copies are a visual treatment, not audio history.
+Standard EQ retains its real spectrum history with a copper/orange palette;
+HPF retains its audio-reactive idle plane; Limiter retains real gain-reduction
+telemetry. Native-resolution text and bounded texture caches preserve sharpness.
+The old reference images remain geometry/calibration sources rather than the
+production faceplates. Design documentation describes this distinction.
+
+Verification:
+
+- Focused rack/parameter suites: 232 tests passed, 1 skipped.
+- Sanitized public release suite: 554 tests passed, 25 skipped, 187 subtests
+  passed, including wheel contents and hardware-free runtime imports.
+- Actual GTK captures of all five racks were inspected at 1440 px and the
+  1042 px minimum width. Limiter meter scale labels were moved to the right of
+  its bar to clear the main GR readout, then both widths were captured and
+  inspected again. Captures: `/tmp/io24-orange-final/`.
+- One independent review found no remaining material issues. Python compilation
+  and diff whitespace checks pass. The sanitized export contains 107 files.
+
+Captures use fake USB/audio, synthetic preview telemetry and disabled session
+writes. No live device, audio graph, firmware or Wine operation occurred.
+The installed Host launcher points to this worktree; reopening it loads the
+redesign without a separate binary build. The public checkout remains
+`/tmp/io24-publish-dynamics-20261101`; private history must never be pushed.
+
+The wheel built successfully at
+`/tmp/io24-orange-release-wheel/io24-0.1.0-py3-none-any.whl`.
+The 107-file public allowlist and credential scan passed. Public commit
+`bee467b` was pushed successfully to `Ajuntanaga/io24:io24-multiband-insert`.

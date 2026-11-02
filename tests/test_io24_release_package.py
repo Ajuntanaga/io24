@@ -20,6 +20,7 @@ class ReleasePackageTests(unittest.TestCase):
     def test_reference_rack_runtime_and_assets_ship(self):
         expected = {
             "io24_rack_reference.py",
+            "io24_retro_rack.py",
             "tools/render_rack_assets.py",
             "tests/test_io24_rack_reference.py",
             "docs/design/limiter-reference.png",
@@ -48,6 +49,7 @@ class ReleasePackageTests(unittest.TestCase):
             "io24_preset_record.py",
             "io24_presets.py",
             "io24_rack_reference.py",
+            "io24_retro_rack.py",
             "io24_alt_eq.py",
             "io24_eq_reference.py",
             "io24_uc472_passive_eq.py",

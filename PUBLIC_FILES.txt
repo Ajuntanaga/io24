@@ -58,6 +58,7 @@ io24_native_strip.py
 io24_preset_record.py
 io24_presets.py
 io24_rack_reference.py
+io24_retro_rack.py
 io24_scene.py
 io24_uc472_passive_eq.py
 io24_uc472_vintage_eq.py

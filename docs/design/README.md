@@ -10,18 +10,17 @@ load-bearing crop, screen, plot, knob, rack ear, slot, screw, divider, and lamp
 landmark. The Host, asset renderer, hit testing, and pixel-diff tooling all use
 that same geometry.
 
-Passive and Vintage use value-free production faceplates derived from their
-references. Their declared material regions receive slate-blue and smoked-metal
-finishes; screw heads, screen hardware, dividers, and measured landmarks remain
-intact. Source knobs, illustrative values, headings, response traces, and lamps
-are cleared. GTK renders the lettering at the actual display resolution and
-draws control values from the decoded UC fields.
+Normal rendering uses the procedural chassis in `io24_retro_rack.py`: deep black
+for Standard and porcelain white for Passive and Vintage. Recessed glass, black
+rack ears, mounting hardware and orange enamel accents follow the measured
+geometry. GTK renders lettering at the actual display resolution and draws
+control values from the decoded UC fields.
 
-The live racks share procedural flat nickel caps and rotating rubber grips with
-the dynamics racks. Knobs are rendered at native pixel size and cached separately
-from their live lettering. Vintage retains its band colours in the pointer
-inlays. The original transparent PNG knob assets and calibration images remain
-available as design references; normal rendering uses the procedural hardware.
+The live racks use amplifier-style knobs with flat ivory caps, fluted black
+grips and orange pointer tips, plus chrome bat switches with orange pilot lamps.
+Knobs are rendered at native pixel size and cached separately from their live
+lettering. The original PNG faceplates, knob assets and calibration images
+remain available as design references; production uses the procedural hardware.
 
 - `passive-program-eq-reference.png` establishes the blue steel faceplate,
   low/high grouping, recessed response display, stepped selectors, screws and
@@ -47,12 +46,12 @@ coordinates, regeneration command, and diff workflow.
 Selecting or hovering a continuous knob shows its exact decoded value; a
 stepped selector lights its current printed position instead. The response
 display previews the semantic controls immediately and is replaced by UC's
-exact designed sections after a successful device write. The clickable lamp
+exact designed sections after a successful device write. The power switch
 is that EQ model's independent on/off control.
 
 All three models occupy the same full-width, 2U outer rack rectangle. Vintage
-fits its cleaned source plate into that rectangle while keeping measured
-control positions and circular knob bodies as independent live layers.
+maps its measured control positions into that rectangle while keeping circular
+knob bodies as independent live layers.
 Switching models therefore does not resize or jump the page.
 
 Standard's list rows are state-only and remain hidden. Its faceplate provides
@@ -63,18 +62,22 @@ the original illustrative bitmap.
 
 ## Production finishes
 
-HPF uses petrol-blue metal, Standard EQ uses navy steel, Passive uses slate blue,
-Vintage uses smoked charcoal, and Limiter uses warm graphite. These finishes
-share fine brush marks, flat machined knobs, and small contact shadows. Knob
-underlighting is absent. Native live headings and scales stay separate from the
-static metal textures so resizing does not resample their lettering.
+HPF, Passive and Vintage use porcelain white; Standard and Limiter use deep
+black. Fine powdercoat and machining, black rack ears, contact shadows and chrome
+hardware give the units depth. Orange is the shared display and enamel accent.
+Knob underlighting is absent. Native live headings and scales stay separate from
+the cached textures so resizing does not resample their lettering.
 
-The response displays use a bounded woven phosphor texture beneath their actual
-curves. HPF retains its audio-responsive moving plane and idle motion. This
-treatment adds no timer or synthetic production signal; the existing control,
-telemetry, and DSP paths remain authoritative.
+The recessed displays project the actual response into a bounded 2.5D mesh.
+The front edge remains the true response; receding ribbons describe its shape,
+not additional signal history. Standard retains its real spectrum history in
+copper and orange. HPF retains its audio-responsive plane and idle motion, and
+Limiter retains its measured gain-reduction meter. This treatment adds no timer
+or synthetic production signal; existing control, telemetry and DSP paths remain
+authoritative.
 
-Regenerate the production EQ plates with:
+The procedural production chassis requires no asset build. Regenerate the
+historical reference faceplates and calibration layers with:
 
 ```bash
 python3 tools/render_standard_eq_reference.py --faceplate
@@ -102,9 +105,11 @@ For calibration, set `IO24_EQ_REFERENCE_CALIBRATION` to `backdrop`, `overlay`,
 as `underlay`) shows only the generated populated reference; `overlay` adds
 that reference at 46% opacity over the live rack, `nodes` adds the measured
 geometry, and `both` combines those two inspection layers. Normal mode uses
-the production faceplate and live controls.
+the procedural production chassis and live controls.
 
-Capture the same state with `backdrop` and normally. The harness writes each
+For geometry inspection, capture the same state with `backdrop` and normally.
+These now have different artwork; use two production captures for pixel
+regression comparisons. The harness writes each
 limiter capture's actual allocation to a `.limiter-rack.json` sidecar. Use
 that rectangle with `--rack limiter --rack-rect X,Y,W,H` in
 `tools/eq_reference_diff.py`. Allowances include the source cleanup regions,

@@ -147,7 +147,7 @@ def text_width(ctx, text, spacing):
 
 
 def label(ctx, text, cx, cy, size, colour, bold=True, spacing=0.0,
-          align="center", engraved=True):
+          align="center", engraved=True, visible=True):
     """Print faceplate text vertically centred on its cap height."""
     font(ctx, size, bold)
     cap = ctx.text_extents("H").height
@@ -164,9 +164,10 @@ def label(ctx, text, cx, cy, size, colour, bold=True, spacing=0.0,
             ctx.show_text(character)
             pen += ctx.text_extents(character).x_advance + spacing
 
-    if engraved:
-        run(0.0, 1.4, (0.0, 0.0, 0.0, 0.55 * colour[3]))
-    run(0.0, 0.0, colour)
+    if visible:
+        if engraved:
+            run(0.0, 1.4, (0.0, 0.0, 0.0, 0.55 * colour[3]))
+        run(0.0, 0.0, colour)
     return x, width
 
 
@@ -392,11 +393,11 @@ def draw_band_symbol(ctx, index, cx, cy, selected=False):
     circle(ctx, cx, cy, 2.2 if selected else 1.7, colour)
 
 
-def draw_heading(ctx, selected=SELECTED):
+def draw_heading(ctx, selected=SELECTED, draw_title=True):
     x, _y, _w, _h = SCREEN_CUT
     title_x, title_w = label(
         ctx, "STANDARD  EQ", WIDTH / 2.0, HEADING_Y, 29,
-        (0.90, 0.92, 0.90, 0.94), spacing=9.5)
+        (0.90, 0.92, 0.90, 0.94), spacing=9.5, visible=draw_title)
     right = SCREEN_CUT[0] + SCREEN_CUT[2]
     for start, end in ((x + 40, title_x - 30),
                        (title_x + title_w + 30, right - 40)):
@@ -909,7 +910,8 @@ def render(output, faceplate=False):
     ctx = cairo.Context(surface)
     for sx, sy in SCREWS:
         draw_screw(ctx, sx, sy)
-    draw_heading(ctx, selected=None if faceplate else SELECTED)
+    draw_heading(ctx, selected=None if faceplate else SELECTED,
+                 draw_title=not faceplate)
     draw_screen(ctx, rng, dynamic=not faceplate)
     for index, band in enumerate(BANDS):
         draw_knob(ctx, index, band, rng, dynamic=not faceplate)

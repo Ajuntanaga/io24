@@ -688,6 +688,8 @@ class ReferenceRackTests(unittest.TestCase):
         rack.grab_focus = lambda: None
         rack.get_width = lambda: 700
         rack.get_height = lambda: 210
+        rack.get_scale_factor = lambda: 1
+        rack.get_pango_context = lambda: SimpleNamespace(get_serial=lambda: 0)
         return rack
 
     def test_drag_fraction_changes_only_the_backing_widget(self):
@@ -877,6 +879,7 @@ class ReferenceRackTests(unittest.TestCase):
             expected = io24gtk.standard_eq_rack_bounds(
                 width,
                 total_height - io24gtk.ALTERNATE_EQ_RACK_SHADOW_ROOM)
+            expected = (round(expected[0]), round(expected[1]), *expected[2:])
 
             self.assertAlmostEqual(rack_width / rack_height, eq_aspect)
             self.assertAlmostEqual(rack_width, width)

@@ -6,7 +6,7 @@ The canonical full references stay untouched.  For each rack this tool emits:
 * an exact cropped underlay for pixel comparison;
 * a transparent landmark overlay with every load-bearing measured node; and
 * for Passive/Vintage, a production faceplate with illustrative controls,
-  response trace, and lamp removed so live protocol values can be drawn once.
+  response trace, lamp and headings removed for crisp live rendering.
 
 Run from any directory:
 
@@ -46,7 +46,7 @@ def _crop_reference(art):
 
 
 def _control_mask(model, art):
-    """Mask every illustrative, parameter-bearing control inscription."""
+    """Mask controls and headings replaced by native-resolution rendering."""
     width, height = art["rack_crop"][2:]
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
@@ -57,6 +57,10 @@ def _control_mask(model, art):
     draw.ellipse((lx - reach, ly - reach, lx + reach, ly + reach), fill=255)
     sx, sy, sw, sh = art["screen"]
     draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4), fill=0)
+    # Vintage's title sits immediately above the bezel. Keep the cleanup
+    # feather beyond its last glyph row; the screen itself is restored below.
+    for x, y, region_width, region_height in art["heading_clear_regions"]:
+        draw.rectangle((x, y, x + region_width, y + region_height), fill=255)
     for cx, cy, radius in art["screws"]:
         keep = radius + 8
         draw.ellipse((cx - keep, cy - keep, cx + keep, cy + keep), fill=0)
@@ -140,6 +144,10 @@ def _plate_fill(image, mask, model):
     sx, sy, sw, sh = art["screen"]
     restore_draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4),
                            fill=255)
+    for x, y, region_width, region_height in art["heading_clear_regions"]:
+        restore_draw.rectangle((x, y, x + region_width, y + region_height),
+                               fill=0)
+    restore_draw.rectangle((sx, sy, sx + sw, sy + sh), fill=255)
     for cx, cy, radius in art["screws"]:
         keep = radius * 2.25
         restore_draw.ellipse((cx - keep, cy - keep,
@@ -152,7 +160,7 @@ def _plate_fill(image, mask, model):
 
 
 def _blank_reference_plot(image, art, model):
-    """Clear state-bearing plot pixels; GTK restores the calibrated grid."""
+    """Clear the trace and raster lettering; GTK restores grid and scales."""
     source = np.asarray(image, dtype=np.float32)
     x, y, width, height = art["plot"]
     plot = source[y:y + height, x:x + width]
@@ -170,6 +178,20 @@ def _blank_reference_plot(image, art, model):
         cleaned + rng.normal(0.0, .55, (height, width, 1)), 0, 255)
     result = source.copy()
     result[y:y + height, x:x + width] = cleaned
+    # Interpolate the adjacent unlettered glass across each narrow label
+    # strip. This preserves its local illumination without resampling text.
+    for index, (lx, ly, lw, lh) in enumerate(art["graph_label_clear_regions"]):
+        if index == 0:
+            blend = np.linspace(0, 1, lw)[None, :, None]
+            start = source[ly:ly + lh, lx - 1:lx]
+            end = source[ly:ly + lh, lx + lw:lx + lw + 1]
+        else:
+            blend = np.linspace(0, 1, lh)[:, None, None]
+            start = source[ly - 1:ly, lx:lx + lw]
+            end = source[ly + lh:ly + lh + 1, lx:lx + lw]
+        glass = start * (1 - blend) + end * blend
+        result[ly:ly + lh, lx:lx + lw] = np.clip(
+            glass + rng.normal(0, .35, (lh, lw, 1)), 0, 255)
     return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8), "RGB")
 
 

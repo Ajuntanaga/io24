@@ -4853,3 +4853,27 @@ Inspected actual GTK Gate, Compressor, and Multiband captures at 1440 px and
 The same 143 parameter/crossover tests and 61 subtests pass; Python compilation
 and diff whitespace checks pass. Images are under `/tmp/io24-sharpness/gtk/`
 and `/tmp/io24-sharpness/after/`. Reopen Host to load the renderer change.
+
+### HPF, EQ and limiter sharpness and GitHub publication, 2026-11-01
+
+Published the completed dynamics work through the sanitized 106-file public
+export, as commit `2fa1eaf` on `Ajuntanaga/io24:io24-multiband-insert`. Private
+source history remains local (`7b8a597`); do not push that history to the public
+repository. The public checkout is `/tmp/io24-publish-dynamics-20261101`.
+
+Applied the same sharpness treatment to HPF, Limiter, Standard EQ, Passive
+Program EQ and Vintage EQ. Shared faceplate text uses a cached native Pango
+context with rounded glyph positions and physical-pixel origins. Rack origins
+are pixel-aligned, and HPF/Limiter static caches account for display scale and
+font-context changes. The EQ production assets no longer contain rasterized
+titles/group headings; Passive/Vintage graph scales also render as native text,
+aligned with the live response grid. Canonical reference images are preserved.
+Metal and knob textures, control bindings and audio processing remain intact.
+
+The five affected suites pass: 165 tests, 2 skips, 50 subtests. Actual GTK
+captures of all five racks at 1440 px and the 1042 px minimum width were
+inspected, including removal of residual Vintage title pixels and alignment
+of graph scales. Evidence is `/tmp/io24-other-racks/after/`; the capture harness
+uses the fake USB/audio backend and disables session writes. No live hardware,
+audio graph, firmware or Wine operation occurred. The installed launcher still
+points at this worktree, so reopening Host loads the change without a build.

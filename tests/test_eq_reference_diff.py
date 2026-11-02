@@ -84,14 +84,16 @@ class EqReferenceDiffTests(unittest.TestCase):
                 changed = np.any(source != faceplate, axis=2)
                 allowed = np.zeros((height, width), dtype=bool)
                 padding = 12
-                for x, y, region_width, region_height in \
-                        art["control_clear_regions"]:
+                for x, y, region_width, region_height in (
+                        *art["control_clear_regions"],
+                        *art["heading_clear_regions"]):
                     allowed[max(0, y - padding):
                             min(height, y + region_height + padding),
                             max(0, x - padding):
                             min(width, x + region_width + padding)] = True
                 for x, y, region_width, region_height in \
-                        art.get("faceplate_cleanup_regions", ()):
+                        (*art.get("faceplate_cleanup_regions", ()),
+                         *art["graph_label_clear_regions"]):
                     allowed[y:y + region_height,
                             x:x + region_width] = True
                 x, y, plot_width, plot_height = art["plot"]

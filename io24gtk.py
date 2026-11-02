@@ -1050,37 +1050,72 @@ def centred_label(widget, sn, text, cx, y, color, size=9):
 EQ_FACEPLATE_FONT = "Nimbus Sans Narrow"
 
 
-def faceplate_label(widget, sn, text, x, y, color, size=9,
-                    weight=Pango.Weight.SEMIBOLD):
-    """Condensed engraved lettering shared by the three EQ faceplates."""
-    lay = widget.create_pango_layout(text)
+def _rack_pixel(widget, value):
+    """Align lettering and its parent translation to physical display pixels."""
+    scale = widget.get_scale_factor()
+    return round(value * scale) / scale
+
+
+def _faceplate_layout(widget, text, size, weight):
+    # Use a private context: changing the widget's shared Pango context also
+    # changes unrelated native controls. Recreate on font/DPI/scale changes.
+    key = (widget.get_pango_context().get_serial(), widget.get_scale_factor())
+    cached = getattr(widget, "_rack_text_context", None)
+    if cached is None or cached[0] != key:
+        context = widget.create_pango_context()
+        # Keep GTK's native font options and hinting; round individual glyph
+        # positions as well as the layout origin so narrow lettering stays
+        # crisp without requiring the optional PyGObject Cairo bridge.
+        context.set_round_glyph_positions(True)
+        cached = (key, context)
+        widget._rack_text_context = cached
+    lay = Pango.Layout.new(cached[1])
+    lay.set_text(text, -1)
     fd = Pango.FontDescription()
     fd.set_family(EQ_FACEPLATE_FONT)
     fd.set_stretch(Pango.Stretch.CONDENSED)
     fd.set_weight(weight)
     fd.set_size(int(size * Pango.SCALE))
     lay.set_font_description(fd)
+    return lay
+
+
+def _append_faceplate_text(widget, sn, lay, x, y, color):
     sn.save()
-    sn.translate(Graphene.Point().init(x, y))
+    sn.translate(Graphene.Point().init(
+        _rack_pixel(widget, x), _rack_pixel(widget, y)))
     sn.append_layout(lay, color)
     sn.restore()
+
+
+def faceplate_label(widget, sn, text, x, y, color, size=9,
+                    weight=Pango.Weight.SEMIBOLD):
+    """Native, pixel-aligned lettering drawn above the rack artwork."""
+    lay = _faceplate_layout(widget, text, size, weight)
+    _append_faceplate_text(widget, sn, lay, x, y, color)
 
 
 def centred_faceplate_label(widget, sn, text, cx, y, color, size=9,
                             weight=Pango.Weight.SEMIBOLD):
     """Draw condensed faceplate text centred without width guessing."""
-    lay = widget.create_pango_layout(text)
-    fd = Pango.FontDescription()
-    fd.set_family(EQ_FACEPLATE_FONT)
-    fd.set_stretch(Pango.Stretch.CONDENSED)
-    fd.set_weight(weight)
-    fd.set_size(int(size * Pango.SCALE))
-    lay.set_font_description(fd)
+    lay = _faceplate_layout(widget, text, size, weight)
     width, _height = lay.get_pixel_size()
-    sn.save()
-    sn.translate(Graphene.Point().init(cx - width / 2.0, y))
-    sn.append_layout(lay, color)
-    sn.restore()
+    _append_faceplate_text(widget, sn, lay, cx - width / 2.0, y, color)
+
+
+def faceplate_heading(widget, sn, text, cx, cy, color, pixels, tracking):
+    """Keep reference typography live, centred on its visible cap height."""
+    lay = _faceplate_layout(widget, text, 9, Pango.Weight.SEMIBOLD)
+    fd = lay.get_font_description()
+    fd.set_absolute_size(pixels * Pango.SCALE)
+    lay.set_font_description(fd)
+    attrs = Pango.AttrList()
+    attrs.insert(Pango.attr_letter_spacing_new(round(tracking * Pango.SCALE)))
+    lay.set_attributes(attrs)
+    ink, _logical = lay.get_pixel_extents()
+    _append_faceplate_text(widget, sn, lay,
+                          cx - ink.x - ink.width / 2,
+                          cy - ink.y - ink.height / 2, color)
 
 
 def vgrad(sn, x, y, w, h, stops):
@@ -2793,7 +2828,8 @@ class ReferenceRack(Canvas):
         height = float(height if height is not None else
                        (self.get_height() or 180))
         usable_height = max(1.0, height - ALTERNATE_EQ_RACK_SHADOW_ROOM)
-        return standard_eq_rack_bounds(width, usable_height)
+        x, y, rack_w, rack_h = standard_eq_rack_bounds(width, usable_height)
+        return (_rack_pixel(self, x), _rack_pixel(self, y), rack_w, rack_h)
 
     def _local_layout(self, width, height):
         return io24_rack_reference.control_layout(
@@ -3262,7 +3298,8 @@ class ReferenceRack(Canvas):
 
     def _append_production_faceplate(self, sn, width, height):
         """Reuse the size-dependent static rack node across telemetry frames."""
-        key = (int(round(width)), int(round(height)))
+        key = (width, height, self.get_scale_factor(),
+               self.get_pango_context().get_serial())
         cached = getattr(self, "_faceplate_node", None)
         if cached is None or cached[0] != key:
             static = Gtk.Snapshot()
@@ -5644,6 +5681,11 @@ class EQCurve(ChannelBound, Canvas):
                 (.45, (.118, .146, .190, 1)),
                 (1.0, (.060, .075, .102, 1))), rgba(.35, .44, .54, .8))
 
+        faceplate_heading(
+            self, sn, "STANDARD  EQ", px + pw / 2, layout["heading_y"],
+            rgba(.90, .92, .90, .94), 29 * layout["scale"],
+            9.5 * layout["scale"])
+
         gx, gy, gw, gh = self._graph_bounds(w, h)
 
         # The screen is the authoritative response: all four band controls,
@@ -6346,6 +6388,15 @@ class AlternateEqRack(ChannelBound, Canvas):
         bezel_x = max(12.0, min(22.0, h * .16))
         bezel_y = max(11.0, min(18.0, h * .13))
         db_range = 18.0 if model == "passive" else 12.0
+        art = ALTERNATE_EQ_REFERENCE_ART[model]
+        plot_x, plot_y, plot_w, plot_h = art["plot"]
+        scale_x, scale_y = w / plot_w, h / plot_h
+        db_strip, hz_strip = art["graph_label_clear_regions"]
+        db_label_x = x + (db_strip[0] + db_strip[2] / 2 - plot_x) * scale_x
+        hz_label_y = y + (hz_strip[1] + hz_strip[3] / 2 - plot_y) * scale_y
+        label_pixels = max(8.0, 14.0 * scale_x)
+        label_colour = rgba(.58, .76, .83, .90) if model == "passive" else \
+            rgba(.83, .85, .82, .92)
         if draw_bezel:
             rounded_box(sn, x - bezel_x, y - bezel_y,
                         w + bezel_x * 2, h + bezel_y * 2, 13,
@@ -6366,13 +6417,9 @@ class AlternateEqRack(ChannelBound, Canvas):
                 polyline(sn, [(x, gy), (x + w, gy)],
                          rgba(.30, .55, .64, .30 if db == 0 else .16), 1.0)
                 if draw_labels:
-                    # The vector fallback engraves the dB scale into the left
-                    # bezel; production underlays retain the source labels.
-                    centred_faceplate_label(
-                        self, sn, "%+d" % db, x - bezel_x / 2,
-                        max(y - 4, min(y + h - 7, gy - 4)),
-                        rgba(.55, .72, .78, .62), 5.2,
-                        Pango.Weight.NORMAL)
+                    faceplate_heading(
+                        self, sn, "%+d" % db if db else "0",
+                        db_label_x, gy, label_colour, label_pixels, 0)
         frequencies = ((20, "20"), (50, "50"), (100, "100"),
                        (200, "200"), (500, "500"), (1000, "1k"),
                        (2000, "2k"), (5000, "5k"), (10000, "10k"),
@@ -6387,11 +6434,9 @@ class AlternateEqRack(ChannelBound, Canvas):
                 for frequency, text in frequencies:
                     gx = x + math.log10(frequency / 20.0) / math.log10(
                         24000 / 20.0) * w
-                    label_x = max(x + 10, min(x + w - 10, gx))
-                    centred_faceplate_label(
-                        self, sn, text, label_x, y + h - 12,
-                        rgba(.55, .72, .78, .60), 5.6,
-                        Pango.Weight.NORMAL)
+                    faceplate_heading(
+                        self, sn, text, gx, hz_label_y,
+                        label_colour, label_pixels, 0)
         if active:
             points = [(x + px, y + py) for px, py in
                       self.win.curve_points(
@@ -6431,6 +6476,7 @@ class AlternateEqRack(ChannelBound, Canvas):
             rgba(.16, .20, .22, 1))
         x, y, rack_w, rack_h = alternate_eq_rack_bounds(
             view["model"], w, h)
+        x, y = _rack_pixel(self, x), _rack_pixel(self, y)
         shadow_blur = max(6.0, min(12.0, rack_h * .045))
         shadow_offset = max(3.0, min(7.0, rack_h * .026))
         sn.push_blur(shadow_blur)
@@ -6549,8 +6595,8 @@ class AlternateEqRack(ChannelBound, Canvas):
         graph = (gx * w, gy * h, gw * w, gh * h)
         heading_y = h * (.079 if passive else .082)
         if passive:
-            title = "P A S S I V E   P R O G R A M   E Q"
-            groups = ((.177, "L O W", INK), (.793, "H I G H", INK))
+            title = "PASSIVE  PROGRAM  EQ"
+            groups = (("LOW", INK), ("HIGH", INK))
             # The Passive reference joins its three headings with long,
             # engraved rules on one common baseline.
             for start, end in ((.083, .149), (.205, .392),
@@ -6559,11 +6605,11 @@ class AlternateEqRack(ChannelBound, Canvas):
                               (end * w, heading_y)],
                          pal(INK, .58), 1.0)
         else:
-            title = "V I N T A G E   E Q"
-            groups = ((.125, "L O W", (.67, .35, .35)),
-                      (.275, "L O W - M I D", (.72, .56, .27)),
-                      (.760, "H I - M I D", (.55, .65, .43)),
-                      (.900, "H I G H", (.40, .57, .73)))
+            title = "VINTAGE  EQ"
+            groups = (("LOW", (.67, .35, .35)),
+                      ("LOW-MID", (.72, .56, .27)),
+                      ("HI-MID", (.55, .65, .43)),
+                      ("HIGH", (.40, .57, .73)))
             for divider in (.200, .350, .696, .855):
                 polyline(sn, [(divider * w, h * .075),
                               (divider * w, h * .865)],
@@ -6572,19 +6618,9 @@ class AlternateEqRack(ChannelBound, Canvas):
                 polyline(sn, [(start * w, heading_y),
                               (end * w, heading_y)],
                          rgba(.88, .86, .78, .56), 1.0)
-        title_y = heading_y - h * (.023 if passive else .033)
-        centred_faceplate_label(
-            self, sn, title, w / 2, title_y,
-            rgba(.88, .86, .78, .90), max(7.0, min(11.0, w / 85)),
-            Pango.Weight.MEDIUM)
-        for gx, group, group_colour in groups:
-            centred_faceplate_label(
-                self, sn, group, gx * w, geometry["group_y"] * h,
-                pal(group_colour, .86), max(6.5, min(9.0, w / 100)))
         # The value-free production underlay retains the source reference's
-        # metal, ears, screws, separators, typography and bezel pixel for
-        # pixel. Only parameter-bearing regions were removed by the asset
-        # generator; the live controls below remain protocol-authoritative.
+        # metal, ears, screws, separators and bezel. Headings and controls
+        # are drawn above it at the display's native resolution.
         # Vintage's cleaned source plate is fitted to the common 2U bay as the
         # explicit calibration backdrop. Knob bodies remain independent,
         # circular assets, so the fitted static plate cannot distort a live
@@ -6597,11 +6633,20 @@ class AlternateEqRack(ChannelBound, Canvas):
             sn.append_texture(faceplate, Graphene.Rect().init(0, 0, w, h))
 
         art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
+        scale = w / art["rack_crop"][2]
+        headings = ((title, (.88, .86, .78)), *groups)
+        for index, ((text, colour), region) in enumerate(zip(
+                headings, art["heading_clear_regions"])):
+            hx, hy, hw, hh = io24_eq_reference.scaled_rect(
+                region, w, h, view["model"])
+            faceplate_heading(
+                self, sn, text, hx + hw / 2, hy + hh / 2,
+                pal(colour, .94), (26 if index == 0 else 25) * scale,
+                (9.5 if index == 0 else 3.5) * scale)
         graph = io24_eq_reference.scaled_rect(
             art["plot"], w, h, view["model"])
         self._draw_graph(sn, *graph, active, view["model"],
-                         draw_static=True, draw_bezel=faceplate is None,
-                         draw_labels=faceplate is None)
+                         draw_static=True, draw_bezel=faceplate is None)
         if not passive and faceplate is None:
             gx, gy, gw, gh = graph
             for sx, sy in ((gx - 5, gy - 5), (gx + gw + 5, gy - 5),

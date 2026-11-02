@@ -84,6 +84,9 @@ EQ_REFERENCE_RACKS = {
         "heading_y": 30,
         "screen": (593, 60, 707, 365),
         "plot": (663, 110, 591, 261),
+        # Left dB strip and lower frequency strip, inside the screen glass.
+        "graph_label_clear_regions": ((620, 102, 37, 281),
+                                      (651, 384, 625, 27)),
         "controls": {
             "bboost": (243, 213, 66),
             "batten": (467, 213, 66),
@@ -95,9 +98,14 @@ EQ_REFERENCE_RACKS = {
             "hsfreq": (1858, 422, 58),
         },
         # Parameter-bearing artwork cleared from the production underlay.
-        # Static headings, rules, rack hardware and the screen stay untouched.
+        # Rules, rack hardware and the display surround stay untouched.
+        # Headings and graph scales are cleared separately for live text.
         "control_clear_regions": ((86, 58, 478, 424),
                                   (1290, 58, 786, 424)),
+        # Title first, then group labels; centres also anchor live lettering.
+        "heading_clear_regions": ((867, 19, 422, 37),
+                                  (334, 18, 94, 39),
+                                  (1655, 18, 108, 40)),
         # Static cleanup performed by ``_open_rack_slots``: source-photo
         # whitespace may be normalized only in the two ears and narrow crop
         # fringes.  Keep this explicit so the pixel-diff gate still rejects
@@ -128,6 +136,8 @@ EQ_REFERENCE_RACKS = {
         "heading_y": 31,
         "screen": (765, 47, 705, 292),
         "plot": (858, 102, 557, 175),
+        "graph_label_clear_regions": ((819, 94, 34, 190),
+                                      (847, 285, 579, 26)),
         "controls": {
             "lowgain": (182, 186, 55),
             "lowfreq": (342, 188, 55),
@@ -141,6 +151,11 @@ EQ_REFERENCE_RACKS = {
                                   (432, 68, 322, 262),
                                   (1496, 68, 347, 262),
                                   (1844, 68, 232, 262)),
+        "heading_clear_regions": ((990, 14, 270, 38),
+                                  (228, 32, 73, 37),
+                                  (523, 31, 140, 39),
+                                  (1604, 31, 110, 39),
+                                  (1896, 31, 82, 39)),
         "faceplate_cleanup_regions": ((0, 0, 80, 377),
                                       (2076, 0, 80, 377),
                                       (0, 0, 2156, 8),

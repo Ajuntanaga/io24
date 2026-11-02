@@ -4877,3 +4877,42 @@ of graph scales. Evidence is `/tmp/io24-other-racks/after/`; the capture harness
 uses the fake USB/audio backend and disables session writes. No live hardware,
 audio graph, firmware or Wine operation occurred. The installed launcher still
 points at this worktree, so reopening Host loads the change without a build.
+
+### HPF, EQ and limiter retrofuture finishes, 2026-11-01
+
+Completed the user's expanded design direction across HPF, Standard EQ, Passive
+Program EQ, Vintage EQ and Limiter. The production finishes are petrol blue,
+navy, slate steel blue, smoked charcoal and warm graphite respectively. Brushed
+metal, fine edges and contact shadows carry the hardware texture. Flat machined
+nickel knob caps now share rotating rubber grips and enamel pointers; the broad
+knob underlighting is removed. Woven phosphor meshes follow the existing plotted
+response data. HPF retains its existing audio-responsive plane and idle motion.
+Live labels remain native-resolution Pango text. Control layout, bindings,
+parameter behavior and audio processing are unchanged.
+
+The alternate EQ asset generator declares its material regions, preserves screw
+cores and display bezels, and feathers the finish around screw contact shadows.
+Canonical references remain untouched. Updated the design and calibration docs
+to distinguish original geometry references from current production finishes.
+
+Verification is complete:
+
+- The sanitized public release suite passed: 580 tests, 25 skips, 201 subtests.
+- Final generated-asset checks passed: 23 tests and 28 subtests; the limiter
+  asset drift check matches. Public export matches its 106-file allowlist.
+- Actual GTK captures of all five racks at 1440 px and the 1042 px minimum
+  width were inspected. Final previews are in `/tmp/io24-retrofuture-racks/`,
+  named `<hpf|limiter|standard|passive|vintage>-<1042|1440>.png`.
+- One independent review found no material issues. Its requested final asset
+  verification is included above. Diff whitespace checks pass.
+
+The capture harness uses fake USB/audio and synthetic preview telemetry with
+session writes disabled. No live device, audio graph, firmware or Wine operation
+occurred. Reopening the installed Host loads the implementation without a build.
+
+Public commit `45982f6` was pushed successfully to
+`Ajuntanaga/io24:io24-multiband-insert` from the sanitized checkout
+`/tmp/io24-publish-dynamics-20261101`. Keep private source history local.
+The user also requested regular compaction: keep this
+checkpoint current; compaction is automatic and cannot be scheduled by this
+session.

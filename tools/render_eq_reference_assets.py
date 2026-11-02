@@ -159,6 +159,61 @@ def _plate_fill(image, mask, model):
     return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8), "RGB")
 
 
+def _finish_plate(image, art, model):
+    """Anodized production metal, with photographed hardware left intact."""
+    width, height = image.size
+    mask = Image.new("L", image.size, 0)
+    draw = ImageDraw.Draw(mask)
+    x, y, w, h = art["material_region"]
+    draw.rectangle((x, y, x + w - 1, y + h - 1), fill=255)
+    sx, sy, sw, sh = art["screen"]
+    draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4), fill=0)
+    for hx, hy, hw, hh in art["heading_clear_regions"]:
+        draw.rectangle((hx, hy, hx + hw, hy + hh), fill=255)
+    draw.rectangle((sx, sy, sx + sw, sy + sh), fill=0)
+    for x1, y1, x2, y2 in art.get("dividers", ()):
+        draw.line((x1, y1, x2, y2), fill=0, width=13)
+
+    # Cool slate for Passive; neutral smoked metal for Vintage. Broad light
+    # belongs to the metal, while the short brush marks resolve at rack scale.
+    stops = np.array((
+        (96, 114, 132), (64, 83, 104), (44, 63, 84), (27, 43, 61), (17, 28, 41)
+    ) if model == "passive" else (
+        (83, 85, 83), (57, 61, 61), (38, 43, 44), (26, 30, 32), (15, 19, 21)
+    ), dtype=np.float32)
+    positions = (0, .055, .43, .90, 1)
+    yy, xx = np.mgrid[:height, :width]
+    # Preserve each photographed screw head, then feather its contact shadow
+    # into the new finish. A hard circular cutout leaves a patch of old metal.
+    coverage = np.asarray(mask, dtype=np.float32) / 255
+    for cx, cy, radius in art["screws"]:
+        distance = np.hypot(xx - cx, yy - cy)
+        feather = np.clip((distance - radius - 1) / max(1, radius * .65), 0, 1)
+        coverage *= feather * feather * (3 - 2 * feather)
+    mask = Image.fromarray(np.rint(coverage * 255).astype(np.uint8), "L")
+    v = np.clip((yy - y) / max(1, h - 1), 0, 1)
+    metal = np.stack([np.interp(v, positions, stops[:, c])
+                      for c in range(3)], axis=2)
+    rng = np.random.default_rng(20261101 if model == "passive" else 20261102)
+    sheen = np.exp(-((xx / width + yy / height * .15 - .46) / .28) ** 2)
+    metal += sheen[:, :, None] * np.array((4.5, 5, 5.5))
+    metal += rng.normal(0, 1.55, (height, width, 1))
+    metal += rng.normal(0, 1.15, (height, 1, 1))
+    finish = Image.fromarray(np.clip(metal, 0, 255).astype(np.uint8), "RGB")
+    brush = ImageDraw.Draw(finish, "RGBA")
+    for _ in range(4200):
+        bx = int(rng.integers(x, x + w))
+        by = int(rng.integers(y, y + h))
+        span = int(rng.integers(4, 94))
+        color = (205, 220, 229, 12) if rng.random() > .35 else (0, 6, 12, 25)
+        brush.line((bx, by, min(x + w - 1, bx + span), by), fill=color)
+    brush.line((x + 2, y + 1, x + w - 3, y + 1),
+               fill=(217, 231, 234, 65), width=1)
+    brush.line((x + 2, y + h - 2, x + w - 3, y + h - 2),
+               fill=(0, 0, 0, 165), width=2)
+    return Image.composite(finish, image, mask)
+
+
 def _blank_reference_plot(image, art, model):
     """Clear the trace and raster lettering; GTK restores grid and scales."""
     source = np.asarray(image, dtype=np.float32)
@@ -350,6 +405,7 @@ def render_model(model, output_dir=DESIGN):
     outputs = [underlay, nodes]
     if model in ("passive", "vintage"):
         faceplate = _plate_fill(cropped, _control_mask(model, art), model)
+        faceplate = _finish_plate(faceplate, art, model)
         faceplate = _blank_reference_plot(faceplate, art, model)
         faceplate = _open_rack_slots(faceplate, art)
         faceplate_path = output_dir / art["faceplate_filename"]

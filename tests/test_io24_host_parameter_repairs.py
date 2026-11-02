@@ -1531,7 +1531,7 @@ class HostRefinementTests(unittest.TestCase):
     def test_multiband_selection_hides_single_band_only_controls(self):
         widgets = {name: _Control() for name in (
             "model", "comp_param_stack", "ckey_row", "cklisten",
-            "comp_curve")}
+            "comp_curve", "mbc_rack")}
         host = SimpleNamespace(w={1: widgets}, _adopt_mute=True)
 
         widgets["model"].set_selected(io24gtk.MULTIBAND_MODEL)
@@ -1541,17 +1541,61 @@ class HostRefinementTests(unittest.TestCase):
                          "multiband")
         self.assertFalse(widgets["ckey_row"].visible)
         self.assertFalse(widgets["cklisten"].visible)
-        self.assertFalse(widgets["comp_curve"].visible)
+        self.assertTrue(widgets["comp_curve"].visible)
+        self.assertFalse(widgets["comp_param_stack"].visible)
+        self.assertTrue(widgets["mbc_rack"].visible)
 
         widgets["model"].set_selected(0)
         io24gtk.Win._comp_model_changed(host, 1)
 
         self.assertEqual(widgets["comp_param_stack"].visible_child_name,
                          "standard")
-        self.assertTrue(widgets["ckey_row"].visible)
-        self.assertTrue(widgets["cklisten"].visible)
+        self.assertFalse(widgets["ckey_row"].visible)
+        self.assertFalse(widgets["cklisten"].visible)
+        self.assertFalse(widgets["comp_param_stack"].visible)
+        self.assertFalse(widgets["mbc_rack"].visible)
         self.assertTrue(widgets["comp_curve"].visible)
         self.assertEqual(widgets["comp_curve"].draws, 2)
+
+    def test_live_crossover_moves_cannot_cross_adjacent_splits(self):
+        controls = {ch: _multiband_controls() for ch in (1, 2)}
+        insert = SimpleNamespace(running=True, set_channel_controls=mock.Mock())
+        host = SimpleNamespace(mbc_ctl=controls, _mbc_mute=False,
+                               link_both=False, insert=insert)
+        for name in ("_mbc_set", "_mbc_targets", "_mbc_mirror", "_mbc_push"):
+            setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
+        for index, before, requested, expected in (
+                (0, (150, 300, 4500), 400, 299),
+                (1, (400, 800, 4500), 300, 401),
+                (1, (150, 800, 2000), 2500, 1999),
+                (2, (150, 2500, 4500), 2000, 2501)):
+            with self.subTest(index=index):
+                for ch in (1, 2):
+                    for i, value in enumerate(before):
+                        controls[ch]["x%d" % i].set_value(value)
+                insert.set_channel_controls.reset_mock()
+                cid = "x%d" % index
+                keys = [name + ":Freq" for name in io24_mbc.crossover_nodes()[index]]
+                controls[1][cid].set_value(requested)
+                host._mbc_set(1, cid, keys, requested)
+                self.assertEqual(controls[1][cid].get_value(), expected)
+                self.assertEqual(controls[2][cid].get_value(), before[index])
+                insert.set_channel_controls.assert_called_once_with(
+                    1, {key: expected for key in keys})
+                self.assertFalse(host._mbc_mute)
+
+        # Linking preserves ordering even when the neighbouring channel has
+        # different split settings. Every compensation filter moves with it.
+        host.link_both = True
+        controls[1]["x1"].set_value(350)
+        controls[2]["x1"].set_value(300)
+        keys = [name + ":Freq" for name in io24_mbc.crossover_nodes()[0]]
+        insert.set_channel_controls.reset_mock()
+        host._mbc_set(1, "x0", keys, 400)
+        self.assertEqual(controls[1]["x0"].get_value(), 299)
+        self.assertEqual(controls[2]["x0"].get_value(), 299)
+        self.assertEqual(insert.set_channel_controls.call_args_list, [
+            mock.call(ch, {key: 299 for key in keys}) for ch in (1, 2)])
 
     def test_host_file_worker_uses_its_serialized_device_argument(self):
         picker = inspect.getsource(io24gtk.Win._pick)

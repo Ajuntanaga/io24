@@ -399,6 +399,11 @@ change, then let the Host observe the new rate before turning it back on.
 
 The DFU interface reports `Upload Unsupported`, so the device cannot provide a
 recovery image before a write. No custom firmware image is included here.
+The latest offline updater comparison also found that Universal Control 5.1.1
+still embeds the same stock io24 1.28 payload and the same compatibility gate;
+it contains no alternate image or software bypass. Further extension work now
+requires read-only physical SWD/JTAG or external-flash acquisition rather than
+additional DFU guessing.
 
 ## License and source boundary
 

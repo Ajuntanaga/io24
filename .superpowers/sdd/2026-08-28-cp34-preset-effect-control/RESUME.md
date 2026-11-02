@@ -4783,3 +4783,73 @@ contracts take many minutes; do not report it as a completed broad pass. No
 USB, ALSA, PipeWire graph, firmware, slot, or device-setting operation occurred
 for this closure. Physical `PrsM` persistence, cold-boot recall, and standalone
 VoiceFX audibility still require a separately authorized bounded device run.
+
+### Host multiband rack and crossover completion, 2026-11-01
+
+The current user request is the Host compressor rack UI, not a continuation of
+the firmware or live-loopback lanes above. The working implementation is in
+`.worktrees/reference-rack-compiler`; the installed `io24-mixer` launcher points
+there. Changes are uncommitted. Preserve the existing Gate/compressor rack work.
+
+Multiband now has an EQ-sized silver crossover rack and a matching band rack.
+Three large logarithmic crossover knobs share the canonical adjustments, enforce
+strict ordering (including stereo-linked channels), and update every affected
+split/phase-compensation node. The four plotted response curves match the actual
+24 dB/oct Linkwitz-Riley filters. Four selectable bands expose independent
+Standard/Tube/FET controls, key filter/listen, and the appropriate static transfer
+and detector response. Presets and stereo linking retain the original paths.
+Master power preserves parameter values, and the 40 Hz key-filter endpoint does
+not disable that filter. The old duplicate controls remain hidden.
+
+Visual work includes flat lathed vintage caps, textured rotating grips,
+even scale spacing, readable readouts, and woven phosphor fills beneath
+the signal/response curves. The mesh follows the plotted data without synthetic
+production telemetry or a separate animation clock. Stationary chrome and knobs
+use bounded caches; thread density follows device resolution. A measured 1215 x
+272 crossover redraw benchmark improved from the stage-two review's roughly
+70 ms median to 13.84 ms for distinct crossover changes, with 0.94 ms cache-hit
+redraws. This is local Cairo timing, not a sustained live-audio performance claim.
+
+Requested checks and both review stages are complete:
+
+- Parameter/DSP/persistence checks: `test_io24_host_parameter_repairs.py`,
+  `test_io24_multiband_insert.py`, and `test_io24_uc_multiband.py` pass together:
+  143 tests and 61 subtests. Coverage includes plotted-versus-implemented LR4
+  responses, linked crossover clamping, and all compensation-node updates.
+- `tests/dynamics_rack_smoke.py` passes under Xvfb with the fake backend and real
+  pointer/keyboard delivery: knobs, power, models, all four bands, key filter,
+  key listen, presets, stereo link, crossover limits, and telemetry display.
+- Review stage one found no remaining functional blocker. Review stage two
+  found the interactive redraw cost; the bounded rendering changes above resolve
+  that finding. No third broad review was opened.
+- Final actual GTK screenshots were inspected at 1440 px and the application's
+  1042 px minimum width: no overlapping readouts or clipped controls. The smallest
+  engraved scale text is necessarily compact at minimum width.
+
+Final previews are `/tmp/io24-multiband-finished/Multiband — 1440px.png` and
+`Multiband — 1042px.png`. Their input traces are a synthetic preview fixture;
+the GTK test backend stubs USB and PipeWire. No live Host/device session, live
+audio, firmware, Wine, or PipeWire route was operated for this task. Reopening
+the installed Host loads this Python implementation without a separate build.
+
+Follow-up: removed knob underlighting from Gate and all compressor racks while
+retaining the metal, grip textures and cast shadows. Multiband now has only the
+upper master power switch; band racks have no duplicate painted or interactive
+power control. The two bays share a zero-spacing stack and use 4 px of shadow
+room instead of 18 px, preserving their metal-face dimensions. The same 143
+tests/61 subtests and real-pointer GTK smoke pass after this change, including
+master-power toggles retaining band settings. Updated 1440 px and 1042 px GTK
+previews were inspected; controls and labels remain clear at both sizes.
+
+Sharpness follow-up: the user reported soft/smeared lettering on both Multiband
+and Gate. The shared dynamics renderer now uses grayscale hinted text for its
+composited image surfaces, renders headers at the actual display resolution
+instead of downsizing letters baked into the metal texture, and aligns the
+panel and cached knobs to physical pixels. This removes visible colored text
+fringes and avoids a second interpolation of the cached artwork. Metal/grip
+textures, layout, parameter bindings, and audio behavior are unchanged.
+Inspected actual GTK Gate, Compressor, and Multiband captures at 1440 px and
+1042 px with the fully stubbed backend, plus a direct 2x Cairo Gate render.
+The same 143 parameter/crossover tests and 61 subtests pass; Python compilation
+and diff whitespace checks pass. Images are under `/tmp/io24-sharpness/gtk/`
+and `/tmp/io24-sharpness/after/`. Reopen Host to load the renderer change.

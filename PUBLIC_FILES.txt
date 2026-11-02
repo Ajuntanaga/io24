@@ -47,6 +47,7 @@ io24-mixer
 io24.py
 io24_alt_eq.py
 io24_dsp.py
+io24_dynamics_rack.py
 io24_eq_reference.py
 io24_fx.py
 io24_mbc.py
@@ -73,6 +74,8 @@ probes/probe_setp.py
 pyproject.toml
 systemd/io24-startup.service
 systemd/io24d.service
+tests/paint_smoke.py
+tests/dynamics_rack_smoke.py
 tests/test_eq_reference_diff.py
 tests/test_io24_fx_model_transition.py
 tests/test_io24_global_fx.py

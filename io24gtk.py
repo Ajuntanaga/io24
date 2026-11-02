@@ -55,6 +55,7 @@ with warnings.catch_warnings():
 import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
 import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage EQ)
 import io24_dsp                            # noqa: E402  (exact compressor models)
+import io24_dynamics_rack                  # noqa: E402  (silver dynamics artwork)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_eq_reference                   # noqa: E402  (measured EQ artwork)
 import io24_mbc                            # noqa: E402  (host multiband)
@@ -6637,6 +6638,337 @@ class AlternateEqRack(ChannelBound, Canvas):
             dot(sn, lx, ly, lamp_radius * .45, pal(lamp, .35))
 
 
+class DynamicsKnob(Gtk.Scale):
+    """Accessible native range sharing the original parameter's adjustment.
+
+    The rack draws its face; this widget supplies focus, AT value semantics,
+    keyboard editing, and a drag target at the exact painted coordinates.
+    """
+
+    def __init__(self, rack, spec, source):
+        self.rack, self.spec, self.source = rack, spec, source
+        if spec.unit == "choice":
+            adjustment = Gtk.Adjustment(value=source.get_selected(), lower=0,
+                                        upper=4, step_increment=1, page_increment=1)
+        else:
+            adjustment = source.get_adjustment()
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL,
+                         adjustment=adjustment, draw_value=False)
+        self.set_focusable(True)
+        self.set_cursor_from_name("ns-resize")
+        self.update_property([Gtk.AccessibleProperty.LABEL],
+                             [spec.title.title()])
+        self.set_tooltip_text(spec.title.title() +
+                              " · drag up/down or scroll · Shift for fine control · double-click to reset")
+        if spec.unit == "choice":
+            self.connect("value-changed", lambda s: source.set_selected(
+                int(round(s.get_value()))))
+        self.connect("value-changed", self._changed)
+        self.connect("notify::has-focus", lambda *_: rack.queue_draw())
+        drag = Gtk.GestureDrag.new()
+        drag.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        drag.connect("drag-begin", self._begin)
+        drag.connect("drag-update", self._drag)
+        self.add_controller(drag)
+        click = Gtk.GestureClick.new()
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click.connect("pressed", self._press)
+        self.add_controller(click)
+        # Claiming a drag must still let the click recognizer count a double
+        # click. Group both recognizers so they share the captured sequence.
+        drag.group(click)
+        scroll = Gtk.EventControllerScroll.new(
+            Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        scroll.connect("scroll", self._scroll)
+        self.add_controller(scroll)
+        keys = Gtk.EventControllerKey.new()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        hover = Gtk.EventControllerMotion.new()
+        hover.connect("enter", lambda *_: self._hover(True))
+        hover.connect("leave", lambda *_: self._hover(False))
+        self.add_controller(hover)
+        self._changed(self)
+
+    def do_measure(self, orientation, for_size):
+        return 1, 1, -1, -1
+
+    def do_snapshot(self, snapshot):
+        pass                         # all visible parts live on the faceplate
+
+    def _changed(self, *_):
+        self.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                             [self.spec.text(self.get_value())])
+        self.rack.queue_draw()
+
+    def _hover(self, active):
+        self.rack.hovered = self.spec.key if active else None
+        self.rack.queue_draw()
+
+    def _begin(self, gesture, x, y):
+        self.grab_focus()
+        self.drag_start = self.spec.fraction(self.get_value())
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _drag(self, gesture, dx, dy):
+        fine = bool(gesture.get_current_event_state() & Gdk.ModifierType.SHIFT_MASK)
+        self.set_value(self.spec.value(self.drag_start - dy / (1800 if fine else 180)))
+
+    def _press(self, gesture, presses, x, y):
+        if presses == 2:
+            self.set_value(self.spec.default)
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _step(self, direction, fine=False, large=False):
+        if self.spec.unit == "choice":
+            self.set_value(round(self.get_value()) + direction)
+        else:
+            step = .001 if fine else (.1 if large else .01)
+            self.set_value(self.spec.value(
+                self.spec.fraction(self.get_value()) + direction * step))
+
+    def _scroll(self, controller, dx, dy):
+        # Leave ordinary page scrolling alone until the knob has focus.
+        if not self.has_focus():
+            return False
+        fine = bool(controller.get_current_event_state() & Gdk.ModifierType.SHIFT_MASK)
+        self._step(-dy, fine)
+        return True
+
+    def _key(self, controller, keyval, keycode, state):
+        fine = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        if keyval in (Gdk.KEY_Up, Gdk.KEY_Right, Gdk.KEY_Page_Up):
+            self._step(1, fine, keyval == Gdk.KEY_Page_Up)
+        elif keyval in (Gdk.KEY_Down, Gdk.KEY_Left, Gdk.KEY_Page_Down):
+            self._step(-1, fine, keyval == Gdk.KEY_Page_Down)
+        elif keyval in (Gdk.KEY_Home, Gdk.KEY_End):
+            self.set_value(self.spec.low if keyval == Gdk.KEY_Home else self.spec.high)
+        else:
+            return False
+        return True
+
+
+class DynamicsButton(Gtk.Button):
+    def do_measure(self, orientation, for_size):
+        return 1, 1, -1, -1
+
+    def do_snapshot(self, snapshot):
+        pass
+
+
+class DynamicsRack(Gtk.Fixed):
+    """Silver Gate/Compressor panel bound to the existing settings, not a copy."""
+
+    def __init__(self, win, channel, kind, band=0):
+        super().__init__()
+        # FixedLayout measures only its children. This panel instead measures
+        # the complete rack bay and allocates its controls in that coordinate
+        # system; Gtk.Fixed still owns/disposes the child widgets normally.
+        self.set_layout_manager(None)
+        self.win, self.channel, self.kind = win, channel, kind
+        self.band = band
+        self.power_key = "gate_on" if kind == "gate" else "comp_on"
+        self.W = dict(win.w[channel])
+        if kind == "comp":
+            self.W.update({"x%d" % i: win.mbc_ctl[channel]["x%d" % i]
+                           for i in range(3)})
+            win.mbc_status[channel].connect("notify::subtitle",
+                                            lambda *_: self.queue_draw())
+        elif kind == "band":
+            mapping = {
+                "cth": "s_thr", "rat": "s_ratio", "catk": "s_attack",
+                "crel": "s_release", "mk": "s_gain", "knee": "s_knee",
+                "auto": "s_auto", "tpeak": "t_peak", "tgain": "t_gain",
+                "climit": "t_limit", "finput": "f_input", "foutput": "f_output",
+                "fatk": "f_attack", "frel": "f_release", "fratio": "f_ratio",
+                "model": "type", "ckey": "keyf", "keyon": "keyon",
+                "cklisten": "listen",
+            }
+            self.W.update({key: win.mbc_ctl[channel][(band, cid)]
+                           for key, cid in mapping.items()})
+        self.targets, self.rects = {}, {}
+        self.history = deque(maxlen=150)
+        self.hovered = None
+        self.online = False
+        self.set_hexpand(True)
+        specs = (io24_dynamics_rack.GATE if kind == "gate" else
+                 tuple({s.key: s for group in (
+                     io24_dynamics_rack.parameters(kind, m, band)
+                     for m in range(3 if kind == "band" else 4))
+                        for s in group}.values()))
+        for spec in specs:
+            knob = DynamicsKnob(self, spec, self.W[spec.key])
+            self.targets[spec.key] = knob
+            knob.set_parent(self)
+        buttons = ({"power": "Gate power", "gate_mode": "Gate mode",
+                    "expander": "Expander mode", "gklisten": "Gate key listen"}
+                   if kind == "gate" else
+                   {"power": "Compressor power", "knee": "Soft knee",
+                    "auto": "Auto mode", "climit": "Limit mode",
+                    "cklisten": "Compressor key listen",
+                    **{"model_" + str(i): name.title() + " compressor"
+                       for i, name in enumerate(COMP_MODELS[:3] if kind == "band"
+                                                else COMP_MODELS)}})
+        if kind == "band":
+            buttons.pop("power")
+            buttons.update({"keyon": "Band key filter",
+                            **{"band_" + str(i): "Edit " + name.lower() + " band"
+                               for i, name in enumerate(io24_dynamics_rack.BAND_NAMES)}})
+        for key, title in buttons.items():
+            button = DynamicsButton()
+            button.set_tooltip_text(title)
+            button.set_cursor_from_name("pointer")
+            button.update_property([Gtk.AccessibleProperty.LABEL], [title])
+            button.connect("clicked", lambda _, k=key: self.activate_control(k))
+            button.connect("notify::has-focus", lambda *_: self.queue_draw())
+            self.targets[key] = button
+            button.set_parent(self)
+        watched = (("gate_on", "gexp", "gklisten") if kind == "gate" else
+                   ("comp_on", "model", "knee", "auto", "climit", "cklisten", "fratio"))
+        if kind == "band":
+            watched += ("keyon",)
+        for key in watched:
+            signal = "notify::selected" if key in ("model", "fratio") else "notify::active"
+            self.W[key].connect(signal, lambda *_: self.refresh())
+        self.connect("unmap", self._unmapped)
+        self.refresh()
+
+    @property
+    def model(self):
+        return 0 if self.kind == "gate" else int(self.W["model"].get_selected())
+
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            return 560, FAT_CHANNEL_WIDTH, -1, -1
+        height = standard_eq_canvas_height(for_size if for_size > 0 else FAT_CHANNEL_WIDTH)
+        if self.kind == "band" or (self.kind == "comp" and self.model == MULTIBAND_MODEL):
+            # Keep the EQ-sized metal face; adjoining bays need less shadow room.
+            height -= int(ALTERNATE_EQ_RACK_SHADOW_ROOM) - 4
+        return height, height, -1, -1
+
+    def do_size_allocate(self, width, height, baseline):
+        rx, ry, rw, rh = standard_eq_rack_bounds(width, height)
+        scale = rw / io24_dynamics_rack.WIDTH
+        for key, (x, y, w, h) in self.rects.items():
+            widget = self.targets[key]
+            transform = Gsk.Transform.new().translate(
+                Graphene.Point().init(rx + x * scale, ry + y * scale))
+            widget.allocate(max(1, round(w * scale)), max(1, round(h * scale)),
+                            -1, transform)
+
+    def activate_control(self, key):
+        if key.startswith("band_"):
+            stack = self.win.w[self.channel]["mbc_rack"]
+            stack.set_visible_child_name(key[-1])
+            stack.get_visible_child().targets[key].grab_focus()
+        elif key.startswith("model_"):
+            self.W["model"].set_selected(int(key[-1]))
+        elif key in ("gate_mode", "expander"):
+            self.W["gexp"].set_active(key == "expander")
+        else:
+            row = self.W[self.power_key if key == "power" else key]
+            row.set_active(not row.get_active())
+
+    def refresh(self):
+        layout = io24_dynamics_rack.controls(self.kind, self.model)
+        changed = layout != self.rects
+        self.rects = layout
+        for key, target in self.targets.items():
+            target.set_visible(key in layout)
+            if isinstance(target, DynamicsButton):
+                if key.startswith("band_"):
+                    active = self.band == int(key[-1])
+                elif key.startswith("model_"):
+                    active = self.model == int(key[-1])
+                elif key in ("gate_mode", "expander"):
+                    active = self.W["gexp"].get_active() == (key == "expander")
+                else:
+                    active = self.W[self.power_key if key == "power" else key].get_active()
+                target.update_state([Gtk.AccessibleState.PRESSED],
+                                    [int(Gtk.AccessibleTristate.TRUE if active else Gtk.AccessibleTristate.FALSE)])
+        if "fratio" in self.targets:
+            self.targets["fratio"].set_value(self.W["fratio"].get_selected())
+        if changed:
+            self.history.clear()        # never attribute an old model's GR to a new one
+            self.queue_resize()
+        self.queue_draw()
+
+    def _unmapped(self, *_):
+        self.history.clear()
+        self.online = False
+
+    def tick(self, snap):
+        if self.kind == "band" or not self.get_mapped():
+            return
+        self.online = bool(snap.get("alive"))
+        if self.online:
+            reduction = snap.get("gr", {}).get(self.channel, {}).get(self.kind, 0.0)
+            if not self.W[self.power_key].get_active() or self.model == MULTIBAND_MODEL:
+                reduction = 0.0
+            self.history.append((snap["in"][self.channel - 1], min(0.0, reduction)))
+        else:
+            self.history.clear()
+        self.queue_draw()
+
+    def do_snapshot(self, snapshot):
+        width, height = self.get_width(), self.get_height()
+        if width <= 0 or height <= 0:
+            return
+        values = {spec.key: (self.W[spec.key].get_selected() if spec.unit == "choice"
+                            else self.W[spec.key].get_value())
+                  for spec in io24_dynamics_rack.parameters(self.kind, self.model, self.band)}
+        states = {key: self.W[key].get_active() for key in (
+            ("gexp", "gklisten") if self.kind == "gate" else
+            ("knee", "auto", "climit", "cklisten"))}
+        states["power"] = self.W[self.power_key].get_active()
+        focused = next((k for k, v in self.targets.items() if v.has_focus()), None)
+        fs = getattr(self.win, "_fs", 48000)
+        details = {"sample_rate": fs}
+        transfer = (-24, 4, 0)
+        if self.kind == "band":
+            common = io24_mbc.compressor_controls(
+                self.win._mbc_band_state(self.channel, self.band), sample_rate=fs)
+            details["common"] = common
+            transfer = (common["Threshold level (dB)"],
+                        1 / max(1e-6, 1 - common["Slope"]),
+                        20 * math.log10(max(1e-9, common["Makeup gain (linear)"])))
+            states.update(band=self.band, keyon=self.W["keyon"].get_active())
+        elif self.kind == "comp":
+            if self.model == MULTIBAND_MODEL:
+                details["status"] = self.win.mbc_status[self.channel].get_subtitle()
+            else:
+                model, kwargs = self.win._compressor_kwargs(self.channel)
+                blob = (io24_dsp.cpxt_comp, io24_dsp.cpxt_tube,
+                        io24_dsp.cpxt_fet)[model](0, fs=fs, **kwargs)
+                _attack, _release, slope, knee, threshold, makeup = struct.unpack_from(
+                    "<6f", blob, 0x20)
+                transfer = (threshold, 1 / max(1e-6, 1 - slope),
+                            20 * math.log10(max(1e-9, makeup)))
+                details["knee"] = knee
+        # A memory texture avoids the separately packaged gi-cairo bridge.
+        # Render at the monitor scale so metal engraving stays crisp on HiDPI.
+        import cairo
+        scale = self.get_scale_factor()
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width * scale, height * scale)
+        cr = cairo.Context(surface)
+        cr.scale(scale, scale)
+        io24_dynamics_rack.paint(cr, width, height, self.kind, self.model,
+                                values, states, self.history, self.online,
+                                transfer, focused, self.hovered, details)
+        surface.flush()
+        texture = Gdk.MemoryTexture.new(
+            width * scale, height * scale,
+            (Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED if sys.byteorder == "little"
+             else Gdk.MemoryFormat.A8R8G8B8_PREMULTIPLIED),
+            GLib.Bytes.new(surface.get_data()), surface.get_stride())
+        snapshot.append_texture(texture, Graphene.Rect().init(0, 0, width, height))
+
+
 class CompCurve(ChannelBound, Canvas):
     """Compressor transfer curve with a live dot at the current input level."""
 
@@ -8552,6 +8884,22 @@ class Win(Adw.ApplicationWindow):
         """Push one crossover move to every graph that carries it."""
         if self._mbc_mute:
             return
+        # Slider ranges overlap. Keep the edited split strictly between its
+        # neighbours before it reaches either the graph or a saved snapshot.
+        # Linked channels may retain different neighbouring splits, so respect
+        # both sets of bounds without moving another knob behind the user.
+        index = int(cid[1:])
+        targets = self._mbc_targets(ch)
+        lower = max((self.mbc_ctl[c]["x%d" % (index - 1)].get_value() + 1
+                     for c in targets), default=40) if index else 40
+        upper = min((self.mbc_ctl[c]["x%d" % (index + 1)].get_value() - 1
+                     for c in targets), default=12000) if index < 2 else 12000
+        value = max(lower, min(upper, value))
+        prior, self._mbc_mute = self._mbc_mute, True
+        try:
+            self.mbc_ctl[ch][cid].set_value(value)
+        finally:
+            self._mbc_mute = prior
         self._mbc_mirror(ch, cid)
         self._mbc_push(ch, keys, value)
 
@@ -9119,9 +9467,14 @@ class Win(Adw.ApplicationWindow):
                           lambda *_a, c=ch: self._dyn_push("gate", c))
         gt.add(W["gexp"])
 
-        d = Adw.PreferencesGroup(title="Compressor")
-        W["comp_curve"] = CompCurve(self, ch)
-        d.add(W["comp_curve"])
+        gate_controls = gt
+        gate_controls.set_visible(False)
+        gt = Adw.PreferencesGroup()
+        W["gate_rack"] = DynamicsRack(self, ch, "gate")
+        gt.add(W["gate_rack"])
+        gt.add(gate_controls)
+
+        d = Adw.PreferencesGroup()
         W["comp_on"] = Adw.SwitchRow(title="Compressor")
         W["comp_on"].connect("notify::active", self._dyn_toggle, "comp", ch)
         d.add(W["comp_on"])
@@ -9218,6 +9571,29 @@ class Win(Adw.ApplicationWindow):
         W["cklisten"].connect("notify::active",
                               lambda *_a, c=ch: self._dyn_push("comp", c))
         d.add(W["cklisten"])
+
+        # Keep the canonical controls/adjustments for hydration and linked
+        # edits. The rack provides their visible, accessible interaction layer.
+        for name in ("comp_on", "model", "ckey_row", "cklisten"):
+            W[name].set_visible(False)
+        d.remove(W["comp_param_stack"])
+        rack_stack = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        W["comp_curve"] = DynamicsRack(self, ch, "comp")
+        rack_stack.append(W["comp_curve"])
+        W["mbc_rack"] = Gtk.Stack()
+        W["mbc_rack"].set_vhomogeneous(False)
+        for band in range(4):
+            W["mbc_rack"].add_named(DynamicsRack(self, ch, "band", band), str(band))
+        W["mbc_rack"].set_visible_child_name("0")
+        W["mbc_rack"].set_visible(False)
+        rack_stack.append(W["mbc_rack"])
+        d.add(rack_stack)
+        missing = self._insert_missing()
+        W["mbc_notice"] = Gtk.Label(label=missing or "", wrap=True, xalign=0)
+        W["mbc_notice"].set_visible(False)
+        d.add(W["mbc_notice"])
+        W["comp_param_stack"].set_visible(False)
+        d.add(W["comp_param_stack"])
 
         lm = self._limiter_group(ch)
 
@@ -12843,13 +13219,16 @@ class Win(Adw.ApplicationWindow):
         W = self.w[ch]
         model = max(0, min(MULTIBAND_MODEL, W["model"].get_selected()))
         W["comp_param_stack"].set_visible_child_name(COMP_MODELS[model])
-        # the key filter and listen rows belong to the unit's compressors
+        # Both racks share the canonical controls kept in this hidden stack.
+        W["comp_param_stack"].set_visible(False)
+        W["mbc_rack"].set_visible(model == MULTIBAND_MODEL)
+        if "mbc_notice" in W:
+            W["mbc_notice"].set_visible(
+                model == MULTIBAND_MODEL and bool(W["mbc_notice"].get_label()))
         for name in ("ckey_row", "cklisten"):
             if name in W:
-                W[name].set_visible(model != MULTIBAND_MODEL)
-        # The single transfer curve has no truthful meaning for four parallel
-        # bands; the rack miniature above represents all four instead.
-        W["comp_curve"].set_visible(model != MULTIBAND_MODEL)
+                W[name].set_visible(False)
+        W["comp_curve"].set_visible(True)
         W["comp_curve"].queue_draw()
         if not self._adopt_mute:
             self._dyn_push("comp", ch)
@@ -13874,7 +14253,8 @@ class Win(Adw.ApplicationWindow):
                 for rack in getattr(self, "hpf_racks", {}).values():
                     rack.queue_draw()
                 for c in self.w:
-                    self.w[c]["comp_curve"].queue_draw()
+                    self.w[c]["comp_curve"].tick(s)
+                    self.w[c]["gate_rack"].tick(s)
                     self.w[c]["curve"].queue_draw()
 
         # Following the hardware is cheap and must happen on both pages — but

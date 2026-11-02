@@ -36,6 +36,7 @@ class ReleasePackageTests(unittest.TestCase):
         required_modules = {
             "io24.py",
             "io24_dsp.py",
+            "io24_dynamics_rack.py",
             "io24_fx.py",
             "io24_mbc.py",
             "io24_voicefx_delay.py",

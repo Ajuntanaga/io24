@@ -77,6 +77,9 @@ class _Draws:
     def queue_draw(self):
         pass
 
+    def tick(self, snapshot):
+        pass
+
 
 class _Ctl:
     def __init__(self, dev=None):
@@ -1034,8 +1037,10 @@ class LimiterRackIntegrationTests(unittest.TestCase):
             get_visible_child_name=lambda: "ch")
         window.racks = {}
         window.w = {
-            1: {"comp_curve": _Draws(), "curve": _Draws()},
-            2: {"comp_curve": _Draws(), "curve": _Draws()},
+            1: {"comp_curve": _Draws(), "gate_rack": _Draws(),
+                "curve": _Draws()},
+            2: {"comp_curve": _Draws(), "gate_rack": _Draws(),
+                "curve": _Draws()},
         }
         redraws = []
         window.limiter_racks = {

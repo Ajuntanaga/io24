@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Paint smoke test: launch the GTK app against a STUB device, cycle every page.
 
-Run it with the interface UNPLUGGED:  python3 tests/paint_smoke.py
-Exits non-zero if any draw callback raised.
-
-Why a stub: main() exits when no io24 is present, so the app cannot be launched
-unplugged. Why unplugged at all: the ch page starts the spectrum, which opens the
-sound card — the condition associated with the device dropping to its bootloader.
-With no device there is no card to open, so every paint path can be exercised at
-zero risk to the hardware.
+Run under a temporary display: xvfb-run -a python3 tests/paint_smoke.py
+USB, audio capture, PipeWire, and session persistence are all stubbed, including
+the Channel spectrum. No interface needs to be attached or disconnected.
+Exits non-zero if a GTK callback raises or the page cycle does not finish.
 
 What this actually tests: GTK swallows exceptions raised inside a draw callback,
 which is exactly why 13 stale attribute reads in EQCurve/CompCurve/Rack went
@@ -22,6 +18,7 @@ import math
 import struct
 import sys
 import threading
+import time
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -47,9 +44,16 @@ class FakeInner:
     def floats(self, rsp):
         f = [0.0] * 512
         input_db = os.environ.get("IO24_PAINT_INPUT_DB")
-        input_level = (10.0 ** (float(input_db) / 20.0)
-                       if input_db is not None else 0.06)
-        f[4], f[6] = input_level, 0.03             # input meters
+        phase = time.monotonic()
+        if input_db is not None:
+            level = 10.0 ** (float(input_db) / 20.0)
+        elif os.environ.get("IO24_PAINT_DYNAMICS"):
+            # Synthetic input only for the explicitly selected dynamics preview.
+            level = 10 ** ((-29 + 12 * math.sin(phase * 3.1)
+                           + 5 * math.sin(phase * 8.3)) / 20)
+        else:
+            level = .06
+        f[4], f[6] = level, level * .5
         f[12] = f[13] = 0.12                       # main L/R
         f[14] = f[15] = 0.09                       # mix A
         f[16] = f[17] = 0.02                       # mix B
@@ -63,10 +67,11 @@ class FakeInner:
 
     def read_reduction(self, block, channel=1):
         if block.strip() == "lim":
-            # The controller converts this amplitude ratio to -8.4 dB.  A
-            # non-zero limiter display is easier to inspect than an idle one.
-            return [10.0 ** (-8.4 / 20.0), 0.87]
-        return [1.0, 0.87]
+            return [10.0 ** (-8.4 / 20.0), .87]
+        if os.environ.get("IO24_PAINT_DYNAMICS"):
+            reduction = -4.5 * (1 + math.sin(time.monotonic() * 3.1))
+            return [10 ** (reduction / 20), 1.0]
+        return [1.0, .87]
 
     def read_params(self):
         return {"flags": 0x0181, "hpVolume": 0.55, "mainVolume": 0.43,
@@ -181,7 +186,7 @@ def scroll_page(widget, fraction=1.0):
     return False
 
 
-def main():
+def main(check=None):
     # This harness exists to inspect rendering, not audio capture. Keeping the
     # real Spectrum constructor here would make visiting the Channel page open
     # ALSA whenever an interface happened to be attached.
@@ -244,9 +249,17 @@ def main():
     state = {"i": 0, "pages": None, "seen": [], "capture_pending": None,
              "capture_retries": 0,
              "scroll_settled": False, "eq_model_set": False,
-             "comp_model_set": False, "module_set": False,
-             "fx_model_set": False,
-             "wheel_tested": False}
+             "comp_model_set": False, "module_set": False, "fx_model_set": False,
+             "wheel_tested": False, "checked": False, "completed": False,
+             "callback_failed": False}
+    original_excepthook = sys.excepthook
+
+    def callback_failed(exc_type, value, traceback):
+        state["callback_failed"] = True
+        original_excepthook(exc_type, value, traceback)
+        app.quit()
+
+    sys.excepthook = callback_failed
     capture_dir = os.environ.get("IO24_PAINT_CAPTURE_DIR")
     if capture_dir:
         capture_dir = Path(capture_dir)
@@ -329,6 +342,16 @@ def main():
                 win.w[1]["model"].set_selected(model_index)
                 win.show_module(1, "COMP")
                 print("COMP MODEL -> %s" % model_name, flush=True)
+            dynamics = os.environ.get("IO24_PAINT_DYNAMICS")
+            if dynamics:
+                if dynamics not in ("gate", "comp"):
+                    raise RuntimeError("IO24_PAINT_DYNAMICS must be gate or comp")
+                win.show_module(1, "GATE" if dynamics == "gate" else "COMP")
+                win.w[1][dynamics + "_on"].set_active(
+                    os.environ.get("IO24_PAINT_DYNAMICS_ON") == "1")
+                for key, value in json.loads(os.environ.get(
+                        "IO24_PAINT_DYNAMICS_PARAMS", "{}")).items():
+                    win.w[1][key].set_value(value)
             state["comp_model_set"] = True
         if not state["module_set"]:
             module = os.environ.get("IO24_PAINT_MODULE", "").upper()
@@ -386,6 +409,9 @@ def main():
         pending = state["capture_pending"]
         if pending is not None:
             page_number, page_name = pending
+            if check is not None and not state["checked"]:
+                state["checked"] = True
+                check(win)
             if os.environ.get("IO24_PAINT_WHEEL_TEST") == "1" and \
                     not state["wheel_tested"]:
                 scroller = G.first_descendant(
@@ -416,7 +442,7 @@ def main():
                 band = int(os.environ["IO24_PAINT_MBC_BAND"])
                 if not 0 <= band < len(io24_mbc.BANDS):
                     raise RuntimeError("IO24_PAINT_MBC_BAND must be 0..3")
-                win.mbc_ctl[1][(band, "expander")].set_expanded(True)
+                win.w[1]["mbc_rack"].set_visible_child_name(str(band))
                 # Exercise a connected model fader too. This caught a callback
                 # arity error that a static paint alone could not expose.
                 threshold = win.mbc_ctl[1][(band, "s_thr")]
@@ -479,6 +505,7 @@ def main():
         i = state["i"]
         if i >= len(state["pages"]):
             print("CYCLED ALL PAGES", flush=True)
+            state["completed"] = True
             app.quit()
             return False
         name = state["pages"][i]
@@ -490,6 +517,7 @@ def main():
             print("PAGE -> %s" % name, flush=True)
         except Exception as e:
             print("PAGE %s failed: %s" % (name, e), flush=True)
+            raise
         # force every canvas on screen to repaint a few times
         for _ in range(3):
             win.queue_draw()
@@ -500,11 +528,14 @@ def main():
     interval_ms = int(os.environ.get("IO24_PAINT_INTERVAL_MS", "1200"))
     GLib.timeout_add(interval_ms, drive)
     GLib.timeout_add(40000, lambda: (app.quit(), False)[1])   # hard stop
-    rc = app.run([])
-    ctl.close()
+    try:
+        rc = app.run([])
+    finally:
+        ctl.close()
+        sys.excepthook = original_excepthook
     print("VISITED: %s" % state["seen"], flush=True)
-    if not state["seen"]:
-        print("FAIL: no page was ever shown", flush=True)
+    if state["callback_failed"] or not state["completed"]:
+        print("FAIL: callback error or incomplete page cycle", flush=True)
         return 1
     return rc
 

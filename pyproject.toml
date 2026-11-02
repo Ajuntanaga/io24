@@ -40,10 +40,10 @@ io24-scene = "io24_scene:main"
 # every path in PROTOCOL.md that points at the code behind a finding.
 [tool.setuptools]
 py-modules = [
-    "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters",
+    "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters", "io24_dynamics_rack",
     "io24_mbc", "io24_uc_comp", "io24_voicefx_delay", "io24_native_stat", "io24_native_strip", "io24_preset_record", "io24_presets",
     "io24_alt_eq", "io24_eq_reference", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
-    "io24_scene", "io24d", "io24gtk", "ucnet_shim", "calibrate",
+    "io24_scene", "io24_rack_reference", "io24d", "io24gtk", "ucnet_shim", "calibrate",
 ]
 
 [tool.setuptools.data-files]
@@ -69,4 +69,8 @@ py-modules = [
     "docs/design/vintage-eq-calibration-underlay.png",
     "docs/design/vintage-eq-faceplate.png",
     "docs/design/vintage-eq-reference.png",
+    "docs/design/limiter-faceplate.png",
+    "docs/design/limiter-knob.png",
+    "docs/design/limiter-calibration-underlay.png",
+    "docs/design/limiter-calibration-nodes.png",
 ]

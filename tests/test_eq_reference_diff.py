@@ -9,13 +9,50 @@ import numpy as np
 from PIL import Image
 
 import io24_eq_reference
-from tools.eq_reference_diff import diff_images, model_regions
+import io24_rack_reference
+from tools.eq_reference_diff import diff_images, model_regions, rack_regions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class EqReferenceDiffTests(unittest.TestCase):
+    def test_limiter_regions_come_from_the_rack_manifest(self):
+        spec = io24_rack_reference.rack("limiter")
+        rectangles, circles = rack_regions(spec, (10, 20, 700, 210))
+
+        self.assertEqual(len(rectangles), 1 + len(spec["cleanup_regions"]) +
+                         len(spec["controls"]))
+        self.assertEqual(len(circles), 3)
+        self.assertEqual(circles[0][:2], (150, 132))
+
+    def test_limiter_live_regions_cover_ticks_values_focus_and_lamp_at_both_widths(self):
+        spec = io24_rack_reference.rack("limiter")
+        style = spec["live_style"]
+        for width in (600, 1040):
+            rects, circles = rack_regions(spec, (0, 0, width, 180))
+            def allowed(x, y):
+                return any(rx <= x < rx + rw and ry <= y < ry + rh
+                           for rx, ry, rw, rh in rects) or any(
+                    (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2
+                    for cx, cy, r in circles)
+            geometry = io24_rack_reference.control_layout("limiter", width, 180)
+            for cx, cy, radius in geometry.values():
+                self.assertTrue(allowed(cx, cy - radius * style["tick_major_outer"]))
+                self.assertTrue(allowed(cx + radius + style["knob_focus_px"], cy))
+                self.assertTrue(allowed(cx, cy + radius + style["value_offset_px"] +
+                                        style["value_height_px"] / 2))
+            lx, ly, lr = spec["lamp"]
+            scale = min(width / spec["source_size"][0],
+                        180 / spec["source_size"][1])
+            self.assertTrue(allowed(lx * width / spec["source_size"][0] +
+                                    lr * scale + style["lamp_focus_px"],
+                                    ly * 180 / spec["source_size"][1]))
+            # Static rack hardware is outside every live allowance.
+            sx, sy, _radius = spec["screws"][0]
+            self.assertFalse(allowed(sx * width / spec["source_size"][0],
+                                     sy * 180 / spec["source_size"][1]))
+
     def test_calibration_underlays_are_exact_reference_crops(self):
         for model in ("standard", "passive", "vintage"):
             with self.subTest(model=model):

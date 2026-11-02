@@ -60,3 +60,56 @@ four large Gain knobs, four smaller logarithmic Q knobs, per-band power and
 outer-band Peak/Shelf buttons, Flatten, and global power. The Q additions are
 recorded in the calibration-node overlay even though they are not present in
 the original illustrative bitmap.
+
+## Reference-rack workflow
+
+To add a rack, commit a single populated source reference in `docs/design/`,
+then declare its source size, static hardware, live regions, controls, and
+generated filenames in `io24_rack_reference.py`. Keep the manifest as the
+coordinate authority: runtime hit targets, focus, renderer output, and diff
+allowances must all derive from it.
+
+Compile the reference and generated assets, then use the non-writing drift
+gate before committing:
+
+```bash
+python3 tools/render_rack_assets.py limiter
+python3 tools/render_rack_assets.py limiter --check
+```
+
+For calibration, set `IO24_EQ_REFERENCE_CALIBRATION` to `backdrop`, `overlay`,
+`nodes`, or `both` while running the paint harness. `backdrop` (also accepted
+as `underlay`) shows only the generated populated reference; `overlay` adds
+that reference at 46% opacity over the live rack, `nodes` adds the measured
+geometry, and `both` combines those two inspection layers. Normal mode uses
+the production faceplate and live controls.
+
+Capture the same state with `backdrop` and normally. The harness writes each
+limiter capture's actual allocation to a `.limiter-rack.json` sidecar. Use
+that rectangle with `--rack limiter --rack-rect X,Y,W,H` in
+`tools/eq_reference_diff.py`. Allowances include the source cleanup regions,
+the live display, tick strokes, focus/hover halos, lamp border, and clipped
+value text. Dimensions come from the manifest, including fixed logical-pixel
+padding where the GTK paint uses a fixed font or halo. Native GTK regression
+tests also compare actual reference/live render nodes at 600 and 1040 px,
+including extreme values, power, and all focus/hover targets.
+
+Bind a new `ReferenceRack` only to the existing authoritative widgets and
+their existing callbacks; do not introduce a second state store or device
+write path. The limiter retains its original switch row and sliders, mapped
+inside a transparent, non-measuring GTK overlay. This preserves native
+switch/slider accessibility roles, names, values, Tab navigation, and native
+actions without displaying the old rows. Pointer events still reach the rack;
+native focus selects the corresponding painted control. Finally, paint-capture
+the selected module at desktop and minimum
+width with the hardware-free harness, inspect the captures, and keep those
+captures outside the release tree:
+
+```bash
+IO24_PAINT_PAGE=ch IO24_PAINT_MODULE=LIM IO24_PAINT_LIMITER_ON=1 \
+IO24_PAINT_CAPTURE_DIR=/tmp/io24-limiter-desktop \
+python3 tests/paint_smoke.py
+IO24_PAINT_WIDTH=600 IO24_PAINT_PAGE=ch IO24_PAINT_MODULE=LIM \
+IO24_PAINT_LIMITER_ON=1 IO24_PAINT_CAPTURE_DIR=/tmp/io24-limiter-minimum \
+python3 tests/paint_smoke.py
+```

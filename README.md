@@ -60,9 +60,9 @@ day:
 
 | Area | Linux Host support |
 |---|---|
-| Inputs | gain, phantom power, mute, fixed 80 Hz low cut, stereo link, and automatic Host-side leveling |
+| Inputs | gain, phantom power, mute, channel HPF power, stereo link, and automatic Host-side leveling |
 | Mixer | Main, Mix A, and Mix B levels and assigns; source and output mute; bus masters; solo; monitor blend; headphones source; persistent Mirror Main |
-| Fat Channel | digital HPF, gate, Standard/Tube/FET compressors, limiter, four-band Standard EQ, Passive Program EQ, and Vintage 1970s EQ |
+| Fat Channel | variable cutoff for the channel HPF, gate, Standard/Tube/FET compressors, limiter, four-band Standard EQ, Passive Program EQ, and Vintage 1970s EQ |
 | Device reverb | shared block-202 reverb, measured working with both inputs feeding it |
 | Voice FX | Transformer, Detuner, Vocoder, Ring Modulator, Filters, and Delay in the exact UC XML control order. Each model retains its settings, while turning one **On** turns the other five off, matching UC's single active rack. All six are verified on Input 1; models 1–5 are verified on Input 2. Above 48 kHz, Delay automatically moves to the safe Host insert instead of selecting the unaccepted high-rate firmware model. |
 | Host effects | four-band multiband compressor and the safe high-rate Voice FX Delay fallback |

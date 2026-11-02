@@ -962,5 +962,24 @@ class CrossoverTests(unittest.TestCase):
         self.assertEqual(tuned, biquads)
         self.assertIn("b0_3", io24_mbc.crossover_nodes()[2])
 
+    def test_rack_curves_match_the_actual_filter_graph(self):
+        import io24_dynamics_rack
+        for fs in (44100, 48000, 96000):
+            for splits in ((150, 800, 4500), (299, 300, 2000),
+                           (400, 2499, 2500), (400, 2500, 12000)):
+                state = io24_mbc.default_snapshot()
+                state["xovers"] = list(splits)
+                graph = io24_mbc.build_graph(None, False, state=state)
+                nodes = {node["name"]: node for node in graph["nodes"]}
+                for step in range(61):
+                    freq = 20 * 1000 ** (step / 60)
+                    drawn = io24_dynamics_rack.crossover_response(freq, splits, fs)
+                    for band, leg in enumerate(io24_mbc.CROSSOVER_LEGS):
+                        actual = 1
+                        for index in range(len(leg)):
+                            actual *= self._response(nodes["b%d_%d" % (band, index)],
+                                                     freq, fs)
+                        self.assertAlmostEqual(drawn[band], abs(actual), places=8)
+
 if __name__ == "__main__":
     unittest.main()

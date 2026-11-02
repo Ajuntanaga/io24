@@ -68,7 +68,7 @@ class EqReferenceDiffTests(unittest.TestCase):
                     art["calibration_underlay_filename"]).convert("RGB"))
                 self.assertTrue(np.array_equal(source, underlay))
 
-    def test_alternate_faceplates_change_only_declared_dynamic_or_cleanup_regions(self):
+    def test_alternate_faceplates_preserve_hardware_outside_declared_finishes(self):
         for model in ("passive", "vintage"):
             with self.subTest(model=model):
                 art = io24_eq_reference.rack(model)
@@ -93,6 +93,7 @@ class EqReferenceDiffTests(unittest.TestCase):
                             min(width, x + region_width + padding)] = True
                 for x, y, region_width, region_height in \
                         (*art.get("faceplate_cleanup_regions", ()),
+                         art["material_region"],
                          *art["graph_label_clear_regions"]):
                     allowed[y:y + region_height,
                             x:x + region_width] = True
@@ -104,6 +105,14 @@ class EqReferenceDiffTests(unittest.TestCase):
                             (lamp_radius * 2.35 + padding) ** 2)
                 self.assertTrue(changed.any())
                 self.assertFalse((changed & ~allowed).any())
+                # The material allowance must not silently permit damage to
+                # the mounting hardware or photographed bezel.
+                for cx, cy, radius in art["screws"]:
+                    core = ((xx - cx) ** 2 + (yy - cy) ** 2 <= radius ** 2)
+                    self.assertFalse(changed[core].any())
+                sx, sy, sw, sh = art["screen"]
+                self.assertFalse(changed[sy:sy + sh, sx:sx + 8].any())
+                self.assertFalse(changed[sy:sy + sh, sx + sw - 8:sx + sw].any())
 
     def test_node_overlays_are_transparent_and_reference_sized(self):
         for model in ("standard", "passive", "vintage"):

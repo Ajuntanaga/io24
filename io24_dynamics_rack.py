@@ -362,11 +362,13 @@ def faceplate(kind):
     return surface
 
 
-@lru_cache(maxsize=1)
-def _dial_face():
+@lru_cache(maxsize=4)
+def _dial_face(raster_scale=1):
     """A flat, lathe-finished cap with fixed illumination, cached for all knobs."""
     import cairo
-    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 110, 110)
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32,
+                                 110 * raster_scale, 110 * raster_scale)
+    surface.set_device_scale(raster_scale, raster_scale)
     cr = cairo.Context(surface)
     cx = cy = 55
     _radial(cr, cx, cy, 50,
@@ -396,6 +398,46 @@ def _dial_face():
         cr.set_line_width(.25 if i % 3 else .4)
         cr.stroke()
     cr.restore()
+    return surface
+
+
+def machined_dial_surface(radius, angle, accent):
+    """Native-pixel hardware for the filter/EQ/limiter controls.
+
+    The grip and enamel index rotate with the parameter; illumination and
+    contact shadows remain in room coordinates. There is no emissive base.
+    """
+    import cairo
+    size = max(8, math.ceil(radius * 2.6))
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    cr = cairo.Context(surface)
+    cr.translate(size / 2, size / 2)
+    cr.scale(radius / 65, radius / 65)
+    _radial(cr, 3, 9, 77,
+            [(0, (0, 0, 0, .82)), (.72, (0, 0, 0, .58)),
+             (.88, (0, 0, 0, .17)), (1, (0, 0, 0, 0))], (0, 0))
+    _radial(cr, 0, 2, 68,
+            [(0, (.035, .04, .04, 1)), (.94, (.04, .045, .045, 1)),
+             (.97, (.55, .56, .53, 1)), (1, (.08, .09, .085, 1))])
+    _radial(cr, 0, 0, 65,
+            [(0, (.17, .18, .17, 1)), (.75, (.11, .12, .115, 1)),
+             (1, (.025, .029, .027, 1))])
+    for tooth in range(80):
+        a = angle + tooth * math.tau / 80
+        light = .5 + .5 * math.cos(a + 2.25)
+        _line(cr, [(51 * math.cos(a), 51 * math.sin(a)),
+                   (64 * math.cos(a), 64 * math.sin(a))],
+              (.008, .012, .010), 2.5, .95)
+        a += .019
+        _line(cr, [(52 * math.cos(a), 52 * math.sin(a)),
+                   (63 * math.cos(a), 63 * math.sin(a))],
+              (.40, .42, .39), 1.05, .16 + .7 * light)
+    cr.set_source_surface(_dial_face(max(1, math.ceil(radius / 65))), -55, -55)
+    cr.paint()
+    index = [(r * math.cos(angle), r * math.sin(angle)) for r in (29, 59)]
+    _line(cr, [(x + .8, y + 1) for x, y in index], (1, 1, .95), 5.5, .42)
+    _line(cr, index, (.015, .019, .017), 5.2, 1)
+    _line(cr, index, accent, 2.5, 1)
     return surface
 
 

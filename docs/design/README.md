@@ -11,17 +11,17 @@ landmark. The Host, asset renderer, hit testing, and pixel-diff tooling all use
 that same geometry.
 
 Passive and Vintage use value-free production faceplates derived from their
-references. Static metal, rack hardware, group headings, dividers, and display
-bezels therefore stay pixel-identical to the source references. The source
-knobs, illustrative scale values, response trace, and lamp are removed. GTK
-draws those state-bearing regions from the decoded UC fields, so no decorative
-value can contradict the actual control protocol.
+references. Their declared material regions receive slate-blue and smoked-metal
+finishes; screw heads, screen hardware, dividers, and measured landmarks remain
+intact. Source knobs, illustrative values, headings, response traces, and lamps
+are cleared. GTK renders the lettering at the actual display resolution and
+draws control values from the decoded UC fields.
 
-Knob bodies are separate transparent PNG assets generated from
-`eq-knob-reference-board.png` by `tools/render_eq_knob_assets.py`. Standard has
-separate Gain and Q bodies, Passive has continuous and selector bodies, and
-Vintage has one coloured body per band. GTK adds only live collars, pointers,
-focus, and values, so the faceplates never bake in a control position.
+The live racks share procedural flat nickel caps and rotating rubber grips with
+the dynamics racks. Knobs are rendered at native pixel size and cached separately
+from their live lettering. Vintage retains its band colours in the pointer
+inlays. The original transparent PNG knob assets and calibration images remain
+available as design references; normal rendering uses the procedural hardware.
 
 - `passive-program-eq-reference.png` establishes the blue steel faceplate,
   low/high grouping, recessed response display, stepped selectors, screws and
@@ -60,6 +60,26 @@ four large Gain knobs, four smaller logarithmic Q knobs, per-band power and
 outer-band Peak/Shelf buttons, Flatten, and global power. The Q additions are
 recorded in the calibration-node overlay even though they are not present in
 the original illustrative bitmap.
+
+## Production finishes
+
+HPF uses petrol-blue metal, Standard EQ uses navy steel, Passive uses slate blue,
+Vintage uses smoked charcoal, and Limiter uses warm graphite. These finishes
+share fine brush marks, flat machined knobs, and small contact shadows. Knob
+underlighting is absent. Native live headings and scales stay separate from the
+static metal textures so resizing does not resample their lettering.
+
+The response displays use a bounded woven phosphor texture beneath their actual
+curves. HPF retains its audio-responsive moving plane and idle motion. This
+treatment adds no timer or synthetic production signal; the existing control,
+telemetry, and DSP paths remain authoritative.
+
+Regenerate the production EQ plates with:
+
+```bash
+python3 tools/render_standard_eq_reference.py --faceplate
+python3 tools/render_eq_reference_assets.py
+```
 
 ## Reference-rack workflow
 

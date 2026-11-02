@@ -33,6 +33,7 @@ import threading
 import time
 import warnings
 from collections import deque
+from functools import lru_cache
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -2433,6 +2434,59 @@ def hpf_input_energy(win, channel):
     return normalized * normalized * (3.0 - 2.0 * normalized)
 
 
+def _material_texture(surface):
+    surface.flush()
+    return Gdk.MemoryTexture.new(
+        surface.get_width(), surface.get_height(),
+        Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED if sys.byteorder == "little"
+        else Gdk.MemoryFormat.A8R8G8B8_PREMULTIPLIED,
+        GLib.Bytes.new(surface.get_data()), surface.get_stride())
+
+
+@lru_cache(maxsize=48)
+def _machined_knob_texture(pixel_radius, angle, accent):
+    return _material_texture(io24_dynamics_rack.machined_dial_surface(
+        pixel_radius, angle, accent))
+
+
+def append_machined_knob(widget, sn, cx, cy, radius, angle, accent,
+                         active=True, focused=False):
+    scale = max(1, widget.get_scale_factor())
+    texture = _machined_knob_texture(round(radius * scale, 2), angle,
+                                     tuple(accent))
+    size = texture.get_width() / scale
+    if not active:
+        sn.push_opacity(.76)
+    sn.append_texture(texture, Graphene.Rect().init(
+        _rack_pixel(widget, cx - size / 2),
+        _rack_pixel(widget, cy - size / 2), size, size))
+    if not active:
+        sn.pop()
+    if focused:
+        polyline(sn, standard_eq_arc_points(
+            cx, cy, radius * 1.10, 0, math.tau), rgba(*accent, .85), 1.0)
+
+
+@lru_cache(maxsize=16)
+def _response_mesh_texture(points, baseline, rect, colour, scale):
+    return _material_texture(io24_dynamics_rack._signal_surface(
+        points, baseline, rect, colour, scale))
+
+
+def response_mesh(widget, sn, points, baseline, rect, colour, opacity=1.0):
+    """Bounded, cached woven fill clipped to the real response envelope."""
+    scale = max(1, widget.get_scale_factor())
+    texture = _response_mesh_texture(tuple(points), baseline, tuple(rect),
+                                      tuple(colour), scale)
+    if opacity != 1.0:
+        sn.push_opacity(opacity)
+    sn.append_texture(texture, Graphene.Rect().init(
+        rect[0], rect[1], texture.get_width() / scale,
+        texture.get_height() / scale))
+    if opacity != 1.0:
+        sn.pop()
+
+
 def draw_limiter_display(win, channel, sn, rect, rack_state, active):
     """Paint the limiter's live future-retro transfer and reduction field."""
     x, y, width, height = rect
@@ -2529,8 +2583,11 @@ def draw_limiter_display(win, channel, sn, rect, rack_state, active):
     knee_y = graph_bottom - (threshold + 40.0) / 40.0 * graph_h
     curve = [(graph_x, graph_bottom), (knee_x, knee_y),
              (graph_x + graph_w, knee_y)]
-    fill_poly(sn, curve + [(graph_x + graph_w, graph_bottom)],
-              pal(PHOS, .055 * lit))
+    envelope = [(graph_x + graph_w * i / 64,
+                 graph_bottom - min(i / 64, threshold_norm) * graph_h)
+                for i in range(65)]
+    response_mesh(win, sn, envelope, graph_bottom,
+                  (graph_x, graph_y, graph_w, graph_h), (.88, .64, .28), lit)
     glow(sn, lambda: polyline(sn, curve, pal(PHOS, .95 * lit), 1.8),
          radius=max(3.0, height * .030))
     dot(sn, knee_x, knee_y, max(1.8, height * .014),
@@ -2680,8 +2737,8 @@ def draw_hpf_display(win, channel, sn, rect, rack_state, active):
         px = gx + gw * column / 96.0
         py = gy + gh * .84 - (db + 36.0) / 36.0 * gh * .66
         curve.append((px, py))
-    fill = curve + [(gx + gw, gy + gh * .90), (gx, gy + gh * .90)]
-    fill_poly(sn, fill, rgba(.03, .72, .86, .075 * lit))
+    response_mesh(win, sn, curve, gy + gh * .90,
+                  (gx, gy, gw, gh), (.16, .77, .85), .70 * lit)
     glow(sn, lambda: polyline(sn, curve, rgba(.30, .96, 1.0, .98 * lit), 2.0),
          radius=max(4.0, height * .035))
 
@@ -3132,33 +3189,33 @@ class ReferenceRack(Canvas):
         # A multi-stop gunmetal plate establishes real top light and a dark
         # lower return. Fine directional brushing and sparse wear stop the
         # material reading as a single flat CSS colour.
-        plate_stops = ((0.0, (.17, .205, .225, 1.0)),
-                       (.08, (.075, .105, .125, 1.0)),
-                       (.48, (.032, .050, .064, 1.0)),
-                       (.82, (.018, .029, .040, 1.0)),
-                       (1.0, (.007, .013, .021, 1.0))) if futuristic else (
-                           (0.0, (.245, .255, .250, 1.0)),
-                           (.08, (.145, .151, .146, 1.0)),
-                           (.48, (.092, .094, .087, 1.0)),
-                           (.82, (.060, .061, .057, 1.0)),
-                           (1.0, (.030, .032, .031, 1.0)))
+        plate_stops = ((0.0, (.30, .39, .41, 1.0)),
+                       (.06, (.16, .26, .29, 1.0)),
+                       (.44, (.105, .19, .22, 1.0)),
+                       (.84, (.060, .12, .15, 1.0)),
+                       (1.0, (.026, .055, .072, 1.0))) if futuristic else (
+                           (0.0, (.39, .38, .33, 1.0)),
+                           (.06, (.25, .24, .205, 1.0)),
+                           (.44, (.18, .175, .145, 1.0)),
+                           (.84, (.115, .112, .095, 1.0)),
+                           (1.0, (.055, .055, .048, 1.0)))
         rounded_vgrad(sn, px, py, pw, ph, 6.0, plate_stops,
                       rgba(.30, .33, .33, .92) if futuristic else
                       rgba(.48, .45, .36, .92))
         for row in range(int(py + 4), max(int(py + 5), int(py + ph - 4)), 2):
             phase = math.sin(row * .43)
-            tone = (rgba(.38, .82, .90, .018 + .011 * (phase + 1.0))
+            tone = (rgba(.66, .82, .85, .027 + .014 * (phase + 1.0))
                     if futuristic else
-                    rgba(.90, .84, .68, .020 + .012 * (phase + 1.0)))
+                    rgba(.90, .86, .75, .030 + .014 * (phase + 1.0)))
             polyline(sn, [(px + 5, row), (px + pw - 5, row)], tone, .45)
         for index in range(760):
             gx = px + 13 + ((index * 97) % max(19, int(pw - 31)))
             gy = py + 8 + ((index * 53) % max(11, int(ph - 18)))
             length = 1 + ((index * 17) % 17)
             bright = index % 6 != 0
-            grain = ((rgba(.54, .88, .94, .072) if bright else
+            grain = ((rgba(.69, .88, .94, .095) if bright else
                       rgba(.002, .012, .018, .21)) if futuristic else
-                     (rgba(.92, .86, .70, .052) if bright else
+                     (rgba(.92, .86, .70, .082) if bright else
                       rgba(.005, .007, .007, .16)))
             polyline(sn, [(gx, gy), (min(px + pw - 7, gx + length), gy)],
                      grain, .42)
@@ -3224,20 +3281,10 @@ class ReferenceRack(Canvas):
                       (px + pw - 6, py + ph - 3)],
                  rgba(0, 0, 0, .76), 1.4)
 
-        # Recess the two control fields and the metering field into the plate.
+        # Only the glass is inset; controls sit directly on continuous metal.
         display = io24_rack_reference.scaled_rect(
             self.spec["display"], width, height, self.rack_id)
         dx, dy, dw, dh = display
-        control_centres = ((width * .193,) if futuristic else
-                           (width * .20, width * .80))
-        for cx in control_centres:
-            rounded_box(sn, cx - width * .115, py + ph * .215,
-                        width * .23, ph * .655, 8.0,
-                        rgba(.018, .020, .019, .18),
-                        rgba(.62, .55, .40, .13))
-            polyline(sn, [(cx - width * .103, py + ph * .240),
-                          (cx + width * .103, py + ph * .240)],
-                     rgba(.88, .79, .60, .11), .8)
         rounded_box(sn, dx - 10, dy - 10, dw + 20, dh + 20, 9.0,
                     rgba(.012, .014, .014, .88),
                     rgba(.58, .53, .41, .58))
@@ -3317,201 +3364,20 @@ class ReferenceRack(Canvas):
         selected = field == self.selected_field
         hovered = field == self.hover_field
         style = self.spec["live_style"]
-        if selected or hovered:
-            dot(sn, cx, cy, radius + style["knob_focus_px"],
-                pal(ACCENT, .15 if selected else .09))
         control = self.spec["controls"][field]
         value = self._widget(field).get_value()
         angle = math.radians(
             io24_rack_reference.pointer_angle(control, value))
         tick_lit = 1.0 if active else .58
-        # Strong under-light is projected across the faceplate before the
-        # physical knob is assembled. Overlapping blurred pools form a broad
-        # ellipse; the opaque skirt then supplies real contact occlusion.
-        pool_alpha = .205 if active else .045
-        sn.push_blur(max(6.0, radius * .27))
-        for offset, size, strength in (
-                (-.68, .56, .62), (-.34, .70, .84),
-                (0.0, .82, 1.0), (.34, .70, .84), (.68, .56, .62)):
-            dot(sn, cx + radius * offset, cy + radius * .94, radius * size,
-                (rgba(.05, .82, 1.0, pool_alpha * strength) if futuristic
-                 else rgba(1.0, .49, .075, pool_alpha * strength)))
-        sn.pop()
-        # A sharper reflected pool survives small allocations; the skirt masks
-        # its upper half, leaving a convincing wash on the metal below.
-        for offset, strength in ((-.42, .58), (0.0, 1.0), (.42, .58)):
-            pool = (((0.0, (.20, .93, 1.0,
-                            (.30 if active else .065) * strength)),
-                     (.48, (.02, .49, 1.0,
-                            (.15 if active else .032) * strength)),
-                     (1.0, (.015, .04, .30, 0.0))) if futuristic else (
-                    (0.0, (1.0, .56, .11,
-                           (.30 if active else .065) * strength)),
-                    (.48, (1.0, .37, .045,
-                           (.15 if active else .032) * strength)),
-                    (1.0, (.28, .055, .006, 0.0))))
-            radial_dot(sn, cx + radius * offset, cy + radius * .88,
-                       radius * .64, pool, focus=(0.0, .18))
-        lower_arc = standard_eq_arc_points(
-            cx, cy, radius * 1.015, math.radians(24), math.radians(156))
-        sn.push_blur(max(3.0, radius * .14))
-        polyline(sn, lower_arc,
-                 (rgba(.08, .84, 1.0, .86 if active else .18)
-                  if futuristic else
-                  rgba(1.0, .58, .12, .86 if active else .18)),
-                 max(3.6, radius * .15))
-        sn.pop()
-        polyline(sn, lower_arc,
-                 (rgba(.62, .98, 1.0, .82 if active else .16)
-                  if futuristic else
-                  rgba(1.0, .76, .31, .78 if active else .16)),
-                 max(1.0, radius * .028))
         for inner, outer, major in self._knob_tick_segments(field, geometry):
             polyline(sn, [inner, outer],
                      rgba(.91, .82, .62, (.90 if major else .72) * tick_lit),
                      max(1.0, radius * style[
                          "tick_major_width" if major else "tick_minor_width"]))
-        # The control is assembled like real 1960s hardware: a nickel bezel,
-        # scalloped phenolic skirt and a separately machined aluminium cap.
-        # Material-specific gradients and occlusion are what keep it from
-        # reading as a stack of flat circles at the shipped rack sizes.
-        sn.push_blur(max(2.8, radius * .10))
-        dot(sn, cx + radius * .08, cy + radius * .13, radius * 1.10,
-            rgba(0, 0, 0, .86))
-        sn.pop()
-        radial_dot(sn, cx, cy, radius * 1.045, (
-            (0.00, (.88, .85, .73, 1.0)),
-            (0.26, (.47, .45, .39, 1.0)),
-            (0.58, (.17, .17, .15, 1.0)),
-            (0.84, (.56, .53, .44, 1.0)),
-            (1.00, (.095, .092, .080, 1.0))), focus=(-.34, -.38))
-        for factor, colour, width in (
-                (1.005, rgba(.95, .90, .74, .52), .022),
-                (.958, rgba(.035, .032, .027, .92), .030)):
-            polyline(sn, standard_eq_arc_points(
-                cx, cy, radius * factor, 0.0, math.tau), colour,
-                max(.75, radius * width))
-
-        # Overlapping lobes form a genuine scalloped Bakelite silhouette;
-        # alternating edge light/shade describes the moulded finger grips.
-        for index in range(20):
-            groove = angle + math.tau * index / 20.0
-            gx = cx + radius * .785 * math.cos(groove)
-            gy = cy + radius * .785 * math.sin(groove)
-            dot(sn, gx + radius * .018, gy + radius * .026,
-                radius * .126, rgba(.008, .008, .007, 1.0))
-            radial_dot(sn, gx, gy, radius * .108, (
-                (0.0, (.18, .165, .135, 1.0)),
-                (.45, (.060, .054, .043, 1.0)),
-                (1.0, (.018, .017, .014, 1.0))), focus=(-.36, -.42))
-        radial_dot(sn, cx, cy, radius * .785, (
-            (0.00, (.145, .132, .105, 1.0)),
-            (0.38, (.060, .054, .043, 1.0)),
-            (0.76, (.020, .019, .016, 1.0)),
-            (1.00, (.006, .006, .005, 1.0))), focus=(-.34, -.40))
-        polyline(sn, standard_eq_arc_points(
-            cx, cy, radius * .735, math.radians(204), math.radians(326)),
-            rgba(.62, .56, .43, .30), max(.8, radius * .022))
-        polyline(sn, standard_eq_arc_points(
-            cx, cy, radius * .752, math.radians(18), math.radians(142)),
-            rgba(0, 0, 0, .72), max(1.0, radius * .032))
-        # Mould seams and a small worn nick rotate with the skirt. Their
-        # asymmetry makes parameter movement visible in the black material,
-        # while the fixed upper-left light still describes world illumination.
-        for index in range(10):
-            seam = angle + math.tau * index / 10.0 + math.radians(8)
-            polyline(sn, [
-                (cx + radius * .64 * math.cos(seam),
-                 cy + radius * .64 * math.sin(seam)),
-                (cx + radius * .88 * math.cos(seam),
-                 cy + radius * .88 * math.sin(seam)),
-            ], rgba(.34, .30, .23, .20 if index % 2 else .30),
-                max(.55, radius * .012))
-            shadow_angle = seam + math.radians(2.3)
-            polyline(sn, [
-                (cx + radius * .66 * math.cos(shadow_angle),
-                 cy + radius * .66 * math.sin(shadow_angle)),
-                (cx + radius * .87 * math.cos(shadow_angle),
-                 cy + radius * .87 * math.sin(shadow_angle)),
-            ], rgba(0, 0, 0, .43), max(.55, radius * .014))
-        nick_angle = angle + math.radians(112)
-        nick_x = cx + radius * .855 * math.cos(nick_angle)
-        nick_y = cy + radius * .855 * math.sin(nick_angle)
-        dot(sn, nick_x, nick_y, max(.75, radius * .026),
-            rgba(.58, .50, .35, .46))
-        polyline(sn, [
-            (nick_x - radius * .030 * math.sin(nick_angle),
-             nick_y + radius * .030 * math.cos(nick_angle)),
-            (nick_x + radius * .030 * math.sin(nick_angle),
-             nick_y - radius * .030 * math.cos(nick_angle)),
-        ], rgba(.035, .030, .023, .72), max(.55, radius * .012))
-
-        cap_y = cy - radius * .035
-        cap_stops = ((0.00, (.90, .98, 1.0, 1.0)),
-                     (0.20, (.54, .67, .72, 1.0)),
-                     (0.52, (.24, .31, .35, 1.0)),
-                     (0.78, (.49, .62, .67, 1.0)),
-                     (1.00, (.10, .15, .18, 1.0))) if futuristic else (
-                         (0.00, (.96, .84, .59, 1.0)),
-                         (0.20, (.78, .65, .40, 1.0)),
-                         (0.52, (.54, .43, .25, 1.0)),
-                         (0.78, (.72, .58, .33, 1.0)),
-                         (1.00, (.30, .225, .12, 1.0)))
-        if futuristic:
-            # A shallow, flat-topped titanium insert over the retained
-            # rubberized scalloped skirt. Concentric machining reads as a
-            # planar face instead of the former rounded dome.
-            sn.push_blur(max(1.2, radius * .045))
-            dot(sn, cx + radius * .018, cap_y + radius * .035,
-                radius * .625, rgba(0, 0, 0, .64))
-            sn.pop()
-            dot(sn, cx, cap_y, radius * .605, rgba(.255, .335, .375, 1.0))
-            for factor, alpha in ((.56, .24), (.49, .14), (.40, .11),
-                                  (.30, .085), (.20, .07)):
-                polyline(sn, standard_eq_arc_points(
-                    cx, cap_y, radius * factor, 0.0, math.tau),
-                    rgba(.72, .92, .96, alpha), max(.42, radius * .008))
-            polyline(sn, standard_eq_arc_points(
-                cx, cap_y, radius * .585, math.radians(202),
-                math.radians(338)), rgba(.015, .035, .044, .70),
-                max(.85, radius * .018))
-            polyline(sn, standard_eq_arc_points(
-                cx, cap_y, radius * .585, math.radians(22),
-                math.radians(158)), rgba(.83, .98, 1.0, .44),
-                max(.65, radius * .013))
-        else:
-            radial_dot(sn, cx, cap_y, radius * .615, cap_stops,
-                       focus=(-.34, -.38))
-            # Fine radial machining marks follow the cap rather than floating
-            # over it; the low contrast leaves room for the pointer channel.
-            for index in range(36):
-                machining = angle + math.tau * index / 36.0
-                alpha = .11 if index % 3 else .19
-                polyline(sn, [
-                    (cx + radius * .16 * math.cos(machining),
-                     cap_y + radius * .16 * math.sin(machining)),
-                    (cx + radius * .56 * math.cos(machining),
-                     cap_y + radius * .56 * math.sin(machining)),
-                ], rgba(.98, .88, .64, alpha), max(.45, radius * .008))
-        for factor, colour in (
-                (.575, (rgba(.78, .96, 1.0, .34) if futuristic else
-                         rgba(1.0, .92, .72, .30))),
-                (.525, (rgba(.025, .075, .090, .48) if futuristic else
-                         rgba(.19, .13, .065, .34)))):
-            polyline(sn, standard_eq_arc_points(
-                cx, cap_y, radius * factor, 0.0, math.tau), colour,
-                max(.55, radius * .013))
-        lit = 1.0 if active else .48
-        pointer = [
-            (cx + radius * .055 * math.cos(angle),
-             cap_y + radius * .055 * math.sin(angle)),
-            (cx + radius * .53 * math.cos(angle),
-             cap_y + radius * .53 * math.sin(angle)),
-        ]
-        polyline(sn, pointer, rgba(.12, .075, .028, .88),
-                 max(2.0, radius * .070))
-        polyline(sn, pointer, pal(IVORY, .92 * lit),
-                 max(.8, radius * .022))
+        accent = (.56, .91, .94) if futuristic else (.96, .77, .39)
+        append_machined_knob(self, sn, cx, cy, radius * .96, angle, accent,
+                             active, selected or hovered)
+        lit = 1.0 if active else .58
         formatter = self.bindings[field].get("format")
         text = (str(formatter(value)) if callable(formatter)
                 else control.get("format_string", "{}").format(value))
@@ -5554,12 +5420,6 @@ class EQCurve(ChannelBound, Canvas):
         """Draw one compact physical Q rotary with independent live motion."""
         selected = index == self.cur_band
         hovered = index == self.hover_q
-        if selected or hovered:
-            glow(sn, lambda: dot(
-                sn, cx, cy, radius * 1.18,
-                rgba(*STANDARD_EQ_KNOB_TONE, .24 if selected else .16)),
-                radius=max(3.0, 7.0 * scale))
-
         # Eleven fixed ticks and the shared Passive-style body retain the same
         # physical vocabulary as the larger Gain encoders.
         for tick in range(11):
@@ -5576,24 +5436,9 @@ class EQCurve(ChannelBound, Canvas):
                  cy + outer * math.sin(angle)),
             ], rgba(.78, .82, .83, .72), max(.65, 1.35 * scale))
 
-        append_eq_knob_texture(
-            sn, STANDARD_EQ_KNOB_ASSETS["q"], cx, cy,
-            standard_eq_knob_asset_diameter("q", radius))
-        ring = standard_eq_arc_points(cx, cy, radius * .61, 0.0, math.tau)
-        polyline(sn, ring, rgba(*STANDARD_EQ_KNOB_TONE, .48),
-                 max(1.0, 2.2 * scale))
-        angle = standard_eq_q_angle(band["q"])
-        cos_a, sin_a = math.cos(angle), math.sin(angle)
-        polyline(sn, [
-            (cx + radius * .12 * cos_a, cy + radius * .12 * sin_a),
-            (cx + radius * .70 * cos_a, cy + radius * .70 * sin_a),
-        ], rgba(0, 0, 0, .70), max(2.0, 4.0 * scale))
-        polyline(sn, [
-            (cx + radius * .12 * cos_a - scale,
-             cy + radius * .12 * sin_a - scale),
-            (cx + radius * .70 * cos_a - scale,
-             cy + radius * .70 * sin_a - scale),
-        ], rgba(.98, .98, .94, .98), max(1.0, 2.1 * scale))
+        append_machined_knob(
+            self, sn, cx, cy, radius, standard_eq_q_angle(band["q"]),
+            (.78, .88, .86), band["shape"] != "off", selected or hovered)
         centred_faceplate_label(
             self, sn, "Q %.2f" % band["q"], cx,
             cy + radius + max(3.0, 6.0 * scale),
@@ -5663,11 +5508,8 @@ class EQCurve(ChannelBound, Canvas):
                     sn, STANDARD_EQ_REFERENCE_ART[
                         "calibration_underlay_filename"], panel):
             return
-        # The blank faceplate comes from the same deterministic renderer as the
-        # approved reference, so metal, grain, rack ears, fluted knobs and the
-        # screen frame stay pixel-identical.  Only state-bearing marks are
-        # drawn below: no illustrative value from the reference can leak into
-        # the live Host.
+        # The production finish shares the reference geometry. Knobs and
+        # state-bearing marks render live at the device's pixel scale.
         px, py, pw, ph = layout["panel"]
         try:
             texture = standard_eq_faceplate_texture()
@@ -5712,11 +5554,11 @@ class EQCurve(ChannelBound, Canvas):
         pts = [(gx + px, gy + py) for px, py in
                self.win.curve_points(gw, gh, self.channel)]
         if active and any(b["shape"] != "off" for b in self.bands):
-            fill_poly(sn, pts + [(gx + gw, gy + gh / 2),
-                                 (gx, gy + gh / 2)], pal(acc, 0.075))
+            response_mesh(self, sn, pts, gy + gh / 2,
+                          (gx, gy, gw, gh), (.25, .79, .83))
         if active:
-            glow(sn, lambda: polyline(sn, pts, pal(acc), 2.8),
-                 radius=max(6.0, 10.0 * scale), passes=2)
+            glow(sn, lambda: polyline(sn, pts, pal(acc), 1.8),
+                 radius=3.0, passes=1)
             polyline(sn, pts, rgba(.86, 1.0, 1.0, .68),
                      max(.65, 1.05 * scale))
         else:
@@ -5773,9 +5615,8 @@ class EQCurve(ChannelBound, Canvas):
                     tag_y + (tag_height - tag_size) / 2.0,
                     rgba(.84, .91, .92, .94), tag_size)
 
-        # Independent knob assets own the physical knobs. These overlays are
-        # the state that can move: gain arc and pointer, selected-band halo,
-        # gain/frequency/mode readouts, and each band's independent lamp.
+        # Machined caps and rubber skirts share the native-pixel material;
+        # pointers and grip grooves follow each authoritative gain value.
         radius = layout["knob_radius"]
         zero_angle = standard_eq_knob_angle(0.0)
         for index, ((cx, cy), tone, band) in enumerate(zip(
@@ -5787,63 +5628,13 @@ class EQCurve(ChannelBound, Canvas):
             tone_alpha = 1.0 if band_on and active else (
                 .62 if band_on else .28)
 
-            append_eq_knob_texture(
-                sn, STANDARD_EQ_KNOB_ASSETS["gain"], cx, cy,
-                standard_eq_knob_asset_diameter("gain", radius),
-                opacity=1.0 if band_on else .72)
-            collar = standard_eq_arc_points(
-                cx, cy, radius * .61, 0.0, math.tau)
-            polyline(sn, collar, rgba(
-                *STANDARD_EQ_KNOB_TONE, .66 if band_on else .30),
-                     max(1.0, 3.0 * scale))
-
-            if selected or hovered:
-                ring_radius = radius * (.69 if selected else 1.02)
-                ring = standard_eq_arc_points(
-                    cx, cy, ring_radius, 0.0, math.tau)
-                glow(sn, lambda points=ring:
-                     polyline(sn, points, rgba(*STANDARD_EQ_KNOB_TONE,
-                                               .82 if selected else .50),
-                              max(1.2, 4.0 * scale)),
-                     radius=max(4.0, 12.0 * scale))
-
+            append_machined_knob(self, sn, cx, cy, radius, angle, tone,
+                                 band_on, selected or hovered)
             arc_start, arc_end = sorted((zero_angle, angle))
             if abs(arc_end - arc_start) > 1e-6:
-                value_arc = standard_eq_arc_points(
-                    cx, cy, radius * 1.05, arc_start, arc_end)
-                glow(sn, lambda points=value_arc,
-                     alpha=tone_alpha: polyline(
-                         sn, points, rgba(*STANDARD_EQ_KNOB_TONE, alpha),
-                         max(1.0, 4.0 * scale)),
-                     radius=max(2.0, 5.0 * scale))
-
-            cos_a, sin_a = math.cos(angle), math.sin(angle)
-            cap_radius = radius * .605
-            polyline(sn, [
-                (cx + cap_radius * .16 * cos_a + scale * .8,
-                 cy + cap_radius * .16 * sin_a + scale * 1.2),
-                (cx + cap_radius * .92 * cos_a + scale * .8,
-                 cy + cap_radius * .92 * sin_a + scale * 1.2),
-            ], rgba(1, 1, 1, .50), max(1.0, 2.0 * scale))
-            polyline(sn, [
-                (cx + cap_radius * .16 * cos_a,
-                 cy + cap_radius * .16 * sin_a),
-                (cx + cap_radius * .92 * cos_a,
-                 cy + cap_radius * .92 * sin_a),
-            ], rgba(.08, .09, .11, .95), max(1.6, 4.2 * scale))
-            polyline(sn, [
-                (cx + radius * .70 * cos_a + scale,
-                 cy + radius * .70 * sin_a + scale * 1.5),
-                (cx + radius * .96 * cos_a + scale,
-                 cy + radius * .96 * sin_a + scale * 1.5),
-            ], rgba(0, 0, 0, .64), max(2.2, 6.4 * scale))
-            polyline(sn, [
-                (cx + radius * .70 * cos_a,
-                 cy + radius * .70 * sin_a),
-                (cx + radius * .96 * cos_a,
-                 cy + radius * .96 * sin_a),
-            ], rgba(.98, .97, .93, .98 if band_on else .58),
-                max(1.8, 5.2 * scale))
+                polyline(sn, standard_eq_arc_points(
+                    cx, cy, radius * 1.16, arc_start, arc_end),
+                    rgba(*tone, tone_alpha), max(1.0, 2.8 * scale))
 
             gain_size = max(6.8, 18.0 * scale)
             gain_center_y = cy + radius + 13.0 * scale
@@ -6280,11 +6071,6 @@ class AlternateEqRack(ChannelBound, Canvas):
         hovered = spec["field"] == self.hover_field
         selector = spec.get("style") == "selector"
         choices = spec.get("choices")
-        if selected or hovered:
-            glow(sn, lambda: dot(sn, cx, cy, radius * 1.02,
-                                 pal(ACCENT, .22 if active else .12)),
-                 radius=6.0)
-
         # Printed scale.  One engraved dot per position and one value per
         # mark, every value taken from the decoded UC range or switch list.
         size = alternate_eq_mark_label_size(model, spec, radius)
@@ -6313,24 +6099,17 @@ class AlternateEqRack(ChannelBound, Canvas):
                 rgba(.93, .93, .89, .96 if lit else .84),
                 size, Pango.Weight.BOLD if lit else Pango.Weight.MEDIUM)
 
-        # Body. Every model uses an independent transparent reference asset;
-        # only its protocol-authoritative pointer and state remain vector UI.
         body = radius * (.78 if selector else .96)
         angle = alternate_eq_knob_angle(spec, fraction)
-        cos_a, sin_a = math.cos(angle), math.sin(angle)
-        if model == "passive":
-            asset = "passive-selector" if selector else "passive-continuous"
-        else:
-            field = spec["field"]
-            group = "lowmid" if field.startswith("lowmid") else \
-                "low" if field.startswith("low") else \
-                "himid" if field.startswith("himid") else "high"
-            asset = "vintage-" + group
-        append_eq_knob_texture(
-            sn, asset, cx, cy,
-            alternate_eq_knob_asset_diameter(model, spec, radius),
-            rotation_degrees=(math.degrees(angle) + 90.0 if selector else 0),
-            opacity=1.0 if active else .68)
+        field = spec["field"]
+        group = "lowmid" if field.startswith("lowmid") else \
+            "low" if field.startswith("low") else \
+            "himid" if field.startswith("himid") else "high"
+        accent = (.92, .79, .48) if model == "passive" else {
+            "low": (.93, .40, .34), "lowmid": (.92, .75, .31),
+            "himid": (.48, .80, .60), "high": (.46, .71, .94)}[group]
+        append_machined_knob(self, sn, cx, cy, body, angle, accent,
+                             active, selected or hovered)
         if model == "vintage":
             for position in positions:
                 tick = alternate_eq_knob_angle(spec, position)
@@ -6340,28 +6119,6 @@ class AlternateEqRack(ChannelBound, Canvas):
                     (cx + body * 1.13 * math.cos(tick),
                      cy + body * 1.13 * math.sin(tick)),
                 ], rgba(.90, .90, .86, .82), max(.8, radius * .035))
-        if selector:
-            polyline(sn, [(cx + body * .05 * cos_a, cy + body * .05 * sin_a),
-                          (cx + body * .96 * cos_a, cy + body * .96 * sin_a)],
-                     rgba(.97, .97, .95, .96), max(1.4, body * .085))
-        else:
-            cap = body * (.60 if model == "passive" else .70)
-            if model == "passive":
-                # The reference's white bar runs across the black skirt.
-                polyline(sn, [
-                    (cx + cap * 1.02 * cos_a, cy + cap * 1.02 * sin_a),
-                    (cx + body * .96 * cos_a, cy + body * .96 * sin_a),
-                ], rgba(.98, .98, .96, .98), max(1.6, body * .10))
-                polyline(sn, [
-                    (cx + cap * .20 * cos_a, cy + cap * .20 * sin_a),
-                    (cx + cap * .98 * cos_a, cy + cap * .98 * sin_a),
-                ], rgba(1, 1, 1, .45), max(.8, body * .035))
-            else:
-                polyline(sn, [
-                    (cx + cap * .08 * cos_a, cy + cap * .08 * sin_a),
-                    (cx + cap * .90 * cos_a, cy + cap * .90 * sin_a),
-                ], rgba(.99, .99, .97, .97), max(1.5, body * .075))
-
         # Control name.  Passive prints it above the scale, Vintage below.
         label_size = max(6.0, min(10.0, radius * .22))
         if model == "passive" and selector:
@@ -6455,10 +6212,10 @@ class AlternateEqRack(ChannelBound, Canvas):
                 points.append((x + px, max(y + 1, min(y + h - 1, py))))
         colour = pal(chan_col(self.channel), 1.0 if active else .38)
         if active:
-            fill_poly(sn, points + [(x + w, y + h / 2),
-                                    (x, y + h / 2)],
-                      pal(chan_col(self.channel), .12))
-            glow(sn, lambda: polyline(sn, points, colour, 2.1), radius=6.0)
+            response_mesh(self, sn, points, y + h / 2, (x, y, w, h),
+                          (.25, .76, .80) if model == "passive" else
+                          (.76, .68, .38))
+            glow(sn, lambda: polyline(sn, points, colour, 1.8), radius=3.0)
         else:
             polyline(sn, points, colour, 1.4)
 

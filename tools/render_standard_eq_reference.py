@@ -261,7 +261,7 @@ def draw_rack_shadow(ctx):
     paint_layer(ctx, blurred(shadow, 16))
 
 
-def brushed_texture(ctx, x, y, w, h, rng, streaks):
+def brushed_texture(ctx, x, y, w, h, rng, streaks, strength=1.0):
     """Fine horizontal brushing: long faint streaks over short dense grain."""
     ctx.save()
     rounded(ctx, x, y, w, h, 6)
@@ -271,7 +271,7 @@ def brushed_texture(ctx, x, y, w, h, rng, streaks):
         sx = x + rng.random() * w
         length = 14 + rng.random() ** 2 * 380
         bright = rng.random() < 0.55
-        alpha = 0.012 + rng.random() * 0.035
+        alpha = (0.012 + rng.random() * 0.035) * strength
         colour = (0.82, 0.88, 0.95, alpha) if bright else \
             (0.0, 0.01, 0.02, alpha * 1.4)
         line(ctx, [(sx, sy), (sx + length, sy + rng.uniform(-.3, .3))],
@@ -279,16 +279,22 @@ def brushed_texture(ctx, x, y, w, h, rng, streaks):
     ctx.restore()
 
 
-def draw_plate(ctx, rng):
+def draw_plate(ctx, rng, production=False):
     x, y, w, h = RACK
     # Plate body: deep navy graphite with a real vertical fall-off.
     rounded(ctx, x, y, w, h, 8)
-    ctx.set_source(vgradient(y, y + h, (
+    stops = (
+        (0.0, (0.31, 0.37, 0.44, 1)),
+        (0.05, (0.205, 0.265, 0.34, 1)),
+        (0.45, (0.135, 0.185, 0.26, 1)),
+        (0.88, (0.085, 0.12, 0.18, 1)),
+        (1.0, (0.045, 0.066, 0.10, 1))) if production else (
         (0.0, (0.200, 0.238, 0.296, 1)),
         (0.05, (0.160, 0.194, 0.246, 1)),
         (0.45, (0.118, 0.146, 0.190, 1)),
         (0.88, (0.080, 0.100, 0.134, 1)),
-        (1.0, (0.060, 0.075, 0.102, 1)))))
+        (1.0, (0.060, 0.075, 0.102, 1)))
+    ctx.set_source(vgradient(y, y + h, stops))
     ctx.fill()
     # A broad, cool sheen across the upper third reads as anodized metal.
     sheen = cairo.RadialGradient(WIDTH * 0.5, y - 260, 80,
@@ -298,7 +304,8 @@ def draw_plate(ctx, rng):
     rounded(ctx, x, y, w, h, 8)
     ctx.set_source(sheen)
     ctx.fill()
-    brushed_texture(ctx, x, y, w, h, rng, 5200)
+    brushed_texture(ctx, x, y, w, h, rng, 5200,
+                    strength=1.8 if production else 1.0)
 
     # Rack ears are separate folded pieces, one shade darker.
     for ex in (x, x + w - EAR):
@@ -894,7 +901,7 @@ def render(output, faceplate=False):
     ctx = cairo.Context(surface)
     draw_background(ctx)
     draw_rack_shadow(ctx)
-    draw_plate(ctx, rng)
+    draw_plate(ctx, rng, production=faceplate)
     surface.flush()
     stride = surface.get_stride()
     data = np.frombuffer(surface.get_data(), dtype=np.uint8).reshape(

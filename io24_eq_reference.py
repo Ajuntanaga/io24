@@ -106,6 +106,9 @@ EQ_REFERENCE_RACKS = {
         "heading_clear_regions": ((867, 19, 422, 37),
                                   (334, 18, 94, 39),
                                   (1655, 18, 108, 40)),
+        # Production metal can evolve independently of the calibration photo.
+        # The renderer preserves screws, divider rails and the glass surround.
+        "material_region": (80, 8, 1996, 460),
         # Static cleanup performed by ``_open_rack_slots``: source-photo
         # whitespace may be normalized only in the two ears and narrow crop
         # fringes.  Keep this explicit so the pixel-diff gate still rejects
@@ -156,6 +159,7 @@ EQ_REFERENCE_RACKS = {
                                   (523, 31, 140, 39),
                                   (1604, 31, 110, 39),
                                   (1896, 31, 82, 39)),
+        "material_region": (80, 8, 1996, 355),
         "faceplate_cleanup_regions": ((0, 0, 80, 377),
                                       (2076, 0, 80, 377),
                                       (0, 0, 2156, 8),

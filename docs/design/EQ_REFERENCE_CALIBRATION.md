@@ -10,16 +10,17 @@ assets, then run the focused visual tests.
 
 ## Layer contract
 
-Every rack is divided into two visual layers.
+Every rack is divided into three visual layers.
 
 1. The static faceplate owns the metal finish, edge highlights, rack ears,
-   mounting slots, screws, group headings, divider rules, display bezel, and
-   fixed axis inscriptions.
-2. Separate transparent knob assets own each model's physical knob body.
-3. GTK owns anything that can change: response curve, Standard nodes,
-   spectrum trace, Gain and Q knob pointers, protocol-correct values and scale
-   marks, per-band controls, selection/hover focus, error badge, and the
-   independent EQ power lamp.
+   mounting slots, screws, divider rules, and display bezel. The declared
+   `material_region` permits a new finish without changing the landmarks.
+2. Cached procedural hardware owns each knob's flat nickel cap, rotating rubber
+   grip, and pointer inlay, rendered at the actual display resolution.
+3. GTK owns live headings and axis inscriptions as well as the response curve,
+   textured fill, Standard nodes, spectrum trace, protocol-correct values and
+   scale marks, per-band controls, selection/hover focus, error badge, and the
+   independent EQ power lamp. Text is separate from the metal and knob caches.
 
 The Passive and Vintage source references contain illustrative control values.
 Those areas are deliberately cleared from their production faceplates. A
@@ -44,7 +45,7 @@ incorrect UC ranges.
 | Power lamp | `(2032,441)`, radius `20` |
 
 The Standard reference and blank faceplate are rendered by
-`tools/render_eq_reference_assets.py`. The four live bands retain the exact
+`tools/render_standard_eq_reference.py`. The four live bands retain the exact
 Host ranges and shapes. Q remains the existing `0.1..10.0` protocol field; its
 rotary uses logarithmic travel only to make the physical control usable.
 
@@ -63,8 +64,9 @@ rotary uses logarithmic travel only to make the physical control usable.
 | Power lamp | `(2031,427)`, radius `18` |
 
 The two cleared control fields are `(86,58,478,424)` and
-`(1290,58,786,424)`. They stop at the rack-ear seams and do not touch the
-photographed screen bezel or heading line.
+`(1290,58,786,424)`. Separate heading clears remove baked lettering. The
+material region `(80,8,1996,460)` provides the slate-blue finish while protecting
+the photographed screen bezel and screw heads.
 
 ### Vintage EQ
 
@@ -86,8 +88,9 @@ The four cleared control fields follow the dividers exactly:
 `(1844,68,232,262)`.
 
 The source crop remains the measurement authority. At runtime its cleaned
-static plate and y landmarks are fitted into the common-height bay. Knob bodies
-are separate circular assets and use the smaller scale, so the controls and
+static plate and y landmarks are fitted into the common-height bay. Its material
+region `(80,8,1996,355)` provides the smoked-metal finish. Knob bodies
+are separate circular renders and use the smaller scale, so the controls and
 their hit regions are never vertically stretched with the plate.
 
 ## Calibration modes
@@ -109,13 +112,17 @@ IO24_PAINT_CAPTURE_DIR=/tmp/io24-eq-nodes \
 python3 tests/paint_smoke.py
 ```
 
-Regenerate every derived layer with:
+Regenerate the production faceplates and calibration layers with:
 
 ```bash
+python3 tools/render_standard_eq_reference.py --faceplate
 python3 tools/render_eq_reference_assets.py
 ```
 
-`tools/eq_reference_diff.py` compares a `backdrop` capture with a normal
-capture. Scope the comparison to the fitted rack and allow only the measured
-plot, control circles, and power lamp as dynamic regions. Everything else is
-static reference territory.
+`tools/eq_reference_diff.py` compares captures while allowing measured live
+regions to differ. For control-state regression checks, compare two production
+captures at the same size. The source backdrop intentionally has the original
+material and baked lettering, so it is a geometry reference rather than a
+pixel-identical production baseline. `tests/test_eq_reference_diff.py` checks
+that generated faceplate changes stay inside the declared finish/cleanup areas
+and that photographed screw heads and screen sides remain intact.

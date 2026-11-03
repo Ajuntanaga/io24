@@ -37,6 +37,15 @@ def near(actual, expected, message):
 
 def check(win):
     W = win.w[1]
+    win.show_module(1, "EQ")
+    settle()
+    for index in (1, 2, 0, 0):
+        W["eq_model_buttons"][index].emit("clicked")
+        settle()
+        assert win._eq_model_name(1) == win.EQ_MODELS[index]
+        assert [b.get_active() for b in W["eq_model_buttons"]] == [i == index for i in range(3)]
+    win.show_module(1, "GATE")
+    settle()
     gate, comp = W["gate_rack"], W["comp_curve"]
     xid = str(win.get_surface().get_xid())
 
@@ -100,6 +109,11 @@ def check(win):
     near(W["gth"].get_value(), -31.6, "vertical drag updates canonical value")
     click(knob, 2)
     near(W["gth"].get_value(), -40, "double-click reset")
+    W["gth"].set_value(-22)
+    input_event("keydown", "ctrl")
+    click(knob)
+    input_event("keyup", "ctrl")
+    near(W["gth"].get_value(), -40, "Ctrl-click reset")
     input_event("click", 4)
     near(W["gth"].get_value(), -39.16, "focused wheel step")
 

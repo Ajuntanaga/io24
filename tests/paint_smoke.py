@@ -385,6 +385,15 @@ def main(check=None):
                 print("MODULE -> %s" % module, flush=True)
             state["module_set"] = True
         if not state["fx_model_set"]:
+            if "IO24_PAINT_REVERB_ON" in os.environ:
+                win.rev_on.set_active(os.environ["IO24_PAINT_REVERB_ON"] == "1")
+            for field, value in json.loads(os.environ.get(
+                    "IO24_PAINT_REVERB_PARAMS", "{}")).items():
+                control = G.ReverbRack.SPECS[field][0]
+                getattr(win, control).set_value(value)
+            if "IO24_PAINT_REVERB_MOTION" in os.environ:
+                win.rev_mod.set_active(
+                    os.environ["IO24_PAINT_REVERB_MOTION"] == "1")
             model_name = os.environ.get("IO24_PAINT_FX_MODEL", "").lower()
             if model_name:
                 try:
@@ -467,7 +476,9 @@ def main(check=None):
                 return True
             for _ in range(3):
                 win.queue_draw()
-                while GLib.MainContext.default().pending():
+                deadline = time.monotonic() + .02
+                while (GLib.MainContext.default().pending()
+                       and time.monotonic() < deadline):
                     GLib.MainContext.default().iteration(False)
             if capture_dir:
                 if (page_name == "ch" and
@@ -521,7 +532,9 @@ def main(check=None):
         # force every canvas on screen to repaint a few times
         for _ in range(3):
             win.queue_draw()
-            while GLib.MainContext.default().pending():
+            deadline = time.monotonic() + .02
+            while (GLib.MainContext.default().pending()
+                   and time.monotonic() < deadline):
                 GLib.MainContext.default().iteration(False)
         return True
 

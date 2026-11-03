@@ -4957,3 +4957,138 @@ The wheel built successfully at
 `/tmp/io24-orange-release-wheel/io24-0.1.0-py3-none-any.whl`.
 The 107-file public allowlist and credential scan passed. Public commit
 `bee467b` was pushed successfully to `Ajuntanaga/io24:io24-multiband-insert`.
+
+### White powder coat, chrome toggles and EQ mesh depth, 2026-11-02
+
+Completed the requested refinements in the installed Host worktree:
+
+- Passive and Vintage EQ ears now match their white faceplates. Fine,
+  deterministic powder-coat grain covers the white metal surfaces.
+- Power switches use oversized, thick chrome amplifier-style bats with
+  threaded sockets, hex nuts and physical shading. Pointer targets cover the
+  full lever in both positions; labels and keyboard focus remain clear.
+- All three EQ displays have deeper woven response meshes with shaded facets.
+  The front edge still follows the actual EQ curve; receding copies are a
+  visual treatment, not audio history. No new animation timer was introduced.
+- Limiter knobs retain flat tops, with white powder coat and solid, grooved
+  skirts. Knob texture rotates while illumination stays fixed. No underlighting.
+
+Focused rack/parameter verification ran 234 tests successfully (one skipped).
+Added checks exercise full toggle-tip hit areas and confirm limiter parameter
+values are preserved while switching power. Diff whitespace checks pass.
+One code/visual review is complete. Actual GTK captures of all five racks in
+both power states at 1440 px and the 1042 px minimum width are saved under
+`/tmp/io24-ivory-refinements/`. Final renders were inspected after correcting
+the limiter skirt grooves and Standard EQ pilot-light clearance.
+
+Captures use fake USB/audio, synthetic telemetry and disabled session writes.
+No live device, audio graph, firmware or Wine operation occurred. Reopening
+Host loads these refinements; no separate binary build is required. These
+refinements are local and uncommitted; the latest public commit remains
+`bee467b`. Do not push private worktree history.
+
+### Larger sculpted chrome power toggles, 2026-11-02
+
+Refined the HPF, Limiter and all three EQ switches again per user feedback.
+The common renderer now uses a broader rounded chrome bat, faceted hex-nut
+bevels, a larger machined washer, nested socket rings and directional metal
+reflections. Hit regions and focus outlines cover the larger hardware.
+EQ switch centres are raised slightly so the downward lever clears bottom trim;
+the shared geometry drives both paint and interaction.
+
+Verification: 141 focused tests ran successfully (one skipped), including
+power interaction and parameter preservation. Actual fake-device GTK captures
+at 1042 and 1440 px are in `/tmp/io24-toggle-final/`; minimum-width off-state
+captures, refreshed after the EQ clearance correction, are in
+`/tmp/io24-toggle-off/`. Rendered switches were visually inspected. No live
+USB/audio/firmware access. Changes remain local, uncommitted and unpushed.
+
+
+### 2026-11-02 — shared toggles, reset gestures, visible EQ model selector
+
+Latest requested UI work is implemented locally in reference-rack-compiler:
+- Extracted Gate/Comp metal toggle hardware into a shared Cairo renderer used
+  by HPF, Limiter, Standard/Passive/Vintage EQ and Reverb; Gate/Comp keep their
+  existing rendering. Reverb hit testing follows the lever bounds.
+- HPF and Limiter use darker, grooved powder-coated knob rims with stronger
+  edge shadows and shoulder definition.
+- Ctrl-click resets the existing nominal defaults for custom rack parameters,
+  dynamics knobs, general knobs and faders. Standard EQ handles Q/gain knobs
+  separately and restores frequency/gain for a graph node; ordinary double-click
+  band enable behavior remains intact. Ctrl gestures suppress dragging.
+- Slim ivory EQ model strip exposes Standard/Passive/Vintage, with orange
+  selection, keyboard focus and existing per-model parameter memory. Re-clicking
+  the active model leaves exactly one button selected.
+
+Verification: 143 focused unit tests ran, one skipped; compile and diff checks
+passed. Fake-device dynamics GTK smoke passed including actual Ctrl-click input
+and model selection checks. Captures at 1042/1440 px under
+`/tmp/io24-switch-selector/`; corrected orange selector at
+`/tmp/io24-selector-orange/01-ch.png`; Reverb shared switch at
+`/tmp/io24-shared-reverb-switch/01-fx.png`. Visuals inspected. No live USB,
+audio graph, firmware or Wine work. No commit/push. Host launcher uses this
+Python checkout, so reopening loads the changes.
+
+### 2026-11-02 — oversized switches, sharp HPF, redesigned Reverb
+
+Completed the next requested rack refinements in reference-rack-compiler:
+- Enlarged HPF, Limiter, Passive EQ and Vintage EQ metal toggles, with shared
+  paint/hit geometry and clearance from the bottom trim and corner screws.
+- Removed orange circular switch hover/focus outlines. Keyboard focus retains
+  neutral corner marks rather than a surrounding orange halo.
+- EQ model selector now has its own matching ivory rack ears, mounting slots
+  and powder-coated faceplate; the existing native model buttons remain intact.
+- HPF keeps its audio-reactive moving mesh, with a crisp response trace and
+  stronger grid lines replacing the soft overlapping trace/glow layers.
+- Reverb now has an ivory powder-coated chassis, matching ears, machined white
+  knobs, a larger shared metal power toggle and a full-width dark display over
+  an evenly spaced control row. Its orange perspective mesh uses bounded
+  geometry and follows reverb parameters/movement; it is not an audio analyzer.
+- Corrected Reverb power hit-test argument order so the whole visible lever
+  works in either position.
+
+Verification: 144 focused tests ran successfully (one skipped), covering layout,
+power hit regions and existing parameter behavior. The real GTK input smoke
+passed pointer/keyboard/reset/model/crossover/band checks with fake devices.
+Actual GTK captures at 1042 and 1440 px were inspected under
+`/tmp/io24-rack-refresh/` and `/tmp/io24-rack-clearance/`; the final Limiter
+switch-to-screw spacing is captured in `/tmp/io24-toggle-clearance-final/`.
+No live USB/audio graph, firmware or Wine access. No commit/push. Reopening
+Host loads the local Python changes; no binary build is needed.
+
+### 2026-11-02 — Reverb pseudo-3D mesh complete
+
+Completed the requested Reverb graphical continuation in reference-rack-compiler.
+- The display now has a raised 640-facet acoustic terrain: oblique perspective,
+  crossed triangular weave, directional facet lighting, dark cut sides, an
+  anchored floor and fine ivory seams/junctions. No blur/glow overlays on text.
+- Room size shapes decay, pre-delay leaves an empty interval before the mesh,
+  high-pass and return change relief, and Size Motion adds slow torsion. This
+  is a parameter illustration, not measured audio or an impulse-response plot.
+- Added 36 px of height for the display. Rack width and control bindings stay
+  intact, with the existing evenly spaced knobs and metal power toggle.
+- Geometry is rendered into one device-resolution Cairo texture per changed
+  frame, retaining only the current frame. Labels remain native GTK text.
+  The shared texture helper now bulk-copies bytes instead of letting GI marshal
+  a memoryview byte by byte. No new timer, history buffer or audio processing.
+- Paint smoke accepts synthetic Reverb settings and bounds its event-draining
+  loop; active animation previously prevented the capture from completing.
+
+Verification: 146 focused Host/effect/EQ tests ran successfully (one skipped),
+including mesh bounds at control extremes, connected topology and relief
+response. Fake-device GTK captures were inspected at 1440, 1042, 760 and 650 px,
+covering active default, maximum motion/pre-delay/filter and bypassed minimum
+settings. Captures: `/tmp/io24-reverb-texture-1440/`,
+`/tmp/io24-reverb-final-1042/`, `/tmp/io24-reverb-final-narrow/`,
+`/tmp/io24-reverb-final-off/`. Final display snapshot assembly measured a median
+10.37 ms at 1042 px and 9.59 ms at 760 px over six changing phases, versus
+24.24 ms for the initial individual-GSK-facet implementation. These are bounded
+software-rendered checks, not a sustained live-session performance measurement.
+`git diff --check` passes. No hardware, USB, audio graph or Wine access; no
+commit/push. The desktop launcher points at this worktree, so reopening Host
+loads the changes without a separate binary build. Current request is complete.
+
+### EQ model selector finish — 2026-11-02
+- Moved selector screws onto rack ears, clearing the EQ MODEL label at all widths.
+- Native three model toggles now have raised bevelled caps, dark metal unselected faces, orange selected faces, pressed shading and keyboard focus outlines.
+- Visually checked fake-device GTK captures at 1042 and 760 px; all three buttons switch model and exclusive selected state. EQ suites: 82 passed; diff whitespace check passed. No hardware, commits or push.

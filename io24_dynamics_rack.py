@@ -664,11 +664,8 @@ def _listen_button(cr, rect, name, active, focused=False):
         cr.stroke()
 
 
-def _power(cr, rect, on, focused):
-    x, y, w, h = rect
-    cx, cy = x + w / 2, y + h / 2 - 8
-    _engrave(cr, "POWER", cx, y - 53, 20, centered=True, bold=True)
-    _engrave(cr, "ON", cx, y - 20, 20, centered=True)
+def power_hardware(cr, cx, cy, on):
+    """Shared Gate/Comp metal toggle, in reference pixels."""
     _radial(cr, cx + 6, cy + 9, 48,
             [(0, (0, 0, 0, .9)), (.64, (0, 0, 0, .58)), (1, (0, 0, 0, 0))])
     # Bright lathed washer beneath a bevelled hex nut: each facet catches light
@@ -746,6 +743,14 @@ def _power(cr, rect, on, focused):
              (1, (.18, .25, .19, 1))])
     cr.restore()
     cr.restore()
+
+
+def _power(cr, rect, on, focused):
+    x, y, w, h = rect
+    cx, cy = x + w / 2, y + h / 2 - 8
+    _engrave(cr, "POWER", cx, y - 53, 20, centered=True, bold=True)
+    _engrave(cr, "ON", cx, y - 20, 20, centered=True)
+    power_hardware(cr, cx, cy, on)
     _jewel(cr, cx, y + h + 25, 15, on)
     if focused:
         _rect(cr, x - 3, y - 5, w + 6, h + 10, 8)

@@ -9,7 +9,7 @@ import random
 ORANGE = (1.0, .32, .055)
 CREAM = (.96, .925, .83)
 DARK_INK = (.12, .115, .10)
-LIGHT_MODELS = frozenset(("hpf", "passive", "vintage"))
+LIGHT_MODELS = frozenset(("hpf", "passive", "vintage", "selector", "reverb"))
 
 
 def ink(model):
@@ -97,6 +97,16 @@ def _glass(c, x, y, w, h):
     _line(c, [(x+10,y+h-6),(x+w-10,y+h-6)], (*ORANGE,.26), .7)
 
 
+def _powder_coat(c, x, y, width, height, seed=924, density=22):
+    """Fine raised enamel grain, clipped by the caller and baked into the paint."""
+    rng = random.Random(seed)
+    for _ in range(int(width * height / density)):
+        px, py = rng.uniform(x, x+width), rng.uniform(y, y+height)
+        r = rng.uniform(.28, .62)
+        _circle(c, px+.18, py+.25, r, (.24, .25, .23, .10))
+        _circle(c, px-.13, py-.17, r*.72, (1, 1, .98, .34))
+
+
 def chassis_surface(width, height, scale, model, screen):
     surface, c = _surface(width, height, scale)
     light = model in LIGHT_MODELS
@@ -117,19 +127,31 @@ def chassis_surface(width, height, scale, model, screen):
         (1,(.08,.087,.082,1)))
     _gradient(c, 0, 0, 0, height, stops)
     c.fill()
-    # Fine powder coat and short directional machining, baked once per size.
+    # These white units have integral coated ears, with only the thin
+    # folded perimeter and the mounting slots exposing the dark return.
+    coated_ears = model in ("passive", "vintage", "selector", "reverb")
+    if coated_ears:
+        for ex in (1, right):
+            _round(c, ex, 2, ear-1, height-4, 2)
+            _gradient(c, 0, 0, 0, height, stops)
+            c.fill()
+    # The white finish is stippled enamel, not horizontal brushed stripes.
     c.save()
-    c.rectangle(left+2, 4, right-left-4, height-8)
+    texture_left = 2 if coated_ears else left+2
+    texture_right = width-2 if coated_ears else right-2
+    c.rectangle(texture_left, 4, texture_right-texture_left, height-8)
     c.clip()
-    rng = random.Random(924)
-    for _ in range(int(width*height/80)):
-        px, py = rng.uniform(left+3,right-3), rng.uniform(4,height-4)
-        c.rectangle(px,py,.45+rng.random()*.7,.35)
-        c.set_source_rgba(0,0,0,.035 if light else .16)
-        c.fill()
-    for n in range(2, int(height), 3):
-        _line(c, [(left+3,n+.5),(right-3,n+.5)],
-              (1,1,.94,.06 if light else .025), .5)
+    if light:
+        _powder_coat(c, texture_left, 4, texture_right-texture_left, height-8)
+    else:
+        rng = random.Random(924)
+        for _ in range(int(width*height/80)):
+            px, py = rng.uniform(left+3,right-3), rng.uniform(4,height-4)
+            c.rectangle(px,py,.45+rng.random()*.7,.35)
+            c.set_source_rgba(0,0,0,.16)
+            c.fill()
+        for n in range(2, int(height), 3):
+            _line(c, [(left+3,n+.5),(right-3,n+.5)], (1,1,.94,.025), .5)
     c.restore()
     # Orange enamel seam, with a dark lower return: no coloured outer border.
     c.rectangle(left+1,height-6,right-left-2,2)
@@ -138,7 +160,8 @@ def chassis_surface(width, height, scale, model, screen):
     _line(c, [(left+1,height-3),(right-1,height-3)], (0,0,0,.7), 1)
     for ex in (0,width-ear):
         _line(c, [(ex+ear-1,4),(ex+ear-1,height-4)], (.6,.62,.57,.26), .7)
-        for ey in (height*.075,height*.89):
+        for ey in ((height/2-3.5,) if model == "selector" else
+                   (height*.075,height*.89)):
             sw, sh = ear*.57, max(7,height*.046)
             _round(c, ex+ear*.215,ey,sw,sh,sh/2)
             c.set_source_rgba(.38,.39,.36,.8)
@@ -146,20 +169,23 @@ def chassis_surface(width, height, scale, model, screen):
             _round(c, ex+ear*.215+.7,ey+.3,sw-1.4,sh-1.6,sh/2)
             c.set_source_rgba(.003,.005,.005,1)
             c.fill()
-    for px in (left+width*.016,right-width*.016):
-        for py in (height*.07,height*.91):
+    for px in ((ear/2, width-ear/2) if model == "selector" else
+               (left+width*.016,right-width*.016)):
+        for py in ((height/2,) if model == "selector" else
+                   (height*.07,height*.91)):
             _screw(c,px,py,max(3,width*.005))
     # A machined orange registration tab cuts into each side of the display.
-    x,y,w,h = screen
-    for px in (x-5,x+w+2):
-        c.rectangle(px,y+h*.22,3,h*.14)
-        c.set_source_rgba(*ORANGE,.95)
-        c.fill()
-    _glass(c,*screen)
+    if screen is not None:
+        x,y,w,h = screen
+        for px in (x-5,x+w+2):
+            c.rectangle(px,y+h*.22,3,h*.14)
+            c.set_source_rgba(*ORANGE,.95)
+            c.fill()
+        _glass(c,*screen)
     return surface
 
 
-def amplifier_knob_surface(radius, angle, accent=ORANGE):
+def amplifier_knob_surface(radius, angle, accent=ORANGE, powder_coated=False):
     """Ivory amplifier knob: rotating scalloped rubber skirt, flat cap.
 
     The index and knurling rotate with the control. World-space light stays
@@ -174,34 +200,66 @@ def amplifier_knob_surface(radius, angle, accent=ORANGE):
     for r,a in ((71,.08),(69,.13),(66,.24)):
         _circle(c,1.8,4.5,r,(0,0,0,a))
     _circle(c,0,1,64,(.012,.013,.012,1))
-    # Broad, tangible bakelite flutes rather than a serrated metallic disc.
+    if powder_coated:
+        c.arc(0,0,62.8,0,math.tau)
+        _gradient(c,-45,-54,45,54,(
+            (0,(.69,.73,.69,1)),(.38,(.49,.54,.50,1)),
+            (1,(.24,.29,.25,1))))
+        c.fill()
+    # The skirt has actual recesses and a separate bevel under the flat cap.
     for n in range(40):
         a = angle + n*math.tau/40
         p1=(math.cos(a)*55,math.sin(a)*55)
         p2=(math.cos(a)*62.3,math.sin(a)*62.3)
         light=max(0,math.cos(a+2.1))
-        _line(c,[p1,p2],(.12+light*.15,.12+light*.14,.105+light*.12,1),3.2)
-        _line(c,[(p1[0]+.6,p1[1]),(p2[0]+.6,p2[1])],(0,0,0,.8),.8)
+        tone = ((.34+light*.36,.37+light*.36,.34+light*.35,1)
+                if powder_coated else
+                (.12+light*.15,.12+light*.14,.105+light*.12,1))
+        _line(c,[p1,p2],tone,3.2)
+        _line(c,[(p1[0]+.6,p1[1]),(p2[0]+.6,p2[1])],
+              (0,0,0,.65 if powder_coated else .8),1.15)
     c.arc(0,0,54.5,0,math.tau)
-    _gradient(c,-42,-54,38,54, (
+    shoulder = (
+        (0,(.87,.91,.86,1)), (.27,(.74,.79,.74,1)),
+        (.63,(.46,.52,.47,1)), (1,(.22,.28,.24,1))) if powder_coated else (
         (0,(1,1,.94,1)), (.30,(.95,.93,.84,1)),
-        (.70,(.68,.65,.55,1)), (1,(.36,.34,.28,1))))
+        (.70,(.68,.65,.55,1)), (1,(.36,.34,.28,1)))
+    _gradient(c,-42,-54,38,54,shoulder)
     c.fill()
+    if powder_coated:
+        c.save()
+        c.arc(0,0,62.5,0,math.tau)
+        c.arc_negative(0,0,48,math.tau,0)
+        c.clip()
+        c.rotate(angle)
+        _powder_coat(c,-64,-64,128,128,seed=215,density=13)
+        c.restore()
     c.arc(0,-1,48,0,math.tau)
-    _gradient(c,-40,-48,34,48, (
+    cap = (
+        (0,(.995,1,.98,1)), (.45,(.96,.97,.94,1)),
+        (1,(.88,.90,.86,1))) if powder_coated else (
         (0,(1,.995,.94,1)), (.4,(.97,.95,.86,1)),
-        (1,(.83,.80,.69,1))))
+        (1,(.83,.80,.69,1)))
+    _gradient(c,-40,-48,34,48,cap)
     c.fill()
     c.arc(0,-1,47,0,math.tau)
     c.set_line_width(.8)
     c.set_source_rgba(1,1,.97,.8)
     c.stroke()
-    # Almost invisible concentric machining on the flat cap, with no bump.
-    for r in range(16,46,3):
-        c.arc(0,-1,r,0,math.tau)
-        c.set_source_rgba(.35,.31,.22,.035)
-        c.set_line_width(.45)
-        c.stroke()
+    if powder_coated:
+        c.save()
+        c.arc(0,-1,46.5,0,math.tau)
+        c.clip()
+        c.rotate(angle)
+        _powder_coat(c,-48,-49,96,96,seed=716,density=10)
+        c.restore()
+    else:
+        # Almost invisible concentric machining on the flat cap, with no bump.
+        for r in range(16,46,3):
+            c.arc(0,-1,r,0,math.tau)
+            c.set_source_rgba(.35,.31,.22,.035)
+            c.set_line_width(.45)
+            c.stroke()
     dx,dy=math.cos(angle),math.sin(angle)
     _line(c,[(dx*20,dy*20),(dx*43,dy*43)],(.12,.105,.075,1),4)
     # Recessed orange index continues down the shoulder, fixed to the body.
@@ -209,44 +267,28 @@ def amplifier_knob_surface(radius, angle, accent=ORANGE):
     return surface
 
 
+def toggle_contains(cx, cy, radius, x, y):
+    """Cover the whole bat in either position, with a comfortable minimum hit area."""
+    return (radius > 0 and abs(float(x)-cx) <= max(18, radius*1.5)
+            and abs(float(y)-cy) <= max(24, radius*2.1))
+
+
 def toggle_surface(radius, active):
-    """Short chrome bat lever inside the established circular hit target."""
-    import cairo
-    surface,c=_surface(math.ceil(radius*4),math.ceil(radius*3))
-    c.translate(surface.get_width()/2,surface.get_height()/2)
-    c.scale(radius/12,radius/12)
-    c.set_line_cap(cairo.LINE_CAP_ROUND)
-    _circle(c,1,2,11.5,(0,0,0,.55))
-    _circle(c,0,0,10.5,(.02,.02,.018,1))
-    c.move_to(9,0)
-    for n in range(1,7):
-        c.line_to(9*math.cos(n*math.tau/6),9*math.sin(n*math.tau/6))
-    _gradient(c,-8,-8,8,8,((0,(1,1,.95,1)),(.35,(.62,.64,.61,1)),
-                          (.55,(.17,.19,.18,1)),(1,(.65,.66,.61,1))))
-    c.fill()
-    _circle(c,0,0,5.6,(.05,.055,.05,1))
-    tip=-9 if active else 9
-    _line(c,[(1.5,2),(1.5,tip+2)],(0,0,0,.6),7)
-    c.move_to(0,2 if active else -2)
-    c.line_to(0,tip)
-    _gradient(c,-4,0,4,0,((0,(.15,.16,.15,1)),(.32,(.86,.88,.84,1)),
-                         (.50,(1,1,.96,1)),(.70,(.44,.47,.44,1)),
-                         (1,(.10,.12,.11,1))))
-    c.set_line_width(6)
-    c.stroke()
-    _line(c,[(-.7,tip-1),(-.7,tip+1)],(1,1,.98,.9),2)
-    _circle(c,-18,0,3.8,(.06,.05,.035,1))
-    _circle(c,-18,0,2.5,(*ORANGE,1) if active else (.22,.12,.055,1))
-    if active:
-        _circle(c,-18.5,-.6,.8,(1,.91,.62,1))
+    """Use exactly the Gate/Comp hardware on every effects rack."""
+    from io24_dynamics_rack import power_hardware
+    size = math.ceil(radius * 5.8)
+    surface, c = _surface(size, size)
+    c.translate(size / 2, size / 2)
+    c.scale(radius / 35, radius / 35)
+    power_hardware(c, 0, 0, active)
     return surface
 
 
-def response_volume_surface(points, baseline, rect, colour, scale):
+def response_volume_surface(points, baseline, rect, colour, scale, mesh_depth=False):
     """Extrude the supplied response into a bounded, translucent wire volume.
 
     Front edge retains exact data coordinates. Receding copies are a spatial
-    projection, not invented audio history. At most 97 samples and 12 rows,
+    projection, not invented audio history. At most 97 samples and 18 rows,
     independent of the display's pixel count.
     """
     x,y,w,h=rect
@@ -262,6 +304,9 @@ def response_volume_surface(points, baseline, rect, colour, scale):
     base=baseline-y
     def project(p,t):
         px,py=p
+        if mesh_depth:
+            return (w*.49+(px-w*.49)*(1-t*.24)+w*.035*t,
+                    base-h*.34*t+(py-base)*(1-t*.58))
         return (w*.50+(px-w*.50)*(1-t*.18)+w*.035*t,
                 h*.18+(py-h*.18)*(1-t*.38)-h*.09*t)
     # Warm optical density below the real envelope.
@@ -273,7 +318,7 @@ def response_volume_surface(points, baseline, rect, colour, scale):
     _gradient(c,0,min(p[1] for p in front),0,h,
               ((0,(*colour,.26)),(1,(*colour,.015))))
     c.fill()
-    rows=12
+    rows=18 if mesh_depth else 12
     # Back-to-front translucent ribbons form an illuminated curved object.
     for row in range(rows,0,-1):
         t=row/rows
@@ -283,12 +328,25 @@ def response_volume_surface(points, baseline, rect, colour, scale):
         for p in back[1:]: c.line_to(*p)
         for p in reversed(near): c.line_to(*p)
         c.close_path()
-        c.set_source_rgba(*colour,.023+.018*(1-t))
+        c.set_source_rgba(*colour,(.05 if mesh_depth else .023)+.018*(1-t))
         c.fill()
-        _line(c,back,(*colour,.13+.30*(1-t)),.55+.35*(1-t))
+        _line(c,back,(*colour,.17+.30*(1-t)),.55+.35*(1-t))
+        if mesh_depth:
+            # Diagonal threads and shaded facets make one woven surface;
+            # their heights come exclusively from the supplied EQ response.
+            for i in range(0,len(front)-2,2):
+                a,b,d = back[i],back[i+2],near[i+2]
+                slope = min(1,abs(front[i+2][1]-front[i][1])/max(h*.08,1))
+                c.move_to(*a)
+                c.line_to(*b)
+                c.line_to(*d)
+                c.close_path()
+                c.set_source_rgba(*colour,.018+.055*slope)
+                c.fill()
+                _line(c,[a,d],(*colour,.11+.09*(1-t)),.5)
     for i in range(0,len(front),max(1,len(front)//36)):
         _line(c,[project(front[i],j/rows) for j in range(rows+1)],
-              (*colour,.23),.6)
+              (*colour,.36 if mesh_depth else .23),.65)
     # A dashed projected zero plane makes depth legible at flat EQ settings.
     for n in range(11):
         p=(w*n/10,base)
@@ -296,4 +354,104 @@ def response_volume_surface(points, baseline, rect, colour, scale):
     _line(c,front,(*colour,.14),7)
     _line(c,front,(*colour,.28),3)
     _line(c,front,(1,.66,.32,.95),1.1)
+    return surface
+
+
+def reverb_mesh_project(point, rect):
+    """Oblique camera shared by the surface, plinth and depth markers."""
+    x, y, w, h = rect
+    t, lane, relief = point
+    far = (1.0 - lane) * .5
+    return (x + w * (.025 + t * .84 + far * .11),
+            y + h * (.98 - far * .36 - t * .12 - relief * .62))
+
+
+def reverb_facet_light(triangle):
+    """Diffuse face lighting in world space, independent of window size."""
+    a, b, c = triangle
+    u = ((b[0]-a[0])*3.0, (b[1]-a[1])*.65, b[2]-a[2])
+    v = ((c[0]-a[0])*3.0, (c[1]-a[1])*.65, c[2]-a[2])
+    nx, ny, nz = (u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2],
+                  u[0]*v[1]-u[1]*v[0])
+    length = max(1e-9, math.sqrt(nx*nx + ny*ny + nz*nz))
+    return max(0.0, min(1.0, (-.35*nx - .45*ny + .82*nz) / length))
+
+
+def reverb_mesh_surface(width, height, scale, mesh, triangles, gap, active):
+    """Rasterize one bounded chamber frame, with depth-ordered 3D facets.
+
+    Cairo draws the small display into one native-resolution GTK texture;
+    hundreds of individual GSK stroke/fill nodes cost too much per frame.
+    Geometry and parameter state belong to the caller. No audio or timers.
+    """
+    surface, c = _surface(width, height, scale)
+    lit = 1.0 if active else .30
+    viewport = (17, 23, width - 34, height - 43)
+    project = lambda point: reverb_mesh_project(point, viewport)
+    base = lambda point: project((point[0], point[1], 0.0))
+    projected = {p: project(p) for row in mesh["rows"] for p in row}
+    c.rectangle(8, 20, width - 16, height - 36)
+    c.clip()
+
+    def polygon(points, colour, edge=None):
+        c.new_path()
+        c.move_to(*points[0])
+        for point in points[1:]:
+            c.line_to(*point)
+        c.close_path()
+        c.set_source_rgba(*colour)
+        if edge is None:
+            c.fill()
+        else:
+            c.fill_preserve()
+            c.set_source_rgba(*edge)
+            c.set_line_width(.65)
+            c.stroke()
+
+    # The floor and the volume share a camera. Pre-delay is an empty stretch
+    # of floor up to the ignition edge; the camera never moves with a control.
+    corners = [project(p) for p in ((0, -1, 0), (1, -1, 0),
+                                    (1, 1, 0), (0, 1, 0))]
+    polygon(corners, (.08*lit, .035*lit, .012*lit, 1))
+    for index in range(9):
+        lane = -1 + index / 4
+        _line(c, [project((0, lane, 0)), project((1, lane, 0))],
+              (*ORANGE, .13*lit), .6)
+    for index in range(25):
+        t = index / 24
+        _line(c, [project((t, -1, 0)), project((t, 1, 0))],
+              (*ORANGE, (.22 if index % 4 == 0 else .11)*lit), .6)
+    _line(c, corners + corners[:1], (*ORANGE, .38*lit), .8)
+    _line(c, [project((gap, -1, 0)), project((gap, 1, 0))],
+          (*CREAM, .42*lit), .8)
+
+    # 640 triangles: back-to-front opaque faces and fine cross-weaving.
+    for triangle in sorted(triangles,
+                           key=lambda tri: sum(p[1] - p[0]*.24 for p in tri)):
+        relief = sum(p[2] for p in triangle) / 3
+        light = reverb_facet_light(triangle)
+        shade = .10 + .34*light + .20*relief
+        polygon([projected[p] for p in triangle],
+                (shade*lit, (.025 + shade*.24)*lit,
+                 (.009 + shade*.035)*lit, 1),
+                (1, .25 + light*.20, .065, (.26 + light*.29)*lit))
+
+    # Dark cut faces connect the moving skin to its floor.
+    for edge in (mesh["columns"][0], mesh["rows"][-1]):
+        for a, b in zip(edge, edge[1:]):
+            polygon([projected[a], projected[b], base(b), base(a)],
+                    (.13*lit, .031*lit, .008*lit, 1))
+        _line(c, [projected[p] for p in edge], (*ORANGE, .92*lit), 1)
+        for point in edge[::2]:
+            _line(c, [base(point), projected[point]], (*ORANGE, .26*lit), .6)
+
+    # Ivory seams and sparse illuminated junctions; no fuzzy glow passes.
+    for index in (0, len(mesh["rows"]) // 2):
+        _line(c, [projected[p] for p in mesh["rows"][index]],
+              (*CREAM, (.36 if index == 0 else .82)*lit), .85)
+    for row in mesh["rows"][2:-1:3]:
+        for point in row[2:-1:5]:
+            if point[2] > .13:
+                px, py = projected[point]
+                _circle(c, px, py, .85, (*CREAM, .80*lit))
     return surface

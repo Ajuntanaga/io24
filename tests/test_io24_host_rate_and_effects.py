@@ -18,6 +18,7 @@ from unittest import mock
 
 import io24gtk
 import io24_rack_reference
+import io24_retro_rack
 
 
 class _Value:
@@ -546,23 +547,36 @@ class ReverbRackTests(unittest.TestCase):
                 self.assertGreaterEqual(cy - radius, fy)
                 self.assertLessEqual(cy + radius, fy + fh)
 
-    def test_display_sits_between_the_left_and_right_knobs(self):
-        for width in (600, 680, 1040):
-            layout = io24gtk.reverb_rack_layout(width, 220)
-            dx, _dy, dw, _dh = layout["display"]
-            left_edge = layout["size"][0] + layout["size"][2]
-            right_edge = layout["hp"][0] - layout["hp"][2]
-            self.assertGreater(dx, left_edge)
-            self.assertLess(dx + dw, right_edge)
-            self.assertGreaterEqual(dw, 160)
+    def test_display_sits_above_an_even_control_row(self):
+        for width in (600, 1042, 1440):
+            layout = io24gtk.reverb_rack_layout(width, 300)
+            dx, dy, dw, dh = layout["display"]
+            controls = [layout[field] for field in
+                        ("predelay", "size", "hp", "mix", "movement", "power")]
+            self.assertGreaterEqual(dw, 400)
+            for cx, cy, radius in controls:
+                self.assertLess(dy + dh, cy - radius - 26)
+            steps = [controls[i+1][0] - controls[i][0] for i in range(5)]
+            for step in steps:
+                self.assertAlmostEqual(step, steps[0])
 
-    def test_size_motion_switch_is_separate_from_its_depth_knob(self):
-        for width in (600, 680, 1040):
-            layout = io24gtk.reverb_rack_layout(width, 220)
+    def test_size_motion_switch_is_in_the_header(self):
+        for width in (600, 1042, 1440):
+            layout = io24gtk.reverb_rack_layout(width, 300)
             tx, ty, tr = layout["motion_power"]
-            kx, ky, kr = layout["movement"]
-            self.assertEqual(tx, kx)
-            self.assertLess(ty + tr, ky - kr)
+            self.assertLess(ty + tr, layout["display"][1])
+            self.assertLess(tx + tr, layout["face"][0] + layout["face"][2])
+
+    def test_power_target_covers_both_lever_positions(self):
+        for width in (600, 1042, 1440):
+            layout = io24gtk.reverb_rack_layout(width, 300)
+            rack = SimpleNamespace(_layout=lambda: layout,
+                                   CONTROL_ORDER=io24gtk.ReverbRack.CONTROL_ORDER)
+            cx, cy, radius = layout["power"]
+            for tip in (-2.0, 0, 2.0):
+                self.assertEqual(io24gtk.ReverbRack._control_at(
+                    rack, cx, cy + radius * tip), "power")
+            self.assertIsNone(io24gtk.ReverbRack._control_at(rack, 0, 0))
 
     def test_rack_readouts_use_the_existing_control_units(self):
         text = io24gtk.ReverbRack._value_text
@@ -620,6 +634,41 @@ class ReverbRackTests(unittest.TestCase):
         self.assertIn(mesh["rows"][1][1], first_cell[0])
         self.assertIn(mesh["rows"][0][2], second_cell[1])
         self.assertIn(mesh["rows"][1][1], second_cell[1])
+
+    def test_mesh_relief_and_projection_remain_inside_viewport_at_extremes(self):
+        viewport = (17, 23, 500, 102)
+        for size, mix, pre, hp in ((0, 0, .0001, 0), (1, 1, .25, 500),
+                                   (1, 1, .0001, 0), (.5, 1, .02, 200)):
+            profile = io24gtk.reverb_field_profile(size, mix, pre, hp)
+            for phase in (0, .7, 2.3, 4.8):
+                mesh = io24gtk.reverb_mesh_geometry(
+                    profile, phase, .30, rows=11, columns=33)
+                self.assertEqual(len(io24gtk.reverb_mesh_triangles(mesh)), 640)
+                for row in mesh["rows"]:
+                    self.assertEqual(row[0][0], profile["gap"])
+                    for point in row:
+                        px, py = io24_retro_rack.reverb_mesh_project(point, viewport)
+                        self.assertGreaterEqual(point[2], 0)
+                        self.assertGreaterEqual(px, viewport[0])
+                        self.assertLessEqual(px, viewport[0] + viewport[2])
+                        self.assertGreaterEqual(py, viewport[1])
+                        self.assertLessEqual(py, viewport[1] + viewport[3])
+
+    def test_mesh_relief_tracks_return_and_high_pass_and_moves_in_height(self):
+        def surface(mix, hp, phase=0):
+            return io24gtk.reverb_mesh_geometry(
+                io24gtk.reverb_field_profile(.7, mix, .02, hp), phase)
+
+        full = surface(1, 0)
+        quiet = surface(0, 0)
+        filtered = surface(1, 500)
+        moving = surface(1, 0, .8)
+        for full_row, quiet_row, filtered_row in zip(
+                full["rows"], quiet["rows"], filtered["rows"]):
+            for a, b, c in zip(full_row, quiet_row, filtered_row):
+                self.assertGreater(a[2], b[2])
+                self.assertGreater(a[2], c[2])
+        self.assertNotEqual(full["rows"][3][3][2], moving["rows"][3][3][2])
 
 
 class ReferenceRackTests(unittest.TestCase):
@@ -691,6 +740,19 @@ class ReferenceRackTests(unittest.TestCase):
         rack.get_scale_factor = lambda: 1
         rack.get_pango_context = lambda: SimpleNamespace(get_serial=lambda: 0)
         return rack
+
+    def test_ctrl_click_resets_parameter_without_toggling_power(self):
+        rack = self._rack(threshold=-28.0, power=True)
+        rack._control_at = lambda x, y: "threshold"
+        gesture = SimpleNamespace(
+            get_current_event_state=lambda: io24gtk.Gdk.ModifierType.CONTROL_MASK,
+            set_state=mock.Mock())
+        rack._clicked(gesture, 1, 0, 0)
+        self.assertEqual(rack.bindings["threshold"]["widget"].get_value(),
+                         rack.spec["controls"]["threshold"]["default"])
+        self.assertTrue(rack._power_active())
+        rack._drag_begin(gesture, 0, 0)
+        self.assertIsNone(rack.drag_field)
 
     def test_drag_fraction_changes_only_the_backing_widget(self):
         rack = self._rack(threshold=-28.0, release=0.4)
@@ -773,6 +835,18 @@ class ReferenceRackTests(unittest.TestCase):
             rack.bindings["threshold"]["widget"].get_value(), -7.99)
         rack._drag_end()
         self.assertIsNone(rack.drag_field)
+
+    def test_full_limiter_toggle_lever_is_clickable_in_both_positions(self):
+        rack = self._rack(threshold=-17.0, release=.73, power=False)
+        cx, cy, radius = rack._lamp_layout()
+        for direction, expected in ((1, True), (-1, False)):
+            tip_y = cy + direction * radius * 1.2 * 1.65
+            self.assertEqual(rack._control_at(cx, tip_y), "power")
+            rack._clicked(SimpleNamespace(set_state=lambda _state: None),
+                          1, cx, tip_y)
+            self.assertEqual(rack.bindings["power"]["widget"].get_active(), expected)
+            self.assertEqual(rack.bindings["threshold"]["widget"].get_value(), -17.0)
+            self.assertEqual(rack.bindings["release"]["widget"].get_value(), .73)
 
     def test_keyboard_navigation_and_power_use_the_bound_switch(self):
         rack = self._rack(power=False)

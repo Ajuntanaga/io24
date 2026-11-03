@@ -1108,8 +1108,30 @@ class AlternateEqRackContractTests(unittest.TestCase):
         self.assertEqual(len(layout["band_power"]), 4)
         self.assertEqual(len(layout["band_mode"]), 4)
         self.assertEqual(layout["flatten"], (1450.0, 72.0, 58.0, 24.0))
-        self.assertEqual(layout["power"], (2032.0, 441.0, 20.0))
+        # The larger chrome bat sits 12 reference pixels above the old lamp
+        # centre so its off position clears the lower faceplate trim.
+        self.assertEqual(layout["power"], (2032.0, 429.0, 20.0))
         self.assertTrue(os.path.isfile(io24gtk.standard_eq_faceplate_path()))
+
+    def test_eq_toggle_tips_use_the_same_geometry_as_the_painted_hardware(self):
+        for width in (900, 1220):
+            height = width * 482 / 2156
+            standard = SimpleNamespace(get_width=lambda: width,
+                                       get_height=lambda: height)
+            cx, cy, radius = io24gtk.standard_eq_rack_layout(width, height)["power"]
+            for direction in (-1, 1):
+                self.assertTrue(io24gtk.EQCurve._power_at(
+                    standard, cx, cy + direction * radius * 1.65))
+            for model in ("passive", "vintage"):
+                rack = SimpleNamespace(get_width=lambda: width,
+                                       get_height=lambda: height,
+                                       _view=lambda: {"model": model})
+                rack._power_geometry = lambda: io24gtk.AlternateEqRack._power_geometry(rack)
+                cx, cy, radius = rack._power_geometry()
+                for direction in (-1, 1):
+                    self.assertTrue(io24gtk.AlternateEqRack._power_at(
+                        rack, cx, cy + direction * radius * 1.65))
+                self.assertFalse(io24gtk.AlternateEqRack._power_at(rack, -100, -100))
 
     def test_standard_q_knobs_cover_the_exact_existing_range_logarithmically(self):
         low, high = io24_presets.STANDARD_EQ_Q_RANGE

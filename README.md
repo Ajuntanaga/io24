@@ -447,35 +447,27 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 Vendor installers, DLLs, firmware, extracted factory preset bodies, decompiler
 output, local captures, personal paths, device serials, VMs, and agent work
 records are not part of the public repository or Python wheel. Optional factory
-data and exact alternate-EQ coefficients must be recovered from your own local
-Universal Control installation. The Host remains useful without that optional
+preset data must be recovered from your own local Universal Control
+installation. All three EQ models work without that installation. The Host remains useful without that optional
 catalog.
 
 [PUBLICATION.md](PUBLICATION.md) records the complete clean-source boundary and
 the release checks used before publishing.
 
-## Optional Passive and Vintage EQ setup
+## Three native EQ models
 
-These two EQ models require the exact Universal Control 4.7.2
-`dspusbdevice.dll`; it is not bundled with this project. Standard EQ does not
-require it. Using your own Windows installer, run from the extracted io24 folder:
+Standard, Passive, and Vintage EQ work out of the box on Linux. No Windows
+DLL, Universal Control installation, Wine, or disassembler is needed for EQ.
+The existing controls, defaults, live routing, and preset coefficient layout
+are preserved.
 
-```bash
-sudo apt install p7zip-full
-.venv/bin/io24-eq-setup "/path/to/Universal Control 4.7.2 installer.exe"
-```
+Passive and Vintage use native circuit calculations with explicit binary32
+rounding. The regression fixture covers 808 reference cases across 44.1, 48,
+88.2, and 96 kHz; every coefficient matches the retained instruction
+interpreter's output byte for byte. This verifies calculation parity, not a
+new hardware or listening test.
 
-The command extracts only the DLL into temporary storage, verifies its exact
-size and SHA-256, then installs it at `~/.cache/io24/re/dspusbdevice.dll`. It
-does not run the installer, use Wine, download files, or access the io24.
-Restart the Host afterwards. The setup command itself does not need sudo.
-
-Installer extraction depends on 7-Zip recognizing the archive format. The
-setup command has been checked with the real pinned DLL and a test archive;
-extraction from the original UC 4.7.2 installer has not yet been verified.
-If 7-Zip cannot read your installer format, supply an already-extracted
-`dspusbdevice.dll` from your own installation to the same command. Only the
-pinned build is accepted; other 4.7.2 builds or newer versions may not match.
-An existing different cache file is preserved. `--destination PATH` selects
-another location; set `IO24_UC472_DSPUSBDEVICE` to that path when launching
-the Host. If that variable is already set, setup uses it by default.
+For development only, the legacy oracle and `io24-eq-setup` remain available.
+The optional `re` dependency installs its disassembler. A developer can supply
+the pinned UC 4.7.2 DLL locally for comparison; it is never included in the
+source release or wheel and is not used by the Host's EQ calculations.

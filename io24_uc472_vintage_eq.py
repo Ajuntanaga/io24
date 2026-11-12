@@ -34,7 +34,6 @@ import sys
 import threading
 from pathlib import Path
 
-from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 
 DSP_SHA256 = "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28"
 DSP_SIZE = 4_979_672
@@ -126,6 +125,8 @@ class Machine:
 
     def __init__(self, image, trace=False):
         self.image = image
+        from capstone import Cs, CS_ARCH_X86, CS_MODE_64
+
         self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         self.md.detail = True
         self.trace = trace

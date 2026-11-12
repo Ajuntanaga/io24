@@ -1,0 +1,8925 @@
+{
+ "oracle_sha256": "de685e89c88b191b9709145056aa37d58a76f141a53a9c1533dff917f611fd28",
+ "cases": [
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -16.0,
+    44100.0
+   ],
+   "hex": "cef37f3f98aa2b40ebae2bc0d2c118c053c218408e45343f773e34bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -6.0,
+    44100.0
+   ],
+   "hex": "c3ff7f3fc5c73840d9c738c074b931c076b93140dfc5633fbbc563bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -1.5,
+    44100.0
+   ],
+   "hex": "f3ff7f3fc7de3840cbde38c031e531c031e531400819643f001964bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "0100803f21e0384022e038c0bbe731c0bce73140d61d643fd71d64bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    1.5,
+    44100.0
+   ],
+   "hex": "0800803fd4de3840d2de38c03ae531c03ce531400c19643f161964bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    6.0,
+    44100.0
+   ],
+   "hex": "1e00803f05c83840f0c738c0a0b931c09eb93140f0c5633f13c663bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    16.0,
+    44100.0
+   ],
+   "hex": "1c06803f1ab72b40c9b22bc09bc918c01cc918400d47343f294e34bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -16.0,
+    44100.0
+   ],
+   "hex": "6cd47f3fee5c1f40626c1fc066ae01c02fb001406ff2083f14d908bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -6.0,
+    44100.0
+   ],
+   "hex": "14ff7f3ffac436404ec536c080e32dc089e32d40ac765c3f21765cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -1.5,
+    44100.0
+   ],
+   "hex": "cdff7f3f5af236406cf236c0f0382ec0f3382e40df175d3fc1175dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803f0ef536400ff536c0ee3d2ec0ef3d2e4034215d3f35215dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    1.5,
+    44100.0
+   ],
+   "hex": "1b00803f90f2364081f236c015392ec015392e40ed175d3f0d185dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    6.0,
+    44100.0
+   ],
+   "hex": "7500803ff6c53640a2c536c029e42dc020e42d40ec765c3f76775cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    16.0,
+    44100.0
+   ],
+   "hex": "cf15803f8a871f4015781fc046c601c07ec4014063f0083fc60909bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -16.0,
+    44100.0
+   ],
+   "hex": "9e617f3f947b0a40b9b30ac0ae2fb7bfa63cb73fae83863e59cb85be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -6.0,
+    44100.0
+   ],
+   "hex": "f8fb7f3f505f3240b96032c0189725c03f97254039d04c3fdfcd4cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -1.5,
+    44100.0
+   ],
+   "hex": "1fff7f3fe8bc324037bd32c09d4326c0a643264001104e3f7d0f4ebf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "ffff7f3fafc23240afc232c0d54d26c0d54d264093224e3f93224ebf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    1.5,
+    44100.0
+   ],
+   "hex": "7100803fd3bd324085bd32c0374426c02f44264032104e3fb6104ebf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    6.0,
+    44100.0
+   ],
+   "hex": "0202803f886332401c6232c0db9925c0b199254019d14c3f70d34cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    16.0,
+    44100.0
+   ],
+   "hex": "614f803fbe090b4074d10ac04aaeb7bf48a1b73f541e863e18d786be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -16.0,
+    44100.0
+   ],
+   "hex": "1fb97c3f06b1be3fd203c1bf7f2da5be6240a63e484544bee9e54b3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -6.0,
+    44100.0
+   ],
+   "hex": "94dd7f3ffa6122402e6e22c00c7b08c0757c084087e4173f7fd017bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -1.5,
+    44100.0
+   ],
+   "hex": "6ef87f3fd7662340866923c04d350ac09d350a406edc1a3f06d81abf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803f00792340007923c0c8500ac0c8500a40b8081b3fb8081bbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    1.5,
+    44100.0
+   ],
+   "hex": "ca03803f5c6e2340ad6b23c0b3390ac064390a409adc1a3f03e11abf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    6.0,
+    44100.0
+   ],
+   "hex": "3811803f07842240d37722c0d08e08c0698d0840eae4173ff6f817bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    16.0,
+    44100.0
+   ],
+   "hex": "dfa8813f8184c33fff29c1bf3b68a8bec951a73eb88a4ebec3d0463e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -16.0,
+    44100.0
+   ],
+   "hex": "f857003ff119493ff11949bfc683ef3d1e6fc33e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -6.0,
+    44100.0
+   ],
+   "hex": "903b4a3fe5de613fe5de61bfba21063ca7af4e3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -1.5,
+    44100.0
+   ],
+   "hex": "ab88713f0f15733f0f1573bf04048abda8befd3d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803fd2007a3fd2007abf4b41c8bd4b41c83d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    1.5,
+    44100.0
+   ],
+   "hex": "91aa873f11d2803f11d280bf997806be2648923d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    6.0,
+    44100.0
+   ],
+   "hex": "fd07a23f19f68e3f19f68ebf99d182be0ecb29bc"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    16.0,
+    44100.0
+   ],
+   "hex": "8a50ff3f1b90c83f1b90c8bf29e942bfa2df6ebe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -16.0,
+    44100.0
+   ],
+   "hex": "9f89e53e730b143f730b14bf2562713e51c5a13e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -6.0,
+    44100.0
+   ],
+   "hex": "c5b9433f667c283f667c28bfef52053e018cd73d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -1.5,
+    44100.0
+   ],
+   "hex": "d9a16f3f3103373f310337bf5120623d80080f3c"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803f25ee3c3f25ee3cbf09fcc93c09fcc9bc"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    1.5,
+    44100.0
+   ],
+   "hex": "2dbe883f4d83433f4d8343bf8bcd18bc4e9271bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    6.0,
+    44100.0
+   ],
+   "hex": "046ba73f285f5c3f285f5cbf6ef60cbeaf612ebe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    16.0,
+    44100.0
+   ],
+   "hex": "afc10e40b81ca53fb81ca5bfaf6b34bf119b06bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -16.0,
+    44100.0
+   ],
+   "hex": "c861c93ec034903ec03490be02c2b73e6db87d3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -6.0,
+    44100.0
+   ],
+   "hex": "e5ca3c3f5368a63e5368a6be0c39853e6d95183b"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -1.5,
+    44100.0
+   ],
+   "hex": "14916d3fbf90b63ebf90b6be6ee3403e6a4feebd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803faf3dbd3eaf3dbdbea87f223ea47f22be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    1.5,
+    44100.0
+   ],
+   "hex": "8aee893f26bbc43e26bbc4be9066003ee2da4fbe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    6.0,
+    44100.0
+   ],
+   "hex": "ee90ad3f6ca5e13e6ca5e1be03e64ebbf2a5b4be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    16.0,
+    44100.0
+   ],
+   "hex": "36b722402b51373f2b5137bf494421bf909869bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -16.0,
+    44100.0
+   ],
+   "hex": "dbac623fecdede3fecdedebfa2503ebfc7a35b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -6.0,
+    44100.0
+   ],
+   "hex": "12b8743f57a1e43f57a1e4bf44d949bf3221553f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -1.5,
+    44100.0
+   ],
+   "hex": "22237d3ff313e83ff313e8bfc1c050bf9f9d533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "ffff7f3f3a5be93f3a5be9bf275053bf2750533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    1.5,
+    44100.0
+   ],
+   "hex": "9572813fdab3ea3fdab3eabf480256bf201d533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    6.0,
+    44100.0
+   ],
+   "hex": "87e6853f682bef3f682befbf57f45ebf4827533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    16.0,
+    44100.0
+   ],
+   "hex": "2b8f903f12b4fb3f12b4fbbfeb0d78bf95ef563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -16.0,
+    44100.0
+   ],
+   "hex": "5b1a4c3f4eccc43f4eccc4bf4ac10bbff0a63f3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -6.0,
+    44100.0
+   ],
+   "hex": "69a16b3f23fbcd3f23fbcdbfbe381ebf5597323f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -1.5,
+    44100.0
+   ],
+   "hex": "6ac47a3f9aa8d33f9aa8d3bf9ea329bf34df2e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803fb0ccd53fb0ccd5bfcbf12dbfcbf12d3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    1.5,
+    44100.0
+   ],
+   "hex": "c5ab823f4613d83f4613d8bf5c8532bfd32d2d3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    6.0,
+    44100.0
+   ],
+   "hex": "b0108b3f93c9df3f93c9dfbf9f0742bf3fe62b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    16.0,
+    44100.0
+   ],
+   "hex": "e48ba03f75d6f63f75d6f6bf1f6270bf584a2f3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -16.0,
+    44100.0
+   ],
+   "hex": "7447263f9287973f928797bfaf215cbef7c0103f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -6.0,
+    44100.0
+   ],
+   "hex": "838b5b3f0f2fa43f0f2fa4bfb603a2beb3ecea3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -1.5,
+    44100.0
+   ],
+   "hex": "376d763f9a76ac3f9a76acbff800c4be8826d73e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803f8daeaf3f8daeafbf7837d1be7837d13e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    1.5,
+    44100.0
+   ],
+   "hex": "fff8843fcd29b33fcd29b3bf4582dfbe4a9ecb3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    6.0,
+    44100.0
+   ],
+   "hex": "1141953f3d72bf3f3d72bfbf79f708bfaeeabc3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    16.0,
+    44100.0
+   ],
+   "hex": "f410c53fba4ae93fba4ae9bf29dc5ebf8074a93e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -16.0,
+    44100.0
+   ],
+   "hex": "d2c07c3e4c5ce63f003296bed5ef4ebf9200623d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -6.0,
+    44100.0
+   ],
+   "hex": "f193413f67dde93f5871abbf83a455bf7438173f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -1.5,
+    44100.0
+   ],
+   "hex": "92c16f3f99f5e83f2bb7d8bff0e853bf82aa433f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "0000803f034be83f034be8bf81a252bf81a2523f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    1.5,
+    44100.0
+   ],
+   "hex": "17ac883ff965e73f26bef8bf39ec50bf6544623f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    6.0,
+    44100.0
+   ],
+   "hex": "8a46a93f1ebae23f99a31ac0ddfb47bf78448d3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    16.0,
+    44100.0
+   ],
+   "hex": "eda48140ea1f983fd651e9c0c5e764be57985140"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "e50d7f3f9c8f553fda3153bf91f1763df40264bd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "f31f7f3f655d6e3f95b26bbf6ebf883da69c7cbd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "f8c97d3f129ff03fa098efbffbc761bf4687613f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "09dc7d3ff905fd3fbcd2fbbfb40e7abf9dda793f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    44100.0
+   ],
+   "hex": "6ddb7d3f3c26fc3f7ef5fabf8c5778bf3e23783f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "3b16803fd32ac13e8abab8be5ad1a93e683ca4be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "703f803ff708143f0ed10ebf73c4d43eb91ccebe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "21a47c3ff3fddf3ffc63dfbfb45542bf85af423f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "9ff67c3fbab7f93f617bf8bf307c73bf954f743f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    44100.0
+   ],
+   "hex": "7ff37c3f26d3f73fcd9ff6bf40d96fbfa7a6703f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "b640813fdffa8cbd7f50d03d8cfcd23eea68c8be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "7ce7813f777fa03e980489be88c72b3f6d9e24bf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "92cd793f32f4c13fa8d3c2bf493f0dbfa0040e3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "f61b7b3fc3e3f23f7b76f1bfd4ff65bf4d30693f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    44100.0
+   ],
+   "hex": "b70d7b3f6cefee3f08a5edbf45be5ebf6ac9613f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "7511823f76e090bee3c2a73e46c2be3e54f9b0be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    44100.0
+   ],
+   "hex": "3549833fba0c603ed8e31abe5d09423f1edf37bf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "90f9763fcbf8ac3f6486afbf8f25d7be4255d83e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    44100.0
+   ],
+   "hex": "726b793f8d32ed3f4e7febbfffd75abff65f603f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    44100.0
+   ],
+   "hex": "234f793f7d9fe73f0831e6bfe10351bfc837563f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "abf97f3f710ef83f0e08f8bf1fec9dbfcfe79d3f07580b3e1a530bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "bd5cc43fe8e1ec3f7a4df6bfe50d90bf1354173f4b73fb3d259f48bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "edab0d3e79981e404adc75bedaca0ac0492e0b3ef1c32b3f40806ebc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "84e2593efda91d40d0787fbeea8709c0d8e1743d197a2a3fd20e6bbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "487d2d3ffb8d16401be9c1bf4c3efabf4e6c993f16fe113f967aa8be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "cef97f3f9c54c93f7d4fc9bf1ea613bfcea1133f03eb64bea9e6643e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "d65cc43f1328be3f2c9faebf1c1200bf32190bbd4b8b4ebed5cda43d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "04c7433eb3361740172586be9c00febf525c9c3d6145153f0961073d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "c710963ed5ca15407d9572bef0b9fabfbc2ee4bc327d143f7164223c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "f8fd353fb9150b40c682b5bf0498d6bfc08f7e3f1a77e23edaab67be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "e6f97f3fe8b4a33fcfb0a3bfaf7943bd366c433d615c03bf6b59033f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "e85cc43f5f88983fe8ce69bf08cb4a3b388b09bf490bedbe35233d3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "ca5b8d3e205a0b40422a98beec1bd8bf48b49ebc8640e23e405ce03d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "c4bcd73eb6380940a0005ebe17ddd3bfc5d62bbe34c0e23e78e4003d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "474a423f9afdf43f8293a3bffd07a3bf3af0323ff5b2833e66c69ebd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "b7f97f3f8693e63f948de6bf66369abf2e329a3f98e9093eb0e409be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "8652ef3f21c3d53f501ee5bf90ec83bf129a243e47b3e73d0005e63b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "06ac0d3ecb1a10409cc855be89eaeabf4c8de73d73910d3f749044bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "4629823e72cb0e40ba0e65becb66e7bf33c4abbbcfda0b3feeb1a53b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "038d2e3f442e07401dafadbfa502cebfd49b7a3f521fe53ead1c82be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "d6f97f3fb3d9b73ffed4b7bfc8fd18bf50f9183f019162beab8c623e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "a252ef3f4c09a73f4bc18dbf5f61f1bebbfccbbe1d523ebe1df43cbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "1ec7433e06b908404ef65fbe35add6bf3213783d8e0ef63e0829df3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "0f03b33ec2b40640289638be811bd2bf5754cfbd3e53f43e52dc0dbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "071a373fb26af73f0128a0bf03ddafbfaaf74d3fabb8b13ed0e732be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "f3f97f3f013a923f4e3692bf90afdebd93a5de3def0202bffcff013f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "b852ef3f9969813fd7d10ebf9a68adbce84059bfd66cdabebcdad8bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "d85b8d3ee8b8f93f485170be9c27b6bfede2c2bcd079ba3ecaeab83d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "0461003f80aaf33f319fe3bdc537b0bf600d82bed202bc3efabdf9bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "0478433f493bd63f40978cbfe44284bff7660d3f45c24e3e7c2c75bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "b7f97f3fe529cf3f8824cfbfaecd96bf92c9963f08b8093e24b309be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "bbebf43f3672bf3fea93cfbfa05a7fbfe7aeab3d6620e53de1936a3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "0aac0d3eeab5054078c63ebe9379d6bfe279dc3df7cf093f30593fbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "3eca843e9e7204406bf54ebee202d3bf9abd81bc9d0f083f80c8c83b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "3fae2e3f6c28fa3f8631a0bf657abbbf6c56643f286fdd3ee8d67abe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "daf97f3f0f70a03fef6ba0bf3c4423bf953f233f9c3f62be453b623e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "daebf43f62b8903f64576cbf237d00bfecc8d2bee2343cbe7db2c0bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "23c7433e48a8fc3fa82a40be10a2c4bf06f2833d6a87ef3e843dd93c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "c197b63e43bcf83fe17e17be0a1dc0bf8228d6bdcdcfed3e947f33bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "c43c373fac36e33fedfc91bf2ef3a0bfe2703d3f95c2ab3ecf732cbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "f4f97f3fbda0753f7a9a75bf8d7f4fbe75784f3e3bd401bf48d1013f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "f2ebf43f5e31563f32b8b8be7db1d2bde0884fbfafffd7be36265dbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "d95b8d3e22efe43ffe6642bec9f6a7bfeaf4a4bb5587b53eea02b43d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "02e9023f0d07df3fc00d7dbddd0ca2bfc89f7bbee23ab73e5a301cbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "ec9c433f6c07c23f90e27abf032a75bf3a2f053f0dd5473e8e526cbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "c3f97f3f9c2cba3fc727babf4ed792bf4cd3923f468b083e648608be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "9ff20a40ad41a83fe8f1bcbf983a6bbf463981be98f7d53d32b46a3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "1eac0d3e85c0f23fb97823be66a1b4bf4a1cba3db2efe83eceb421bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "a7af933eb0edef3f7ae337be39c2b0bf805b7ebd7f20e53e7ece473c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "ce682f3fbc41e13f4dc48fbf9d159abfc42d3a3fb646b23e922846be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "e6f97f3fc9728b3f2a6f8bbf7daa2abfa7a52a3f805160be2f4d603e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "b0f20a40ad0f733f46002fbfa496fabe36892ebf06c12fbe22cdc0bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "36c7433ef9fce33f696f1abe52a2a5bf7a01603d596eca3ed998b73c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "9adcca3eab8ddf3fb45dd1bd5b91a0bfb5491ebe67f1c83e8045c4bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "c7ff373f5e4fca3fbea980bfa70384bfd1a3193fe34b8a3e443a08be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "02fa7f3f2da64b3fe7a04bbfe0398fbe5b358f3eb1b800bfbfb5003f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "bdf20a4047d0273fd4263abd231913be068683bf20b5c9becb445dbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "e45b8d3ed343cc3f46ea0bbe82898dbf6e7362bbe969993ec321983d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "9c36113fd590c53f1d25a83c5cdf86bfd2499abee0369c3ebb93a6bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "116c443f7d1fa93f5ea355bfa43048bf0c29d53e42f3203e18a33abd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "d8f97f3fb773383fc46e38bf93f183bf09ee833ff96b063e1d6706be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "64b126408dba223f94735bbf5c233cbf82ad5ebfee74bc3db9be043e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "3cac0d3e2b14a53f7f019bbd43c93abf335f713d0a9ca63ee84ce7bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "b0afaa3e1aada23f01ddd2bd9c9133bf4aa60ebeb6bda23e4da7b03c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "1b83303f11e9963f03b03cbf459514bf3a1eb03e6bf0613e1ee2ecbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "f9f97f3f1d00b63ed4fab5be477651bfac70513ff5d45cbe98d05c3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "76b12640c58d8a3e349bbf3d88a40dbfa09586bf7ccc1abe5a175abe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "54c7433e9d50963f12890ebd1ab62ebf16a8583d53ca903ee852833c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "8c15ea3ec14c923fde0dd23cd81125bf11d25fbe6726903e062e34bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "dd26393fb2ed7f3f845b19bf6f1303bf88bc973e4a522f3e00d4a2bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "14fa7f3fa20a7c3d1cfe7bbd82a325bf169f253f0771fdbe246bfd3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "85b126401c10bfbc56f05b3fad68d0be494d99bf71a8b1beec4afabe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "f45b8d3eef2e7d3f5825fd3c204f1bbf6af1303df0755b3ee4a0593d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "f829273fb9cf703f097b6a3ed1240ebf5c15b0be0a82653e412f17be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "7ca5453f228f3d3fbe86ccbea383d3be92f3683e973ccc3d04ebdebc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "ecf97f3f28a4a73e539fa7becb7676bf3670763f9e79043eca7404be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "95133e40c64d963e6acd10bf8d951cbf97e1adbfe2f4a63d8f2b433e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "53ac0d3e8273803fc8da13bdf878babee9b51a3dd1f1663e7048a0bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "ce4cbc3e7ea77c3f58318dbd4b14adbe1eb547beddcd5f3efa6deb3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "b756313fa230693fc4490fbf3b8e7cbe0c3a0a3ef208003e9cc06abd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "0cfa7f3f4f191abd471c1a3d1cc664bf18c0643f42a259beea9d593e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "aa133e402b6692bd90be043fea0e0ebfc824b5bf462309be6e53a0be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "6bc7433ee75f633f981aa33cca38b3be8cb3323d3ab3483e380b363c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "9ef7003f81dd5b3f4749b73df109a1beb7de8cbe8188493e20da72bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "0b043a3f474c3b3ff20cd3be63b367be55d9fa3dcbd3c63d7c5021bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "29fa7f3ff4c1a9bebcbea93e9e8756bf0d82563f71c5f9be91bff93e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "ba133e404e18bbbedf1cb23fa95c02bfd0fdbabf9e639dbe88ff37bf"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "005c8d3e9bed333f2016e13d3692a7be3740593d191a183e6fd5163d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "79dd373f542a283f07baad3ede0d8ebec58acdbeeb6a263eecd74abe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "6990463fd6dcf13e8ba84bbea38a49be34d2d53da617683dae725cbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "cef97f3fa7986cbe06946c3e807368bf986d683fcea4073ef29f07be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    44100.0
+   ],
+   "hex": "fd05174079eb3dbefd2f1bbb1e242cbf74fe2fbf38ddca3da6d3b53d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "2dac0d3e647b1b3fee4d993cd5fe56bec9066a3d2c43cb3ef1190dbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    44100.0
+   ],
+   "hex": "72ff9d3ed8c5193f79f2d2bbc35d45be5854edbd315dc73e2150863c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    44100.0
+   ],
+   "hex": "39e82f3f27760a3f9a9e9dbeb8a722be2cefd93dd1cc943ea72d22be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "eef97f3fd29918bf7796183fcb7985bf7976853fe5d65ebe8ed25e3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    44100.0
+   ],
+   "hex": "0e06174085ee0cbf81ea5b3fa9614abfb5c111bf37a226be565d15be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "44c7433e93e8fb3e55e6c33d504977bef2c7c83da6a4b03ee835a03c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    44100.0
+   ],
+   "hex": "e6ded83ec2b5f43eec67153ec36c5ebe4d5d0fbef775af3e96f206bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    44100.0
+   ],
+   "hex": "f884383fef2bb93e9d0219beeeb551be87d81e3e31e2663e7bf9debd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "0afa7f3f36d963bf17d4633f9b5d93bffe59933fddbeffbefab8ff3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    44100.0
+   ],
+   "hex": "1c061740e62d58bf94bdc63f2bbb62bfadd1f2be893dbfbe1f6babbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "eb5b8d3eff039d3e528c603e2b9695be05b1273ec4de853e83c0843d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    44100.0
+   ],
+   "hex": "13131b3f3527913ee248c63e531083beb07f36beaa96893eb094e3bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    44100.0
+   ],
+   "hex": "88f9443f1be9d13da638a33dcae18abe68fb663e5565063e57b418bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -16.0,
+    48000.0
+   ],
+   "hex": "c1f57f3fba2e2d404c322dc0a5941bc035951b405385393f167f39bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -6.0,
+    48000.0
+   ],
+   "hex": "ccff7f3f44593940555939c00ed632c010d632407bf2653f5cf265bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -1.5,
+    48000.0
+   ],
+   "hex": "f5ff7f3f6e6e3940726e39c074fe32c076fe32409c3f663f953f66bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fab6f3940ac6f39c0cc0033c0cd0033401044663f114466bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    1.5,
+    48000.0
+   ],
+   "hex": "0700803f7a6e3940796e39c07dfe32c07efe32409f3f663fa83f66bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    6.0,
+    48000.0
+   ],
+   "hex": "1900803f7b5939406a5939c035d632c032d632408bf2653faaf265bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    16.0,
+    48000.0
+   ],
+   "hex": "2305803f3b392d40ac352dc0709b1bc0e29a1b408386393fc58c39bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -16.0,
+    48000.0
+   ],
+   "hex": "15db7f3f919b214068a821c0fec005c003c30540a353103f263d10bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -6.0,
+    48000.0
+   ],
+   "hex": "3cff7f3feb7e3740307f37c0c6492fc0d2492f40c5285f3f4d285fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -1.5,
+    48000.0
+   ],
+   "hex": "d6ff7f3fb2a83740c1a837c0d6982fc0d8982f40a4be5f3f89be5fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803f2dab37402eab37c0729d2fc0739d2f404ec75f3f4fc75fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    1.5,
+    48000.0
+   ],
+   "hex": "1600803fdfa83740d2a837c0f5982fc0f5982f40aebe5f3fcbbe5fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    6.0,
+    48000.0
+   ],
+   "hex": "6200803fbd7f3740787f37c0594a2fc04d4a2f40f9285f3f70295fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    16.0,
+    48000.0
+   ],
+   "hex": "7b12803fbcbf2140e5b221c050d605c04dd40540f651103f7b6810bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -16.0,
+    48000.0
+   ],
+   "hex": "fb777f3f229f0d406bce0dc0ee00c2bfc90fc23fee23993e317e98be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -6.0,
+    48000.0
+   ],
+   "hex": "a0fc7f3f276f33404f7033c03b9627c067962740a990503f9a8e50bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -1.5,
+    48000.0
+   ],
+   "hex": "44ff7f3f84c53340c6c533c08b3628c0953628409fbb513f2bbb51bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fd1ca3340d1ca33c0044028c004402840f8cc513ff8cc51bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    1.5,
+    48000.0
+   ],
+   "hex": "5e00803f4ac6334009c633c0103728c007372840c5bb513f3abc51bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    6.0,
+    48000.0
+   ],
+   "hex": "ae01803fae723340827133c09e9827c06f9827405991503f679350bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    16.0,
+    48000.0
+   ],
+   "hex": "2644803feb190e4087ea0dc01c77c2bf3668c23f63cf983e747599be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -16.0,
+    48000.0
+   ],
+   "hex": "df1a7d3fb960c63f1364c8bfca81cfbeacc5d03ea0ba28bebcc82f3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -6.0,
+    48000.0
+   ],
+   "hex": "e5e27f3f718d24408f9724c0a8490cc03f4b0c40e58b1e3f2a7a1ebf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -1.5,
+    48000.0
+   ],
+   "hex": "99f97f3f158025404f8225c000eb0dc059eb0d40e161213ffb5d21bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fb9902540b99025c0d2040ec0d2040e40278c213f278c21bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    1.5,
+    48000.0
+   ],
+   "hex": "3403803f748625403a8425c0e6ee0dc08eee0d400462213feb6521bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    6.0,
+    48000.0
+   ],
+   "hex": "900e803f48aa24402aa024c0345b0cc09e590c40308c1e3ff09d1ebf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    16.0,
+    48000.0
+   ],
+   "hex": "cd76813fdaaeca3f99a5c8bffd28d3be68e1d13e75cb31beada82a3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -16.0,
+    48000.0
+   ],
+   "hex": "5ca6043f618c553f618c55bfb659a23dda1cce3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -6.0,
+    48000.0
+   ],
+   "hex": "e8424c3fbedb6e3fbedb6ebf518ef4bc2c866d3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -1.5,
+    48000.0
+   ],
+   "hex": "9d1e723f4c29803f4c2980bfa159d7bd5932233e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803f94a8833f94a883bf348e0abe348e0a3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    1.5,
+    48000.0
+   ],
+   "hex": "8c56873f3782873f378287bf708d2cbe24b2e33d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    6.0,
+    48000.0
+   ],
+   "hex": "036ca03f1eae953f1eae95bf11d894be2140193d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    16.0,
+    48000.0
+   ],
+   "hex": "be06f73f1110ce3f1110cebf44e346bfdda81cbe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -16.0,
+    48000.0
+   ],
+   "hex": "87abec3e6d01213f6d0121bf5e6e513e4a9daa3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -6.0,
+    48000.0
+   ],
+   "hex": "a673453f8499363f849936bf9e5cc83d1603063e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -1.5,
+    48000.0
+   ],
+   "hex": "df23703fc5da453fc5da45bf0e05b83c8dbf213d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803f2c0c4c3f2c0c4cbf134505bc1345053c"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    1.5,
+    48000.0
+   ],
+   "hex": "2474883ff7eb523ff7eb52bf496e2cbd572cc4bc"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    6.0,
+    48000.0
+   ],
+   "hex": "56f4a53f75be6c3f75be6cbfc8bf2dbef1e201be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    16.0,
+    48000.0
+   ],
+   "hex": "52740a40d927ae3fd927aebf9f8c38bf4f89e2be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -16.0,
+    48000.0
+   ],
+   "hex": "f965cd3e7757aa3e7757aabef1c2ae3e16d7833e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -6.0,
+    48000.0
+   ],
+   "hex": "1acb3d3f262dc43e262dc4beab3a773e66c78c3c"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -1.5,
+    48000.0
+   ],
+   "hex": "0ede6d3ffce9d63efce9d6be50092d3e0f03c9bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fbaa3de3ebaa3debe57720e3e54720ebe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    1.5,
+    48000.0
+   ],
+   "hex": "e6c1893fff4be73eff4be7bed155d83d163a3abe"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    6.0,
+    48000.0
+   ],
+   "hex": "a2a6ac3f074e043f074e04bf36e3bdbc58bca6be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    16.0,
+    48000.0
+   ],
+   "hex": "ae881f408b4e543f8b4e54bff55124bfc4d059bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -16.0,
+    48000.0
+   ],
+   "hex": "8ac5643fc642e13fc642e1bfc60243bf3c3d5e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -6.0,
+    48000.0
+   ],
+   "hex": "7a8b753feaa7e63feaa7e6bf0ed04dbf9444583f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -1.5,
+    48000.0
+   ],
+   "hex": "88597d3f42e0e93f42e0e9bf864254bffee8563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "ffff7f3f7611eb3f7611ebbf99a556bf99a5563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    1.5,
+    48000.0
+   ],
+   "hex": "c956813f9352ec3f9352ecbf862859bff47a563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    6.0,
+    48000.0
+   ],
+   "hex": "3f73853f257af03f257af0bff97961bf7c93563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    16.0,
+    48000.0
+   ],
+   "hex": "0b3c8f3f4412fc3f4412fcbfa8b078bf92385a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -16.0,
+    48000.0
+   ],
+   "hex": "3f684f3f49a6c83f49a6c8bf042813bfc5bf433f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -6.0,
+    48000.0
+   ],
+   "hex": "e1fb6c3fe063d13fe063d1bfe6b724bf04bc373f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -1.5,
+    48000.0
+   ],
+   "hex": "b51f7b3fb3c4d63fb3c4d6bf4d862fbf9766343f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803f93cad83f93cad8bfd89633bfd896333f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    1.5,
+    48000.0
+   ],
+   "hex": "447c823f47f0da3f47f0dabf54e737bfcdee323f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    6.0,
+    48000.0
+   ],
+   "hex": "5f458a3f2831e23f2831e2bf487a46bf8aef313f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    16.0,
+    48000.0
+   ],
+   "hex": "1dfd9d3fbca8f73fbca8f7bf4c9c71bf13a2353f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -16.0,
+    48000.0
+   ],
+   "hex": "1fbf2a3f0c0a9d3f0c0a9dbf461482be044b163f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -6.0,
+    48000.0
+   ],
+   "hex": "ec805d3ff272a93ff272a9bf7fd1b4bea8cff93e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -1.5,
+    48000.0
+   ],
+   "hex": "2bf7763f5883b13f5883b1bf1bcad5bec8dbe73e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fd7a2b43fd7a2b4bff98ee2bef98ee23e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    1.5,
+    48000.0
+   ],
+   "hex": "b8ae843fc001b83fc001b8bf2357f0be409cdd3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    6.0,
+    48000.0
+   ],
+   "hex": "34ef933fabd6c33fabd6c3bfa95b10bf81fad03e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    16.0,
+    48000.0
+   ],
+   "hex": "00e9bf3fdb72eb3fdb72ebbf855561bf0a07c33e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -16.0,
+    48000.0
+   ],
+   "hex": "d86f763e8d55e83f0dc697bed78d52bf5f4e813d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -6.0,
+    48000.0
+   ],
+   "hex": "1523413f7297eb3f87baacbf2fcf58bf43f2193f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -1.5,
+    48000.0
+   ],
+   "hex": "fea26f3f27c0ea3f2663dabfc23157bfc0d4463f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "0000803fa421ea3fa421eabf5b0156bf5b01563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    1.5,
+    48000.0
+   ],
+   "hex": "87bd883fb34ce93fc1c7fabf726854bf80e3653f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    6.0,
+    48000.0
+   ],
+   "hex": "74a9a93ff0f2e43fec221cc0a90d4cbf4ab08f3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    16.0,
+    48000.0
+   ],
+   "hex": "94f78440cda99d3f9b59f1c0ed5286be87b95a40"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "e0fd7e3fa658623f6c1360bff05ab73cc0ed95bc"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "310d7f3f853a793f55b176bfaf63c93c5dbaa4bc"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "cedf7d3f63d2f13f83c6f0bfb21964bf57c8633f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "1eef7d3f5443fd3f5b10fcbffc887abf22407a3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    48000.0
+   ],
+   "hex": "9bee7d3fa375fc3fda44fbbfa1f478bfbdab783f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "0100803f731fdb3eae4ad3be0c499e3eb12399be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "1423803f0c3d1d3fbf7218bf9cb0c23e759ebcbe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "7cd47c3f4361e23f86b3e1bfb7c346bfab09473f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "b61a7d3fed37fa3f8dfdf8bf9d7a74bf9523753f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    48000.0
+   ],
+   "hex": "14187d3f1c7af83f8347f7bf541f71bf91c3713f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "5115813f749e9dbc669d4b3d3556d43e7c6dcabe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "6ca4813f98f6ac3ebb8e97be60eb253f27541fbf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "b4407a3f8c35c63f7ed0c6bfaa7514bf073e153f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "915f7b3fb0e9f33f6c86f2bf180368bf0dd76a3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    48000.0
+   ],
+   "hex": "93537b3feb44f03f8affeebf764761bf7efc633f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "08db813f07e26ebec9c48c3e8f7cc63ece7db9be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    48000.0
+   ],
+   "hex": "f1e7823f6084733ef76634beb2b43d3fd55534bf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "c0ac773f9456b23f116bb4bfceeae7beaa6ae93e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    48000.0
+   ],
+   "hex": "74c8793f6ca3ee3f2a05edbf69a85dbf8fa2623f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    48000.0
+   ],
+   "hex": "a0b0793fed7ee93f701be8bf1f7f54bfea32593f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "a5f97f3f02830040b27f00c0a63ca8bf1338a83f8334353e8d2e35be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "c887bf3f2779f63fb1ec00c04be29abf34a6363f80c1243ec10e93bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "6b60093ee8af2140507579bebcf70ec0b627133e1025313ff35199bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "f4774e3e31d720408c8382be1fcd0dc056eb983d35e32f3fea9cc2bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "1ca82c3f8c201a401064c6bf47e901c06cbf9f3f3e8c183f9e90b1be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "c6f97f3fe533d23f8c2ed2bf503e25bf8a39253f3d373cbeec333c3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "e087bf3f07a7c73f45cabbbf764112bfad39993d25212bbe9ac1983d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "1acf3b3e71ce1a40682b88be2ab503c05783b13d54be1b3faebcd93c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "51ba8c3e3e8619403a1f7dbeef3302c0f087e0bbace91a3fd8271e3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "cfa6343fd6550f4024e6babf8065e1bf4381863f02dbf13ec85c7dbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "e2f97f3f406dab3ff368abbfed78bbbdcf6fbb3dc114f7be410ff73e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "f287bf3f60e0a03fccc481bf286a2dbd6280e8beb6a6e0be1e87483e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "30ed863edb9c0f40f0c79abe84c7e2bf7ce8c7bbdfdaf13e2e58cd3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "a264c93ec5af0d40965470be76dfdebf34150ebe4ff3f13eeadf0e3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "406d403fb5e1fe3f36f9a9bf6eb1aebf42a7423fc4b6943e20f4cebd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "b1f97f3fdedaf13fa0d4f1bfc24ca4bf4748a43fe075333eef6f33be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "7e35e83f12ace13f3959f4bf91b08ebf06d0993e189c183e0ec83fbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "8560093e8b44144063a75cbe94a1f5bf26baf83d78eb133fb80580bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "39f7753e600e134098176fbe5a52f2bfd74d573ce633123ffa03913b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "7cac2d3f90c50b402e9ab3bf288ad9bfb5cf843f1581f33e80b48bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "d0f97f3fbe08c33fc203c3bf587728bf7872283f49673abefe633a3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "9835e83ff1d9b23fe3689fbfb21509bf78bf8ebe5d831ebe2936473b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "34cf3b3e14630d40c9f568be22ffe1bf4601903d9b0c023f6ed1b53c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "7668a73e56890b40b0444bbe4ab9ddbfc7479cbd2d0e013ff7a98dbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "5ab6353f38fa0040b21da7bfa1f2bbbf05d15d3f9c0ac13e665547be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "ecf97f3f19429c3f263e9cbf66630fbe885d0f3ebbb3f4be3aaef43e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "ae35e83f49138c3f6a2132bf405364bd252d42bfd116d0bec9c0023c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "3eed863e7e310240e6fa7cbe030ec2bf2dde52bc4bf4c93eb877ab3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "4611ef3e5dd0fe3fb07b11bea47fbcbf8ce361becccaca3eaa0597bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "1a8d413fe728e23f01ba94bfa45d90bfd04c1d3f6d716d3e7bcca2bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "b2f97f3f3d66dd3f8460ddbf9871a0bf3b6da03f8e31333e9b2b33be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "ec36ee3f2fe2cd3faea3e1bfcee389bfa42f5d3e06d1163ea254ed3b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "8860093ec6e20a40008448beac9de2bfd286ec3da5cb0f3f8be778bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "e0847b3e1cb309409b155cbe7050dfbff3dede3a6e070e3f80c4c03b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "a2d02d3ff0980240f668a7bf62fec7bf5d59743f1ef4ea3ef77286be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "d4f97f3f1f94ae3fa48faebfffb72fbf01b32f3f5a203abe091d3a3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "0a37ee3f0e109f3ff6808abf3ff60dbf3c049dbe89a61cbe5c87f6bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "37cf3b3e4e010440cc6d4dbea7ffd0bf7d77933dacd8fc3ec0bfb03c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "8027ab3ee42d0240b4922ebe43b9ccbfc22aa8bd70d9fa3e26f8cdbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "0ddc353f329bef3f92579abf797eadbf586c4d3fca43ba3e3dd53fbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "f0f97f3f7bcd873f06ca87bff0f85dbe5cf15d3e9856f4be1851f43e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "2237ee3fcf92703f10ae04bf5c18f9bd8e523dbfdba4cdbec0cfa1bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "40ed863e729ff13ffe6b55beaf56b4bffa4da53ac852c43ed4afa63d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "9058f43e971bec3f0b63cabddfbfaebf3a765ebe4a4ec53e9837d4bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "10b5413fbccfcf3f9b1887bf687786bf4418143fab1d653e4aab9cbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "bdf97f3f5dbcca3f1cb7cabf17129cbfd60d9c3f21b9313e32b331be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "d02b07400d95b83fbe1ad2bff1c47ebfc5bcefbd3c390d3eae7d7c3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "9b60093e506cfe3ffe742fbefadfc1bf00dbc93dde01f53eff0a54bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "ca0d8c3e74bafb3f003848bea120bebf044f32bdd115f13e5a4c5b3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "f5882e3f4c6aed3fd3cd97bfa840a7bfc4e44a3f235abf3e8a4b57be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "def97f3f3fea9b3f38e69bbf5da034bf3f9b343f5a9938be0c96383e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "e12b0740ecc2893f086f5ebff08808bfad3014bfa4af12be312383bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "4acf3b3e60a9f03fba2b2bbe94c4b2bf92427a3d4768d73e9494963c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "986bbe3e2278ec3f9d2905beeae7adbf1e6f06be7381d53e562b86bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "449c363ff9d2d73f0bed89bf23c290bff0a5293fadb5973e1a9619be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "faf97f3f33476a3f2b416abfc86a8fbe30668f3e4e55f2bed24ff23e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "ee2b07408df8453f15906abe90761abe8c1976bf3790c0bee8252cbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "4aed863e3746da3fb23224be0b319abfb9c61f39f440a73e84018e3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "44b9073fd8ebd33f3649cabc3bcf93bfe97e8bbe1223a93e6d9a83bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "d280423fcc06b83f9ef96abfef425fbfd25ff13eb9a73a3ec4d37abd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "d4f97f3f4ea7683f26a168bf7c928abfbf8e8a3f29dc2e3e42d62ebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "b546244072164e3f9c048bbfa84a49bfe0db47bf7baff73d860d243e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "ba60093e7a00b43f6f2bbfbdab5a57bfda53823de2ebad3e6d8216bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "36c4a33ee890b13f24d001befc0a50bf042200be7fcca93e6899d33c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "5eb42f3f93b6a53f98c450bf125d2ebff493cf3e260f713e163a00be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "f3f97f3f10030b3f3eff0abf19d850bf72d2503f05a035beb29c353e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "c646244063e4e03eb0b316be68b50ebfdc3781bfe5a100beef682abe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "6dcf3b3e8a3da63fdde777bd732449bfaa74563dd7e8983edaca553c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "d24ede3e6e3ba23f27695bbcde803fbf3a4850be86b2973e368107bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "7cd4373f261f903ff45630bfd68a19bfacc0b13e782a3f3e72edb6bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "10fa7f3f14d7753e85cf75be814718bf5e43183fdf6deebe6268ee3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "d64624409d930b3ec462213f0862bcbe7c7999bf07dda8bec6b3dfbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "5bed863e5fda8f3f62a8e9bbbf0532bf394c0b3d47746d3e669c493d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "f8111e3f84a7893f4b602c3e3dfe24bfcc5fa8be035e753eb09102be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "c8cb433f67a6603f8d9500bf95c2f5be91d4853e9d61eb3d314c15bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "e6f97f3fd398073f1f9507bf7f0580bf0e02803fb2362c3ed5302cbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "68e53c40686aef3e6a5551bfa24e25bfd428a7bfd947da3dea6d793e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "d260093e361a8f3f61ee5fbdead9edbeab37263d495e6e3e6641cebb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "3de6b53e31e28c3fc7f0c2bd8500e0bec02b3cbe9592663eacc7103d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "1d94303f33ed823f7efa22bf517faabea61e3f3e1d34073e0fa27cbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "08fa7f3f56d2273e90cc27bea83e5fbfb7385f3f5ee032be08dd323e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "7ae53c40a687d03d6f19863e1c520abfcda6b4bfbbb8e2bd278c81be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "83cf3b3e4557813f3cbffabbcd4be1bebf90243d0592513e7e84123c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "aea1f63e67ff7a3f3bd9403d1bcecebece0687beca19513ef4b13bbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "cfbd383f6fab5a3f9e3800bf664e98beef94253e798ed63d112834bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "23fa7f3fd6620ebe28610e3efd1444bfd20f443f22d2eabea6ccea3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "8ce53c404ef14dbedcf8933f42f1e7be51d3bfbfcfd094be960f2abf"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "68ed863e36e8553f06fb8c3d10dfccbebce0213dbdb8223e34290a3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "480c2f3f40d1493f12888c3e8951b3bef076c8be04c82e3ebfc633be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "18c3443fe4131b3f39139abe4a097bbe03f3ff3daa4f843de4da92bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "ccf97f3f3c57e0bcac5be03c9ce06bbf8ada6b3fc51a303edf1430be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    48000.0
+   ],
+   "hex": "a6f51740809cceba2ce77abeab7d2ebfaa6331bfa932033ebaaef23d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "ae60093e9fbb3c3fd74b6bbb4cac9ebe58e4653dd11acb3e72c52fbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    48000.0
+   ],
+   "hex": "d90d9a3e80be3a3fc4c00ebd315595be36f1e7bd2fffc63e83d7a93c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    48000.0
+   ],
+   "hex": "ae3a2f3f70592b3f3e37cbbe07c077bec4d31c3e5350953e209d23be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "e8f97f3ff04dc9bec249c93e423e7fbfd2377f3ff9ea36bea9e7363e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    48000.0
+   ],
+   "hex": "b7f517401717bcbe339d1f3f95703fbf3a7120bfbd4508be4416fcbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "5fcf3b3ebe35213f96b07e3d9d13a7beea1eb23d2f91b23e08a9793c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    48000.0
+   ],
+   "hex": "1042d13ea4401d3f164dd13d9e369abee6e312befcfdb03e1602d7bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    48000.0
+   ],
+   "hex": "9855373f692e003f3dac80be763588befb923b3ec9c96c3e706ce9bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "06fa7f3f433432bf5730323f0ba487bfaea0873f5420f0bed81af03e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    48000.0
+   ],
+   "hex": "c4f51740d4982bbf21e0ab3ff9794dbf3a6812bf87e4b2be0476a5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "54ed863ed1dee83e953c2d3e6dbfb4be7d720c3e24a68a3e82706b3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    48000.0
+   ],
+   "hex": "efef143f56d2db3e10f7a43e3b0ca2bef78544be40ab8d3e9c32d0bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    48000.0
+   ],
+   "hex": "4545433f9b37813e2a2917bd605f9abec2da683e10b8113e8e8f3ebd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -16.0,
+    88200.0
+   ],
+   "hex": "0bfd7f3f445b35402e5c35c036182bc09c182b40a2f0563f5eee56bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -6.0,
+    88200.0
+   ],
+   "hex": "f2ff7f3ffb533c4000543cc0b4b238c0b6b23840c87a713fbc7a71bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -1.5,
+    88200.0
+   ],
+   "hex": "fdff7f3f905f3c40925f3cc04bc938c04bc93840d4a6713fd2a671bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f3d603c403e603cc099ca38c09aca38405ea9713f5fa971bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    1.5,
+    88200.0
+   ],
+   "hex": "0200803f935f3c40945f3cc04cc938c04ec93840d4a6713fd9a671bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    6.0,
+    88200.0
+   ],
+   "hex": "0600803f0a543c4005543cc0c0b238c0bdb23840c97a713fd37a71bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    16.0,
+    88200.0
+   ],
+   "hex": "7d01803f475e35405f5d35c0961a2bc0331a2b40d9f0563f22f356bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -16.0,
+    88200.0
+   ],
+   "hex": "dbf47f3f8f312e4000352ec0b6361dc034381d40b3083c3f2a003cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -6.0,
+    88200.0
+   ],
+   "hex": "c8ff7f3fdc4d3b40ed4d3bc0c4b236c0cbb2364031936d3f05936dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -1.5,
+    88200.0
+   ],
+   "hex": "f3ff7f3fda643b40de643bc06adf36c06bdf3640e8e96d3fdfe96dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "0100803f34663b4035663bc002e236c003e23640edee6d3feeee6dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    1.5,
+    88200.0
+   ],
+   "hex": "0700803fe7643b40e5643bc073df36c075df3640ece96d3ff6e96dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    6.0,
+    88200.0
+   ],
+   "hex": "1b00803f164e3b40054e3bc0f3b236c0ecb2364039936d3f64936dbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    16.0,
+    88200.0
+   ],
+   "hex": "9405803f953c2e4027392ec00b3f1dc0913d1d4058083c3fe6103cbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -16.0,
+    88200.0
+   ],
+   "hex": "87d37f3fd37b2040888920c0cdf902c0b9ff02405ec8093f47a609bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -6.0,
+    88200.0
+   ],
+   "hex": "09ff7f3feb073940330839c0364832c05448324033ff643f77fe64bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -1.5,
+    88200.0
+   ],
+   "hex": "caff7f3f0d3839401e3839c0bba432c0c1a4324049b1653f22b165bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "ffff7f3fea3a3940ea3a39c024aa32c024aa324095bb653f95bb65bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    1.5,
+    88200.0
+   ],
+   "hex": "1c00803f45383940363839c0e7a432c0e2a4324053b1653f7cb165bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    6.0,
+    88200.0
+   ],
+   "hex": "7a00803fe60839409b0839c0004932c0e048324053ff643f0d0065bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    16.0,
+    88200.0
+   ],
+   "hex": "3f16803f70a52040b79720c07f1603c09010034035be093f50e009bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -16.0,
+    88200.0
+   ],
+   "hex": "27dc7e3ffc66fa3ff71afbbf3df384bf0941853f50049f3da20698bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -6.0,
+    88200.0
+   ],
+   "hex": "52f77f3fcf5a30407c5d30c0a9ba21c0d1bb21406d6d453fc66645bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -1.5,
+    88200.0
+   ],
+   "hex": "19fe7f3f46e83040dbe830c008c022c049c02240f251473f7d5047bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f38f1304038f130c0c0cf22c0c0cf2240076e473f076e47bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    1.5,
+    88200.0
+   ],
+   "hex": "f500803f2cea304096e930c07fc122c03fc12240f851473f6f5347bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    6.0,
+    88200.0
+   ],
+   "hex": "5904803f77633040cb6030c04dc121c027c02140786d453f217445bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    16.0,
+    88200.0
+   ],
+   "hex": "9392803f843afc3fbb85fbbfa1d985bf7d8b853fb9b4983d6dba9fbd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -16.0,
+    88200.0
+   ],
+   "hex": "9423253f5ccc953f5ccc95bf9fea51be12570f3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -6.0,
+    88200.0
+   ],
+   "hex": "e10a5b3ff97aa23ff97aa2bfc9309dbe081be73e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -1.5,
+    88200.0
+   ],
+   "hex": "b749763feccaaa3feccaaabff06cbfbe84d9d23e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803fee06ae3fee06aebf2dbfccbe2dbfcc3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    1.5,
+    88200.0
+   ],
+   "hex": "2b0c853f1587b13f1587b1bf0e2adbbe63f9c63e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    6.0,
+    88200.0
+   ],
+   "hex": "b898953f01e5bd3f01e5bdbf990c07bf55b6b73e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    16.0,
+    88200.0
+   ],
+   "hex": "426dc63ffc37e83ffc37e8bf0b355ebf0cb5a23e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -16.0,
+    88200.0
+   ],
+   "hex": "0463143f38d17c3f38d17cbf344a6fbd3d23f53e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -6.0,
+    88200.0
+   ],
+   "hex": "d488533fdd488b3fdd488bbf83382abe970aae3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -1.5,
+    88200.0
+   ],
+   "hex": "3431743fa9f2933fa9f293bfc57f74be7bdd913e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f455e973f455e97bf9de988be9de9883e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    1.5,
+    88200.0
+   ],
+   "hex": "7b30863f121a9b3f121a9bbf1ceb98be2f29803e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    6.0,
+    88200.0
+   ],
+   "hex": "fde79a3f1a90a83f1a90a8bf2ca0d2be7a004e3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    16.0,
+    88200.0
+   ],
+   "hex": "0ad4dc3f3415da3f3415dabf547553bff969ce3d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -16.0,
+    88200.0
+   ],
+   "hex": "da0afa3e3ad1333f3ad133bf7886153eea31bb3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -6.0,
+    88200.0
+   ],
+   "hex": "e7a7483f579d4a3f579d4abfc8a21a3db1b7363e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -1.5,
+    88200.0
+   ],
+   "hex": "8713713fdd8a5a3fdd8a5abf43331bbd6bfdc43d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803fa0f7603fa0f760bf0a178cbd11178c3d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    1.5,
+    88200.0
+   ],
+   "hex": "7cec873f3912683f391268bf352fd1bdcece243d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    6.0,
+    88200.0
+   ],
+   "hex": "f14da33fdf3f813fdf3f81bf2d1d69be754945bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    16.0,
+    88200.0
+   ],
+   "hex": "be0c0340091ab83f091ab8bfb9a73fbf811699be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -16.0,
+    88200.0
+   ],
+   "hex": "5953703f655eee3f655eeebf02e45cbfa9906c3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -6.0,
+    88200.0
+   ],
+   "hex": "b70a7a3f449ff13f449ff1bf4a6663bf925b693f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -1.5,
+    88200.0
+   ],
+   "hex": "aa7f7e3f6f88f33f6f88f3bff03867bf46b9683f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f113cf43f113cf4bf51a068bf51a0683f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    1.5,
+    88200.0
+   ],
+   "hex": "4ec1803f37f8f43f37f8f4bfbb186abf2096683f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    6.0,
+    88200.0
+   ],
+   "hex": "d10c833f3161f73f3161f7bf15eb6ebf74d1683f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    16.0,
+    88200.0
+   ],
+   "hex": "2f59883f5feafd3f5feafdbf86fe7bbf294c6b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -16.0,
+    88200.0
+   ],
+   "hex": "1fad623f8adade3f8adadebf3b513ebf1ca45b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -6.0,
+    88200.0
+   ],
+   "hex": "2db8743fca9ce43fca9ce4bfc4d949bf9821553f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -1.5,
+    88200.0
+   ],
+   "hex": "29237d3f4e0fe83f4e0fe8bf36c150bf0d9e533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f8b56e93f8b56e9bf955053bf9550533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    1.5,
+    88200.0
+   ],
+   "hex": "9072813f20afea3f20afeabfb10256bf901d533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    6.0,
+    88200.0
+   ],
+   "hex": "78e6853f8b26ef3f8b26efbfa9f45ebfb827533f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    16.0,
+    88200.0
+   ],
+   "hex": "ff8e903fd2aefb3fd2aefbbfff0d78bf00f0563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -16.0,
+    88200.0
+   ],
+   "hex": "eec6473f97c8bf3f97c8bfbfc11002bfd3493a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -6.0,
+    88200.0
+   ],
+   "hex": "b0d8693f2d84c93f2d84c9bf61a815bfb2cf2b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -1.5,
+    88200.0
+   ],
+   "hex": "914b7a3f6d92cf3f6d92cfbf13d921bf828d273f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803ff2dcd13ff2dcd1bfc27526bfc275263f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    1.5,
+    88200.0
+   ],
+   "hex": "ddea823f944dd43f944dd4bf275f2bbf6f89253f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    6.0,
+    88200.0
+   ],
+   "hex": "4c208c3f699bdc3f699bdcbf83163cbfecd5233f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    16.0,
+    88200.0
+   ],
+   "hex": "d905a43fc5c1f53fc5c1f5bf19b76ebf68ab263f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -16.0,
+    88200.0
+   ],
+   "hex": "b58e543eb2cdf23f87c59fbe9b3066bf50a2da3d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -6.0,
+    88200.0
+   ],
+   "hex": "03ca3e3f0fb0f43f127ab3bf06e069bf09aa283f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -1.5,
+    88200.0
+   ],
+   "hex": "d6ff6e3f1434f43fe933e3bf89ed68bf5fed573f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "0000803f8cd8f33f8cd8f3bf843a68bf843a683f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    1.5,
+    88200.0
+   ],
+   "hex": "e01a893f435df33f82c902c0654967bf267f793f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    6.0,
+    88200.0
+   ],
+   "hex": "f7bfab3f3ed2f03f162924c01b5062bf04e89c3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    16.0,
+    88200.0
+   ],
+   "hex": "21299a40fd6cc03fc03612c1c4a803bf399e8a40"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "38bd7e3f7f649c3fbd6b9bbf737384be02e8843e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "dbc17e3ffbc0a23f02baa1bf8a628bbedbdf8b3e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "2c4e7e3f9d24f83f9f01f7bfc16c70bf4fbd6f3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "cd527e3f1b81fe3fca4efdbfe7027dbf1a4f7c3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    88200.0
+   ],
+   "hex": "a9527e3fcb10fe3f5edffcbf5d247cbf06717b3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "16277f3f0e4d4b3f87cf48bf774eb23d46fea7bd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "d23c7f3fc672663f439d63bf7a82c73d700bbcbd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "d0c47d3fa240ef3f2240eebfa6215fbface05e3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "93da7d3f80d3fc3fe29ffbbf37aa79bf4f79793f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    88200.0
+   ],
+   "hex": "ccd97d3f1fdffb3f58aefabf30cb77bfe799773f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "8627803f6e6fad3e7882a4be1b16b23e1028acbe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "da55803fd7160d3f2a8607bfd364e23e3244dbbe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "50787c3f891dde3f7094ddbf74e13ebf034e3f3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "0fd57c3f1a4df93f010ff8bfa6a872bf15a3733f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    88200.0
+   ],
+   "hex": "8ad17c3fc749f73fbe15f6bf55cd6ebfa0c06f3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "28a1803f4c27f63de187c4bd6ac4d23e8294cabe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    88200.0
+   ],
+   "hex": "e7fa803f1b74d13ee129c1be2199143f5c680fbf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "10277b3f2152d13f9856d1bf11e027bf11bd283f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    88200.0
+   ],
+   "hex": "dfda7b3fb94cf63f13fef4bf3fb76cbf4adb6e3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    88200.0
+   ],
+   "hex": "f0d37b3fa870f33f5035f2bf255867bfdb69693f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "84f97f3f754419407c4019c0372befbfd224ef3f94fbe43e24f5e4be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "bc63a43ff30d16401c3e1ec002b0e5bfe042c13f661cd93eda7597be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "301fe53d22cb3040a14982be5e2c25c044bb413ed6ce503f187d33bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "42b3143e0b623040c4c789be958924c0a0bc1e3e8fe84f3f6250e8bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "4219283f5b2d2c40c465dcbf65971cc0d04ec33fc671403ffd69e9be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "a4f97f3f35ca0340d2c603c0fba89bbfb9a49b3f91f3e93ddceae9bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "d063a43fb2930040c8a802c0d05594bf7ed55f3f7fd2dd3dc8bd9abd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "b02e103e88c02c405ec88bbe68cd1dc053931b3e49c2423feac966bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "99eb3a3ec92c2c4037ec8dbe42071dc04695df3df9f9413fb2e411bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "4a062d3fb080254078d4d5bf129a10c0c4c6b13fe4fe293f9408c5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "c0f97f3f68ccdb3fd5c6dbbf1e170dbff5120d3f959266be388e663e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "e463a43f635fd53f4517cdbf1ad602bfbb10683e3d9e5abe7d84183e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "edc6433e77b625403a529cbeb1f610c00e3bb23dd0492a3f71701a3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "825c7d3e1cdc2440b11f95be88f90fc07476f13ce3c1293f2818cc3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "3514353fd6961a406017cbbfd2fef9bf581c953f224a053f278c89be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "8df97f3f62a816407aa416c0a318ecbf4f12ec3f34afe33ec7a8e3be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "d3c6bd3f8a511140683a1fc02a23dcbf34539e3f0d97cf3e3b5840be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "501fe53da36929401c5d77be7ac218c0b9f4313e0b363c3f65c821bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "2ef32a3eb6c42840881688be2ac417c00674f03ddbd13a3f910765bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "0cc8283ff1dc2340dad5d1bf5cab0ec0e469b13f0d3d293f1fe7cbbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "aaf97f3f232e0140d02a01c0cc569abf8d529a3f03a0e83d3e97e8bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "e7c6bd3f93aef73f20c5febfb4f68dbf6a51203f4a18d43dc78244bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "c02e103e095f2540067883bed4da11c0134d0d3e438c2f3f0c0550bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "b2bd563e01762440c20c87be53a510c032328a3de35d2e3f2dfc87bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "d5b92d3feb2f1d4070e7cabf988b03c0c609a13f7c7f153fbd1eacbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "c9f97f3f4494d63fd08ed6bfca040ebf91000e3fe34365be8e3f653e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "fec6bd3f91e6cb3fdfdbbdbf5225f9beb4b17a3beb0751bedfafc13d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "fec6433ef7541e40400891bef1d305c04ae99a3db77d193fc2340b3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "7662913e84fb1c40543f85be954804c0a05a9dbc0fbf183fda97533c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "7ccf353f8b4512402492bfbf97b6e2bf5843863f0d71ea3e444e70be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "8df97f3f1d2613404c2213c059c5e8bf1cbfe83f4264e33ed45de3be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "0d5fc33f737e0d402baa1cc0aa86d7bf9a1e943ff07dcd3e01fa27be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "551fe53d473d2540c0e46fbeb4ab13c0a97d2c3e84cf373ffcff1dbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "6eb12f3ecc8f2440416a85be7b9e12c098dddb3df952363f1cce32bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "f3ec283f78941f408e4eccbf927809c0e3dfaa3fb256243ff4abc5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "abf97f3fb757fb3f4051fbbf665e99bf325a993f6a53e83db64ae8bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "225fc33f6408f03f04c4f7bf56eb8bbf5d0a113f83f3d13d899d2bbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "c42e103eae32214038897dbe87070dc0f993093e88712b3fbb274bbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "1cab5c3ebf3c2040e0ad82bebcbf0bc0b1546d3d52302a3faf944dbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "bedf2d3f65e71840c233c5bf2396fdbf6e2c9b3f892b113f1cdca6be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "caf97f3fb78fcf3f728acfbffce010bfb8dc103f71f864be16f4643e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "385fc33f6240c43fe1f0b4bffb6efbbef20e11bd10eb4ebe2526a93d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "02c7433e9d281a4034a68abe257601c09f88993d01e7153f9bf3073d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "9e5d953e3fbb184078dc7bbe35a6ffbffff1e3bc2520153f7abf293c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "07f7353feefc0d40e495b9bf34abdabf5280813ff7a7e33edbf568be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "93f97f3f6aa10f40b19d0fc0bfebe4bf98e5e43f1c2be23eb024e2be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "7841da3fc9470840d79b1cc0e410cebf508d673fdce8c43efa9988bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "731fe53d35291e402c3963be3c5d08c0d86e1e3eee4d263f6ef30ebd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "b686423e0f521d40314583bee10f07c05263993d4679243fcceca43a"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "467e293f1de91740a489c2bf6970fabf972b9b3f710b113fac22adbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "b1f97f3f544ef43f0848f4bf54e197bf25dd973f7d13e73dc00ae7bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "9041da3f109be53f58f9efbf5cf585bfb7b3ae3ed72ec93d658f8bbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "d22e103e9b1e1a40f2966dbe7b2b02c03479fa3d781d1b3f79cd37bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "2b31743ed5eb1840b1f277be959500c07c38b83c9b9b193f8493673a"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "03752e3fc73b11400e1abbbf55aee6bf368f8c3fca20003f842592be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "d0f97f3f5486c83f3781c8bf23b712bfceb2123f19bd63bec6b8633e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "aa41da3f0cd3b93f6052a5bf1edbf1be657e6ebeb34646be188e093d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "11c7433e891413404aa57fbed2c2eebfc4d4863d27a0073f3702f63c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "d126a53e2a4b1140b2a55ebeceb4eabf250a8cbdb8c4063f04b77439"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "bb92363ff25006409ef1aebf2460c6bf0c57693ff6efc83e7a094cbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "a6f97f3f3378f93fba71f9bf6917d2bfbc11d23ffeedde3e96e7debe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "fa9e0940c86fe53f0be413c06fc6aebf8b045c3ec389af3ec8e8333e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "b61fe53ddc64064043ae38bedd95cebf03faef3db5c7fb3e136bd8bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "8ec86d3e415605405a876fbe0d3ccbbfbca0b2bb92f2f63e4a54ef3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "e7c42a3f5345ff3fa065a3bfffc9b6bfcc5f603fb95ccb3eb6fa6bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "c3f97f3fb283ce3f5b7ecebfa9bb91bfa8b7913f57c4e33dbcbbe3bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "089f0940457bba3f066acbbf66476abff20571be1b59b33d7dce373d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "f52e103e415a0240f80b38bec232c5bfeea3bd3dfdd6ea3e5c200bbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "8313953e72ce0040c5aa48be291cc1bf309d78bd8325e73e6791253c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "85c42f3fcbe9f13fc5f29abffd16a8bf66734a3f37a7b33e223047be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "e2f97f3fafbba23f80b7a2bf0b4620bf6a41203f387a60bee075603e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "189f094042b38e3f558a5abfb794e9bea1bb31bf85c130be342ab5bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "35c7433e61a0f63f4cf136be0cd9b4bfeced4b3d5155cd3e9a3aba3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "f047c93e15f1f13f847405be6d99afbfb0fe1fbe79d1cb3ecaf6bbbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "abf0373fe712dc3f82228dbf840e90bf289b263fa2e38c3ecd080bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "b8f97f3f5c58de3f9a52debff707c4bfa802c43f079fdb3ea898dbbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "064b24403ceac63f19a710c007ec95bf0ac5cabe57889b3eb420ce3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "f01fe53d5eb1ec3fb2f41bbe943e9ebfb678b53da662b73e989f9dbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "ed12893e045fea3fd75c63be24889abf63068fbd8903b23ec7ed573d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "03d02b3f9a26df3ff4e08ebf403e86bf105b223f1b70843ed6c811be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "d8f97f3fda63b33f335fb3bf7ac68cbf99c28c3f0363e03d675ae0bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "164b2440b9f59b3f4b09b3bfd10e4dbf782944bf99e89e3dc697d23d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "122f103e2b9ce43ffce413be51e296bfd5458c3dfc0bab3e2aa5cabb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "31b8ab3e6421e13fcefd29bec85892bf059b04be1b4ea73e0130923c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "e0d6303f86cad13f4abf85bf59c875bf5d1c113f05056a3e6e19f6bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "f8f97f3fda9b873f539887bfd8e928bf00e5283f63255dbe08215d3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "2a4b24406d5b603fef4a05bfc0e5d8be8a6192bf769c1cbe00914fbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "52c7433e0788d63f6bda05be51108abf9506093d388e953e32a5873c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "ea83e73e7d2ed13f08f28dbd583884bf420c6ebe98d2943ef66d2dbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "d20e393fe1f2bb3fa8a26dbfcda950bf26d5e93e4a92373e3cc2abbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "acf97f3f2747ae3f9c42aebfedcdafbf37c9af3f8336de3e1e30debe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    88200.0
+   ],
+   "hex": "ca980f406c1ca13f78d9e8bf777e8dbfb8d00dbe540eab3e44f7673e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "c41fe53db5aed03fdae202be83f091bfe6e7b73d31e2eb3ec5c0cabc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    88200.0
+   ],
+   "hex": "3c41763efb10cf3fa4143ebee8018fbffccc27bd91e3e63e0e170e3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    88200.0
+   ],
+   "hex": "ba032b3f0600c63f48447cbf30e27dbf117c1b3f4daeba3e01c456be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "c8f97f3fa652833f324f83bfe5ad88bf36aa883fe108e33d3c00e3bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    88200.0
+   ],
+   "hex": "d7980f40cf4f6c3f967888bf2c9355bf76b8d1bec2c4ae3da0fd6c3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "fc2e103e8099c83f78afe8bd0d598cbf5083a43d4903dc3efa5602bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    88200.0
+   ],
+   "hex": "ad5a9a3e511ac63f110307be37be88bfdc9eaabdf843d83e3720433c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    88200.0
+   ],
+   "hex": "0b05303fdba4b83f172669bfb96d6cbf59200f3f5eeba43eba4735be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "e8f97f3f4b152f3f9b102fbf729a41bf2e95413f7bc15fbe23bd5f3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    88200.0
+   ],
+   "hex": "e7980f40cabf143fb4f498bea9d30ebf029a2fbf183e2cbebc95e9bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "3cc7433e5f85ba3f9c05b6bdc09b82bf07bc823d835ec03edc78ae3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    88200.0
+   ],
+   "hex": "e555d03e929bb63f6a431fbddbd37bbf264420be77fcbe3ef809e1bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    88200.0
+   ],
+   "hex": "f933383f97cea23f2de449bfe1e34fbf77d7f53e0357813e6e10fdbd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -16.0,
+    96000.0
+   ],
+   "hex": "84fd7f3ffd2e3640bf2f36c0e8b02cc042b12c4034055a3f42035abf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -6.0,
+    96000.0
+   ],
+   "hex": "f3ff7f3f259f3c40299f3cc05f4739c062473940d5a0723fcaa072bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    -1.5,
+    96000.0
+   ],
+   "hex": "feff7f3fcda93c40cda93cc0305c39c0305c394080c9723f7ec972bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "0100803f6aaa3c406baa3cc0645d39c0655d3940d9cb723fdacb72bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    1.5,
+    96000.0
+   ],
+   "hex": "0200803fcea93c40d0a93cc0325c39c0345c394080c9723f84c972bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    6.0,
+    96000.0
+   ],
+   "hex": "0600803f339f3c402f9f3cc06b4739c069473940d7a0723fe0a072bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    0,
+    16.0,
+    96000.0
+   ],
+   "hex": "4101803f84313640c43036c0f0b22cc097b22c405f055a3f57075abf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -16.0,
+    96000.0
+   ],
+   "hex": "96f67f3f1c842f40fa862fc08dbc1fc0e4bd1f406dd8403f0cd140bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -6.0,
+    96000.0
+   ],
+   "hex": "d0ff7f3ff5ad3b4002ae3bc06a6f37c0706f37407f056f3f5a056fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    -1.5,
+    96000.0
+   ],
+   "hex": "f6ff7f3f1dc33b401fc33bc0969837c097983740a7556f3fa0556fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f58c43b4059c43bc0f89a37c0f99a3740475a6f3f485a6fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    1.5,
+    96000.0
+   ],
+   "hex": "0700803f27c33b4027c33bc09f9837c0a0983740aa556f3fb4556fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    6.0,
+    96000.0
+   ],
+   "hex": "1700803f25ae3b4018ae3bc0936f37c08c6f374087056f3fab056fbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    1,
+    16.0,
+    96000.0
+   ],
+   "hex": "b804803f708d2f40948a2fc0c5c31fc070c21f4023d8403f89df40bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -16.0,
+    96000.0
+   ],
+   "hex": "10da7f3f8d9b224016a722c0aff006c00ff60640ec2e113f331111bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -6.0,
+    96000.0
+   ],
+   "hex": "31ff7f3fd49539400f9639c0665b33c0805b3340c214673f1e1467bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    -1.5,
+    96000.0
+   ],
+   "hex": "d4ff7f3f27c2394035c239c0e3b033c0eab03340d1b9673fafb967bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803fcac43940cac439c0e3b533c0e3b533405dc3673f5dc367bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    1.5,
+    96000.0
+   ],
+   "hex": "1600803f55c2394048c239c008b133c003b13340d6b9673ffab967bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    6.0,
+    96000.0
+   ],
+   "hex": "6500803fa5963940679639c0115c33c0f45b3340d914673f791567bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    2,
+    16.0,
+    96000.0
+   ],
+   "hex": "fb12803f34bf2240a8b322c0120a07c0b0040740b526113f724411bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -16.0,
+    96000.0
+   ],
+   "hex": "3d017f3f7e8d0040f8da00c0d05f90bf08a8903f6d68ec3daf2be6bd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -6.0,
+    96000.0
+   ],
+   "hex": "abf87f3f128f31404d9131c03dfc23c047fd234091a6493fd2a049bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    -1.5,
+    96000.0
+   ],
+   "hex": "65fe7f3ffc113240791232c0bbef24c0f6ef2440be6c4b3f7c6b4bbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f331a3240331a32c055fe24c055fe24400b874b3f0b874bbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    1.5,
+    96000.0
+   ],
+   "hex": "ce00803f971332401b1332c0fff024c0c5f02440c26c4b3f056e4bbf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    6.0,
+    96000.0
+   ],
+   "hex": "ac03803f649631402b9431c0fa0124c0f10024409aa6493f5aac49bf"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low",
+    3,
+    16.0,
+    96000.0
+   ],
+   "hex": "e07f803fb45b0140ec0d01c08c3891bf0cf0903fa211e73d9c54edbd"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -16.0,
+    96000.0
+   ],
+   "hex": "599d293f675f9b3f675f9bbf4b047abebae3143f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -6.0,
+    96000.0
+   ],
+   "hex": "45025d3fa9d3a73fa9d3a7bf9a11b0be100df63e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    -1.5,
+    96000.0
+   ],
+   "hex": "63d4763f08efaf3f08efafbf5e4ed1be97a5e33e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f8b13b33f8b13b3bfc330debec330de3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    1.5,
+    96000.0
+   ],
+   "hex": "6bc1843f5978b63f5978b6bfc11aecbe1815d93e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    6.0,
+    96000.0
+   ],
+   "hex": "fa43943fdc65c23fdc65c2bfe3800ebfdcf1cb3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    0,
+    16.0,
+    96000.0
+   ],
+   "hex": "dd30c13f2981ea3f2981eabf34b860bff3acbc3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -16.0,
+    96000.0
+   ],
+   "hex": "e9e6183f4b8d843f4b8d84bfe58dc8bdd32a003f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -6.0,
+    96000.0
+   ],
+   "hex": "da94553fa06e913fa06e91bf348651be6699bd3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    -1.5,
+    96000.0
+   ],
+   "hex": "98c4743f66099a3f66099abfd0408dbea2b7a33e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f9d6b9d3f9d6b9dbf5b9a9bbe5b9a9b3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    1.5,
+    96000.0
+   ],
+   "hex": "addf853ff01aa13ff01aa1bfe53aabbe2ebc933e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    6.0,
+    96000.0
+   ],
+   "hex": "ec6b993fd950ae3fd950aebf3541e3be10237b3e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    1,
+    16.0,
+    96000.0
+   ],
+   "hex": "a54ed63fabeddd3fabedddbf599656bf3be4273e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -16.0,
+    96000.0
+   ],
+   "hex": "1000013f34f7403f34f740bf9dbfe33df70fc53e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -6.0,
+    96000.0
+   ],
+   "hex": "078b4a3f7f98583f7f9858bfaa0d1b3baa67533e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    -1.5,
+    96000.0
+   ],
+   "hex": "ab9f713f7eff683f7eff68bfd3e095bdbb71043e"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "ffff7f3fe7966f3fe7966fbf400ed4bd440ed43d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    1.5,
+    96000.0
+   ],
+   "hex": "a69d873f6edc763f6edc76bf0e530cbeb6cb9e3d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    6.0,
+    96000.0
+   ],
+   "hex": "6ac8a13f79e1883f79e188bfb29985bef6f943bb"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "low-mid",
+    2,
+    16.0,
+    96000.0
+   ],
+   "hex": "d803fe3f2c78bf3f2c78bfbfcd8843bf89fb61be"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -16.0,
+    96000.0
+   ],
+   "hex": "a284713f41b7ef3f41b7efbfd18f5fbf2f0b6e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -6.0,
+    96000.0
+   ],
+   "hex": "39807a3f4fbcf23f4fbcf2bf589a65bf1f1a6b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    -1.5,
+    96000.0
+   ],
+   "hex": "7d9d7e3f9981f43f9981f4bf2b2569bfae876a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803fea27f53fea27f5bfe4716abfe4716a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    1.5,
+    96000.0
+   ],
+   "hex": "38b2803f09d6f53f09d6f5bf3ace6bbfc9696a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    6.0,
+    96000.0
+   ],
+   "hex": "57cf823f7210f83f7210f8bf5c4370bfada46a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    0,
+    16.0,
+    96000.0
+   ],
+   "hex": "d6ac873ff516fe3ff516febf38517cbf8df76c3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -16.0,
+    96000.0
+   ],
+   "hex": "c2c5643f063fe13f063fe1bf400343bf7f3d5e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -6.0,
+    96000.0
+   ],
+   "hex": "8f8b753f07a4e63f07a4e6bf73d04dbfe644583f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    -1.5,
+    96000.0
+   ],
+   "hex": "8b597d3f48dce93f48dce9bfdf4254bf54e9563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f770deb3f770debbff1a556bff1a5563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    1.5,
+    96000.0
+   ],
+   "hex": "c756813f8c4eec3f8c4eecbfd92859bf4c7b563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    6.0,
+    96000.0
+   ],
+   "hex": "3373853f0376f03f0376f0bf3c7a61bfd493563f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    1,
+    16.0,
+    96000.0
+   ],
+   "hex": "e83b8f3fd30dfc3fd30dfcbfb6b078bfe6385a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -16.0,
+    96000.0
+   ],
+   "hex": "78454b3faedec33faedec3bf71e409bff99e3e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -6.0,
+    96000.0
+   ],
+   "hex": "e3496b3fb229cd3fb229cdbf9e941cbfbb4a313f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    -1.5,
+    96000.0
+   ],
+   "hex": "4dad7a3f5dead23f5dead2bf262628bfd8782d3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f0a16d53f0a16d5bf9b832cbf9b832c3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    1.5,
+    96000.0
+   ],
+   "hex": "d1b7823feb64d73feb64d7bfda2731bf39b82b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    6.0,
+    96000.0
+   ],
+   "hex": "6b448b3ff038df3ff038dfbfebe540bf165d2a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "hi-mid",
+    2,
+    16.0,
+    96000.0
+   ],
+   "hex": "0734a13fb4adf63fb4adf6bf701170bf62a92d3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -16.0,
+    96000.0
+   ],
+   "hex": "d025513ebfd8f33fc588a0bef42f68bf38cbe33d"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -6.0,
+    96000.0
+   ],
+   "hex": "e98d3e3f9496f53f7d24b4bf7f996bbf68272a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    -1.5,
+    96000.0
+   ],
+   "hex": "7eef6e3f0924f53f8713e4bf11b96abf8fa8593f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "0000803f74cff43f74cff4bf56136abf56136a3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    1.5,
+    96000.0
+   ],
+   "hex": "4124893f7e5df43f005303c00d3469bf8f7c7b3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    6.0,
+    96000.0
+   ],
+   "hex": "22f6ab3f2403f23fb4f724c0d59764bf0d429e3f"
+  },
+  {
+   "kind": "vintage",
+   "args": [
+    "high",
+    0,
+    16.0,
+    96000.0
+   ],
+   "hex": "89ac9c40147fc43f6d3c15c15d690bbfb5198e40"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "50b97e3f2edea13fb2e6a0bf94ed97be3633983e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "3dbd7e3f81b9a73f5fb5a6bf4c389fbed2839f3e"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "af587e3fc2c4f83ff89ff7bf90a771bf3bee703f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "9b5c7e3f15a0fe3fc26dfdbfbe407dbf93827c3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    96000.0
+   ],
+   "hex": "785c7e3fd938fe3f5107fdbf0d747cbf5bb67b3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "90147f3fa838583ff1d755bf0ead4c3db15f3abd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "fe267f3f7a46713f40986ebfffed623d7cb54ebd"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "44db7d3ff68df03f4687efbf09a461bfdb52613f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "b6ed7d3fe114fd3f9ee1fbbf7b2c7abf83e6793f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    96000.0
+   ],
+   "hex": "0fed7d3f3434fc3f6a03fbbf577378bf3b2d783f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "cd0f803f914ac73e8604bfbe8d86a73e3a0ca2be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "4037803fa70d163facf310bfabd1d03ea94ecabe"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "9aac7c3f6ea1e03f5302e0bfb38543bf64de433f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "96fb7c3fa1d5f93fcf99f8bf77b773bf4484743f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    96000.0
+   ],
+   "hex": "9ff87c3f79fbf73f57c8f6bfd72770bff5ee703f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "ec7f803fb9902d3e619f16be6d58ce3e58b6c6be"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    96000.0
+   ],
+   "hex": "9dcc803f265ee03e7880d1bef1660d3f74a108bf"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "6f797b3f1aabd43fef86d4bf18d22dbfd39e2e3f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    96000.0
+   ],
+   "hex": "0e137c3f8d10f73ffcc6f5bf5a3a6ebf6818703f"
+  },
+  {
+   "kind": "passive_low",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    96000.0
+   ],
+   "hex": "3b0d7c3f8c6ef43f8d35f3bfcc4169bfd8106b3f"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "81f97f3f98e61b408de21bc0f5fbf7bf57f5f73fd6f4f53efaedf5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "f692a13f91ec1840930821c0b606efbf1e6acd3fc931ea3e6f2ba9be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "d091e03de4293240ce7c82be825d27c03aa9463ee13f543fedf83ebd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "4c440f3e0acb3140cfcc89be6cc826c078e5263e4c67533f385d01bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "c4a1273f6be02d40ca68debfe5571fc04600c73f2cea443f0abaefbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "9ef97f3f1ef70640a5f306c02a3fa6bfa33aa63f1b531f3eb24d1fbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "0993a13f17fd03405c9b06c0773c9fbfc9437b3fa7b4173eb629dbbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "d9b40b3e206c2e4024818bbed27a20c0e011233ef218473fdfe999bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "0a10323e68e82d40ff3a8ebef6c61fc03488f73d4959463f0ea94dbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "e4362c3f32aa2740f357d8bf2a1214c0c886b63f1fbb2f3fb15fcdbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "bef97f3f9404e23fd8fee1bf040c21bf5707213f557b3dbe07783d3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "1c93a13f8510dc3f7cc8d5bf4f1c17bfd6d6a73e9c6b34bedc54023e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "06cf3b3e0bdc27405b529bbec66614c01846c93dcc06303f7617f63c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "50ff6e3e991a274030fd95be3d8213c0a6f1403dbb7c2f3fe52daa3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    0,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "d6ca333f89641d401c50cebf306e01c08b489b3f51b30c3ff29094be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "87f97f3f5da8194061a419c0e625f5bf581ff53f0eabf43e34a4f4be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "c62ab93f57ae1440897f22c03703e6bf0bcfac3f47b2e03e180764be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "f091e03db3652b40a31a79be5bd81bc0b6e7373e95dd403fd3872dbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "dfb4233e82cf2a40abb688be3ded1ac00c3f033eda8a3f3fa8b38ebc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "8645283f8d35264029b3d4bf2a5512c08044b63fe9ec2e3f69add3be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "a2f97f3fe2b8044076b504c0cce0a4bf46dca43f7e7d1e3e10781ebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "dc2ab93fba7dff3f743604c09eff98bfc09a3f3f978d113e10b593bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "e9b40b3eefa727408f1e84beee5a15c0c28a153e25ea343ffada8bbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "6c574b3e67d6264026ae88be523f14c083cfa83d55c4333fb6b6dcbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "cfde2c3f04ff1f403652cebf97cd07c0f7c7a63fb81b1c3f9d57b5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "c3f97f3f1e88dd3f7b82ddbf476321bf905e213f417d3cbef4793c3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "f12ab93f1294d33f98e6c8bf367510bf90a6f03d5a1a2dbe46adaf3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "14cf3b3ed9172140ce6491be81f809c0d286b23d5ff31f3f549edf3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "2956883e38e31f40409f88be3c9008c039fc1d3b2a2b1f3f20d8433c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    1,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "9779343fe0b81540f0c5c3bf45c8ecbf202c8d3fcffbf93eee2d83be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "88f97f3f1fa9164036a516c03218f2bfb911f23f065ff43e2c58f4be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "ef7dbe3f7b5a1140847520c05cafe1bf2528a33f7f8dde3e84214bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "f691e03dc3b02740ca9972bed53817c069c8323eaa9d3c3fe9b429bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "b72d283ed2112740c88886bea53e16c0a222f33d6c323b3fe6a16abc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "0669283fde6022408bc5cfbf608e0dc0f33db03f68282a3f8c98cdbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "a5f97f3fa4b901404eb601c00cc9a3bf93c4a33f3e4c1e3ed4461ebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "047ebe3ffed5f83f794d01c00fd996bf79a7303f1a2a103e8b9483bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "ecb40b3efff22340d81280bee2f210c0d2d0113ea4ed303ffac588bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "9cde503e9d142340b50d85be00c50fc04115963d10b42f3ff807b3bb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "38032d3f472a1c407b3fc9bfe86503c03850a13f95da173fc421b0be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "c4f97f3fa289d73f2684d7bfa45023bfe74b233fb5423cbe623f3c3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "1c7ebe3f58eccc3ffc40c1bf1ab910bf3d939d3d92732bbeee7e9c3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "19cf3b3ee9621d407bf48bbec5f105c0b9f8af3d216d1c3f0db1da3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "fc038c3eb41a1c40c67682be0f7204c0bf63cabb639a1b3fc144243c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    2,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "7c9f343f0ee41140d775bebf7533e5bf8da0883f0e2cf33ed1d17ebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "8ef97f3f829f1340ac9b13c0e785eebf827fee3fd125f33ef81ef3be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "68fed33fd2ab0c408efa20c06faed8bff9a6843f81e5d53e8031cdbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "1192e03d48272140cf2167be30a00cc08076253ed2e62b3fc6aa1abd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "5dbc393e68602040befd84be9a670bc0c4b5b43d03232a3f24380dbb"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "52f3283f913d1b408cb5c6bfa2f801c0ce60a13fc096173fd5e8b5be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "acf97f3f0f60fd3f8759fdbf8033a2bf0e2fa23f5b811d3ef17b1dbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "7efed33fad78ef3f669cfcbf57e890bfbc8af33eaa8e0a3e7cea04bd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "fab40b3e85691d40ace071be10bc06c025e9053ef03f213f724d79bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "3290663ecb511c403a117fbee14205c07f1a243dc3c11f3f3a4ff7b9"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "03912d3fbd061540d3e5bfbf8002f1bfa163933f9948073fb0d69bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "cef97f3f6776d13f1071d1bfa55024bfdc4b243f65513bbe1b4e3b3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "99fed33f058fc33f05e2b3bf88440bbff617e6bd5dc824bece151e3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "26cf3b3e6fd91640165d82be1bcdf8bf37209d3d85900e3f5450c73c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "26719a3e2f3b15403eff6bbe310ef5bfa7a334bd229f0d3f5dce213b"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    3,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "1033353f2ac00a406ea2b4bff1b3d1bfaa83783f82a4d83eba7461be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "9ff97f3ffc260340952303c0bddfdcbfcad9dc3ffbd5ef3e26cfefbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "b07205405f8ff23febde1ac0307fbabf5246be3e42cbbf3eae1a1a3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "5392e03d69260b405d8740bee2b4dabf8b56003e6239043f1ceeedbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "b236633ed0230a405d6b77be2878d7bfc29d323c48d5013f1accd93c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "2e332a3f8e910440afb9a9bf973cc3bf065f703fe547d93efd3f7ebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "bef97f3f046fdc3f5269dcbfeb539bbfa94f9b3f255c1b3ec6561bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "be72054066b0c83f806fdebf99d17ebf8a35b8bdd67af83d24a5473d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "1cb50b3ea4680740bed841be317fd1bfeadcce3dce0ff83e27c03fbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "71e08c3e9cf40540360657bec395cdbf0dbb25bdb041f43e3d43393c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "fbd82e3f9ab4fc3f9a07a2bf75b3b4bfb6b15a3fd6eac13e42ce59be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "dcf97f3f5c85b03fd480b0bfb22b2dbfb8262d3f3ec438beebc0383e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "cd720540bdc69c3f46df82bf95e102bfa2f312bf40c113be17736dbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "4acf3b3e8ed80040902844be6957c1bfe3f66e3d2551db3e1e50993c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "0a6abc3e8552fd3f6b8d1ebeb65abcbf961e05bee764d93ede1e7bbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    4,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "6388363f3926e83ffc4d95bf6eaa9cbfb0d9363fec489b3e248b1dbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "b4f97f3f1523ee3fea1ceebf8269cfbfe663cf3f8469ec3eb962ecbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "b8881f40a740d63fde5619c0baf2a1bf473269be60caaa3e2405c73e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "8992e03d7486f73f648825be9e91abbfe1c9c63dc020c43e7e74b0bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "7f59833edd41f53f8ab36dbe7ee8a7bfe46b56bd4cb4be3e9f9d513d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "703d2b3fd80bea3f24ee95bf0a6093bf2626333fdec6913e520a23be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "d0f97f3f1f44c43f0b3fc4bf84c595bf66c1953f6224193e071f19be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "c7881f40ad61ac3f5e4ecabfb13d60bfe4f11dbfd944dd3dd4ea003e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "38b50b3eec0af03ff84120be7b28a4bf58d09c3d8ff9b73e82330ebc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "a2bda23e3cb5ec3fbc763cbeb8ba9fbf9958ddbd47f8b33e870faf3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "ffe92f3fc79cdd3f099e8dbfd9da87bfeea9213fc21c823e35aa0bbe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "f0f97f3f795a983f875698bff5a332bfd79e323f072136beb41d363e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "d9881f400478803f2ab039bfd073efbe933983bfe49203be325419be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "66cf3b3ec0eae23f170117be942897bfbe5d263d04a8a23ef26a633c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "765bd93e51d5dd3f1698cdbdd37f91bf9cf651be174ba13eb7c3f9bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    5,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "7fa4373f950dc93f6cbe7fbfb99c69bf84c0043f1b6c503efb06cabd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "a8f97f3feea7c23fdea2c2bf57aabbbf4fa5bb3fbee8ee3ef0e1eebe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    0,
+    0.0,
+    96000.0
+   ],
+   "hex": "0aba0c40ec34b43f0a70febf004d99bfdc8bb9baf6eeb93e3c2b5e3e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "6492e03d668dde3f32a00fbee6e3a0bf9e30c83deabbf43ef030dcbc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    0,
+    10.0,
+    96000.0
+   ],
+   "hex": "77796d3e30ebdc3f13ea4bbeb9f39dbf6907dabcbeb9ef3e80050a3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    0,
+    4.75,
+    96000.0
+   ],
+   "hex": "dc802a3f19bbd33ffe1687bfc7498dbf457d2d3fac6bc43e11a463be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "c4f97f3ff9c8983ffac498bf8a3f90bfa43b903f77c21a3e18bd1abe"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    1,
+    0.0,
+    96000.0
+   ],
+   "hex": "19ba0c40f4558a3f955ea2bf5f3865bf0a799bbe1de3f03d89e98f3d"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "24b50b3edd11d73f2e0005be7af09abfba63b03db091e53ee47331bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    1,
+    10.0,
+    96000.0
+   ],
+   "hex": "b433933eaf9bd43f17d51cbe2a5e97bfb8c18abd92a8e13ed0f4683c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    1,
+    4.75,
+    96000.0
+   ],
+   "hex": "a2282f3fd24cc73f04da7cbf69ef83bf900f203f934daf3e540243be"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "e4f97f3fa3be593fe5b859bf766d45bf0e68453f7c0d38be2b0a383e"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    0.0,
+    2,
+    0.0,
+    96000.0
+   ],
+   "hex": "28ba0c4097d83c3fa39f03bfc51014bf22e21ebf693d0fbebf29abbd"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    0.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "52cf3b3eb1f1c93fa0b9e4bd268090bfc8a3863d98f7ca3e92e28d3c"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    10.0,
+    10.0,
+    2,
+    10.0,
+    96000.0
+   ],
+   "hex": "70cbc43e0a21c63f949b95bd80e58bbf2ec50ebe6d26c93e1686a1bc"
+  },
+  {
+   "kind": "passive_high",
+   "args": [
+    6,
+    1.5,
+    6.25,
+    2,
+    4.75,
+    96000.0
+   ],
+   "hex": "44db363fd7beb23f043360bf86f068bf38db093f73628c3e280d0dbe"
+  }
+ ]
+}

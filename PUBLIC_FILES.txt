@@ -108,3 +108,7 @@ ucnet_shim.py
 
 io24_eq_setup.py
 tests/test_io24_eq_setup.py
+
+io24_eq_native.py
+tests/test_io24_eq_native.py
+tests/fixtures/native_eq_coefficients.json

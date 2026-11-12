@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Exact UC 4.7.2 Passive and Vintage EQ support for the Linux Host.
 
-Universal Control's component XML supplies the semantic controls and defaults.
-The pinned ``dspusbdevice.dll`` supplies the coefficient designers.  The DLL is
-read as data by the bounded interpreter in :mod:`io24_uc472_vintage_eq`; it is
-never loaded or executed by the operating system.  Live routing follows UC's
-recompute call sites exactly: one seven-float ``Lfdf`` section at index 0 and
-three ``Bqdf`` sections at indexes 1 through 3.
+The native circuit equations preserve UC's binary32 coefficient calculations.
+No DLL, emulator, or disassembler is needed by the Host. Live routing remains
+one seven-float ``Lfdf`` section at index 0 and three ``Bqdf`` sections at
+indexes 1 through 3. The optional legacy oracle is retained for research.
 """
 
 import cmath
@@ -15,25 +13,24 @@ import math
 import os
 from pathlib import Path
 
-import io24_uc472_passive_eq as passive
-import io24_uc472_vintage_eq as vintage
+import io24_eq_native as native
 
 
-PASSIVE_CLASS_ID = passive.PASSIVE_CLASS_ID
-VINTAGE_CLASS_ID = vintage.VINTAGE_CLASS_ID
+PASSIVE_CLASS_ID = "{C0730CBB-5135-4558-9222-C40BDBA036ED}"
+VINTAGE_CLASS_ID = "{E1C5E024-C5CD-473C-B08A-6EC177812E01}"
 CLASS_IDS = {"passive": PASSIVE_CLASS_ID, "vintage": VINTAGE_CLASS_ID}
 MODEL_BY_CLASS_ID = {value: key for key, value in CLASS_IDS.items()}
 
-PASSIVE_LOW_HZ = passive.LOW_FREQUENCIES
-PASSIVE_HIGH_BOOST_HZ = passive.HIGH_BOOST_FREQUENCIES
-PASSIVE_HIGH_ATTEN_HZ = passive.HIGH_ATTENUATION_FREQUENCIES
-VINTAGE_LOW_HZ = vintage.LOW_FREQUENCIES
-VINTAGE_LOWMID_HZ = vintage.LOW_MID_FREQUENCIES
-VINTAGE_HIMID_HZ = vintage.HI_MID_FREQUENCIES
+PASSIVE_LOW_HZ = (20.0, 30.0, 60.0, 100.0)
+PASSIVE_HIGH_BOOST_HZ = (3000.0, 4000.0, 5000.0, 8000.0, 10000.0, 12000.0, 16000.0)
+PASSIVE_HIGH_ATTEN_HZ = (5000.0, 10000.0, 20000.0)
+VINTAGE_LOW_HZ = (35.0, 60.0, 110.0, 220.0)
+VINTAGE_LOWMID_HZ = (360.0, 700.0, 1600.0)
+VINTAGE_HIMID_HZ = (3200.0, 4800.0, 7200.0)
 
 IDENTITY = (1.0, 0.0, 0.0, 0.0, 0.0)
 WIDE_IDENTITY = IDENTITY + (0.0, 0.0)
-NATIVE_RATES = vintage.NATIVE_RATES
+NATIVE_RATES = (44100.0, 48000.0, 88200.0, 96000.0)
 
 # Exact defaults and ordering from UC 4.7.2's embedded fatchannelxt.xml.
 PASSIVE_DEFAULT = {
@@ -164,13 +161,14 @@ def resolve_dll(path=None):
         else:
             return selected
     raise AlternateEqUnavailable(
-        "exact Passive/Vintage EQ needs the pinned UC 4.7.2 "
+        "the optional legacy EQ oracle needs the pinned UC 4.7.2 "
         "dspusbdevice.dll; set IO24_UC472_DSPUSBDEVICE to your local copy"
         " (%s)" % detail)
 
 
 @functools.lru_cache(maxsize=4)
 def _image(path):
+    import io24_uc472_vintage_eq as vintage
     try:
         return vintage.Image(path)
     except (OSError, vintage.AnalysisError) as error:
@@ -178,13 +176,8 @@ def _image(path):
 
 
 def designer_status(path=None):
-    """Return ``(available, detail)`` without touching USB or executing the DLL."""
-    try:
-        resolved = resolve_dll(path)
-        _image(str(resolved))
-    except (AlternateEqUnavailable, ImportError) as error:
-        return False, str(error)
-    return True, "pinned UC 4.7.2 designer available"
+    """Report native availability; ``path`` is retained for API compatibility."""
+    return True, "native Passive/Vintage coefficient designers available"
 
 
 def _rate(rate_hz):
@@ -210,7 +203,7 @@ def design_live_sections(eq, rate_hz=48000.0, dll_path=None):
 
     The result is ready for :class:`io24.Io24`: ``kind`` is ``wide`` for the
     seven-float Lfdf section and ``biquad`` for each five-float Bqdf section.
-    A bypassed model is exact identity and therefore needs no DLL access.
+    A bypassed model is exact identity. ``dll_path`` is ignored for compatibility.
     """
     eq = validate_eq(eq)
     model = model_of(eq)
@@ -221,27 +214,21 @@ def design_live_sections(eq, rate_hz=48000.0, dll_path=None):
                 ("biquad", 2, IDENTITY),
                 ("biquad", 3, IDENTITY))
 
-    image = _image(str(resolve_dll(dll_path)))
     if model == "passive":
-        high = tuple(passive.design_high(
-            image, eq["mfreq"], eq["mboost"], eq["hatten"], eq["hsfreq"],
-            eq["bbwidth"], rate)["coefficients"])
-        low = tuple(passive.design_low(
-            image, eq["bfreq"], eq["bboost"], eq["batten"], rate
-        )["coefficients"])
+        high = tuple(native.passive_high(
+            eq["mfreq"], eq["mboost"], eq["hatten"], eq["hsfreq"],
+            eq["bbwidth"], rate))
+        low = tuple(native.passive_low(
+            eq["bfreq"], eq["bboost"], eq["batten"], rate))
         return (("wide", 0, high), ("biquad", 1, low),
                 ("biquad", 2, IDENTITY), ("biquad", 3, IDENTITY))
 
-    low = tuple(vintage.design(
-        image, "low", eq["lowfreq"], eq["lowgain"], rate)["coefficients"])
-    high = tuple(vintage.design(
-        image, "high", 0, eq["higain"], rate)["coefficients"])
-    high_mid = tuple(vintage.design(
-        image, "hi-mid", eq["himidfreq"], eq["himidgain"], rate
-    )["coefficients"])
-    low_mid = tuple(vintage.design(
-        image, "low-mid", eq["lowmidfreq"], eq["lowmidgain"], rate
-    )["coefficients"])
+    low = tuple(native.vintage("low", eq["lowfreq"], eq["lowgain"], rate))
+    high = tuple(native.vintage("high", 0, eq["higain"], rate))
+    high_mid = tuple(native.vintage(
+        "hi-mid", eq["himidfreq"], eq["himidgain"], rate))
+    low_mid = tuple(native.vintage(
+        "low-mid", eq["lowmidfreq"], eq["lowmidgain"], rate))
     return (("wide", 0, low), ("biquad", 1, high),
             ("biquad", 2, high_mid), ("biquad", 3, low_mid))
 
@@ -284,19 +271,18 @@ def design_changed_live_sections(eq, field, previous_sections,
     previous = _normalized_live_sections(previous_sections)
     if field == "eqallon" or not eq["eqallon"] or previous is None:
         return design_live_sections(eq, rate, dll_path)
-    image = _image(str(resolve_dll(dll_path)))
 
     if model == "passive":
         if field in ("bboost", "batten", "bfreq"):
             replacement_index = 1
-            replacement = ("biquad", 1, tuple(passive.design_low(
-                image, eq["bfreq"], eq["bboost"], eq["batten"], rate
-            )["coefficients"]))
+            replacement = ("biquad", 1, tuple(native.passive_low(
+                eq["bfreq"], eq["bboost"], eq["batten"], rate
+            )))
         elif field in ("mboost", "bbwidth", "mfreq", "hatten", "hsfreq"):
             replacement_index = 0
-            replacement = ("wide", 0, tuple(passive.design_high(
-                image, eq["mfreq"], eq["mboost"], eq["hatten"],
-                eq["hsfreq"], eq["bbwidth"], rate)["coefficients"]))
+            replacement = ("wide", 0, tuple(native.passive_high(
+                eq["mfreq"], eq["mboost"], eq["hatten"],
+                eq["hsfreq"], eq["bbwidth"], rate)))
         else:
             raise ValueError("unknown Passive EQ field %r" % field)
     else:
@@ -319,9 +305,8 @@ def design_changed_live_sections(eq, field, previous_sections,
         except KeyError as error:
             raise ValueError("unknown Vintage EQ field %r" % field) from error
         frequency_index = 0 if frequency_field is None else eq[frequency_field]
-        replacement = (kind, replacement_index, tuple(vintage.design(
-            image, band, frequency_index, eq[gain_field], rate
-        )["coefficients"]))
+        replacement = (kind, replacement_index, tuple(native.vintage(
+            band, frequency_index, eq[gain_field], rate)))
 
     updated = list(previous)
     updated[replacement_index] = replacement
@@ -331,10 +316,16 @@ def design_changed_live_sections(eq, field, previous_sections,
 def design_native_coefficients(eq, dll_path=None):
     """Return the four-rate coefficient table used by a device block."""
     eq = validate_eq(eq)
-    image = _image(str(resolve_dll(dll_path)))
-    if model_of(eq) == "passive":
-        return passive.design_eq(image, eq)
-    return vintage.design_eq(image, eq)
+    result = {}
+    for rate in NATIVE_RATES:
+        sections = design_live_sections(eq, rate)
+        if model_of(eq) == "passive":
+            result[rate] = {"low-mid": sections[1][2], "hi-mid": IDENTITY,
+                            "high": IDENTITY, "wide": sections[0][2]}
+        else:
+            result[rate] = {"low-mid": sections[3][2], "hi-mid": sections[2][2],
+                            "high": sections[1][2], "wide": sections[0][2]}
+    return result
 
 
 def section_response(section, frequency_hz, rate_hz):
@@ -379,9 +370,9 @@ def preview_response_db(eq, frequency_hz, rate_hz=48000.0):
     """Fast parameter-driven curve used while exact DSP work is queued.
 
     This intentionally does not replace :func:`design_live_sections`; device
-    writes still use UC's exact designers.  It gives the GTK graph immediate,
-    continuous feedback without running the retained binary interpreter on
-    the UI thread.  Every semantic control has its own visible contribution.
+    writes still use the exact native coefficient designers. It gives the GTK
+    graph immediate feedback while coefficient work is queued off the UI thread.
+    Every semantic control has its own visible contribution.
     """
     eq = validate_eq(eq)
     _rate(rate_hz)

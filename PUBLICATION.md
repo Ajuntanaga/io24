@@ -60,14 +60,11 @@ send is eligible, the builder replaces every decoded user-facing Fat Channel
 field and includes only a separately supported Voice FX leaf.
 
 The independent Android controller and its own release boundary live at
-[`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android). Users
-who want optional factory data or exact alternate-EQ coefficients must recover
-the required data from their own local Universal Control installation.
-`io24-eq-setup` can extract and verify the exact EQ DLL from a user-provided
-installer or validate an already-extracted DLL; the DLL stays in the user cache
-and is never added to the source release or wheel. The Host
-remains usable without factory preset data and reports that catalog as
-unavailable.
+[`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android). All three EQ models use native coefficient calculations and need no vendor DLL.
+Users who want optional factory preset data must recover it from their own
+local Universal Control installation. The Host remains usable without that
+catalog. The optional legacy EQ oracle and `io24-eq-setup` are development
+utilities only; their locally supplied DLL is excluded from source and wheels.
 
 ## Reproducible release checks
 

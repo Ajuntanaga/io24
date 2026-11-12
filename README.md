@@ -415,13 +415,25 @@ program can ask PipeWire or ALSA to change the clock without going through the
 Host's preflight. Turn Voice FX Delay off before making a direct external clock
 change, then let the Host observe the new rate before turning it back on.
 
-The DFU interface reports `Upload Unsupported`, so the device cannot provide a
-recovery image before a write. No custom firmware image is included here.
-The latest offline updater comparison also found that Universal Control 5.1.1
-still embeds the same stock io24 1.28 payload and the same compatibility gate;
-it contains no alternate image or software bypass. Further extension work now
-requires read-only physical SWD/JTAG or external-flash acquisition rather than
-additional DFU guessing.
+The DFU interface reports `Upload Unsupported`, and the attempted DFU readback
+stalled, so we have no recovery image acquired through that route. No custom
+firmware image is included here.
+
+The bootloader rejected metadata from both genuine stock 1.28 and historical
+1.19 packages under the corrected probe sequence. Subsequent direct-driver
+installation attempts also stalled. The offline comparison of Universal Control
+5.1.1 found the same stock io24 1.28 payload and compatibility gate; that
+comparison identified no alternate image or software bypass. These results do
+not establish whether the blocker is a missing protocol step or a device
+restriction.
+
+The software-only routes investigated so far have reached a dead end. Physical
+SWD/JTAG or external-flash acquisition is the next identified investigation
+route, not a proven requirement or a guaranteed solution: debug access may be
+disabled or read-protected. An official recovery tool, a capture of a successful
+update, or a bootloader image could still resolve the gap without opening the
+unit. Firmware-extension work is paused; these findings do not establish a
+working custom-firmware installation path.
 
 ## License and source boundary
 

@@ -34,13 +34,14 @@ io24-mixer = "io24gtk:main"
 io24-ucnet-shim = "ucnet_shim:main"
 io24-calibrate = "calibrate:main"
 io24-scene = "io24_scene:main"
+io24-eq-setup = "io24_eq_setup:main"
 
 # Flat modules rather than a package: the driver grew as a set of peer modules
 # that import each other by name, and renaming them into a package would break
 # every path in PROTOCOL.md that points at the code behind a finding.
 [tool.setuptools]
 py-modules = [
-    "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters", "io24_dynamics_rack",
+    "io24_eq_setup", "io24", "io24_dsp", "io24_mixer", "io24_fx", "io24_meters", "io24_dynamics_rack",
     "io24_mbc", "io24_uc_comp", "io24_voicefx_delay", "io24_native_stat", "io24_native_strip", "io24_preset_record", "io24_presets",
     "io24_alt_eq", "io24_eq_reference", "io24_uc472_passive_eq", "io24_uc472_vintage_eq",
     "io24_scene", "io24_rack_reference", "io24_retro_rack", "io24d", "io24gtk", "ucnet_shim", "calibrate",

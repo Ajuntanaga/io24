@@ -453,3 +453,29 @@ catalog.
 
 [PUBLICATION.md](PUBLICATION.md) records the complete clean-source boundary and
 the release checks used before publishing.
+
+## Optional Passive and Vintage EQ setup
+
+These two EQ models require the exact Universal Control 4.7.2
+`dspusbdevice.dll`; it is not bundled with this project. Standard EQ does not
+require it. Using your own Windows installer, run from the extracted io24 folder:
+
+```bash
+sudo apt install p7zip-full
+.venv/bin/io24-eq-setup "/path/to/Universal Control 4.7.2 installer.exe"
+```
+
+The command extracts only the DLL into temporary storage, verifies its exact
+size and SHA-256, then installs it at `~/.cache/io24/re/dspusbdevice.dll`. It
+does not run the installer, use Wine, download files, or access the io24.
+Restart the Host afterwards. The setup command itself does not need sudo.
+
+Installer extraction depends on 7-Zip recognizing the archive format. The
+setup command has been checked with the real pinned DLL and a test archive;
+extraction from the original UC 4.7.2 installer has not yet been verified.
+If 7-Zip cannot read your installer format, supply an already-extracted
+`dspusbdevice.dll` from your own installation to the same command. Only the
+pinned build is accepted; other 4.7.2 builds or newer versions may not match.
+An existing different cache file is preserved. `--destination PATH` selects
+another location; set `IO24_UC472_DSPUSBDEVICE` to that path when launching
+the Host. If that variable is already set, setup uses it by default.

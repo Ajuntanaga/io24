@@ -35,6 +35,7 @@ class ReleasePackageTests(unittest.TestCase):
     def test_wheel_contains_and_imports_host_runtime_and_supported_cli_modules(self):
         """Removing or breaking a shipped Host dependency must break the wheel."""
         required_modules = {
+            "io24_eq_setup.py",
             "io24.py",
             "io24_dsp.py",
             "io24_dynamics_rack.py",
@@ -61,6 +62,7 @@ class ReleasePackageTests(unittest.TestCase):
             "calibrate.py",
         }
         required_entry_points = {
+            "io24-eq-setup = io24_eq_setup:main",
             "io24 = io24:main",
             "io24d = io24d:main",
             "io24-mixer = io24gtk:main",

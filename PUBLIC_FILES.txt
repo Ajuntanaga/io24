@@ -105,3 +105,6 @@ tools/render_eq_reference_assets.py
 tools/render_rack_assets.py
 tools/render_standard_eq_reference.py
 ucnet_shim.py
+
+io24_eq_setup.py
+tests/test_io24_eq_setup.py

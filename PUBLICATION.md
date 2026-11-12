@@ -62,7 +62,10 @@ field and includes only a separately supported Voice FX leaf.
 The independent Android controller and its own release boundary live at
 [`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android). Users
 who want optional factory data or exact alternate-EQ coefficients must recover
-the required data from their own local Universal Control installation. The Host
+the required data from their own local Universal Control installation.
+`io24-eq-setup` can extract and verify the exact EQ DLL from a user-provided
+installer or validate an already-extracted DLL; the DLL stays in the user cache
+and is never added to the source release or wheel. The Host
 remains usable without factory preset data and reports that catalog as
 unavailable.
 

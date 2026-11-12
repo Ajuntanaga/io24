@@ -9,13 +9,50 @@ import numpy as np
 from PIL import Image
 
 import io24_eq_reference
-from tools.eq_reference_diff import diff_images, model_regions
+import io24_rack_reference
+from tools.eq_reference_diff import diff_images, model_regions, rack_regions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class EqReferenceDiffTests(unittest.TestCase):
+    def test_limiter_regions_come_from_the_rack_manifest(self):
+        spec = io24_rack_reference.rack("limiter")
+        rectangles, circles = rack_regions(spec, (10, 20, 700, 210))
+
+        self.assertEqual(len(rectangles), 1 + len(spec["cleanup_regions"]) +
+                         len(spec["controls"]))
+        self.assertEqual(len(circles), 3)
+        self.assertEqual(circles[0][:2], (150, 132))
+
+    def test_limiter_live_regions_cover_ticks_values_focus_and_lamp_at_both_widths(self):
+        spec = io24_rack_reference.rack("limiter")
+        style = spec["live_style"]
+        for width in (600, 1040):
+            rects, circles = rack_regions(spec, (0, 0, width, 180))
+            def allowed(x, y):
+                return any(rx <= x < rx + rw and ry <= y < ry + rh
+                           for rx, ry, rw, rh in rects) or any(
+                    (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2
+                    for cx, cy, r in circles)
+            geometry = io24_rack_reference.control_layout("limiter", width, 180)
+            for cx, cy, radius in geometry.values():
+                self.assertTrue(allowed(cx, cy - radius * style["tick_major_outer"]))
+                self.assertTrue(allowed(cx + radius + style["knob_focus_px"], cy))
+                self.assertTrue(allowed(cx, cy + radius + style["value_offset_px"] +
+                                        style["value_height_px"] / 2))
+            lx, ly, lr = spec["lamp"]
+            scale = min(width / spec["source_size"][0],
+                        180 / spec["source_size"][1])
+            self.assertTrue(allowed(lx * width / spec["source_size"][0] +
+                                    lr * scale + style["lamp_focus_px"],
+                                    ly * 180 / spec["source_size"][1]))
+            # Static rack hardware is outside every live allowance.
+            sx, sy, _radius = spec["screws"][0]
+            self.assertFalse(allowed(sx * width / spec["source_size"][0],
+                                     sy * 180 / spec["source_size"][1]))
+
     def test_calibration_underlays_are_exact_reference_crops(self):
         for model in ("standard", "passive", "vintage"):
             with self.subTest(model=model):
@@ -31,7 +68,7 @@ class EqReferenceDiffTests(unittest.TestCase):
                     art["calibration_underlay_filename"]).convert("RGB"))
                 self.assertTrue(np.array_equal(source, underlay))
 
-    def test_alternate_faceplates_change_only_state_bearing_regions(self):
+    def test_alternate_faceplates_preserve_hardware_outside_declared_finishes(self):
         for model in ("passive", "vintage"):
             with self.subTest(model=model):
                 art = io24_eq_reference.rack(model)
@@ -47,12 +84,19 @@ class EqReferenceDiffTests(unittest.TestCase):
                 changed = np.any(source != faceplate, axis=2)
                 allowed = np.zeros((height, width), dtype=bool)
                 padding = 12
-                for x, y, region_width, region_height in \
-                        art["control_clear_regions"]:
+                for x, y, region_width, region_height in (
+                        *art["control_clear_regions"],
+                        *art["heading_clear_regions"]):
                     allowed[max(0, y - padding):
                             min(height, y + region_height + padding),
                             max(0, x - padding):
                             min(width, x + region_width + padding)] = True
+                for x, y, region_width, region_height in \
+                        (*art.get("faceplate_cleanup_regions", ()),
+                         art["material_region"],
+                         *art["graph_label_clear_regions"]):
+                    allowed[y:y + region_height,
+                            x:x + region_width] = True
                 x, y, plot_width, plot_height = art["plot"]
                 allowed[y:y + plot_height, x:x + plot_width] = True
                 lamp_x, lamp_y, lamp_radius = art["lamp"]
@@ -61,6 +105,14 @@ class EqReferenceDiffTests(unittest.TestCase):
                             (lamp_radius * 2.35 + padding) ** 2)
                 self.assertTrue(changed.any())
                 self.assertFalse((changed & ~allowed).any())
+                # The material allowance must not silently permit damage to
+                # the mounting hardware or photographed bezel.
+                for cx, cy, radius in art["screws"]:
+                    core = ((xx - cx) ** 2 + (yy - cy) ** 2 <= radius ** 2)
+                    self.assertFalse(changed[core].any())
+                sx, sy, sw, sh = art["screen"]
+                self.assertFalse(changed[sy:sy + sh, sx:sx + 8].any())
+                self.assertFalse(changed[sy:sy + sh, sx + sw - 8:sx + sw].any())
 
     def test_node_overlays_are_transparent_and_reference_sized(self):
         for model in ("standard", "passive", "vintage"):

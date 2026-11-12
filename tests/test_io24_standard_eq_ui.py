@@ -6,6 +6,7 @@ outer shelf selectors independent.  Nothing here opens USB.
 """
 
 import copy
+from types import SimpleNamespace
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -354,3 +355,28 @@ class SemanticPersistenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ControlResetTests(unittest.TestCase):
+    def test_control_resets_q_gain_or_graph_coordinates_without_power_change(self):
+        for target, expected in (("q", {"q": .6}),
+                                 ("gain", {"gain": 0.0}),
+                                 ("node", {"gain": 0.0, "freq": 320.0})):
+            with self.subTest(target=target):
+                values = {key: _Value(99) for key in ("q", "gain", "freq")}
+                win = SimpleNamespace(_alt_eq=lambda ch: None,
+                                      select_band=mock.Mock())
+                curve = SimpleNamespace(
+                    win=win, channel=1, _power_at=lambda x,y: False,
+                    _flatten_at=lambda x,y: False,
+                    _q_knob_at=lambda x,y: 1 if target == "q" else None,
+                    _knob_at=lambda x,y: 1 if target == "gain" else None,
+                    _hit_band=lambda x,y: 1, wid=lambda key: values[key])
+                gesture = SimpleNamespace(
+                    get_current_event_state=lambda: io24gtk.Gdk.ModifierType.CONTROL_MASK,
+                    set_state=mock.Mock())
+                io24gtk.EQCurve._clicked(curve, gesture, 1, 0, 0)
+                win.select_band.assert_called_once_with(1, 1)
+                for key, widget in values.items():
+                    self.assertEqual(widget.get_value(), expected.get(key, 99))
+                gesture.set_state.assert_called_once()

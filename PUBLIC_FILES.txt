@@ -6,6 +6,15 @@
 CONTRIBUTING.md
 docs/design/README.md
 docs/design/EQ_REFERENCE_CALIBRATION.md
+docs/design/eq-knob-reference-board.png
+docs/design/limiter-calibration-nodes.png
+docs/design/limiter-calibration-underlay.png
+docs/design/limiter-faceplate.png
+docs/design/limiter-knob.png
+docs/design/limiter-rack-assets.json
+docs/design/limiter-reference.png
+docs/design/passive-continuous-knob.png
+docs/design/passive-selector-knob.png
 docs/design/passive-program-eq-calibration-nodes.png
 docs/design/passive-program-eq-calibration-underlay.png
 docs/design/passive-program-eq-faceplate.png
@@ -14,10 +23,17 @@ docs/design/standard-parametric-eq-calibration-nodes.png
 docs/design/standard-parametric-eq-calibration-underlay.png
 docs/design/standard-parametric-eq-faceplate.png
 docs/design/standard-parametric-eq-reference.png
+docs/design/standard-gain-knob.png
+docs/design/standard-q-knob.png
+docs/design/vintage-high-knob.png
+docs/design/vintage-himid-knob.png
+docs/design/vintage-low-knob.png
+docs/design/vintage-lowmid-knob.png
 docs/design/vintage-eq-calibration-nodes.png
 docs/design/vintage-eq-calibration-underlay.png
 docs/design/vintage-eq-faceplate.png
 docs/design/vintage-eq-reference.png
+tools/render_eq_knob_assets.py
 GUIDE.md
 LICENSE
 PROTOCOL.md
@@ -31,6 +47,7 @@ io24-mixer
 io24.py
 io24_alt_eq.py
 io24_dsp.py
+io24_dynamics_rack.py
 io24_eq_reference.py
 io24_fx.py
 io24_mbc.py
@@ -40,6 +57,8 @@ io24_native_stat.py
 io24_native_strip.py
 io24_preset_record.py
 io24_presets.py
+io24_rack_reference.py
+io24_retro_rack.py
 io24_scene.py
 io24_uc472_passive_eq.py
 io24_uc472_vintage_eq.py
@@ -56,6 +75,8 @@ probes/probe_setp.py
 pyproject.toml
 systemd/io24-startup.service
 systemd/io24d.service
+tests/paint_smoke.py
+tests/dynamics_rack_smoke.py
 tests/test_eq_reference_diff.py
 tests/test_io24_fx_model_transition.py
 tests/test_io24_global_fx.py
@@ -69,6 +90,7 @@ tests/test_io24_multiband_insert.py
 tests/test_io24_native_stat.py
 tests/test_io24_preset_persistence.py
 tests/test_io24_presets_page.py
+tests/test_io24_rack_reference.py
 tests/test_io24_release_package.py
 tests/test_io24_scene.py
 tests/test_io24_standard_eq_ui.py
@@ -80,5 +102,6 @@ tests/test_publication_docs.py
 tools/eq_reference_diff.py
 tools/export_public.py
 tools/render_eq_reference_assets.py
+tools/render_rack_assets.py
 tools/render_standard_eq_reference.py
 ucnet_shim.py

@@ -6,7 +6,7 @@ The canonical full references stay untouched.  For each rack this tool emits:
 * an exact cropped underlay for pixel comparison;
 * a transparent landmark overlay with every load-bearing measured node; and
 * for Passive/Vintage, a production faceplate with illustrative controls,
-  response trace, and lamp removed so live protocol values can be drawn once.
+  response trace, lamp and headings removed for crisp live rendering.
 
 Run from any directory:
 
@@ -46,7 +46,7 @@ def _crop_reference(art):
 
 
 def _control_mask(model, art):
-    """Mask every illustrative, parameter-bearing control inscription."""
+    """Mask controls and headings replaced by native-resolution rendering."""
     width, height = art["rack_crop"][2:]
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
@@ -57,6 +57,10 @@ def _control_mask(model, art):
     draw.ellipse((lx - reach, ly - reach, lx + reach, ly + reach), fill=255)
     sx, sy, sw, sh = art["screen"]
     draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4), fill=0)
+    # Vintage's title sits immediately above the bezel. Keep the cleanup
+    # feather beyond its last glyph row; the screen itself is restored below.
+    for x, y, region_width, region_height in art["heading_clear_regions"]:
+        draw.rectangle((x, y, x + region_width, y + region_height), fill=255)
     for cx, cy, radius in art["screws"]:
         keep = radius + 8
         draw.ellipse((cx - keep, cy - keep, cx + keep, cy + keep), fill=0)
@@ -97,11 +101,36 @@ def _plate_fill(image, mask, model):
         prepared_image.filter(ImageFilter.GaussianBlur(7.0)),
         dtype=np.float32)
 
-    # Fine, seeded grain prevents the cleared areas reading as flat patches.
+    # Seeded material replaces the controls without leaving smooth blue
+    # islands. Passive uses a cool satin/brushed finish: broad low-contrast
+    # mottling, a restrained oblique sheen, and fine horizontal tooth. The
+    # texture is deterministic, so pixel diffs remain meaningful.
     seed = 20260925 if model == "passive" else 20260926
     rng = np.random.default_rng(seed)
-    grain = rng.normal(0.0, 1.35, source.shape[:2])[:, :, None]
-    fill = np.clip(smooth + grain, 0, 255)
+    grain_sigma = 1.05 if model == "passive" else 1.35
+    grain = rng.normal(0.0, grain_sigma, source.shape[:2])[:, :, None]
+    if model == "passive":
+        coarse_source = np.clip(
+            127.5 + rng.normal(0.0, 34.0, source.shape[:2]),
+            0, 255).astype(np.uint8)
+        coarse_image = Image.fromarray(coarse_source, "L").filter(
+            ImageFilter.GaussianBlur(15.0))
+        coarse = (np.asarray(coarse_image, dtype=np.float32) - 127.5)[
+            :, :, None] * .11
+        yy, xx = np.mgrid[:height, :width]
+        axis = xx / max(1.0, width - 1.0) + \
+            yy / max(1.0, height - 1.0) * .22
+        sheen = np.exp(-((axis - .52) / .19) ** 2)[:, :, None]
+        cool_sheen = sheen * np.array([.50, 1.25, 2.10],
+                                      dtype=np.float32)
+        row_brush = rng.normal(0.0, .52, (height, 1, 1))
+        hairline = (.24 * np.sin(yy * 2.73) +
+                    .13 * np.sin(yy * .43))[:, :, None]
+        fill = np.clip(
+            smooth + grain + coarse + cool_sheen + row_brush + hairline,
+            0, 255)
+    else:
+        fill = np.clip(smooth + grain, 0, 255)
     alpha = np.asarray(mask.filter(ImageFilter.GaussianBlur(3.0)),
                        dtype=np.float32)[:, :, None] / 255.0
     result = source * (1.0 - alpha) + fill * alpha
@@ -115,6 +144,10 @@ def _plate_fill(image, mask, model):
     sx, sy, sw, sh = art["screen"]
     restore_draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4),
                            fill=255)
+    for x, y, region_width, region_height in art["heading_clear_regions"]:
+        restore_draw.rectangle((x, y, x + region_width, y + region_height),
+                               fill=0)
+    restore_draw.rectangle((sx, sy, sx + sw, sy + sh), fill=255)
     for cx, cy, radius in art["screws"]:
         keep = radius * 2.25
         restore_draw.ellipse((cx - keep, cy - keep,
@@ -126,8 +159,63 @@ def _plate_fill(image, mask, model):
     return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8), "RGB")
 
 
+def _finish_plate(image, art, model):
+    """Anodized production metal, with photographed hardware left intact."""
+    width, height = image.size
+    mask = Image.new("L", image.size, 0)
+    draw = ImageDraw.Draw(mask)
+    x, y, w, h = art["material_region"]
+    draw.rectangle((x, y, x + w - 1, y + h - 1), fill=255)
+    sx, sy, sw, sh = art["screen"]
+    draw.rectangle((sx - 4, sy - 4, sx + sw + 4, sy + sh + 4), fill=0)
+    for hx, hy, hw, hh in art["heading_clear_regions"]:
+        draw.rectangle((hx, hy, hx + hw, hy + hh), fill=255)
+    draw.rectangle((sx, sy, sx + sw, sy + sh), fill=0)
+    for x1, y1, x2, y2 in art.get("dividers", ()):
+        draw.line((x1, y1, x2, y2), fill=0, width=13)
+
+    # Cool slate for Passive; neutral smoked metal for Vintage. Broad light
+    # belongs to the metal, while the short brush marks resolve at rack scale.
+    stops = np.array((
+        (96, 114, 132), (64, 83, 104), (44, 63, 84), (27, 43, 61), (17, 28, 41)
+    ) if model == "passive" else (
+        (83, 85, 83), (57, 61, 61), (38, 43, 44), (26, 30, 32), (15, 19, 21)
+    ), dtype=np.float32)
+    positions = (0, .055, .43, .90, 1)
+    yy, xx = np.mgrid[:height, :width]
+    # Preserve each photographed screw head, then feather its contact shadow
+    # into the new finish. A hard circular cutout leaves a patch of old metal.
+    coverage = np.asarray(mask, dtype=np.float32) / 255
+    for cx, cy, radius in art["screws"]:
+        distance = np.hypot(xx - cx, yy - cy)
+        feather = np.clip((distance - radius - 1) / max(1, radius * .65), 0, 1)
+        coverage *= feather * feather * (3 - 2 * feather)
+    mask = Image.fromarray(np.rint(coverage * 255).astype(np.uint8), "L")
+    v = np.clip((yy - y) / max(1, h - 1), 0, 1)
+    metal = np.stack([np.interp(v, positions, stops[:, c])
+                      for c in range(3)], axis=2)
+    rng = np.random.default_rng(20261101 if model == "passive" else 20261102)
+    sheen = np.exp(-((xx / width + yy / height * .15 - .46) / .28) ** 2)
+    metal += sheen[:, :, None] * np.array((4.5, 5, 5.5))
+    metal += rng.normal(0, 1.55, (height, width, 1))
+    metal += rng.normal(0, 1.15, (height, 1, 1))
+    finish = Image.fromarray(np.clip(metal, 0, 255).astype(np.uint8), "RGB")
+    brush = ImageDraw.Draw(finish, "RGBA")
+    for _ in range(4200):
+        bx = int(rng.integers(x, x + w))
+        by = int(rng.integers(y, y + h))
+        span = int(rng.integers(4, 94))
+        color = (205, 220, 229, 12) if rng.random() > .35 else (0, 6, 12, 25)
+        brush.line((bx, by, min(x + w - 1, bx + span), by), fill=color)
+    brush.line((x + 2, y + 1, x + w - 3, y + 1),
+               fill=(217, 231, 234, 65), width=1)
+    brush.line((x + 2, y + h - 2, x + w - 3, y + h - 2),
+               fill=(0, 0, 0, 165), width=2)
+    return Image.composite(finish, image, mask)
+
+
 def _blank_reference_plot(image, art, model):
-    """Clear state-bearing plot pixels; GTK restores the calibrated grid."""
+    """Clear the trace and raster lettering; GTK restores grid and scales."""
     source = np.asarray(image, dtype=np.float32)
     x, y, width, height = art["plot"]
     plot = source[y:y + height, x:x + width]
@@ -145,7 +233,45 @@ def _blank_reference_plot(image, art, model):
         cleaned + rng.normal(0.0, .55, (height, width, 1)), 0, 255)
     result = source.copy()
     result[y:y + height, x:x + width] = cleaned
+    # Interpolate the adjacent unlettered glass across each narrow label
+    # strip. This preserves its local illumination without resampling text.
+    for index, (lx, ly, lw, lh) in enumerate(art["graph_label_clear_regions"]):
+        if index == 0:
+            blend = np.linspace(0, 1, lw)[None, :, None]
+            start = source[ly:ly + lh, lx - 1:lx]
+            end = source[ly:ly + lh, lx + lw:lx + lw + 1]
+        else:
+            blend = np.linspace(0, 1, lh)[:, None, None]
+            start = source[ly - 1:ly, lx:lx + lw]
+            end = source[ly + lh:ly + lh + 1, lx:lx + lw]
+        glass = start * (1 - blend) + end * blend
+        result[ly:ly + lh, lx:lx + lw] = np.clip(
+            glass + rng.normal(0, .35, (lh, lw, 1)), 0, 255)
     return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8), "RGB")
+
+
+def _open_rack_slots(image, art):
+    """Normalize photographed white space to the Host's dark rack bay.
+
+    The Vintage source was photographed on white and Passive on charcoal.
+    Neither background belongs to the hardware. Replacing only near-white
+    source pixels inside the ears (plus the outer crop fringe) keeps the
+    photographed slot edges intact without exposing the vector fallback below
+    them at a slightly different scale.
+    """
+    image = image.convert("RGBA")
+    pixels = np.asarray(image, dtype=np.uint8).copy()
+    ear = int(art["ear"])
+    in_ears = np.zeros(pixels.shape[:2], dtype=bool)
+    in_ears[:, :ear] = True
+    in_ears[:, pixels.shape[1] - ear:] = True
+    photographed_background = np.min(pixels[:, :, :3], axis=2) > 175
+    yy = np.arange(pixels.shape[0])[:, None]
+    fringe = (yy < 8) | (yy >= pixels.shape[0] - 14)
+    replace = photographed_background & (in_ears | fringe)
+    pixels[:, :, :3][replace] = (3, 7, 10)
+    pixels[:, :, 3] = 255
+    return Image.fromarray(pixels, "RGBA")
 
 
 def _node_overlay(model, art):
@@ -279,7 +405,9 @@ def render_model(model, output_dir=DESIGN):
     outputs = [underlay, nodes]
     if model in ("passive", "vintage"):
         faceplate = _plate_fill(cropped, _control_mask(model, art), model)
+        faceplate = _finish_plate(faceplate, art, model)
         faceplate = _blank_reference_plot(faceplate, art, model)
+        faceplate = _open_rack_slots(faceplate, art)
         faceplate_path = output_dir / art["faceplate_filename"]
         faceplate.save(faceplate_path, optimize=True)
         outputs.append(faceplate_path)

@@ -10,12 +10,17 @@ load-bearing crop, screen, plot, knob, rack ear, slot, screw, divider, and lamp
 landmark. The Host, asset renderer, hit testing, and pixel-diff tooling all use
 that same geometry.
 
-Passive and Vintage use value-free production faceplates derived from their
-references. Static metal, rack hardware, group headings, dividers, and display
-bezels therefore stay pixel-identical to the source references. The source
-knobs, illustrative scale values, response trace, and lamp are removed. GTK
-draws those state-bearing regions from the decoded UC fields, so no decorative
-value can contradict the actual control protocol.
+Normal rendering uses the procedural chassis in `io24_retro_rack.py`: deep black
+for Standard and porcelain white for Passive and Vintage. Recessed glass, black
+rack ears, mounting hardware and orange enamel accents follow the measured
+geometry. GTK renders lettering at the actual display resolution and draws
+control values from the decoded UC fields.
+
+The live racks use amplifier-style knobs with flat ivory caps, fluted black
+grips and orange pointer tips, plus chrome bat switches with orange pilot lamps.
+Knobs are rendered at native pixel size and cached separately from their live
+lettering. The original PNG faceplates, knob assets and calibration images
+remain available as design references; production uses the procedural hardware.
 
 - `passive-program-eq-reference.png` establishes the blue steel faceplate,
   low/high grouping, recessed response display, stepped selectors, screws and
@@ -41,16 +46,95 @@ coordinates, regeneration command, and diff workflow.
 Selecting or hovering a continuous knob shows its exact decoded value; a
 stepped selector lights its current printed position instead. The response
 display previews the semantic controls immediately and is replaced by UC's
-exact designed sections after a successful device write. The clickable lamp
+exact designed sections after a successful device write. The power switch
 is that EQ model's independent on/off control.
 
 All three models occupy the same full-width, 2U outer rack rectangle. Vintage
-keeps its measured source control positions and circular knob radii, but its
-live plate is recomposed to fill the common height instead of floating as a
-short strip. Switching models therefore does not resize or jump the page.
+maps its measured control positions into that rectangle while keeping circular
+knob bodies as independent live layers.
+Switching models therefore does not resize or jump the page.
 
 Standard's list rows are state-only and remain hidden. Its faceplate provides
 four large Gain knobs, four smaller logarithmic Q knobs, per-band power and
 outer-band Peak/Shelf buttons, Flatten, and global power. The Q additions are
 recorded in the calibration-node overlay even though they are not present in
 the original illustrative bitmap.
+
+## Production finishes
+
+HPF, Passive and Vintage use porcelain white; Standard and Limiter use deep
+black. Fine powdercoat and machining, black rack ears, contact shadows and chrome
+hardware give the units depth. Orange is the shared display and enamel accent.
+Knob underlighting is absent. Native live headings and scales stay separate from
+the cached textures so resizing does not resample their lettering.
+
+The recessed displays project the actual response into a bounded 2.5D mesh.
+The front edge remains the true response; receding ribbons describe its shape,
+not additional signal history. Standard retains its real spectrum history in
+copper and orange. HPF retains its audio-responsive plane and idle motion, and
+Limiter retains its measured gain-reduction meter. This treatment adds no timer
+or synthetic production signal; existing control, telemetry and DSP paths remain
+authoritative.
+
+The procedural production chassis requires no asset build. Regenerate the
+historical reference faceplates and calibration layers with:
+
+```bash
+python3 tools/render_standard_eq_reference.py --faceplate
+python3 tools/render_eq_reference_assets.py
+```
+
+## Reference-rack workflow
+
+To add a rack, commit a single populated source reference in `docs/design/`,
+then declare its source size, static hardware, live regions, controls, and
+generated filenames in `io24_rack_reference.py`. Keep the manifest as the
+coordinate authority: runtime hit targets, focus, renderer output, and diff
+allowances must all derive from it.
+
+Compile the reference and generated assets, then use the non-writing drift
+gate before committing:
+
+```bash
+python3 tools/render_rack_assets.py limiter
+python3 tools/render_rack_assets.py limiter --check
+```
+
+For calibration, set `IO24_EQ_REFERENCE_CALIBRATION` to `backdrop`, `overlay`,
+`nodes`, or `both` while running the paint harness. `backdrop` (also accepted
+as `underlay`) shows only the generated populated reference; `overlay` adds
+that reference at 46% opacity over the live rack, `nodes` adds the measured
+geometry, and `both` combines those two inspection layers. Normal mode uses
+the procedural production chassis and live controls.
+
+For geometry inspection, capture the same state with `backdrop` and normally.
+These now have different artwork; use two production captures for pixel
+regression comparisons. The harness writes each
+limiter capture's actual allocation to a `.limiter-rack.json` sidecar. Use
+that rectangle with `--rack limiter --rack-rect X,Y,W,H` in
+`tools/eq_reference_diff.py`. Allowances include the source cleanup regions,
+the live display, tick strokes, focus/hover halos, lamp border, and clipped
+value text. Dimensions come from the manifest, including fixed logical-pixel
+padding where the GTK paint uses a fixed font or halo. Native GTK regression
+tests also compare actual reference/live render nodes at 600 and 1040 px,
+including extreme values, power, and all focus/hover targets.
+
+Bind a new `ReferenceRack` only to the existing authoritative widgets and
+their existing callbacks; do not introduce a second state store or device
+write path. The limiter retains its original switch row and sliders, mapped
+inside a transparent, non-measuring GTK overlay. This preserves native
+switch/slider accessibility roles, names, values, Tab navigation, and native
+actions without displaying the old rows. Pointer events still reach the rack;
+native focus selects the corresponding painted control. Finally, paint-capture
+the selected module at desktop and minimum
+width with the hardware-free harness, inspect the captures, and keep those
+captures outside the release tree:
+
+```bash
+IO24_PAINT_PAGE=ch IO24_PAINT_MODULE=LIM IO24_PAINT_LIMITER_ON=1 \
+IO24_PAINT_CAPTURE_DIR=/tmp/io24-limiter-desktop \
+python3 tests/paint_smoke.py
+IO24_PAINT_WIDTH=600 IO24_PAINT_PAGE=ch IO24_PAINT_MODULE=LIM \
+IO24_PAINT_LIMITER_ON=1 IO24_PAINT_CAPTURE_DIR=/tmp/io24-limiter-minimum \
+python3 tests/paint_smoke.py
+```

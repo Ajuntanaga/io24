@@ -31,6 +31,7 @@ import math
 import os
 import struct
 import sys
+import threading
 from pathlib import Path
 
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
@@ -97,6 +98,13 @@ class Image:
             _name = raw[at:at + 8].rstrip(b"\0").decode()
             vsize, va, rsize, rawptr = struct.unpack_from("<IIII", raw, at + 8)
             self.sections.append((va, max(vsize, rsize), rawptr, rsize))
+        # Every design walks the same immutable instruction addresses. Keep
+        # Capstone's decoded instructions with the validated image instead of
+        # disassembling them again for each knob event. The cache is shared by
+        # the control worker and GTK's exact graph preview; the lock is needed
+        # only while an address is populated for the first time.
+        self.decoded_instructions = {}
+        self.decode_lock = threading.Lock()
 
     def offset(self, va):
         rva = va - IMAGE_BASE
@@ -246,9 +254,17 @@ class Machine:
     STACK_TOP = 0x7FF000000000
 
     def _decode(self, va):
-        code = self.image.read(va, 16)
-        for insn in self.md.disasm(code, va):
-            return insn
+        cached = self.image.decoded_instructions.get(va)
+        if cached is not None:
+            return cached
+        with self.image.decode_lock:
+            cached = self.image.decoded_instructions.get(va)
+            if cached is not None:
+                return cached
+            code = self.image.read(va, 16)
+            for insn in self.md.disasm(code, va):
+                self.image.decoded_instructions[va] = insn
+                return insn
         raise AnalysisError("cannot decode at %#x" % va)
 
     def _math_thunk(self, target):

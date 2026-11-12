@@ -884,6 +884,45 @@ class HostRefinementTests(unittest.TestCase):
             io24gtk.Spectrum._release_alpha(
                 io24gtk.Spectrum.RELEASE_TAU_S), math.exp(-1.0), places=7)
 
+    def test_spectrogram_history_is_bounded_and_copied_for_painting(self):
+        spectrum = io24gtk.Spectrum(autostart=False)
+        for index in range(spectrum.HISTORY_COLUMNS + 7):
+            spectrum.history[0].append((float(index),))
+
+        snapshot = spectrum.history_snapshot(1)
+
+        self.assertIsInstance(snapshot, tuple)
+        self.assertEqual(len(snapshot), spectrum.HISTORY_COLUMNS)
+        self.assertEqual(snapshot[0], (7.0,))
+        self.assertEqual(snapshot[-1],
+                         (float(spectrum.HISTORY_COLUMNS + 6),))
+        with self.assertRaises(ValueError):
+            spectrum.history_snapshot(3)
+
+    def test_spectrogram_palette_hides_silence_and_brightens_signal(self):
+        silent = io24gtk.spectrogram_colour(-120.0)
+        middle = io24gtk.spectrogram_colour(-58.0)
+        loud = io24gtk.spectrogram_colour(-10.0)
+
+        self.assertEqual(silent[3], 0.0)
+        self.assertGreater(middle[3], silent[3])
+        self.assertGreater(loud[3], middle[3])
+        self.assertGreater(loud[0], middle[0])
+
+    def test_spectrogram_raster_places_new_time_right_and_low_frequency_down(self):
+        pixels = io24gtk.spectrogram_pixels(
+            [(-20.0, -120.0), (-120.0, -20.0)],
+            column_count=3, row_count=2)
+
+        def alpha(row, column):
+            return pixels[(row * 3 + column) * 4 + 3]
+
+        self.assertEqual(alpha(0, 0), 0)       # unused history starts clear
+        self.assertGreater(alpha(1, 1), 0)     # old low energy at bottom
+        self.assertEqual(alpha(0, 1), 0)
+        self.assertGreater(alpha(0, 2), 0)     # newest high energy at top/right
+        self.assertEqual(alpha(1, 2), 0)
+
     def test_curve_drag_publishes_one_coherent_band_update(self):
         class Value:
             def __init__(self, host, key):
@@ -937,7 +976,7 @@ class HostRefinementTests(unittest.TestCase):
             _fs=48000.0,
             hpf_by_ch={1: 24.0, 2: 24.0},
             ctl=SimpleNamespace(submit=submitted.append),
-            _adopt_hpf_controls=lambda _ch, _hz: None,
+            _adopt_hpf_controls=lambda _ch, _hz, **_kwargs: None,
             racks={},
             say=messages.append,
         )
@@ -946,6 +985,52 @@ class HostRefinementTests(unittest.TestCase):
 
         self.assertEqual(len(submitted), 1)
         self.assertEqual(messages, [])
+
+    def test_hpf_cutoff_adoption_does_not_change_shared_power(self):
+        cutoff = SimpleNamespace(
+            value=None, sensitive=None,
+            set_value=lambda value: setattr(cutoff, "value", value),
+            set_sensitive=lambda value: setattr(cutoff, "sensitive", value))
+        mode = SimpleNamespace(
+            selected=None,
+            set_selected=lambda value: setattr(mode, "selected", value),
+            get_selected=lambda: mode.selected)
+        power = SimpleNamespace(
+            active=True,
+            get_active=lambda: power.active,
+            set_active=lambda value: setattr(power, "active", bool(value)))
+        host = SimpleNamespace(
+            hpf_by_ch={1: 80.0},
+            w={1: {"hpf": cutoff, "hpf_mode": mode}},
+            hpf_live={1: SimpleNamespace(w=power)},
+            _hpf_basic_index=io24gtk.Win._hpf_basic_index)
+
+        io24gtk.Win._adopt_hpf_controls(host, 1, 24.0)
+
+        self.assertEqual(cutoff.value, 24.0)
+        self.assertEqual(mode.selected, 0)
+        self.assertFalse(cutoff.sensitive)
+        self.assertTrue(io24gtk.Win.hpf_enabled(host, 1))
+
+        power.set_active(False)
+        self.assertFalse(io24gtk.Win.hpf_enabled(host, 1))
+        self.assertEqual(cutoff.value, 24.0)
+
+    def test_hpf_power_round_trip_preserves_cutoff(self):
+        power = SimpleNamespace(active=True)
+        power.get_active = lambda: power.active
+        power.set_active = lambda value: setattr(power, "active", bool(value))
+        host = SimpleNamespace(
+            hpf_by_ch={1: 347.0},
+            hpf_live={1: SimpleNamespace(w=power)})
+
+        io24gtk.Win.toggle_module(host, 1, "HPF")
+        self.assertFalse(power.active)
+        self.assertEqual(host.hpf_by_ch[1], 347.0)
+
+        io24gtk.Win.toggle_module(host, 1, "HPF")
+        self.assertTrue(power.active)
+        self.assertEqual(host.hpf_by_ch[1], 347.0)
 
     def test_preset_indicator_identifies_slot_and_respects_reduced_motion(self):
         visual = getattr(
@@ -1275,7 +1360,7 @@ class HostRefinementTests(unittest.TestCase):
             invalidate_curve=lambda: None, _adopt_mute=False,
             _insert_reconcile=lambda restart=False: None,
             _adopt_band=lambda _ch: None,
-            _adopt_hpf_controls=lambda _ch, _hz: None,
+            _adopt_hpf_controls=lambda _ch, _hz, **_kwargs: None,
             _adopt_dynamics=lambda _ch, _preset: None,
             _sync_order_row=lambda _ch: None,
             w={1: {"gate_on": toggle, "comp_on": toggle,
@@ -1446,7 +1531,7 @@ class HostRefinementTests(unittest.TestCase):
     def test_multiband_selection_hides_single_band_only_controls(self):
         widgets = {name: _Control() for name in (
             "model", "comp_param_stack", "ckey_row", "cklisten",
-            "comp_curve")}
+            "comp_curve", "mbc_rack")}
         host = SimpleNamespace(w={1: widgets}, _adopt_mute=True)
 
         widgets["model"].set_selected(io24gtk.MULTIBAND_MODEL)
@@ -1456,17 +1541,61 @@ class HostRefinementTests(unittest.TestCase):
                          "multiband")
         self.assertFalse(widgets["ckey_row"].visible)
         self.assertFalse(widgets["cklisten"].visible)
-        self.assertFalse(widgets["comp_curve"].visible)
+        self.assertTrue(widgets["comp_curve"].visible)
+        self.assertFalse(widgets["comp_param_stack"].visible)
+        self.assertTrue(widgets["mbc_rack"].visible)
 
         widgets["model"].set_selected(0)
         io24gtk.Win._comp_model_changed(host, 1)
 
         self.assertEqual(widgets["comp_param_stack"].visible_child_name,
                          "standard")
-        self.assertTrue(widgets["ckey_row"].visible)
-        self.assertTrue(widgets["cklisten"].visible)
+        self.assertFalse(widgets["ckey_row"].visible)
+        self.assertFalse(widgets["cklisten"].visible)
+        self.assertFalse(widgets["comp_param_stack"].visible)
+        self.assertFalse(widgets["mbc_rack"].visible)
         self.assertTrue(widgets["comp_curve"].visible)
         self.assertEqual(widgets["comp_curve"].draws, 2)
+
+    def test_live_crossover_moves_cannot_cross_adjacent_splits(self):
+        controls = {ch: _multiband_controls() for ch in (1, 2)}
+        insert = SimpleNamespace(running=True, set_channel_controls=mock.Mock())
+        host = SimpleNamespace(mbc_ctl=controls, _mbc_mute=False,
+                               link_both=False, insert=insert)
+        for name in ("_mbc_set", "_mbc_targets", "_mbc_mirror", "_mbc_push"):
+            setattr(host, name, getattr(io24gtk.Win, name).__get__(host))
+        for index, before, requested, expected in (
+                (0, (150, 300, 4500), 400, 299),
+                (1, (400, 800, 4500), 300, 401),
+                (1, (150, 800, 2000), 2500, 1999),
+                (2, (150, 2500, 4500), 2000, 2501)):
+            with self.subTest(index=index):
+                for ch in (1, 2):
+                    for i, value in enumerate(before):
+                        controls[ch]["x%d" % i].set_value(value)
+                insert.set_channel_controls.reset_mock()
+                cid = "x%d" % index
+                keys = [name + ":Freq" for name in io24_mbc.crossover_nodes()[index]]
+                controls[1][cid].set_value(requested)
+                host._mbc_set(1, cid, keys, requested)
+                self.assertEqual(controls[1][cid].get_value(), expected)
+                self.assertEqual(controls[2][cid].get_value(), before[index])
+                insert.set_channel_controls.assert_called_once_with(
+                    1, {key: expected for key in keys})
+                self.assertFalse(host._mbc_mute)
+
+        # Linking preserves ordering even when the neighbouring channel has
+        # different split settings. Every compensation filter moves with it.
+        host.link_both = True
+        controls[1]["x1"].set_value(350)
+        controls[2]["x1"].set_value(300)
+        keys = [name + ":Freq" for name in io24_mbc.crossover_nodes()[0]]
+        insert.set_channel_controls.reset_mock()
+        host._mbc_set(1, "x0", keys, 400)
+        self.assertEqual(controls[1]["x0"].get_value(), 299)
+        self.assertEqual(controls[2]["x0"].get_value(), 299)
+        self.assertEqual(insert.set_channel_controls.call_args_list, [
+            mock.call(ch, {key: 299 for key in keys}) for ch in (1, 2)])
 
     def test_host_file_worker_uses_its_serialized_device_argument(self):
         picker = inspect.getsource(io24gtk.Win._pick)

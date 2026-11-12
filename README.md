@@ -13,9 +13,27 @@ to set up. The independent
 [io24 Controller for Android](https://github.com/Ajuntanaga/io24-android) talks
 to the interface directly from a phone and does not depend on this Host.
 
+## Project status
+
+Active development is paused while the Host is used day to day. This snapshot
+includes the finished rack interface and the supported controls described below.
+The remaining device and firmware limitations are documented here; custom
+firmware extensions are not part of this release.
+
+## Download
+
+[Download the Linux source ZIP](https://github.com/Ajuntanaga/io24/archive/refs/heads/main.zip),
+extract it, and open a terminal in the extracted `io24-main` folder. The download
+contains the app, rack artwork, documentation, and tests. It does not include
+virtual machines, development environments, or proprietary firmware.
+
+Keep the extracted folder if you use `install-desktop.sh`: its launcher runs
+from that location. Your existing local presets and settings are separate from
+this download.
+
 ## Quick start
 
-Here is a clean setup for Debian or Ubuntu:
+From the extracted folder, here is a clean setup for Debian or Ubuntu:
 
 ```bash
 sudo apt install build-essential libusb-1.0-0 pipewire-bin wireplumber \
@@ -60,9 +78,9 @@ day:
 
 | Area | Linux Host support |
 |---|---|
-| Inputs | gain, phantom power, mute, fixed 80 Hz low cut, stereo link, and automatic Host-side leveling |
+| Inputs | gain, phantom power, mute, channel HPF power, stereo link, and automatic Host-side leveling |
 | Mixer | Main, Mix A, and Mix B levels and assigns; source and output mute; bus masters; solo; monitor blend; headphones source; persistent Mirror Main |
-| Fat Channel | digital HPF, gate, Standard/Tube/FET compressors, limiter, four-band Standard EQ, Passive Program EQ, and Vintage 1970s EQ |
+| Fat Channel | variable cutoff for the channel HPF, gate, Standard/Tube/FET compressors, limiter, four-band Standard EQ, Passive Program EQ, and Vintage 1970s EQ |
 | Device reverb | shared block-202 reverb, measured working with both inputs feeding it |
 | Voice FX | Transformer, Detuner, Vocoder, Ring Modulator, Filters, and Delay in the exact UC XML control order. Each model retains its settings, while turning one **On** turns the other five off, matching UC's single active rack. All six are verified on Input 1; models 1–5 are verified on Input 2. Above 48 kHz, Delay automatically moves to the safe Host insert instead of selecting the unaccepted high-rate firmware model. |
 | Host effects | four-band multiband compressor and the safe high-rate Voice FX Delay fallback |
@@ -399,6 +417,11 @@ change, then let the Host observe the new rate before turning it back on.
 
 The DFU interface reports `Upload Unsupported`, so the device cannot provide a
 recovery image before a write. No custom firmware image is included here.
+The latest offline updater comparison also found that Universal Control 5.1.1
+still embeds the same stock io24 1.28 payload and the same compatibility gate;
+it contains no alternate image or software bypass. Further extension work now
+requires read-only physical SWD/JTAG or external-flash acquisition rather than
+additional DFU guessing.
 
 ## License and source boundary
 

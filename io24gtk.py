@@ -31,20 +31,37 @@ import struct
 import sys
 import threading
 import time
+import warnings
+from collections import deque
+from functools import lru_cache
 
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gsk", "4.0")
-from gi.repository import (Adw, GLib, Gtk, Gio, Gdk, Gsk, Graphene,  # noqa: E402
-                           Pango)
+# PyGObject 3.54 warns while its own override loader enumerates GLib's legacy
+# unix_signal_add_full alias.  Nothing here calls that alias; keep this narrow
+# so deprecations originating in io24gtk itself remain visible.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message=(r"GLib\.unix_signal_add_full is deprecated; "
+                 r"use GLibUnix\.signal_add_full instead"),
+        category=gi.PyGIDeprecationWarning,
+        module=r"gi\.overrides(?:\..*)?",
+    )
+    from gi.repository import (Adw, GLib, Gtk, Gio, Gdk, Gsk, Graphene,  # noqa: E402
+                               Pango)
 
 import io24                                # noqa: E402  (STEREO_PAIRS, pan law)
 import io24_alt_eq                         # noqa: E402  (exact Passive/Vintage EQ)
 import io24_dsp                            # noqa: E402  (exact compressor models)
+import io24_dynamics_rack                  # noqa: E402  (silver dynamics artwork)
 import io24_fx                             # noqa: E402  (vendor VoiceFX schema/builders)
 import io24_eq_reference                   # noqa: E402  (measured EQ artwork)
 import io24_mbc                            # noqa: E402  (host multiband)
+import io24_rack_reference                 # noqa: E402  (shared rack geometry)
+import io24_retro_rack                     # noqa: E402  (enamel and phosphor racks)
 import io24_voicefx_delay                  # noqa: E402  (safe high-rate Delay)
 import io24_presets                        # noqa: E402  (shared preset model resolver)
 import io24_scene                          # noqa: E402  (UC scene import)
@@ -83,6 +100,10 @@ DEVICE_PRESET_LIBRARY_REGISTRY_PATH = os.path.join(
 LAST_SESSION_PATH = os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
     "io24", "last-session.json")
+# A short quiet period keeps a dragged fader from causing one filesystem
+# replacement per input event, while still checkpointing a settled edit before
+# a normal close (or an abrupt one) can lose the working context.
+HOST_SESSION_DEBOUNCE_MS = 250
 # Setters the unit reports itself. A resume takes these from the unit, so a
 # change made on the hardware while the Host was closed stands.
 RESUME_SKIP = ("set_mute", "set_hp_mute", "set_channel_link",
@@ -191,6 +212,36 @@ def first_descendant(root, widget_type):
     return None
 
 
+def deferred_parent_scroll_restore(widget):
+    """Capture a parent page's vertical position for a deferred relayout.
+
+    GTK may run ``ensure-visible`` after a newly shown rack has been measured,
+    which used to pull the Fat Channel down to the Vintage EQ even though the
+    user had not scrolled.  Returning an idle-compatible callback keeps the
+    user's exact offset after that delayed allocation without coupling the EQ
+    model code to the page hierarchy.
+    """
+    current = widget
+    while current is not None:
+        get_adjustment = getattr(current, "get_vadjustment", None)
+        adjustment = get_adjustment() if callable(get_adjustment) else None
+        if adjustment is not None:
+            value = float(adjustment.get_value())
+
+            def restore():
+                lower = float(adjustment.get_lower())
+                upper = float(adjustment.get_upper())
+                page_size = float(adjustment.get_page_size())
+                adjustment.set_value(max(
+                    lower, min(value, max(lower, upper - page_size))))
+                return False
+
+            return restore
+        get_parent = getattr(current, "get_parent", None)
+        current = get_parent() if callable(get_parent) else None
+    return None
+
+
 def keep_page_wheel_scrolling(page):
     """Make vertical wheel/trackpad input scroll the page, even over faders.
 
@@ -234,6 +285,44 @@ def load_last_session(path=None):
     if isinstance(data, dict) and data.get("version") == 1:
         return data
     return None
+
+
+def host_presentation(session):
+    """Return the safe, Host-local working-context portion of a session.
+
+    Device values deliberately do not live here: the driver's durable shadow
+    owns those.  This is only the context that the Host itself creates -- the
+    open page, selected strip/band, and window placement.
+    """
+    candidate = (session or {}).get("host_presentation")
+    if not isinstance(candidate, dict):
+        return {}
+    result = {}
+    if candidate.get("page") in ("mix", "ch", "fx", "route", "dev", "pre"):
+        result["page"] = candidate["page"]
+    if candidate.get("channel") in (1, 2):
+        result["channel"] = candidate["channel"]
+    bands = candidate.get("bands")
+    if isinstance(bands, dict):
+        clean = {}
+        for channel in ("1", "2"):
+            value = bands.get(channel)
+            if isinstance(value, int) and 0 <= value < 4:
+                clean[channel] = value
+        if clean:
+            result["bands"] = clean
+    window = candidate.get("window")
+    if isinstance(window, dict):
+        clean = {}
+        for dimension in ("width", "height"):
+            value = window.get(dimension)
+            if isinstance(value, int) and 320 <= value <= 7680:
+                clean[dimension] = value
+        if isinstance(window.get("maximized"), bool):
+            clean["maximized"] = window["maximized"]
+        if clean:
+            result["window"] = clean
+    return result
 
 
 def db(x):
@@ -963,37 +1052,72 @@ def centred_label(widget, sn, text, cx, y, color, size=9):
 EQ_FACEPLATE_FONT = "Nimbus Sans Narrow"
 
 
-def faceplate_label(widget, sn, text, x, y, color, size=9,
-                    weight=Pango.Weight.SEMIBOLD):
-    """Condensed engraved lettering shared by the three EQ faceplates."""
-    lay = widget.create_pango_layout(text)
+def _rack_pixel(widget, value):
+    """Align lettering and its parent translation to physical display pixels."""
+    scale = widget.get_scale_factor()
+    return round(value * scale) / scale
+
+
+def _faceplate_layout(widget, text, size, weight):
+    # Use a private context: changing the widget's shared Pango context also
+    # changes unrelated native controls. Recreate on font/DPI/scale changes.
+    key = (widget.get_pango_context().get_serial(), widget.get_scale_factor())
+    cached = getattr(widget, "_rack_text_context", None)
+    if cached is None or cached[0] != key:
+        context = widget.create_pango_context()
+        # Keep GTK's native font options and hinting; round individual glyph
+        # positions as well as the layout origin so narrow lettering stays
+        # crisp without requiring the optional PyGObject Cairo bridge.
+        context.set_round_glyph_positions(True)
+        cached = (key, context)
+        widget._rack_text_context = cached
+    lay = Pango.Layout.new(cached[1])
+    lay.set_text(text, -1)
     fd = Pango.FontDescription()
     fd.set_family(EQ_FACEPLATE_FONT)
     fd.set_stretch(Pango.Stretch.CONDENSED)
     fd.set_weight(weight)
     fd.set_size(int(size * Pango.SCALE))
     lay.set_font_description(fd)
+    return lay
+
+
+def _append_faceplate_text(widget, sn, lay, x, y, color):
     sn.save()
-    sn.translate(Graphene.Point().init(x, y))
+    sn.translate(Graphene.Point().init(
+        _rack_pixel(widget, x), _rack_pixel(widget, y)))
     sn.append_layout(lay, color)
     sn.restore()
+
+
+def faceplate_label(widget, sn, text, x, y, color, size=9,
+                    weight=Pango.Weight.SEMIBOLD):
+    """Native, pixel-aligned lettering drawn above the rack artwork."""
+    lay = _faceplate_layout(widget, text, size, weight)
+    _append_faceplate_text(widget, sn, lay, x, y, color)
 
 
 def centred_faceplate_label(widget, sn, text, cx, y, color, size=9,
                             weight=Pango.Weight.SEMIBOLD):
     """Draw condensed faceplate text centred without width guessing."""
-    lay = widget.create_pango_layout(text)
-    fd = Pango.FontDescription()
-    fd.set_family(EQ_FACEPLATE_FONT)
-    fd.set_stretch(Pango.Stretch.CONDENSED)
-    fd.set_weight(weight)
-    fd.set_size(int(size * Pango.SCALE))
-    lay.set_font_description(fd)
+    lay = _faceplate_layout(widget, text, size, weight)
     width, _height = lay.get_pixel_size()
-    sn.save()
-    sn.translate(Graphene.Point().init(cx - width / 2.0, y))
-    sn.append_layout(lay, color)
-    sn.restore()
+    _append_faceplate_text(widget, sn, lay, cx - width / 2.0, y, color)
+
+
+def faceplate_heading(widget, sn, text, cx, cy, color, pixels, tracking):
+    """Keep reference typography live, centred on its visible cap height."""
+    lay = _faceplate_layout(widget, text, 9, Pango.Weight.SEMIBOLD)
+    fd = lay.get_font_description()
+    fd.set_absolute_size(pixels * Pango.SCALE)
+    lay.set_font_description(fd)
+    attrs = Pango.AttrList()
+    attrs.insert(Pango.attr_letter_spacing_new(round(tracking * Pango.SCALE)))
+    lay.set_attributes(attrs)
+    ink, _logical = lay.get_pixel_extents()
+    _append_faceplate_text(widget, sn, lay,
+                          cx - ink.x - ink.width / 2,
+                          cy - ink.y - ink.height / 2, color)
 
 
 def vgrad(sn, x, y, w, h, stops):
@@ -1050,6 +1174,70 @@ def radial_dot(sn, x, y, r, stops, focus=(-.22, -.26)):
     sn.pop()
 
 
+SPECTROGRAM_FLOOR_DB = -100.0
+SPECTROGRAM_CEILING_DB = -18.0
+SPECTROGRAM_ROWS = 64
+
+
+def spectrogram_colour(level_db):
+    """Map live level to charcoal, copper and orange phosphor density.
+
+    This is intentionally independent of the four EQ band colours.  The heat
+    field describes the source over time; the brighter response line and
+    coloured control nodes describe what the EQ will do to it.
+    """
+    amount = (float(level_db) - SPECTROGRAM_FLOOR_DB) / \
+        (SPECTROGRAM_CEILING_DB - SPECTROGRAM_FLOOR_DB)
+    amount = max(0.0, min(1.0, amount))
+    stops = (
+        (0.00, (.018, .020, .020)),
+        (0.24, (.090, .036, .018)),
+        (0.48, (.260, .064, .018)),
+        (0.70, (.620, .160, .025)),
+        (0.86, (.970, .320, .055)),
+        (1.00, (1.000, .740, .320)),
+    )
+    for index in range(len(stops) - 1):
+        left, left_colour = stops[index]
+        right, right_colour = stops[index + 1]
+        if amount <= right:
+            local = (amount - left) / max(1e-9, right - left)
+            colour = tuple(
+                a + (b - a) * local
+                for a, b in zip(left_colour, right_colour))
+            break
+    else:
+        colour = stops[-1][1]
+    # Silence disappears into the glass; useful signal becomes decisively
+    # visible without covering the engraved grid or the response trace.
+    alpha = 0.0 if amount < .035 else .08 + .54 * amount
+    return colour + (alpha,)
+
+
+def spectrogram_pixels(history, column_count, row_count=SPECTROGRAM_ROWS):
+    """Rasterize oldest-to-newest log-frequency slices into RGBA bytes."""
+    column_count = max(1, int(column_count))
+    row_count = max(1, int(row_count))
+    frames = tuple(history)[-column_count:]
+    first_column = column_count - len(frames)
+    pixels = bytearray(column_count * row_count * 4)
+    for column, frame in enumerate(frames, first_column):
+        if not frame:
+            continue
+        for row in range(row_count):
+            source = int(round(
+                row * (len(frame) - 1) / max(1, row_count - 1)))
+            colour = spectrogram_colour(frame[source])
+            # Texture memory is top-to-bottom, while analysis bins are
+            # low-to-high. Newest time is the rightmost texture column.
+            screen_row = row_count - row - 1
+            offset = (screen_row * column_count + column) * 4
+            pixels[offset:offset + 4] = bytes(
+                max(0, min(255, int(round(component * 255.0))))
+                for component in colour)
+    return bytes(pixels)
+
+
 class Spectrum:
     """Real-time spectrum from the device's own capture stream.
 
@@ -1064,6 +1252,8 @@ class Spectrum:
     FFT = 8192
     HOP = 1024
     RELEASE_TAU_S = 0.16
+    HISTORY_COLUMNS = 96
+    HISTORY_DECIMATION = 3
 
     # If a capture generation produces no data for this long while it is
     # supposed to be running, treat it as wedged rather than waiting forever.
@@ -1087,6 +1277,11 @@ class Spectrum:
         self.channels = self.CAPTURE_CHANNELS if channels is None else channels
         self.card = card
         self.mag = [None, None]          # dB per log-spaced bin, per channel
+        # Oldest-to-newest FFT slices for the scrolling spectrogram.  The
+        # current magnitude remains separate because its peak-readout release
+        # is useful, while a spectrogram must retain actual time variation.
+        self.history = [deque(maxlen=self.HISTORY_COLUMNS),
+                        deque(maxlen=self.HISTORY_COLUMNS)]
         self.ok = False
         self.error = None
         self.running = False
@@ -1141,6 +1336,8 @@ class Spectrum:
             # Cleared INSIDE the lock, with the generation bump, so a worker
             # cannot slip a frame in between the bump and the clear.
             self.mag = [None, None]
+            self.history = [deque(maxlen=self.HISTORY_COLUMNS),
+                            deque(maxlen=self.HISTORY_COLUMNS)]
             self.ok = False
         if proc is not None:
             # terminate() is what unblocks the reader. kill() is the backstop if
@@ -1172,6 +1369,14 @@ class Spectrum:
     @classmethod
     def _release_alpha(cls, elapsed):
         return math.exp(-max(0.0, float(elapsed)) / cls.RELEASE_TAU_S)
+
+    def history_snapshot(self, channel):
+        """Copy one channel's scrolling analysis without exposing its lock."""
+        index = int(channel) - 1
+        if index not in (0, 1):
+            raise ValueError("spectrum channel must be 1 or 2")
+        with self._lock:
+            return tuple(self.history[index])
 
     def _run(self, gen):
         try:
@@ -1217,6 +1422,7 @@ class Spectrum:
         buf = b""
         smooth = [None, None]
         last_frame_at = None
+        history_step = 0
         try:
             while self.running and gen == self.gen:
                 chunk = proc.stdout.read(hop_bytes)
@@ -1252,9 +1458,12 @@ class Spectrum:
                         with self._lock:
                             if gen == self.gen:
                                 self.mag[out] = smooth[out].tolist()
+                                if history_step % self.HISTORY_DECIMATION == 0:
+                                    self.history[out].append(tuple(binned.tolist()))
                     with self._lock:
                         if gen == self.gen:
                             self.ok = True
+                    history_step += 1
         except Exception as e:
             if gen == self.gen:
                 self.error = "%s: %s" % (type(e).__name__, e)
@@ -2062,99 +2271,1369 @@ class VoiceFxRack(Canvas):
                        h - 49, ACCENT)
 
 
-class ReverbVisual(Canvas):
-    """The reverb as its own decay: pre-delay gap, then the tail dying away.
+def reverb_rack_layout(width, height=336):
+    """Wide chamber display over one evenly spaced row of hardware."""
+    width, height = max(600.0, float(width)), max(280.0, float(height))
+    ear = width * 80 / 2156
+    inner_x, inner_w = ear + 24.0, width - 2 * ear - 48.0
+    cell = inner_w / 6.0
+    cy = height - 69.0
+    radius = min(30.0, cell * .29)
+    layout = {
+        "face": (ear, 2.0, width - 2 * ear, height - 4.0),
+        "display": (inner_x, 49.0, inner_w, height - 191.0),
+        "power": (inner_x + cell * 5.5, cy, min(23.0, cell * .25)),
+        "motion_power": (inner_x + inner_w - 18.0, 26.0, 15.0),
+    }
+    for index, field in enumerate(("predelay", "size", "hp", "mix", "movement")):
+        layout[field] = (inner_x + cell * (index + .5), cy, radius)
+    return layout
 
-    Time runs left to right, energy is height — the two things every reverb
-    control actually changes. Size sets how long the tail survives, Wet mix its
-    height, Pre-delay the silent run-in before the first reflection, and the
-    input high-pass how much low end is under it (drawn as the shaded body).
+
+def reverb_field_profile(size, mix, predelay, hp, phase=0.0, points=81):
+    """Parameter-driven geometry for the rack's acoustic-field display."""
+    size = max(.02, min(1.0, float(size)))
+    mix = max(0.0, min(1.0, float(mix)))
+    predelay = max(0.0, min(.25, float(predelay)))
+    hp = max(0.0, min(500.0, float(hp)))
+    gap = predelay / .25 * .28
+    decay = .09 + size * .76
+
+    def envelope(t):
+        if t < gap:
+            return 0.0
+        return math.exp(-(t - gap) / max(.035, decay)) * (.16 + mix * .84)
+
+    envelope_points = tuple(
+        (i / float(points - 1), envelope(i / float(points - 1)))
+        for i in range(points))
+    reflection_count = 5 + int(round(size * 4.0))
+    reflections = []
+    for i in range(reflection_count):
+        spread = (.036 + size * .020) * (i + 1)
+        t = min(.96, gap + spread * (1.0 + .08 * math.sin(i * 2.17)))
+        reflections.append((t, envelope(t) * (1.0 - i * .045),
+                            -1.0 if i % 2 else 1.0))
+    particles = []
+    for i in range(34):
+        t = gap + (1.0 - gap) * ((i * 29) % 97) / 96.0
+        energy = envelope(t) * (.34 + ((i * 17) % 23) / 34.0)
+        lane = math.sin(i * 2.31 + phase * (.22 + size * .18))
+        particles.append((t, energy, lane))
+    return {
+        "gap": gap,
+        "decay": decay,
+        "low_body": 1.0 - hp / 500.0,
+        "envelope": envelope_points,
+        "reflections": tuple(reflections),
+        "particles": tuple(particles),
+    }
+
+
+def reverb_mesh_geometry(profile, phase, movement_depth=0.0,
+                         rows=7, columns=13):
+    """Return a bounded 3D surface: time, signed room lane, relief height.
+
+    The carrier propagates while reverb is on. Size Movement adds slow torsion
+    without moving the pre-delay ignition point. This illustrates parameters,
+    not measured audio or a reconstructed acoustic impulse response.
+    """
+    gap = float(profile["gap"])
+    decay = float(profile["decay"])
+    movement_depth = max(0.0, min(.30, float(movement_depth)))
+    envelope = profile["envelope"]
+
+    def energy_at(t):
+        position = max(0.0, min(len(envelope) - 1, t * (len(envelope) - 1)))
+        index = int(position)
+        following = min(len(envelope) - 1, index + 1)
+        fraction = position - index
+        return (envelope[index][1] * (1 - fraction)
+                + envelope[following][1] * fraction)
+
+    grid = []
+    for row in range(rows):
+        lane = -1.0 + 2.0 * row / max(1, rows - 1)
+        line = []
+        for column in range(columns):
+            depth = column / max(1, columns - 1)
+            t = gap + (1.0 - gap) * depth
+            energy = energy_at(t)
+            carrier = math.sin(depth * math.tau * (2.15 + decay * .65)
+                               - phase * 1.35 + lane * 1.4)
+            crosswave = math.cos(lane * 3.8 - depth * 5.0 + phase * .63)
+            torsion = movement_depth * math.sin(
+                depth * math.tau * 1.35 + phase * .72) * lane
+            relief = energy * (.48 + carrier * .24 + crosswave * .14
+                               + torsion * .28)
+            relief *= .66 + .34 * profile["low_body"]
+            line.append((t, lane, relief))
+        grid.append(tuple(line))
+    columns_out = tuple(
+        tuple(grid[row][column] for row in range(rows))
+        for column in range(columns))
+    return {"rows": tuple(grid), "columns": columns_out}
+
+
+def reverb_mesh_triangles(mesh):
+    """Connect the chamber grid as an alternating triangular lattice."""
+    rows = mesh["rows"]
+    triangles = []
+    for row in range(len(rows) - 1):
+        for column in range(len(rows[row]) - 1):
+            a = rows[row][column]
+            b = rows[row][column + 1]
+            c = rows[row + 1][column]
+            d = rows[row + 1][column + 1]
+            if (row + column) % 2:
+                triangles.extend(((a, b, c), (b, d, c)))
+            else:
+                triangles.extend(((a, b, d), (a, d, c)))
+    return tuple(triangles)
+
+
+def limiter_display_state(win, channel):
+    """Return the limiter's authoritative controls and live GR telemetry."""
+    controls = win.w[channel]
+    snap = getattr(getattr(win, "ctl", None), "snap", {}) or {}
+    telemetry = (snap.get("gr", {}).get(channel, {}) or {}).get("lim", 0.0)
+    try:
+        telemetry = float(telemetry)
+    except (TypeError, ValueError):
+        telemetry = 0.0
+    if not math.isfinite(telemetry):
+        telemetry = 0.0
+    reduction = min(20.0, abs(min(0.0, telemetry)))
+    return {
+        "reduction_db": reduction,
+        "threshold_db": float(controls["lth"].get_value()),
+        "release_s": float(controls["lrel"].get_value()),
+    }
+
+
+def hpf_input_energy(win, channel):
+    """Normalize existing input-meter telemetry for HPF mesh motion.
+
+    The controller's disconnected/quiet value is -99 dB. Keeping everything
+    at or below -72 dB at exact zero preserves the designed idle animation;
+    only real input adds deformation and light to the display.
+    """
+    snap = getattr(getattr(win, "ctl", None), "snap", {}) or {}
+    try:
+        level_db = float(snap.get("in", ())[channel - 1])
+    except (IndexError, TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(level_db) or level_db <= -72.0:
+        return 0.0
+    normalized = min(1.0, (level_db + 72.0) / 63.0)
+    return normalized * normalized * (3.0 - 2.0 * normalized)
+
+
+def _material_texture(surface):
+    surface.flush()
+    # Passing a memoryview makes GI marshal each byte individually. A bytes
+    # buffer takes its bulk-copy path, crucial for animated mesh textures.
+    return Gdk.MemoryTexture.new(
+        surface.get_width(), surface.get_height(),
+        Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED if sys.byteorder == "little"
+        else Gdk.MemoryFormat.A8R8G8B8_PREMULTIPLIED,
+        GLib.Bytes.new(bytes(surface.get_data())), surface.get_stride())
+
+
+@lru_cache(maxsize=48)
+def _machined_knob_texture(pixel_radius, angle, accent, powder_coated):
+    return _material_texture(io24_retro_rack.amplifier_knob_surface(
+        pixel_radius, angle, accent, powder_coated))
+
+
+def append_machined_knob(widget, sn, cx, cy, radius, angle, accent,
+                         active=True, focused=False, powder_coated=False):
+    scale = max(1, widget.get_scale_factor())
+    texture = _machined_knob_texture(round(radius * scale, 2), angle,
+                                     tuple(accent), bool(powder_coated))
+    size = texture.get_width() / scale
+    if not active:
+        sn.push_opacity(.76)
+    sn.append_texture(texture, Graphene.Rect().init(
+        _rack_pixel(widget, cx - size / 2),
+        _rack_pixel(widget, cy - size / 2), size, size))
+    if not active:
+        sn.pop()
+    if focused:
+        polyline(sn, standard_eq_arc_points(
+            cx, cy, radius * 1.10, 0, math.tau), rgba(*accent, .85), 1.0)
+
+
+@lru_cache(maxsize=16)
+def _response_mesh_texture(points, baseline, rect, colour, scale, mesh_depth):
+    return _material_texture(io24_retro_rack.response_volume_surface(
+        points, baseline, rect, colour, scale, mesh_depth))
+
+
+def response_mesh(widget, sn, points, baseline, rect, colour, opacity=1.0,
+                  mesh_depth=False):
+    """A bounded response volume whose front edge is the real response."""
+    scale = max(1, widget.get_scale_factor())
+    texture = _response_mesh_texture(tuple(points), baseline, tuple(rect),
+                                      tuple(colour), scale, bool(mesh_depth))
+    if opacity != 1.0:
+        sn.push_opacity(opacity)
+    sn.append_texture(texture, Graphene.Rect().init(
+        rect[0], rect[1], texture.get_width() / scale,
+        texture.get_height() / scale))
+    if opacity != 1.0:
+        sn.pop()
+
+
+@lru_cache(maxsize=12)
+def _retro_chassis_texture(width, height, scale, model, screen):
+    return _material_texture(io24_retro_rack.chassis_surface(
+        width, height, scale, model, screen))
+
+
+def append_retro_chassis(widget, sn, rect, model, screen):
+    x, y, width, height = rect
+    scale = max(1, widget.get_scale_factor())
+    texture = _retro_chassis_texture(width, height, scale, model, None if screen is None else tuple(screen))
+    sn.append_texture(texture, Graphene.Rect().init(
+        _rack_pixel(widget, x), _rack_pixel(widget, y),
+        texture.get_width() / scale, texture.get_height() / scale))
+
+
+@lru_cache(maxsize=24)
+def _retro_toggle_texture(radius, active):
+    return _material_texture(io24_retro_rack.toggle_surface(radius, active))
+
+
+def append_retro_toggle(widget, sn, cx, cy, radius, active, focused=False):
+    scale = max(1, widget.get_scale_factor())
+    texture = _retro_toggle_texture(round(radius * scale, 2), bool(active))
+    width, height = texture.get_width() / scale, texture.get_height() / scale
+    sn.append_texture(texture, Graphene.Rect().init(
+        _rack_pixel(widget, cx - width / 2),
+        _rack_pixel(widget, cy - height / 2), width, height))
+    # Pointer hover must not paint a coloured halo around physical hardware.
+    # Keyboard navigation still has a distinct, compact focus indicator.
+    if focused and widget.has_visible_focus():
+        for direction in (-1, 1):
+            edge = cx + direction * radius * 1.55
+            polyline(sn, [(edge - direction * 5, cy + radius * 1.2),
+                          (edge, cy + radius * 1.2),
+                          (edge, cy + radius * .9)],
+                     rgba(.50, .52, .48, .95), 1.2)
+
+
+class EqModelSelectorPlate(Canvas):
+    """Continuous coated rack ears behind the native model buttons."""
+
+    def __init__(self):
+        super().__init__(600, 56)
+        self.set_hexpand(True)
+
+    def paint(self, sn, width, height):
+        append_retro_chassis(self, sn, (0, 0, width, height), "selector", None)
+
+
+def draw_limiter_display(win, channel, sn, rect, rack_state, active):
+    """Paint the limiter's live future-retro transfer and reduction field."""
+    x, y, width, height = rect
+    # The native faceplate supplies the recessed glass and machined frame.
+    # Keep the state graphics inside that well, without a second bezel.
+    inset = max(5.0, min(10.0, height * .08))
+    ix, iy = x + inset, y + inset
+    iw, ih = width - 2.0 * inset, height - 2.0 * inset
+    orange = io24_retro_rack.ORANGE
+    cream = io24_retro_rack.CREAM
+
+    state = limiter_display_state(win, channel)
+    reduction = state["reduction_db"]
+    threshold = max(-40.0, min(0.0, float(
+        rack_state.get("threshold", state["threshold_db"]))))
+    release = max(.05, min(1.5, float(
+        rack_state.get("release", state["release_s"]))))
+    # Bypass dims live ink without erasing the instrument. Everything below is
+    # a deterministic projection of the actual parameter/telemetry state;
+    # there is no invented stream or independent animation timer.
+    lit = 1.0 if active else .72
+    label_size = max(5.6, min(7.5, height * .050))
+    faceplate_label(
+        win, sn, "LIMITER // TRANSFER FIELD", ix + iw * .045, iy + 5.0,
+        rgba(*cream, .78 * lit), label_size, Pango.Weight.SEMIBOLD)
+    centred_faceplate_label(
+        win, sn, "ACTIVE" if active else "BYPASS", ix + iw * .885,
+        iy + 5.0, rgba(*(orange if active else cream), .85 * lit), label_size,
+        Pango.Weight.BOLD)
+
+    graph_x = ix + iw * .050
+    graph_y = iy + ih * .205
+    graph_w = iw * .685
+    graph_h = ih * .555
+    graph_bottom = graph_y + graph_h
+    centre_x = graph_x + graph_w * .50
+
+    # The projection grid opens toward the viewer. Unlike a flat Cartesian
+    # box it gives the telemetry field depth while retaining exact axes.
+    for step in range(9):
+        t = step / 8.0
+        gx = graph_x + graph_w * t
+        top_x = centre_x + (gx - centre_x) * .54
+        major = step in (0, 4, 8)
+        polyline(sn, [(top_x, graph_y), (gx, graph_bottom)],
+                 rgba(*orange, (.22 if major else .10) * lit),
+                 1.0 if major else .65)
+    for step in range(6):
+        depth = step / 5.0
+        yy = graph_y + graph_h * (depth ** 1.45)
+        inset_x = graph_w * .23 * (1.0 - depth)
+        polyline(sn, [(graph_x + inset_x, yy),
+                      (graph_x + graph_w - inset_x, yy)],
+                 rgba(*orange, (.19 if step in (0, 5) else .085) * lit),
+                 1.0 if step in (0, 5) else .65)
+
+    threshold_norm = (threshold + 40.0) / 40.0
+
+    # The luminous transfer trace remains the primary truthful object: unity
+    # below threshold, horizontal limiting above it.
+    polyline(sn, [(graph_x, graph_bottom),
+                  (graph_x + graph_w, graph_y)],
+             rgba(*cream, .17 * lit), 1.0)
+    knee_x = graph_x + (threshold + 40.0) / 40.0 * graph_w
+    knee_y = graph_bottom - (threshold + 40.0) / 40.0 * graph_h
+    curve = [(graph_x, graph_bottom), (knee_x, knee_y),
+             (graph_x + graph_w, knee_y)]
+    envelope = [(graph_x + graph_w * i / 64,
+                 graph_bottom - min(i / 64, threshold_norm) * graph_h)
+                for i in range(65)]
+    response_mesh(win, sn, envelope, graph_bottom,
+                  (graph_x, graph_y, graph_w, graph_h), orange, lit)
+    glow(sn, lambda: polyline(sn, curve, rgba(*orange, .95 * lit), 1.8),
+         radius=max(3.0, height * .030))
+    polyline(sn, curve, rgba(*cream, .90 * lit), .9)
+    dot(sn, knee_x, knee_y, max(1.8, height * .014),
+        rgba(*cream, .95 * lit))
+
+    readout_y = iy + ih * .815
+    centred_faceplate_label(
+        win, sn, "THR  %.1f dB" % threshold,
+        graph_x + graph_w * .25, readout_y,
+        rgba(*cream, .78 * lit), max(5.3, min(7.0, height * .047)),
+        Pango.Weight.SEMIBOLD)
+    centred_faceplate_label(
+        win, sn, "REL  %d ms" % round(release * 1000.0),
+        graph_x + graph_w * .75, readout_y,
+        rgba(*cream, .78 * lit), max(5.3, min(7.0, height * .047)),
+        Pango.Weight.SEMIBOLD)
+
+    meter_top = graph_y + graph_h * .05
+    meter_bottom = graph_bottom
+    meter_height = max(8.0, meter_bottom - meter_top)
+    bar_width = max(8.0, min(15.0, iw * .035))
+    bar_x = ix + iw * .925 - bar_width
+    scale_x = bar_x + bar_width + 7.0
+
+    for value in (0, 10, 20):
+        yy = meter_bottom - value / 20.0 * meter_height
+        polyline(sn, [(bar_x + bar_width + 2.0, yy), (scale_x - 2.0, yy)],
+                 rgba(*orange, .35 * lit), .8)
+        faceplate_label(
+            win, sn, str(value), scale_x, yy - 5.0,
+            rgba(*cream, .65 * lit), max(5.2, min(6.5, height * .044)))
+
+    rounded_box(sn, bar_x, meter_top, bar_width, meter_height, 2.0,
+                rgba(.026, .018, .009, 1.0), rgba(*orange, .34 * lit))
+    segment_count = 24
+    segment_gap = max(1.0, meter_height * .008)
+    segment_h = (meter_height - (segment_count - 1) * segment_gap) / segment_count
+    lit_segments = int(math.ceil(reduction / 20.0 * segment_count))
+    for index in range(segment_count):
+        sy = meter_bottom - (index + 1) * segment_h - index * segment_gap
+        on = index < lit_segments
+        segment_value = (index + 1) / segment_count * 20.0
+        tone = ((1.0, .19, .025) if segment_value >= 14.0 else
+                (1.0, .43, .08) if segment_value >= 9.0 else
+                (1.0, .69, .30))
+        rounded_box(sn, bar_x + 1.5, sy, bar_width - 3.0, segment_h,
+                    min(1.5, segment_h * .30),
+                    rgba(*tone, (.92 if on else .12) * lit))
+
+    value_alpha = (.88 if reduction > 0.05 else .38) * lit
+    centred_faceplate_label(
+        win, sn, "%.1f" % reduction, ix + iw * .825,
+        iy + ih * .37, rgba(*cream, value_alpha),
+        max(9.0, min(15.0, height * .10)), Pango.Weight.BOLD)
+    centred_faceplate_label(
+        win, sn, "dB GR", ix + iw * .825, iy + ih * .51,
+        rgba(*orange, .85 * lit), max(5.5, min(7.5, height * .048)),
+        Pango.Weight.BOLD)
+
+    # Fine horizontal scanlines sit inside the glass and stay subordinate to
+    # the state graphics. They are cached only through normal GTK snapshots.
+    for line in range(9, max(10, int(ih - 6)), 6):
+        polyline(sn, [(ix + 4, iy + line), (ix + iw - 4, iy + line)],
+                 rgba(*orange, .026 * lit), .45)
+
+
+def draw_hpf_display(win, channel, sn, rect, rack_state, active):
+    """Paint a live spectral tunnel around the real second-order HPF curve."""
+    x, y, width, height = rect
+    cutoff = max(24.0, min(1000.0, float(
+        rack_state.get("cutoff", win.hpf_hz(channel)))))
+    lit = 1.0 if active else .30
+    phase = time.monotonic() * .72 if active else 0.0
+    input_energy = hpf_input_energy(win, channel) if active else 0.0
+    orange = io24_retro_rack.ORANGE
+    cream = io24_retro_rack.CREAM
+    inset = max(6.0, height * .055)
+    ix, iy = x + inset, y + inset
+    iw, ih = width - inset * 2.0, height - inset * 2.0
+    faceplate_label(win, sn, "HPF // SPECTRAL APERTURE", ix + iw * .035,
+                    iy + ih * .035, rgba(*orange, .95 * lit),
+                    max(5.5, min(7.4, height * .046)), Pango.Weight.BOLD)
+    centred_faceplate_label(
+        win, sn, "%d" % round(cutoff), ix + iw * .865,
+        iy + ih * .005, rgba(*cream, .98 * lit),
+        max(11.0, min(17.0, height * .108)), Pango.Weight.BOLD)
+    centred_faceplate_label(
+        win, sn, "Hz  /  12 dB OCT", ix + iw * .865,
+        iy + ih * .155, rgba(*cream, .78 * lit),
+        max(4.8, min(6.7, height * .041)), Pango.Weight.BOLD)
+
+    gx, gy = ix + iw * .045, iy + ih * .225
+    gw, gh = iw * .91, ih * .575
+    horizon_y = gy + gh * .50
+    vanishing_x = gx + gw * .19
+
+    # Moving perspective mesh: the cutoff is a luminous aperture through a
+    # spectral tunnel, not a conventional line graph wearing neon colours.
+    for lane in range(9):
+        lane_t = lane / 8.0
+        end_y = gy + gh * lane_t
+        points = []
+        for column in range(33):
+            t = column / 32.0
+            depth = t ** 1.34
+            wave = math.sin(t * 13.0 + lane * .62 - phase) * gh * .010 * lit
+            # Real input excites a second, denser wave through the existing
+            # plane. At zero energy this term is exactly zero, leaving the
+            # original idle geometry unchanged.
+            wave += (math.sin(t * 26.0 + lane * 1.17 - phase * 3.1) *
+                     gh * .034 * input_energy * (.28 + depth * .72))
+            px = vanishing_x + (gx + gw - vanishing_x) * depth
+            py = horizon_y + (end_y - horizon_y) * depth + wave
+            points.append((px, py))
+        polyline(sn, points, rgba(
+            1.0, .32 + .20 * input_energy, .055,
+            (.24 + lane_t * .10 + input_energy * .075) * lit),
+            .7 + input_energy * .38)
+    for column in range(15):
+        t = ((column / 14.0 + phase * .055) % 1.0) ** 1.34
+        px = vanishing_x + (gx + gw - vanishing_x) * t
+        reaction = (math.sin(t * 19.0 - phase * 2.6) * gh * .020 *
+                    input_energy * t)
+        top = horizon_y + (gy - horizon_y) * t + reaction
+        bottom = horizon_y + (gy + gh - horizon_y) * t - reaction
+        polyline(sn, [(px, top), (px, bottom)],
+                 rgba(1.0, .35 + .18 * input_energy, .08,
+                      (.10 + t * .18 + input_energy * .045) * lit),
+                 .72 + input_energy * .30)
+
+    def graph_x(frequency):
+        return gx + math.log(frequency / 20.0) / math.log(20000.0 / 20.0) * gw
+
+    curve = []
+    for column in range(97):
+        frequency = 20.0 * (20000.0 / 20.0) ** (column / 96.0)
+        ratio = max(1e-6, frequency / cutoff)
+        magnitude = ratio * ratio / math.sqrt(1.0 + ratio ** 4)
+        db = max(-36.0, 20.0 * math.log10(max(1e-6, magnitude)))
+        px = gx + gw * column / 96.0
+        py = gy + gh * .84 - (db + 36.0) / 36.0 * gh * .66
+        curve.append((px, py))
+    # One native-resolution response trace over the moving plane. A second
+    # translucent volume and broad blur here softened the entire aperture.
+    polyline(sn, curve, rgba(*orange, .98 * lit), 1.6)
+    polyline(sn, curve, rgba(*cream, .88 * lit), .65)
+    node_x = graph_x(cutoff)
+    node_y = min(curve, key=lambda point: abs(point[0] - node_x))[1]
+    dot(sn, node_x, node_y, 3.2, rgba(*orange, .98 * lit))
+    dot(sn, node_x, node_y, 1.6, rgba(*cream, .98 * lit))
+
+    for frequency, label in ((24, "24"), (40, "40"), (80, "80"),
+                             (160, "160"), (1000, "1K"), (10000, "10K")):
+        px = graph_x(frequency)
+        polyline(sn, [(px, gy + gh * .88), (px, gy + gh * .93)],
+                 rgba(*orange, .55 * lit), .8)
+        centred_faceplate_label(win, sn, label, px, gy + gh * .94,
+                                rgba(*cream, .75 * lit),
+                                max(4.8, min(6.2, height * .038)))
+
+class ReferenceRack(Canvas):
+    """Manifest-painted rack view over existing GTK controls.
+
+    The bound widgets remain authoritative.  This view owns only ephemeral
+    interaction state (focus, hover and drag origin) and never mirrors a DSP
+    parameter or creates a second write path.
     """
 
-    def __init__(self, params, height=190):
-        super().__init__(-1, height)
-        self.params = params
+    DRAG_TRAVEL = 140.0
+
+    def __init__(self, win, rack_id, bindings, display_draw):
+        super().__init__()
+        self.win = win
+        self.rack_id = rack_id
+        self.spec = io24_rack_reference.rack(rack_id)
+        self.bindings = bindings
+        self.display_draw = display_draw
+        self.selected_field = None
+        self.hover_field = None
+        self.drag_field = None
+        self.drag_fraction = 0.0
+        self._faceplate_node = None
+        self._asset_error_reported = False
+        self._missing_assets = set()
+        self._connect_binding_redraws()
+        self.set_hexpand(True)
+        self.set_focusable(True)
+        self.set_accessible_role(Gtk.AccessibleRole.GROUP)
+        self.set_tooltip_text(
+            "Drag or scroll knobs; arrows adjust the focused control")
+
+        click = Gtk.GestureClick()
+        click.set_button(1)
+        click.connect("released", self._clicked)
+        self.add_controller(click)
+        drag = Gtk.GestureDrag()
+        drag.set_button(1)
+        drag.connect("drag-begin", self._drag_begin)
+        drag.connect("drag-update", self._drag_update)
+        drag.connect("drag-end", self._drag_end)
+        self.add_controller(drag)
+        scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll.connect("scroll", self._scroll)
+        self.add_controller(scroll)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._motion)
+        motion.connect("leave", self._leave)
+        self.add_controller(motion)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key_pressed)
+        self.add_controller(keys)
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", self._focus_enter)
+        self.add_controller(focus)
+
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            return (560, FAT_CHANNEL_WIDTH, -1, -1)
+        width = FAT_CHANNEL_TIGHTEN if for_size < 0 else max(1, for_size)
+        # The limiter occupies the exact bay used by Standard, Passive and
+        # Vintage EQ: same full width, faceplate aspect and shadow allowance.
+        height = standard_eq_canvas_height(width)
+        return (height, height, -1, -1)
+
+    def with_native_controls(self, rows):
+        """Keep the authoritative controls mapped for GTK accessibility.
+
+        Opacity affects painting, not GTK's accessible hidden state. The
+        original rows remain visible/mapped in a real PreferencesGroup, so
+        their native switch/slider roles, range values, keyboard handling and
+        assistive-technology actions are retained. The overlay does not take
+        pointer events or participate in measuring the rack.
+        """
+        native = Adw.PreferencesGroup()
+        for row in rows:
+            native.add(row)
+        native.set_opacity(0.0)
+        native.set_can_target(False)
+        native.set_valign(Gtk.Align.START)
+        for field in ("power",) + self._fields():
+            widget = self._widget(field)
+            widget.update_property(
+                [Gtk.AccessibleProperty.LABEL],
+                [self.rack_id.title() + " " + field.replace("_", " ")])
+            focus = Gtk.EventControllerFocus()
+            focus.connect("enter", self._native_focus_enter, field)
+            widget.add_controller(focus)
+            if field != "power":
+                widget.connect("value-changed", self._accessible_value_changed, field)
+                self._accessible_value_changed(widget, field)
+        overlay = Gtk.Overlay()
+        overlay.set_child(self)
+        overlay.add_overlay(native)
+        overlay.set_measure_overlay(native, False)
+        return overlay
+
+    def _native_focus_enter(self, _controller, field):
+        self.selected_field = field
+        self.queue_draw()
+
+    def _accessible_value_changed(self, widget, field):
+        formatter = self.bindings[field].get("format")
+        value = widget.get_value()
+        text = (str(formatter(value)) if callable(formatter)
+                else self.spec["controls"][field].get("format_string", "{}").format(value))
+        widget.update_property([Gtk.AccessibleProperty.VALUE_TEXT], [text])
+
+    def _fields(self):
+        return tuple(self.spec["controls"])
+
+    @property
+    def power_binding(self):
+        """Compatibility alias for the power entry in ``bindings``."""
+        return self.bindings["power"]
+
+    def _rack_bounds(self, width=None, height=None):
+        """Fit the limiter into the same physical bay as every EQ rack."""
+        width = float(width if width is not None else (self.get_width() or 600))
+        height = float(height if height is not None else
+                       (self.get_height() or 180))
+        usable_height = max(1.0, height - ALTERNATE_EQ_RACK_SHADOW_ROOM)
+        x, y, rack_w, rack_h = standard_eq_rack_bounds(width, usable_height)
+        return (_rack_pixel(self, x), _rack_pixel(self, y), rack_w, rack_h)
+
+    def _local_layout(self, width, height):
+        return io24_rack_reference.control_layout(
+            self.rack_id, width, height)
+
+    def _layout(self):
+        x, y, width, height = self._rack_bounds()
+        return {
+            field: (x + cx, y + cy, radius)
+            for field, (cx, cy, radius) in
+            self._local_layout(width, height).items()
+        }
+
+    def _local_lamp_layout(self, width, height):
+        source_width, source_height = self.spec["source_size"]
+        scale_x = float(width) / source_width
+        scale_y = float(height) / source_height
+        x, y, radius = self.spec["lamp"]
+        radius = max(22.0, min(30.0, width * .024))
+        return (x * scale_x,
+                min(y * scale_y, height - radius * 2.25 - 10.0) - 20.0,
+                radius)
+
+
+    def _lamp_layout(self):
+        x, y, width, height = self._rack_bounds()
+        lx, ly, radius = self._local_lamp_layout(width, height)
+        return (x + lx, y + ly, radius)
+
+    def _knob_tick_segments(self, field, geometry):
+        """Return the 11 calibration marks along a control's manifest sweep."""
+        cx, cy, radius = geometry
+        start, end = self.spec["controls"][field]["sweep"]
+        style = self.spec["live_style"]
+        segments = []
+        for index in range(11):
+            angle = math.radians(start + index / 10.0 * (end - start))
+            major = index in (0, 5, 10)
+            inner = radius * style["tick_inner"]
+            outer = radius * style["tick_major_outer" if major else "tick_minor_outer"]
+            segments.append((
+                (cx + inner * math.cos(angle),
+                 cy + inner * math.sin(angle)),
+                (cx + outer * math.cos(angle),
+                 cy + outer * math.sin(angle)),
+                major,
+            ))
+        return tuple(segments)
+
+    @staticmethod
+    def _lamp_color(active):
+        """Approved warm lamp when active; restrained warm grey when idle."""
+        return (rgba(1.0, .55, .12, .98) if active
+                else rgba(.34, .32, .27, .38))
+
+    def _widget(self, field):
+        return self.bindings.get(field, {}).get("widget")
+
+    def _power_active(self):
+        binding = self.bindings.get("power", {})
+        getter = binding.get("get_active")
+        widget = binding.get("widget")
+        if callable(getter):
+            return bool(getter())
+        return bool(widget is not None and widget.get_active())
+
+    def _set_power_active(self, active):
+        binding = self.bindings.get("power", {})
+        setter = binding.get("set_active")
+        widget = binding.get("widget")
+        if callable(setter):
+            setter(bool(active))
+        elif widget is not None:
+            widget.set_active(bool(active))
+
+    def _binding_changed(self, *_args):
+        self.queue_draw()
+
+    def _connect_binding_redraws(self):
+        """Repaint when an authoritative bound widget changes elsewhere."""
+        connected = set()
+        fields_and_signals = [
+            (field, "value-changed") for field in self._fields()
+        ] + [("power", self.bindings.get("power", {}).get(
+            "signal", "notify::active"))]
+        for field, signal in fields_and_signals:
+            widget = self._widget(field)
+            key = (id(widget), signal)
+            if widget is None or key in connected:
+                continue
+            widget.connect(signal, self._binding_changed)
+            connected.add(key)
+
+    def _state(self):
+        state = {}
+        for field in self._fields():
+            widget = self._widget(field)
+            if widget is not None:
+                state[field] = float(widget.get_value())
+        state["power"] = self._power_active()
+        return state
+
+    def _fraction(self, field):
+        widget = self._widget(field)
+        control = self.spec["controls"][field]
+        value = control["range"][0] if widget is None else widget.get_value()
+        return io24_rack_reference.value_fraction(control, value)
+
+    def _set_fraction(self, field, fraction):
+        widget = self._widget(field)
+        control = self.spec["controls"].get(field)
+        if widget is None or control is None:
+            return False
+        widget.set_value(io24_rack_reference.fraction_value(
+            control, fraction))
+        self.queue_draw()
+        return True
+
+    def _reset(self, field):
+        control = self.spec["controls"].get(field)
+        if control is None:
+            return False
+        return self._set_fraction(
+            field,
+            io24_rack_reference.value_fraction(
+                control, control["default"]))
+
+    def _control_at(self, x, y):
+        x, y = float(x), float(y)
+        for field, (cx, cy, radius) in self._layout().items():
+            if math.hypot(x - cx, y - cy) <= radius + 10.0:
+                return field
+        cx, cy, radius = self._lamp_layout()
+        switch_radius = radius
+        if io24_retro_rack.toggle_contains(cx, cy, switch_radius, x, y):
+            return "power"
+        return None
+
+    def _select(self, field):
+        if field not in (("power",) + self._fields()):
+            return False
+        self.selected_field = field
+        self.grab_focus()
+        self.queue_draw()
+        return True
+
+    def _toggle(self, field):
+        if field != "power":
+            return False
+        if self._widget("power") is None:
+            return False
+        self._set_power_active(not self._power_active())
+        self.queue_draw()
+        return True
+
+    def _clicked(self, gesture, presses, x, y):
+        field = self._control_at(x, y)
+        if not self._select(field):
+            return
+        if field == "power":
+            if presses == 1:
+                self._toggle(field)
+            return
+        if control_reset_requested(gesture, presses) and self._reset(field):
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _drag_begin(self, _gesture, x, y):
+        field = self._control_at(x, y)
+        self.drag_field = field if field in self.spec["controls"] else None
+        if control_held(_gesture):
+            self.drag_field = None
+        if self.drag_field is not None:
+            self._select(self.drag_field)
+            self.drag_fraction = self._fraction(self.drag_field)
+
+    def _drag_update(self, _gesture, _dx, dy):
+        if self.drag_field is not None:
+            self._set_fraction(
+                self.drag_field,
+                self.drag_fraction - float(dy) / self.DRAG_TRAVEL)
+
+    def _drag_end(self, *_args):
+        self.drag_field = None
+        self.queue_draw()
+
+    def _motion(self, _controller, x, y):
+        field = self._control_at(x, y)
+        if field != self.hover_field:
+            self.hover_field = field
+            self.set_cursor_from_name("pointer" if field else None)
+            self.queue_draw()
+
+    def _leave(self, *_args):
+        if self.hover_field is not None:
+            self.hover_field = None
+            self.set_cursor_from_name(None)
+            self.queue_draw()
+
+    def _focus_enter(self, *_args):
+        if self.selected_field is None:
+            self.selected_field = "power"
+        self.queue_draw()
+
+    def _nudge(self, direction):
+        field = self.selected_field or self.hover_field
+        control = self.spec["controls"].get(field)
+        if control is None:
+            return False
+        lower, upper = control["range"]
+        return self._set_fraction(
+            field, self._fraction(field) +
+            float(direction) * control["step"] / (upper - lower))
+
+    def _scroll(self, _controller, _dx, dy):
+        if self.hover_field not in self.spec["controls"] or not dy:
+            return False
+        self._select(self.hover_field)
+        return self._nudge(-1 if dy > 0 else 1)
+
+    def _key_pressed(self, _controller, keyval, _keycode, _state):
+        if self.selected_field == "power" and keyval in (
+                Gdk.KEY_space, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return self._toggle("power")
+        if keyval in (Gdk.KEY_Up, Gdk.KEY_Page_Up):
+            return self._nudge(1)
+        if keyval in (Gdk.KEY_Down, Gdk.KEY_Page_Down):
+            return self._nudge(-1)
+        if keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
+            fields = ("power",) + self._fields()
+            try:
+                index = fields.index(self.selected_field)
+            except ValueError:
+                index = 0
+            direction = -1 if keyval == Gdk.KEY_Left else 1
+            self.selected_field = fields[(index + direction) % len(fields)]
+            self.queue_draw()
+            return True
+        return False
+
+    def _texture(self, filename):
+        if filename in getattr(self, "_missing_assets", ()):
+            return None
+        try:
+            return eq_reference_texture(filename)
+        except (FileNotFoundError, OSError, GLib.Error) as error:
+            missing = getattr(self, "_missing_assets", None)
+            if missing is None:
+                self._missing_assets = set()
+            self._missing_assets.add(filename)
+            if not getattr(self, "_asset_error_reported", False):
+                self._asset_error_reported = True
+                self.win.say(
+                    "%s reference rack asset unavailable (%s); "
+                    "using the vector faceplate" %
+                    (self.rack_id, error))
+            return None
+
+    def _draw_fallback_faceplate(self, sn, width, height):
+        box(sn, 0, 0, width, height, pal(FIELD))
+        _crop_x, _crop_y, eq_width, _eq_height = \
+            STANDARD_EQ_REFERENCE_ART["rack_crop"]
+        ear_width = width * STANDARD_EQ_REFERENCE_ART["ear"] / eq_width
+        px, py = ear_width, 0.0
+        pw, ph = width - ear_width * 2.0, height
+        rounded_box(sn, px, py, pw, ph, 4.0,
+                    rgba(.09, .085, .075, 1.0),
+                    rgba(.48, .43, .34, .94))
+        for rect in self.spec["ears"]:
+            x, y, w, h = io24_rack_reference.scaled_rect(
+                rect, width, height, self.rack_id)
+            box(sn, x, y, w, h, rgba(.025, .03, .032, 1.0))
+        for rect in self.spec["slots"]:
+            x, y, w, h = io24_rack_reference.scaled_rect(
+                rect, width, height, self.rack_id)
+            rounded_box(
+                sn, x, y, w, h, min(w, h) * .28,
+                rgba(.006, .008, .009, 1.0),
+                rgba(.21, .24, .24, .78))
+        source_width, source_height = self.spec["source_size"]
+        scale_x = float(width) / source_width
+        scale_y = float(height) / source_height
+        radius_scale = min(scale_x, scale_y)
+        for x, y, radius in self.spec["screws"]:
+            dot(sn, x * scale_x, y * scale_y,
+                radius * radius_scale, rgba(.32, .34, .32, 1.0))
+
+    def _draw_production_faceplate(self, sn, width, height):
+        """Native enamel, engraved type and recessed orange-phosphor glass."""
+        screen = io24_rack_reference.scaled_rect(
+            self.spec["display"], width, height, self.rack_id)
+        append_retro_chassis(self, sn, (0, 0, width, height),
+                             self.rack_id, screen)
+        colour = io24_retro_rack.ink(self.rack_id)
+        faceplate_heading(
+            self, sn, "HIGH-PASS FILTER" if self.rack_id == "hpf"
+            else "PEAK LIMITER", width * .5, height * .077,
+            rgba(*colour, .98), max(12.0, min(19.0, width * .016)),
+            max(2.0, width * .0027))
+        # The orange enamel registration line is clear of the title and glass.
+        polyline(sn, [(width * .455, height * .126),
+                      (width * .545, height * .126)],
+                 rgba(*io24_retro_rack.ORANGE, .96), 1.5)
+
+    def _append_production_faceplate(self, sn, width, height):
+        """Reuse the size-dependent static rack node across telemetry frames."""
+        key = (width, height, self.get_scale_factor(),
+               self.get_pango_context().get_serial())
+        cached = getattr(self, "_faceplate_node", None)
+        if cached is None or cached[0] != key:
+            static = Gtk.Snapshot()
+            self._draw_production_faceplate(static, width, height)
+            node = static.to_node()
+            if node is None:
+                return
+            cached = (key, node)
+            self._faceplate_node = cached
+        sn.append_node(cached[1])
+
+    def _draw_knob(self, sn, field, geometry, active, texture=None):
+        cx, cy, radius = geometry
+        selected = field == self.selected_field
+        hovered = field == self.hover_field
+        style = self.spec["live_style"]
+        control = self.spec["controls"][field]
+        value = self._widget(field).get_value()
+        angle = math.radians(
+            io24_rack_reference.pointer_angle(control, value))
+        colour = io24_retro_rack.ink(self.rack_id)
+        for inner, outer, major in self._knob_tick_segments(field, geometry):
+            polyline(sn, [inner, outer], rgba(*colour, .88 if major else .48),
+                     max(.7, radius * (.027 if major else .018)))
+        endpoint_labels = {
+            "cutoff": ("24", "1k"),
+            "threshold": ("−40", "0"),
+            "release": ("50 ms", "1.5 s"),
+        }
+        for degrees, label in zip(control["sweep"], endpoint_labels[field]):
+            theta = math.radians(degrees)
+            faceplate_heading(
+                self, sn, label,
+                cx + radius * 1.73 * math.cos(theta),
+                cy + radius * 1.73 * math.sin(theta),
+                rgba(*colour, .84), max(7.0, radius * .15), 0)
+        append_machined_knob(self, sn, cx, cy, radius * .96, angle,
+                             io24_retro_rack.ORANGE, active, selected or hovered,
+                             powder_coated=self.rack_id in ("limiter", "hpf"))
+        formatter = self.bindings[field].get("format")
+        text = (str(formatter(value)) if callable(formatter)
+                else control.get("format_string", "{}").format(value))
+        centred_faceplate_label(
+            self, sn, field.replace("_", " ").upper(),
+            cx, cy - radius * 1.90, rgba(*colour, .96),
+            max(7.0, min(10.0, radius * .18)), Pango.Weight.BOLD)
+        _circle, value_rect = io24_rack_reference.control_live_regions(geometry, style)
+        sn.push_clip(Graphene.Rect().init(*value_rect))
+        centred_faceplate_label(
+            self, sn, text, cx, value_rect[1], rgba(*colour, .98),
+            style["value_font_pt"], Pango.Weight.BOLD)
+        sn.pop()
+
+    def _draw_power_switch(self, sn, geometry, active):
+        cx, cy, radius = geometry
+        switch_radius = radius
+        append_retro_toggle(self, sn, cx, cy, switch_radius, active,
+                            self.selected_field == "power" or self.hover_field == "power")
+        centred_faceplate_label(
+            self, sn, "POWER", cx, cy - switch_radius * 2.95,
+            rgba(*io24_retro_rack.ink(self.rack_id), .90),
+            max(6.0, min(8.0, radius * .6)), Pango.Weight.BOLD)
+
+    def paint(self, sn, width, height):
+        calibration = eq_reference_calibration_mode()
+        rack_x, rack_y, rack_width, rack_height = self._rack_bounds(
+            width, height)
+        box(sn, 0, 0, width, height, pal(FIELD))
+        if calibration in ("backdrop", "underlay"):
+            underlay = self._texture(self.spec["calibration_underlay"])
+            if underlay is not None:
+                sn.append_texture(underlay, Graphene.Rect().init(
+                    rack_x, rack_y, rack_width, rack_height))
+                return
+        sn.save()
+        sn.translate(Graphene.Point().init(rack_x, rack_y))
+        self._append_production_faceplate(sn, rack_width, rack_height)
+
+        state = self._state()
+        active = state["power"]
+        layout = self._local_layout(rack_width, rack_height)
+        for field in self._fields():
+            self._draw_knob(sn, field, layout[field], active)
+
+        lx, ly, lr = self._local_lamp_layout(rack_width, rack_height)
+        self._draw_power_switch(sn, (lx, ly, lr), active)
+
+        display_rect = io24_rack_reference.scaled_rect(
+            self.spec["display"], rack_width, rack_height, self.rack_id)
+        self.display_draw(sn, display_rect, state, active)
+        sn.restore()
+
+        for mode, key, opacity in (
+                ("overlay", "calibration_underlay", .46),
+                ("nodes", "calibration_nodes", 1.0)):
+            if calibration not in (mode, "both"):
+                continue
+            texture = self._texture(self.spec[key])
+            if texture is not None:
+                if opacity < 1.0:
+                    sn.push_opacity(opacity)
+                sn.append_texture(texture, Graphene.Rect().init(
+                    rack_x, rack_y, rack_width, rack_height))
+                if opacity < 1.0:
+                    sn.pop()
+
+
+class ReverbRack(Canvas):
+    """A real, interactive 2U faceplate for the existing shared reverb.
+
+    The rack is another view onto the native Adw controls below it. It owns no
+    effect state and introduces no write path: dragging a knob simply changes
+    the same scale that the precise row changes.
+    """
+
+    CONTROL_ORDER = ("predelay", "size", "hp", "mix", "movement")
+    SPECS = {
+        "predelay": ("s_rpre", .0001, .25, .0005, .02, "PRE-DELAY"),
+        "size": ("s_rsize", 0.0, 1.0, .005, .5, "ROOM SIZE"),
+        "hp": ("s_rhp", 0.0, 500.0, 1.0, 200.0, "HIGH-PASS"),
+        "mix": ("s_rmix", 0.0, 1.0, .005, 1.0, "RETURN"),
+        "movement": ("s_rmoddep", 0.0, .30, .005, .08, "DEPTH"),
+    }
+    SWEEP = math.radians(270.0)
+    DRAG_TRAVEL = 140.0
+
+    def __init__(self, win):
+        super().__init__(600, 336)
+        self.win = win
         self.t = 0.0
         self._key = None
         self._moving = False
+        self.selected_field = None
+        self.hover_field = None
+        self.drag_field = None
+        self.drag_fraction = 0.0
         self.set_hexpand(True)
+        self.set_focusable(True)
+        self.set_accessible_role(Gtk.AccessibleRole.GROUP)
+        self.set_tooltip_text(
+            "Shared Reverb: drag or scroll knobs; arrows adjust the focused control")
+
+        click = Gtk.GestureClick()
+        click.set_button(1)
+        click.connect("released", self._clicked)
+        self.add_controller(click)
+        drag = Gtk.GestureDrag()
+        drag.set_button(1)
+        drag.connect("drag-begin", self._drag_begin)
+        drag.connect("drag-update", self._drag_update)
+        drag.connect("drag-end", self._drag_end)
+        self.add_controller(drag)
+        scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll.connect("scroll", self._scroll)
+        self.add_controller(scroll)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._motion)
+        motion.connect("leave", self._leave)
+        self.add_controller(motion)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key_pressed)
+        self.add_controller(keys)
+        focus = Gtk.EventControllerFocus()
+        focus.connect("enter", self._focus_enter)
+        self.add_controller(focus)
+
+    def _layout(self):
+        return reverb_rack_layout(self.get_width() or 600,
+                                  self.get_height() or 336)
+
+    def _params(self):
+        try:
+            return self.win._reverb_live_params() or {}
+        except Exception:
+            return {}
+
+    def _widget(self, field):
+        return getattr(self.win, self.SPECS[field][0], None)
+
+    def _fraction(self, field):
+        _attr, lo, hi, _step, _default, _title = self.SPECS[field]
+        widget = self._widget(field)
+        value = lo if widget is None else float(widget.get_value())
+        return max(0.0, min(1.0, (value - lo) / (hi - lo)))
+
+    def _set_fraction(self, field, fraction):
+        widget = self._widget(field)
+        if widget is None:
+            return False
+        _attr, lo, hi, step, _default, _title = self.SPECS[field]
+        value = lo + max(0.0, min(1.0, fraction)) * (hi - lo)
+        value = round(value / step) * step
+        widget.set_value(max(lo, min(hi, value)))
+        self.queue_draw()
+        return True
+
+    def _control_at(self, x, y):
+        layout = self._layout()
+        mx, my, mr = layout["motion_power"]
+        if math.hypot(float(x) - mx, float(y) - my) <= mr + 6.0:
+            return "motion_power"
+        for field in self.CONTROL_ORDER:
+            cx, cy, radius = layout[field]
+            if math.hypot(float(x) - cx, float(y) - cy) <= radius + 10.0:
+                return field
+        px, py, pr = layout["power"]
+        if io24_retro_rack.toggle_contains(px, py, pr, x, y):
+            return "power"
+        return None
+
+    def _select(self, field):
+        if field is None:
+            return False
+        self.selected_field = field
+        self.grab_focus()
+        self.queue_draw()
+        return True
+
+    def _toggle(self, field):
+        widget = self.win.rev_on if field == "power" else self.win.rev_mod
+        widget.set_active(not widget.get_active())
+        self.queue_draw()
+        return True
+
+    def _clicked(self, gesture, presses, x, y):
+        field = self._control_at(x, y)
+        if not self._select(field):
+            return
+        if field in ("power", "motion_power"):
+            if presses == 1:
+                self._toggle(field)
+            return
+        if control_reset_requested(gesture, presses):
+            default = self.SPECS[field][4]
+            _attr, lo, hi, _step, _default, _title = self.SPECS[field]
+            self._set_fraction(field, (default - lo) / (hi - lo))
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _drag_begin(self, _gesture, x, y):
+        field = self._control_at(x, y)
+        self.drag_field = field if field in self.SPECS else None
+        if control_held(_gesture):
+            self.drag_field = None
+        if self.drag_field is not None:
+            self._select(self.drag_field)
+            self.drag_fraction = self._fraction(self.drag_field)
+
+    def _drag_update(self, _gesture, _dx, dy):
+        if self.drag_field is not None:
+            self._set_fraction(
+                self.drag_field, self.drag_fraction - dy / self.DRAG_TRAVEL)
+
+    def _drag_end(self, *_args):
+        self.drag_field = None
+        self.queue_draw()
+
+    def _motion(self, _controller, x, y):
+        field = self._control_at(x, y)
+        if field != self.hover_field:
+            self.hover_field = field
+            self.set_cursor_from_name("pointer" if field else None)
+            self.queue_draw()
+
+    def _leave(self, *_args):
+        if self.hover_field is not None:
+            self.hover_field = None
+            self.set_cursor_from_name(None)
+            self.queue_draw()
+
+    def _focus_enter(self, *_args):
+        if self.selected_field is None:
+            self.selected_field = "power"
+        self.queue_draw()
+
+    def _nudge(self, direction):
+        field = self.selected_field or self.hover_field
+        if field not in self.SPECS:
+            return False
+        _attr, lo, hi, step, _default, _title = self.SPECS[field]
+        return self._set_fraction(
+            field, self._fraction(field) + direction * step / (hi - lo))
+
+    def _scroll(self, _controller, _dx, dy):
+        if self.hover_field not in self.SPECS:
+            return False
+        self._select(self.hover_field)
+        return self._nudge(-1 if dy > 0 else 1)
+
+    def _key_pressed(self, _controller, keyval, _keycode, _state):
+        if self.selected_field in ("power", "motion_power") and keyval in (
+                Gdk.KEY_space, Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return self._toggle(self.selected_field)
+        if keyval in (Gdk.KEY_Up, Gdk.KEY_Page_Up):
+            return self._nudge(1)
+        if keyval in (Gdk.KEY_Down, Gdk.KEY_Page_Down):
+            return self._nudge(-1)
+        if keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
+            fields = ("power",) + self.CONTROL_ORDER + ("motion_power",)
+            try:
+                index = fields.index(self.selected_field)
+            except ValueError:
+                index = 0
+            self.selected_field = fields[
+                (index + (-1 if keyval == Gdk.KEY_Left else 1)) % len(fields)]
+            self.queue_draw()
+            return True
+        return False
+
+    @staticmethod
+    def _value_text(field, value):
+        if field == "predelay":
+            return "%.0f ms" % (value * 1000.0)
+        if field in ("size", "mix"):
+            return "%.0f %%" % (value * 100.0)
+        if field == "hp":
+            return "OFF" if value < 1.0 else "%.0f Hz" % value
+        return "OFF" if value < .005 else "±%.0f %%" % (value * 100.0)
 
     def tick(self):
-        try:
-            P = self.params() or {}
-        except Exception:
-            return
+        P = self._params()
         key = tuple(round(float(P.get(k, 0) or 0), 4)
-                    for k in ("size", "mix", "predelay", "hp")) + (bool(P.get("on")),)
-        moving = bool(P.get("on")) and self._moving
-        if key == self._key and not moving:
+                    for k in ("size", "mix", "predelay", "hp")) + (
+                        bool(P.get("on")),
+                        bool(getattr(self.win, "rev_mod", None) and
+                             self.win.rev_mod.get_active()),)
+        settings = Gtk.Settings.get_default()
+        animations = bool(settings is None or
+                          settings.get_property("gtk-enable-animations"))
+        animated = bool(P.get("on")) and animations
+        if key == self._key and not animated:
             return
         self._key = key
-        self.t += 0.05
+        if animated:
+            self.t = (self.t + 1.0 / 30.0) % (math.pi * 2000.0)
         if self.get_mapped():
             self.queue_draw()
 
+    def _draw_knob(self, sn, field, cx, cy, radius, active):
+        fraction = self._fraction(field)
+        spec = self.SPECS[field]
+        value = spec[1] + fraction * (spec[2] - spec[1])
+        ink = io24_retro_rack.DARK_INK
+        start = math.radians(135.0)
+        for i in range(11):
+            angle = start + self.SWEEP * i / 10.0
+            r0, r1 = radius + 6.0, radius + (10.0 if i % 5 == 0 else 8.0)
+            polyline(sn, [(cx + r0 * math.cos(angle), cy + r0 * math.sin(angle)),
+                          (cx + r1 * math.cos(angle), cy + r1 * math.sin(angle))],
+                     rgba(*ink, .62), 1.0)
+        append_machined_knob(
+            self, sn, cx, cy, radius, start + self.SWEEP * fraction,
+            io24_retro_rack.ORANGE, active,
+            field == self.selected_field and self.has_visible_focus(),
+            powder_coated=True)
+        centred_faceplate_label(
+            self, sn, spec[5], cx, cy - radius - 26,
+            rgba(*ink, .90), 7, Pango.Weight.BOLD)
+        centred_faceplate_label(
+            self, sn, self._value_text(field, value), cx, cy + radius + 12,
+            rgba(*ink, .98), 9, Pango.Weight.BOLD)
+
+    def _draw_display(self, sn, rect, P, active):
+        x, y, w, h = rect
+        orange, cream = io24_retro_rack.ORANGE, io24_retro_rack.CREAM
+        lit = 1.0 if active else .30
+        size, mix = float(P.get("size", .5)), float(P.get("mix", 1.0))
+        pre, hp = float(P.get("predelay", .02)), float(P.get("hp", 200.0))
+        phase = self.t if active else 0.0
+        motion = self.win.rev_mod.get_active()
+        depth = self.win.s_rmoddep.get_value() if motion else 0.0
+        scale = max(1, self.get_scale_factor())
+        key = (w, h, scale, size, mix, pre, hp, phase, depth, active)
+        if key != getattr(self, "_mesh_texture_key", None):
+            profile = reverb_field_profile(size, mix, pre, hp, phase)
+            mesh = reverb_mesh_geometry(profile, phase, depth, rows=11, columns=33)
+            surface = io24_retro_rack.reverb_mesh_surface(
+                w, h, scale, mesh, reverb_mesh_triangles(mesh),
+                profile["gap"], active)
+            self._mesh_texture = _material_texture(surface)
+            self._mesh_texture_key = key
+        # One current frame, rendered at device pixel density. No history or
+        # frame cache accumulates, and native text never enters this texture.
+        sn.append_texture(self._mesh_texture, Graphene.Rect().init(
+            _rack_pixel(self, x), _rack_pixel(self, y),
+            self._mesh_texture.get_width() / scale,
+            self._mesh_texture.get_height() / scale))
+        # Native-resolution type is outside the mesh's clipping/paint layers.
+        faceplate_label(self, sn, "ACOUSTIC CHAMBER / DIFFUSION MESH", x+16, y+7,
+                        rgba(*orange, .95*lit), 6.5, Pango.Weight.BOLD)
+        faceplate_label(self, sn, "EARLY", x+20, y+h-13,
+                        rgba(*cream, .72*lit), 5.5)
+        centred_faceplate_label(self, sn, "DECAY FIELD", x+w*.5, y+h-13,
+                                rgba(*cream, .72*lit), 5.5)
+        faceplate_label(self, sn, "LATE", x+w-40, y+h-13,
+                        rgba(*cream, .72*lit), 5.5)
+
     def paint(self, sn, w, h):
-        box(sn, 0, 0, w, h, pal(FIELD))
-        try:
-            P = self.params() or {}
-        except Exception:
-            P = {}
-        size = max(0.02, min(1.0, float(P.get("size", 0.5))))
-        mix = max(0.0, min(1.0, float(P.get("mix", 0.35))))
-        pre = max(0.0, min(0.25, float(P.get("predelay", 0.02))))
-        hp = max(0.0, min(500.0, float(P.get("hp", 200.0))))
-        on = bool(P.get("on", False))
-        pad = 16.0
-        base = h - pad
-        for i in range(1, 8):
-            polyline(sn, [(w * i / 8.0, 0), (w * i / 8.0, h)], pal(PHOS, 0.055), 1.0)
-
-        gap = pre / 0.25 * 0.34
-        decay = 0.10 + size * 0.72
-        lit = 1.0 if on else 0.30
-
-        def env(t):
-            if t < gap:
-                return 0.0
-            return math.exp(-(t - gap) / max(0.03, decay)) * (0.12 + mix * 0.88)
-
-        # the dry hit, then the tail
-        polyline(sn, [(14, base), (14, base - (h - 2 * pad) * 0.92)],
-                 pal(IVORY, 0.55 * lit), 2.0)
-        pts = [(14 + (w - 28) * (i / 240.0), base - env(i / 240.0) * (h - 2 * pad) * 0.92)
-               for i in range(241)]
-        if on:
-            glow(sn, lambda: polyline(sn, pts, pal(PHOS, 0.95), 2.2), radius=7.0)
-        else:
-            polyline(sn, pts, pal(PHOS, 0.30), 1.6)
-
-        # the body under the tail: how much low end survives the input high-pass
-        low = 1.0 - min(1.0, hp / 500.0)
-        if low > 0.03:
-            step = 8
-            for i in range(0, 241, step):
-                t = i / 240.0
-                y = base - env(t) * (h - 2 * pad) * 0.92 * low
-                if base - y > 1.0:
-                    x = 14 + (w - 28) * t
-                    polyline(sn, [(x, base), (x, y)], duo(1.0 - t, 0.18 * lit), 1.0)
-
-        # the pre-delay gap, marked where it is
-        if gap > 0.004:
-            gx = 14 + (w - 28) * gap
-            polyline(sn, [(gx, 22), (gx, base)], pal(GOLD, 0.45 * lit), 1.2)
-            # beside its own line, below the readout — at the old spot it sat
-            # directly on top of the "pre N ms" text
-            label(self, sn, "pre-delay", gx + 5, 24, pal(GOLD, 0.5 * lit), 7)
-
-        polyline(sn, [(12, base), (w - 12, base)], pal(GRID, 0.30), 1.0)
-        label(self, sn, "pre %.0f ms   size %.0f%%   wet %.0f%%   hp %s"
-              % (pre * 1000, size * 100, mix * 100,
-                 "off" if hp < 1 else "%.0f Hz" % hp),
-              10, 7, pal(INK, 0.48), 8)
-        if not on:
-            label(self, sn, "reverb off", w - 74, h - 15, pal(INK, 0.35), 8)
+        layout = reverb_rack_layout(w, h)
+        fx, fy, fw, fh = layout["face"]
+        append_retro_chassis(self, sn, (0, 0, w, h), "reverb", layout["display"])
+        ink, orange = io24_retro_rack.DARK_INK, io24_retro_rack.ORANGE
+        faceplate_label(self, sn, "REVERB", fx+24, 12,
+                        rgba(*ink, .98), 16, Pango.Weight.BOLD)
+        faceplate_label(self, sn, "SHARED ROOM PROCESSOR", fx+137, 22,
+                        rgba(*ink, .68), 6.5, Pango.Weight.BOLD)
+        P = self._params()
+        active = bool(P.get("on", False))
+        self._draw_display(sn, layout["display"], P, active)
+        for field in self.CONTROL_ORDER:
+            self._draw_knob(sn, field, *layout[field], active)
+        px, py, pr = layout["power"]
+        append_retro_toggle(self, sn, px, py, pr, active,
+                            self.selected_field == "power")
+        centred_faceplate_label(self, sn, "POWER", px, py+pr*2.1+2,
+                                rgba(*ink, .90), 7, Pango.Weight.BOLD)
+        # A compact mechanical slider keeps room-motion distinct from power.
+        tx, ty, tr = layout["motion_power"]
+        motion = bool(self.win.rev_mod.get_active())
+        faceplate_label(self, sn, "SIZE MOTION", tx-103, ty-5,
+                        rgba(*ink, .90), 7, Pango.Weight.BOLD)
+        rounded_box(sn, tx-tr-2, ty-9, tr*2+4, 18, 4,
+                    rgba(.055, .06, .055, 1), rgba(.4, .42, .38, .9))
+        thumb = tx + (7 if motion else -7)
+        rounded_box(sn, thumb-6, ty-7, 12, 14, 2,
+                    rgba(.78, .80, .74, 1), rgba(1, 1, .94, .9))
+        for offset in (-2, 0, 2):
+            polyline(sn, [(thumb+offset, ty-4), (thumb+offset, ty+4)],
+                     rgba(.3, .32, .29, .8), .65)
+        dot(sn, tx-7 if motion else tx+7, ty, 2,
+            rgba(*orange, .98) if motion else rgba(.35, .37, .33, .7))
+        if self.selected_field == "motion_power" and self.has_visible_focus():
+            polyline(sn, [(tx-tr, ty+12), (tx+tr, ty+12)], rgba(*ink, .8), 1)
 
 
 def fx_response(model, P, bins=34):
@@ -2353,12 +3832,43 @@ def alternate_eq_knob_angle(spec, fraction):
 # remain live GTK vectors sourced from the Standard EQ contract.
 STANDARD_EQ_REFERENCE_ART = io24_eq_reference.rack("standard")
 # Band accents shared by each knob's collar, value arc, heading and node.
-STANDARD_EQ_BAND_TONES = ((.91, .45, .39), (.95, .70, .32),
-                          (.42, .83, .60), (.50, .62, .98))
+STANDARD_EQ_BAND_TONES = ((1.0, .32, .055), (1.0, .62, .21),
+                          (.96, .925, .83), (1.0, .42, .17))
 STANDARD_EQ_KNOB_DEGREES = (-225.0, 45.0)
 STANDARD_EQ_LIGHT = math.radians(-125.0)
 STANDARD_EQ_Q_DRAG_TRAVEL = 240.0
 _EQ_REFERENCE_TEXTURES = {}
+EQ_KNOB_ASSETS = {
+    "standard-gain": "standard-gain-knob.png",
+    "standard-q": "standard-q-knob.png",
+    "passive-continuous": "passive-continuous-knob.png",
+    "passive-selector": "passive-selector-knob.png",
+    "vintage-low": "vintage-low-knob.png",
+    "vintage-lowmid": "vintage-lowmid-knob.png",
+    "vintage-himid": "vintage-himid-knob.png",
+    "vintage-high": "vintage-high-knob.png",
+}
+# Standard keeps one neutral hardware family while giving Gain and Q their
+# correctly proportioned bodies.  These source knobs use an even fluted skirt
+# instead of the Passive control's four deep side cut-outs; band identity stays
+# on the graph nodes and status lamps rather than on the metal controls.
+STANDARD_EQ_KNOB_ASSETS = {
+    "gain": "standard-gain",
+    "q": "standard-q",
+}
+STANDARD_EQ_KNOB_ASSET_SCALE = {"gain": 2.05, "q": 2.10}
+# The Standard rack's physical rotaries are one neutral hardware family. Band
+# colour belongs to the graph nodes and the four status lamps, not the knobs.
+STANDARD_EQ_KNOB_TONE = (.82, .84, .83)
+
+
+def standard_eq_knob_asset_diameter(control, radius):
+    """Return the large analog body size for a Standard Gain or Q rotary."""
+    try:
+        scale = STANDARD_EQ_KNOB_ASSET_SCALE[control]
+    except KeyError as error:
+        raise ValueError("standard EQ control must be gain or q") from error
+    return float(radius) * scale
 
 
 def standard_eq_knob_angle(gain):
@@ -2443,6 +3953,28 @@ def append_eq_reference_texture(snapshot, filename, rect, opacity=1.0):
         texture, Graphene.Rect().init(x, y, width, height))
     if opacity < 1.0:
         snapshot.pop()
+    return True
+
+
+def append_eq_knob_texture(snapshot, name, cx, cy, diameter,
+                           rotation_degrees=0.0, opacity=1.0):
+    """Draw one independent transparent knob body centred on a live control."""
+    try:
+        texture = eq_reference_texture(EQ_KNOB_ASSETS[name])
+    except (KeyError, FileNotFoundError, GLib.Error):
+        return False
+    snapshot.save()
+    transform = Gsk.Transform.new().translate(Graphene.Point().init(cx, cy))
+    if rotation_degrees:
+        transform = transform.rotate(float(rotation_degrees))
+    snapshot.transform(transform)
+    if opacity < 1.0:
+        snapshot.push_opacity(max(0.0, min(1.0, float(opacity))))
+    snapshot.append_texture(texture, Graphene.Rect().init(
+        -diameter / 2.0, -diameter / 2.0, diameter, diameter))
+    if opacity < 1.0:
+        snapshot.pop()
+    snapshot.restore()
     return True
 
 
@@ -2550,7 +4082,7 @@ def standard_eq_rack_layout(width, height):
              rect_width * scale_x, rect_height * scale_y)
             for x, y, rect_width, rect_height in art["band_mode"]),
         "flatten": rectangle("flatten"),
-        "power": point(lamp_x, lamp_y) + (lamp_radius * scale,),
+        "power": point(lamp_x, lamp_y - 12) + (lamp_radius * scale,),
     }
 
 
@@ -2697,8 +4229,8 @@ def alternate_eq_control_text(spec, value):
 def alternate_eq_control_label_y(model, cy, radius):
     """Match the reference's model-specific control-label placement."""
     if model == "vintage":
-        return cy + radius * 1.88
-    return cy - radius * 2.05
+        return cy + radius * 1.60
+    return cy - radius * 2.17
 
 
 def alternate_eq_control_value_y(model, cy, radius):
@@ -2732,7 +4264,22 @@ def alternate_eq_scale_marks(spec):
     return tuple(marks)
 
 
-def alternate_eq_mark_points(spec, cx, cy, radius):
+def alternate_eq_display_scale_marks(model, spec):
+    """Keep large analog knobs legible without changing their exact ranges."""
+    marks = alternate_eq_scale_marks(spec)
+    if spec.get("choices"):
+        return marks
+    if model == "passive":
+        low, high = float(spec["lo"]), float(spec["hi"])
+        middle = (low + high) / 2.0
+        return ((0.0, "%g" % low), (.5, "%g" % middle),
+                (1.0, "%g" % high))
+    if model == "vintage" and len(marks) >= 3:
+        return (marks[0], marks[len(marks) // 2], marks[-1])
+    return marks
+
+
+def alternate_eq_mark_points(spec, cx, cy, radius, marks=None):
     """Centre of every printed value around one knob, as ``(x, y, text)``.
 
     Distances follow the references, which print at about 1.36-1.41 radii;
@@ -2742,11 +4289,41 @@ def alternate_eq_mark_points(spec, cx, cy, radius):
     """
     distance = radius * (1.62 if spec.get("style") == "selector" else 1.38)
     points = []
-    for position, text in alternate_eq_scale_marks(spec):
+    for position, text in (
+            alternate_eq_scale_marks(spec) if marks is None else marks):
         angle = alternate_eq_knob_angle(spec, position)
         points.append((cx + distance * math.cos(angle),
                        cy + distance * math.sin(angle), text))
     return tuple(points)
+
+
+def alternate_eq_mark_label_size(model, spec, radius):
+    """Return reference-scaled engraving size for one alternate EQ dial."""
+    size = max(5.4, min(9.2, float(radius) * .19))
+    if model == "passive" and spec.get("group") == "HIGH":
+        size = min(size, 6.8)
+    if model == "passive" and spec.get("field") == "mfreq":
+        size = min(size, 6.1)
+    return size
+
+
+def alternate_eq_knob_asset_diameter(model, spec, radius):
+    """Scale extracted knob pixels to the photographed body diameter.
+
+    The measured control radius includes the printed scale. Pixel inspection
+    of the source references puts Passive's broad skirt at about 1.82 measured
+    radii across and its chicken-head selectors at 1.52. Vintage deliberately
+    uses a slightly larger 2.10-radii presentation than the photographed body,
+    while preserving its measured centres and safe spacing. Keeping body size
+    independent from the hit radius prevents interaction geometry from moving.
+    """
+    if model == "passive":
+        scale = 1.52 if spec.get("style") == "selector" else 1.82
+    elif model == "vintage":
+        scale = 2.10
+    else:
+        raise ValueError("alternate EQ model must be passive or vintage")
+    return float(radius) * scale
 
 
 def alternate_eq_graph_levels(model):
@@ -2786,7 +4363,7 @@ class Knob(Canvas):
         # which is what made it feel like it was fighting the mouse. Any touch
         # claims the control for a moment; the device drives it again after.
         self._hold_until = 0.0
-        self.set_tooltip_text("Drag to turn, double-click to centre")
+        self.set_tooltip_text("Drag to turn, Ctrl-click or double-click to centre")
 
         dr = Gtk.GestureDrag()
         dr.connect("drag-begin", self._begin)
@@ -2816,6 +4393,8 @@ class Knob(Canvas):
         self._touch()
 
     def _update(self, _g, _dx, dy):
+        if control_held(_g):
+            return
         self._touch()
         self.set_value(self._start - dy / self.TRAVEL)
 
@@ -2823,7 +4402,7 @@ class Knob(Canvas):
         self._touch()
 
     def _clicked(self, g, n_press, _x, _y):
-        if n_press == 2:
+        if control_reset_requested(g, n_press):
             self._touch()
             self.set_value(self.centre)
             g.set_state(Gtk.EventSequenceState.CLAIMED)
@@ -2955,10 +4534,13 @@ class EQCurve(ChannelBound, Canvas):
         self.channel = channel
         self.set_hexpand(True)
         self.set_focusable(True)
+        self.set_tooltip_text(
+            "Drag a large knob for gain; double-click it to switch that "
+            "band on or off. Drag a graph node for frequency and gain. "
+            "Ctrl-click a knob or node to reset its parameters.")
         self._static_nodes = None
         self.drag_band = None
         self._drag_control = None
-        self._drag_pending_enable = False
         self._drag_thr = Throttle(
             lambda _value: self.win._push_band(self.channel), 0.012)
         self._drag_push = lambda: self._drag_thr(0.0)
@@ -3007,13 +4589,14 @@ class EQCurve(ChannelBound, Canvas):
         return standard_eq_rack_layout(w, h)["graph"]
 
     def _node_y(self, band, gy, gh):
-        """A band node's drawn height, clamped inside the screen as painted.
+        """Place a node from its own gain, independent of neighbouring bands.
 
-        Hit-testing used the unclamped response, so a node pinned to the
-        screen edge by a large combined boost could be seen but not grabbed.
+        The response curve remains the aggregate chain.  A node is a control
+        for one band, so letting the other bands move its handle made the
+        controls appear to jump and cluster even though their stored values
+        had not changed.
         """
-        response = self.win.response_for(
-            self.channel, band["freq"], fs=self.win._fs, enabled=True)
+        response = max(-15.0, min(15.0, float(band.get("gain", 0.0))))
         return max(gy + 7, min(gy + gh - 7,
                                gy + gh / 2 - response / 18.0 * (gh / 2)))
 
@@ -3031,7 +4614,9 @@ class EQCurve(ChannelBound, Canvas):
         """The band whose physical knob, skirt included, is under x, y."""
         layout = standard_eq_rack_layout(
             width or self.get_width() or 1, height or self.get_height() or 1)
-        reach = max(14.0, layout["knob_radius"] * 1.08)
+        # The enlarged Passive-style skirt extends beyond the old reference
+        # circle; its full visible edge must feel like part of the control.
+        reach = max(14.0, layout["knob_radius"] * 1.28)
         for index, (cx, cy) in enumerate(layout["encoders"]):
             if math.hypot(float(x) - cx, float(y) - cy) <= reach:
                 return index
@@ -3102,7 +4687,7 @@ class EQCurve(ChannelBound, Canvas):
     def _power_at(self, x, y):
         px, py, radius = standard_eq_rack_layout(
             self.get_width() or 1, self.get_height() or 1)["power"]
-        return math.hypot(float(x) - px, float(y) - py) <= radius * 1.65
+        return io24_retro_rack.toggle_contains(px, py, radius, x, y)
 
     def _nearest(self, x, y):
         w, h = self.get_width() or 1, self.get_height() or 1
@@ -3131,14 +4716,36 @@ class EQCurve(ChannelBound, Canvas):
             if presses == 1:
                 self.win._eq_flat(self.channel)
             return
+        if control_held(_g):
+            q_band = self._q_knob_at(x, y)
+            gain_band = self._knob_at(x, y)
+            band = q_band if q_band is not None else gain_band
+            if band is None:
+                band = self._hit_band(x, y)
+            if band is not None:
+                self.win.select_band(band, self.channel)
+                defaults = ({"q": io24_presets.STANDARD_EQ_DEFAULT_Q}
+                            if q_band is not None else {"gain": 0.0})
+                if q_band is None and gain_band is None:
+                    defaults["freq"] = io24_presets.STANDARD_EQ_BAND_SPECS[band]["default_freq"]
+                for key, value in defaults.items():
+                    self.wid(key).set_value(value)
+                _g.set_state(Gtk.EventSequenceState.CLAIMED)
+            return
+        gain_band = self._knob_at(x, y)
+        if gain_band is not None:
+            self.win.select_band(gain_band, self.channel)
+            if presses == 2:
+                enabled = io24_presets.standard_band_enabled(
+                    self.bands[gain_band])
+                self.win._set_standard_band_enabled(
+                    self.channel, gain_band, not enabled)
+            return
         band_power = self._band_power_at(x, y)
         if band_power is not None:
+            # These are status lamps, not tiny hidden switches.  The large
+            # band knob owns the double-click power gesture.
             self.win.select_band(band_power, self.channel)
-            if presses == 1:
-                enabled = io24_presets.standard_band_enabled(
-                    self.bands[band_power])
-                self.win._set_standard_band_enabled(
-                    self.channel, band_power, not enabled)
             return
         band_mode = self._band_mode_at(x, y)
         if band_mode is not None:
@@ -3162,23 +4769,21 @@ class EQCurve(ChannelBound, Canvas):
             return
         n = self._hit_band(x, y)
         q = self._q_knob_at(x, y)
-        band_power = self._band_power_at(x, y)
         mode = self._band_mode_at(x, y)
         power = self._power_at(x, y)
         flatten = self._flatten_at(x, y)
         if (n != self.hover or q != self.hover_q or
-                band_power != self.hover_band_power or
                 mode != self.hover_mode or power != self.hover_power or
                 flatten != self.hover_flatten):
             self.hover = n
             self.hover_q = q
-            self.hover_band_power = band_power
+            self.hover_band_power = None
             self.hover_mode = mode
             self.hover_power = power
             self.hover_flatten = flatten
             self.set_cursor_from_name(
                 "pointer" if (power or flatten or n is not None or
-                              band_power is not None or mode is not None)
+                              mode is not None)
                 else None)
             self.queue_draw()
 
@@ -3202,6 +4807,10 @@ class EQCurve(ChannelBound, Canvas):
         return max(low, min(high, 20.0 * (24000 / 20.0) ** t))
 
     def _drag_begin(self, g, x, y):
+        if control_held(g):
+            self.drag_band = None
+            self._drag_control = None
+            return
         if self.win._alt_eq(self.channel) is not None:
             self.drag_band = None
             self._drag_control = None
@@ -3231,32 +4840,11 @@ class EQCurve(ChannelBound, Canvas):
             return
         self.win.select_band(self.drag_band, self.channel)
         b = self.bands[self.drag_band]
-        self._drag_pending_enable = (
-            not self.win.eq_enabled(self.channel) or b["shape"] == "off")
         self._start = (x, y, b["freq"], b["gain"], b["q"])
-
-    def _enable_dragged_band(self):
-        if not self._drag_pending_enable or self.drag_band is None:
-            return
-        b = self.bands[self.drag_band]
-        if b["shape"] == "off":
-            b["shape"] = self.win._standard_band_mode(
-                self.channel, self.drag_band)
-            b["on"] = True
-            prior = self.win._adopt_mute
-            self.win._adopt_mute = True
-            try:
-                self.wid("band_on").set_active(True)
-            finally:
-                self.win._adopt_mute = prior
-        if not self.win.eq_enabled(self.channel):
-            self.win._set_eq_enabled(self.channel, True)
-        self._drag_pending_enable = False
 
     def _drag_update(self, g, dx, dy):
         if self.drag_band is None:
             return
-        self._enable_dragged_band()
         self.win.invalidate_curve()
         gx, _gy, gw, gh = self._graph_bounds()
         b = self.bands[self.drag_band]
@@ -3293,9 +4881,10 @@ class EQCurve(ChannelBound, Canvas):
             rack.queue_draw()
 
     def _drag_end(self, g, dx, dy):
+        self._drag_thr.flush_pending()
         self.drag_band = None
         self._drag_control = None
-        self._drag_pending_enable = False
+        self.queue_draw()
 
     def _scroll(self, _c, _dx, dy):
         if self.win._alt_eq(self.channel) is not None:
@@ -3323,18 +4912,12 @@ class EQCurve(ChannelBound, Canvas):
         self.queue_draw()
         return True
 
-    def _draw_q_knob(self, sn, index, cx, cy, radius, band, tone, scale):
+    def _draw_q_knob(self, sn, index, cx, cy, radius, band, _tone, scale):
         """Draw one compact physical Q rotary with independent live motion."""
         selected = index == self.cur_band
         hovered = index == self.hover_q
-        if selected or hovered:
-            glow(sn, lambda: dot(
-                sn, cx, cy, radius * 1.18,
-                rgba(*tone, .24 if selected else .16)),
-                radius=max(3.0, 7.0 * scale))
-
-        # Eleven fixed ticks, a fluted black skirt, and a brushed cap retain
-        # the same physical vocabulary as the larger Gain encoders.
+        # Eleven fixed ticks and the shared Passive-style body retain the same
+        # physical vocabulary as the larger Gain encoders.
         for tick in range(11):
             angle = math.radians(
                 STANDARD_EQ_KNOB_DEGREES[0] +
@@ -3347,43 +4930,68 @@ class EQCurve(ChannelBound, Canvas):
                  cy + inner * math.sin(angle)),
                 (cx + outer * math.cos(angle),
                  cy + outer * math.sin(angle)),
-            ], rgba(.78, .82, .83, .72), max(.65, 1.35 * scale))
+            ], rgba(*io24_retro_rack.CREAM, .62), max(.65, 1.35 * scale))
 
-        dot(sn, cx + radius * .07, cy + radius * .11, radius * 1.06,
-            rgba(0, 0, 0, .58))
-        dot(sn, cx, cy, radius, rgba(.025, .030, .036, 1))
-        for ridge in range(20):
-            angle = math.tau * ridge / 20.0
-            polyline(sn, [
-                (cx + radius * .82 * math.cos(angle),
-                 cy + radius * .82 * math.sin(angle)),
-                (cx + radius * .98 * math.cos(angle),
-                 cy + radius * .98 * math.sin(angle)),
-            ], rgba(.22, .24, .27, .86), max(.55, 1.15 * scale))
-        radial_dot(sn, cx, cy, radius * .73, (
-            (0.0, (.78, .82, .84, 1)),
-            (.24, (.48, .52, .55, 1)),
-            (.72, (.17, .19, .22, 1)),
-            (1.0, (.055, .064, .075, 1)),
-        ))
-        dot(sn, cx, cy, radius * .58, rgba(*tone, .26))
-        angle = standard_eq_q_angle(band["q"])
-        cos_a, sin_a = math.cos(angle), math.sin(angle)
-        polyline(sn, [
-            (cx + radius * .12 * cos_a, cy + radius * .12 * sin_a),
-            (cx + radius * .70 * cos_a, cy + radius * .70 * sin_a),
-        ], rgba(0, 0, 0, .70), max(2.0, 4.0 * scale))
-        polyline(sn, [
-            (cx + radius * .12 * cos_a - scale,
-             cy + radius * .12 * sin_a - scale),
-            (cx + radius * .70 * cos_a - scale,
-             cy + radius * .70 * sin_a - scale),
-        ], rgba(.98, .98, .94, .98), max(1.0, 2.1 * scale))
+        append_machined_knob(
+            self, sn, cx, cy, radius, standard_eq_q_angle(band["q"]),
+            io24_retro_rack.ORANGE, band["shape"] != "off", selected or hovered)
         centred_faceplate_label(
             self, sn, "Q %.2f" % band["q"], cx,
             cy + radius + max(3.0, 6.0 * scale),
-            rgba(.78, .85, .87, .96), max(5.8, 14.0 * scale),
+            rgba(*io24_retro_rack.CREAM, .96), max(5.8, 14.0 * scale),
             Pango.Weight.BOLD if hovered else Pango.Weight.MEDIUM)
+
+    def _draw_spectrogram(self, sn, gx, gy, gw, gh, spectrum):
+        """Paint a conventional scrolling spectrogram inside the EQ glass.
+
+        Time moves left, the newest slice is at the right edge, low frequencies
+        sit at the bottom and highs at the top.  It is deliberately only the
+        background layer: the gain grid, response curve and draggable nodes
+        are painted afterwards and keep their existing EQ coordinates.
+        """
+        if spectrum is None:
+            return False
+        snapshot = getattr(spectrum, "history_snapshot", None)
+        if callable(snapshot):
+            history = snapshot(self.channel)
+        else:
+            histories = getattr(spectrum, "history", ((), ()))
+            history = tuple(histories[self.channel - 1]) \
+                if len(histories) >= self.channel else ()
+        if not history:
+            return False
+
+        column_count = max(
+            1, int(getattr(spectrum, "HISTORY_COLUMNS", len(history))))
+        pixels = spectrogram_pixels(history, column_count)
+        texture = Gdk.MemoryTexture.new(
+            column_count, SPECTROGRAM_ROWS, Gdk.MemoryFormat.R8G8B8A8,
+            GLib.Bytes.new(pixels), column_count * 4)
+        sn.append_texture(texture, Graphene.Rect().init(gx, gy, gw, gh))
+        return True
+
+    def _draw_standard_grid(self, sn, gx, gy, gw, gh, scale):
+        """Restore the EQ grid above the spectrogram heat layer."""
+        tone = io24_retro_rack.ORANGE
+        major_frequencies = {
+            50, 100, 200, 500, 1000, 2000, 5000, 10000}
+        frequencies = [
+            base * decade
+            for decade in (10, 100, 1000, 10000)
+            for base in range(2, 10)
+            if 20 <= base * decade <= 20000
+        ]
+        for frequency in frequencies:
+            x = gx + self._x(frequency, gw)
+            major = frequency in major_frequencies
+            polyline(sn, [(x, gy), (x, gy + gh)],
+                     rgba(*tone, .10 if major else .04),
+                     max(.65, .85 * scale))
+        for level in (-12, -6, 0, 6, 12):
+            y = gy + gh / 2.0 - level / 18.0 * (gh / 2.0)
+            polyline(sn, [(gx, y), (gx + gw, y)],
+                     rgba(*tone, .18 if level == 0 else .065),
+                     max(.7, (1.35 if level == 0 else .9) * scale))
 
     def paint(self, sn, w, h):
         acc = chan_col(self.channel)
@@ -3396,90 +5004,95 @@ class EQCurve(ChannelBound, Canvas):
                     sn, STANDARD_EQ_REFERENCE_ART[
                         "calibration_underlay_filename"], panel):
             return
-        # The blank faceplate comes from the same deterministic renderer as the
-        # approved reference, so metal, grain, rack ears, fluted knobs and the
-        # screen frame stay pixel-identical.  Only state-bearing marks are
-        # drawn below: no illustrative value from the reference can leak into
-        # the live Host.
         px, py, pw, ph = layout["panel"]
-        try:
-            texture = standard_eq_faceplate_texture()
-        except (FileNotFoundError, GLib.Error):
-            texture = None
-        if texture is not None:
-            sn.append_texture(texture, Graphene.Rect().init(px, py, pw, ph))
-        else:
-            rounded_vgrad(sn, px, py, pw, ph, 7, (
-                (0.0, (.20, .238, .296, 1)),
-                (.45, (.118, .146, .190, 1)),
-                (1.0, (.060, .075, .102, 1))), rgba(.35, .44, .54, .8))
+        sx, sy, sw, sh = layout["screen"]
+        append_retro_chassis(self, sn, panel, "standard",
+                             (sx - px, sy - py, sw, sh))
+        faceplate_heading(
+            self, sn, "STANDARD  EQ", px + pw / 2, layout["heading_y"],
+            rgba(*io24_retro_rack.CREAM, .98), 29 * layout["scale"],
+            9.5 * layout["scale"])
+        for index, (cx, _cy) in enumerate(layout["encoders"]):
+            faceplate_heading(
+                self, sn, ("LOW", "LOW MID", "HIGH MID", "HIGH")[index],
+                cx, layout["heading_y"], rgba(*io24_retro_rack.CREAM, .94),
+                21 * layout["scale"], 3.2 * layout["scale"])
 
         gx, gy, gw, gh = self._graph_bounds(w, h)
 
         # The screen is the authoritative response: all four band controls,
-        # spectrum context and marker positions share these exact bounds.
+        # spectrogram context and marker positions share these exact bounds.
         sp = self.win.spectrum
         mag = sp.mag[self.channel - 1] if sp else None
         if sp is None:
-            spectrum_note = "SPECTRUM OFFLINE"
+            spectrum_note = "SPECTROGRAM OFFLINE"
         elif sp.error:
-            spectrum_note = "SPECTRUM ERROR"
+            spectrum_note = "SPECTROGRAM ERROR"
         elif not mag:
-            spectrum_note = "SPECTRUM WAITING"
+            spectrum_note = "SPECTROGRAM WAITING"
         else:
             peak = max(mag)
             spectrum_note = "INPUT %d  PEAK %.0f dB" % (self.channel, peak)
         scale = layout["scale"]
+        self._draw_spectrogram(sn, gx, gy, gw, gh, sp)
+        self._draw_standard_grid(sn, gx, gy, gw, gh, scale)
+        for level in (-12, -6, 0, 6, 12):
+            faceplate_heading(
+                self, sn, "%+d" % level if level else "0", gx - 15 * scale,
+                gy + gh / 2 - level / 18 * gh / 2,
+                rgba(*io24_retro_rack.CREAM, .75), max(7, 13 * scale), 0)
+        for frequency, caption in ((20, "20"), (100, "100"), (1000, "1k"),
+                                   (10000, "10k"), (20000, "20k")):
+            faceplate_heading(
+                self, sn, caption, gx + self._x(frequency, gw),
+                gy + gh + 22 * scale, rgba(*io24_retro_rack.CREAM, .75),
+                max(7, 14 * scale), 0)
         centred_faceplate_label(
             self, sn, spectrum_note, gx + gw - 82.0 * scale,
-            gy + 5.0 * scale, rgba(.54, .72, .75, .52),
+            gy + 5.0 * scale, rgba(.84, .76, .60, .65),
             max(5.7, 15.0 * scale), Pango.Weight.NORMAL)
-        if mag:
-            top, bot = -6.0, -108.0
-            poly = [(gx, gy + gh)]
-            for f, d in zip(sp.freqs, mag):
-                px = gx + self._x(f, gw)
-                py = gy + gh - (max(bot, min(top, d)) - bot) / \
-                    (top - bot) * gh
-                poly.append((px, py))
-            poly.append((gx + gw, gy + gh))
-            fill_poly(sn, poly, pal(acc, 0.13))
-            polyline(sn, poly[1:-1], pal(acc, 0.42), 1.0)
         active = self.win.eq_enabled(self.channel)
         pts = [(gx + px, gy + py) for px, py in
                self.win.curve_points(gw, gh, self.channel)]
         if active and any(b["shape"] != "off" for b in self.bands):
-            fill_poly(sn, pts + [(gx + gw, gy + gh / 2),
-                                 (gx, gy + gh / 2)], pal(acc, 0.14))
+            response_mesh(self, sn, pts, gy + gh / 2,
+                          (gx, gy, gw, gh), io24_retro_rack.ORANGE,
+                          mesh_depth=True)
         if active:
-            glow(sn, lambda: polyline(sn, pts, pal(acc), 2.2), radius=8.0)
+            glow(sn, lambda: polyline(sn, pts, rgba(*io24_retro_rack.ORANGE, 1), 1.8),
+                 radius=3.0, passes=1)
+            polyline(sn, pts, rgba(1.0, .91, .70, .95),
+                     max(.65, 1.05 * scale))
         else:
-            polyline(sn, pts, pal(acc, 0.32), 1.4)
+            polyline(sn, pts, rgba(*io24_retro_rack.ORANGE, .32), 1.4)
 
         for i, b in enumerate(self.bands):
-            if b["shape"] == "off":
-                continue
+            band_on = io24_presets.standard_band_enabled(b)
             tone = STANDARD_EQ_BAND_TONES[i]
             px = gx + self._x(b["freq"], gw)
             py = self._node_y(b, gy, gh)
             sel = (i == self.cur_band)
             hov = (i == self.hover)
-            r = max(4.5, (12.5 if sel else (10.5 if hov else 9.5)) * scale)
+            r = max(4.2, (12.5 if sel else (10.5 if hov else 9.5)) * scale)
             polyline(sn, [(px, gy), (px, gy + gh)],
-                     rgba(*tone, .30 if sel else .12), max(.8, scale))
+                     rgba(*tone, (.30 if sel else .12) if band_on else .055),
+                     max(.8, scale))
             glow(sn, lambda x=px, y=py, radius=r, colour=tone:
                  dot(sn, x, y, radius + 2.0 * scale,
-                     rgba(*colour, .88 if sel else .52)),
-                 radius=max(3.0, 8.0 * scale))
+                     rgba(*colour, (.88 if sel else .52)
+                          if band_on else .18)),
+                 radius=max(2.0, (8.0 if band_on else 3.0) * scale))
             dot(sn, px, py, r + 2.5 * scale, rgba(0, .02, .03, .75))
             radial_dot(sn, px, py, r, (
                 (0.0, (min(1.0, tone[0] * 1.25 + .15),
                        min(1.0, tone[1] * 1.25 + .15),
-                       min(1.0, tone[2] * 1.25 + .15), 1)),
-                (.60, (*tone, 1)),
+                       min(1.0, tone[2] * 1.25 + .15),
+                       1.0 if band_on else .48)),
+                (.60, (*tone, 1.0 if band_on else .42)),
                 (1.0, (tone[0] * .55, tone[1] * .55,
-                       tone[2] * .55, 1))))
-            dot(sn, px, py, max(1.4, 3.2 * scale), rgba(1, 1, .97, .95))
+                       tone[2] * .55, 1.0 if band_on else .40))))
+            dot(sn, px, py, max(1.4, 3.2 * scale),
+                rgba(1, 1, .97, .95 if band_on else .44))
             if sel or hov:
                 tag = "%s   %.0f Hz   %+.1f dB   Q %.2f" % (
                     BAND_NAMES[i], b["freq"], b["gain"], b["q"])
@@ -3492,7 +5105,7 @@ class EQCurve(ChannelBound, Canvas):
                 tag_y = max(gy + 8.0 * scale,
                             py - 50.0 * scale)
                 rounded_box(sn, tag_x, tag_y, tag_width, tag_height,
-                            max(3.0, 5.0 * scale), rgba(.01, .05, .06, .86),
+                            max(3.0, 5.0 * scale), rgba(.018, .015, .012, .94),
                             rgba(*tone, .58))
                 polyline(sn, [(tag_x + 7.0 * scale,
                                tag_y + 7.0 * scale),
@@ -3502,11 +5115,10 @@ class EQCurve(ChannelBound, Canvas):
                 faceplate_label(
                     self, sn, tag, tag_x + 16.0 * scale,
                     tag_y + (tag_height - tag_size) / 2.0,
-                    rgba(.84, .91, .92, .94), tag_size)
+                    rgba(*io24_retro_rack.CREAM, .96), tag_size)
 
-        # The base image owns the physical knobs.  These overlays are exactly
-        # the state that can move: gain arc and pointer, selected-band halo,
-        # gain/frequency/mode readouts, and each band's independent lamp.
+        # Machined caps and rubber skirts share the native-pixel material;
+        # pointers and grip grooves follow each authoritative gain value.
         radius = layout["knob_radius"]
         zero_angle = standard_eq_knob_angle(0.0)
         for index, ((cx, cy), tone, band) in enumerate(zip(
@@ -3518,60 +5130,36 @@ class EQCurve(ChannelBound, Canvas):
             tone_alpha = 1.0 if band_on and active else (
                 .62 if band_on else .28)
 
-            if selected or hovered:
-                ring_radius = radius * (.69 if selected else 1.02)
-                ring = standard_eq_arc_points(
-                    cx, cy, ring_radius, 0.0, math.tau)
-                glow(sn, lambda points=ring, colour=tone:
-                     polyline(sn, points, rgba(*colour,
-                                               .82 if selected else .50),
-                              max(1.2, 4.0 * scale)),
-                     radius=max(4.0, 12.0 * scale))
-
+            for mark in range(-15, 16, 3):
+                theta = standard_eq_knob_angle(mark)
+                polyline(sn, [
+                    (cx + radius * 1.14 * math.cos(theta),
+                     cy + radius * 1.14 * math.sin(theta)),
+                    (cx + radius * 1.26 * math.cos(theta),
+                     cy + radius * 1.26 * math.sin(theta))],
+                    rgba(*io24_retro_rack.CREAM, .62), max(.7, scale * 1.7))
+                if mark in (-15, 0, 15):
+                    faceplate_heading(
+                        self, sn, "%+d" % mark if mark else "0",
+                        cx + radius * 1.48 * math.cos(theta),
+                        cy + radius * 1.48 * math.sin(theta),
+                        rgba(*io24_retro_rack.CREAM, .84), max(8, 16 * scale), 0)
+            append_machined_knob(self, sn, cx, cy, radius, angle,
+                                 io24_retro_rack.ORANGE, band_on, selected or hovered)
             arc_start, arc_end = sorted((zero_angle, angle))
             if abs(arc_end - arc_start) > 1e-6:
-                value_arc = standard_eq_arc_points(
-                    cx, cy, radius * 1.05, arc_start, arc_end)
-                glow(sn, lambda points=value_arc, colour=tone,
-                     alpha=tone_alpha: polyline(
-                         sn, points, rgba(*colour, alpha),
-                         max(1.0, 4.0 * scale)),
-                     radius=max(2.0, 5.0 * scale))
-
-            cos_a, sin_a = math.cos(angle), math.sin(angle)
-            cap_radius = radius * .605
-            polyline(sn, [
-                (cx + cap_radius * .16 * cos_a + scale * .8,
-                 cy + cap_radius * .16 * sin_a + scale * 1.2),
-                (cx + cap_radius * .92 * cos_a + scale * .8,
-                 cy + cap_radius * .92 * sin_a + scale * 1.2),
-            ], rgba(1, 1, 1, .50), max(1.0, 2.0 * scale))
-            polyline(sn, [
-                (cx + cap_radius * .16 * cos_a,
-                 cy + cap_radius * .16 * sin_a),
-                (cx + cap_radius * .92 * cos_a,
-                 cy + cap_radius * .92 * sin_a),
-            ], rgba(.08, .09, .11, .95), max(1.6, 4.2 * scale))
-            polyline(sn, [
-                (cx + radius * .70 * cos_a + scale,
-                 cy + radius * .70 * sin_a + scale * 1.5),
-                (cx + radius * .96 * cos_a + scale,
-                 cy + radius * .96 * sin_a + scale * 1.5),
-            ], rgba(0, 0, 0, .64), max(2.2, 6.4 * scale))
-            polyline(sn, [
-                (cx + radius * .70 * cos_a,
-                 cy + radius * .70 * sin_a),
-                (cx + radius * .96 * cos_a,
-                 cy + radius * .96 * sin_a),
-            ], rgba(.98, .97, .93, .98 if band_on else .58),
-                max(1.8, 5.2 * scale))
+                polyline(sn, standard_eq_arc_points(
+                    cx, cy, radius * 1.16, arc_start, arc_end),
+                    rgba(*tone, tone_alpha), max(1.0, 2.8 * scale))
 
             gain_size = max(6.8, 18.0 * scale)
             gain_center_y = cy + radius + 13.0 * scale
-            centred_faceplate_label(
-                self, sn, "%+.1f dB" % band["gain"], cx,
-                gain_center_y - gain_size * .55,
-                rgba(.94, .95, .92, .96 if selected else .86), gain_size)
+            if self.drag_band == index and self._drag_control == "gain":
+                centred_faceplate_label(
+                    self, sn, "%+.1f dB" % band["gain"], cx,
+                    gain_center_y - gain_size * .55,
+                    rgba(.94, .95, .92, .98), gain_size,
+                    Pango.Weight.BOLD)
 
             qx, qy = layout["q_encoders"][index]
             self._draw_q_knob(
@@ -3579,15 +5167,10 @@ class EQCurve(ChannelBound, Canvas):
 
             detail_size = max(5.8, 14.0 * scale)
             led_x, detail_y, led_r = layout["band_power"][index]
-            if self.hover_band_power == index:
-                glow(sn, lambda x=led_x, y=detail_y, r=led_r,
-                     colour=tone: dot(sn, x, y, r * 1.75,
-                                      rgba(*colour, .30)),
-                     radius=max(3.0, 6.0 * scale))
             if band_on:
                 glow(sn, lambda x=led_x, y=detail_y, colour=tone:
-                     dot(sn, x, y, led_r, rgba(*colour, .95)),
-                     radius=max(2.0, 5.0 * scale))
+                     dot(sn, x, y, led_r * 1.18, rgba(*colour, .98)),
+                     radius=max(4.0, 9.0 * scale), passes=2)
                 radial_dot(sn, led_x, detail_y, led_r, (
                     (0.0, (1, 1, .95, 1)),
                     (.45, (*tone, 1)),
@@ -3601,7 +5184,7 @@ class EQCurve(ChannelBound, Canvas):
             centred_faceplate_label(
                 self, sn, "%.0f Hz" % band["freq"], frequency_x,
                 detail_y - detail_size * .55,
-                rgba(.66, .74, .78, .86), detail_size)
+                rgba(*io24_retro_rack.CREAM, .86), detail_size)
 
             mode_x, mode_y, mode_w, mode_h = layout["band_mode"][index]
             mode_hovered = self.hover_mode == index
@@ -3609,13 +5192,13 @@ class EQCurve(ChannelBound, Canvas):
             rounded_box(
                 sn, mode_x, mode_y, mode_w, mode_h,
                 max(2.0, 4.0 * scale),
-                rgba(.025, .040, .052, .86),
+                rgba(.075, .066, .05, 1),
                 rgba(*tone, .74 if mode_hovered and outer else .32))
             centred_faceplate_label(
                 self, sn, standard_eq_mode_text(band),
                 mode_x + mode_w / 2.0,
                 mode_y + (mode_h - detail_size) / 2.0,
-                rgba(.82, .88, .88, .96 if outer else .62), detail_size,
+                rgba(*io24_retro_rack.CREAM, .96 if outer else .62), detail_size,
                 Pango.Weight.BOLD if mode_hovered and outer
                 else Pango.Weight.MEDIUM)
 
@@ -3623,32 +5206,21 @@ class EQCurve(ChannelBound, Canvas):
         rounded_box(
             sn, flat_x, flat_y, flat_w, flat_h,
             max(2.0, 4.0 * scale),
-            rgba(.010, .038, .047, .88),
-            pal(ACCENT, .72 if self.hover_flatten else .30))
+            rgba(.11, .055, .02, .95),
+            rgba(*io24_retro_rack.ORANGE, .85 if self.hover_flatten else .50))
         centred_faceplate_label(
             self, sn, "FLAT", flat_x + flat_w / 2.0,
             flat_y + max(2.0, 5.0 * scale),
-            rgba(.64, .82, .84, .94), max(5.6, 12.0 * scale),
+            rgba(*io24_retro_rack.CREAM, .94), max(5.6, 12.0 * scale),
             Pango.Weight.BOLD)
 
-        # The faceplate owns global bypass, matching the alternate racks.
-        # Its state stays visible even when the detailed rows are folded away.
+        # The same global bypass target now has a physical bat toggle.
         px, py, power_radius = layout["power"]
-        if self.hover_power:
-            glow(sn, lambda: dot(sn, px, py, power_radius + 5,
-                                 pal(ACCENT, .24)), radius=6.0)
-        if active:
-            glow(sn, lambda: dot(sn, px, py, power_radius * .62,
-                                 pal(AMBER)), radius=7.0)
-            radial_dot(sn, px, py, power_radius * .62, (
-                (0.0, (1.0, .95, .72, 1)),
-                (.45, (1.0, .68, .18, 1)),
-                (1.0, (.62, .30, .05, 1))))
-            dot(sn, px - power_radius * .13, py - power_radius * .17,
-                power_radius * .16,
-                rgba(1, 1, .84, .92))
-        else:
-            dot(sn, px, py, power_radius * .48, rgba(.015, .020, .026, .96))
+        append_retro_toggle(self, sn, px, py, power_radius, active, self.hover_power)
+        centred_faceplate_label(
+            self, sn, "POWER", px, py - power_radius * 2.95,
+            rgba(*io24_retro_rack.CREAM, .9), max(5.8, 12.0 * scale),
+            Pango.Weight.BOLD)
 
         # Developer-only alignment layers. ``overlay`` ghosts the canonical
         # populated reference over the live rack; ``nodes`` adds the measured
@@ -3777,20 +5349,16 @@ class AlternateEqRack(ChannelBound, Canvas):
             return 0.0, 0.0, 0.0
         x, y, rack_w, rack_h = alternate_eq_rack_bounds(
             view["model"], w, h)
-        art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
-        _crop_x, _crop_y, crop_w, crop_h = art["rack_crop"]
-        lamp_x, lamp_y, lamp_radius = art["lamp"]
-        scale = min(rack_w / crop_w, rack_h / crop_h)
-        # The lamp remains a comfortable pointer target even when its exact
-        # photographed body scales below the 32 px desktop minimum.
-        return (x + lamp_x / crop_w * rack_w,
-                y + lamp_y / crop_h * rack_h,
-                max(16.0, lamp_radius * scale * 1.35))
+        # Oversized hardware occupies the clear right-hand corner. Both lever
+        # positions and its label remain inside the matching rack ears.
+        radius = max(18.0, min(27.0, rack_w * .0187))
+        return (x + rack_w * .942,
+                y + rack_h - radius * 2.25 - 28.0, radius)
+
 
     def _power_at(self, x, y):
         cx, cy, radius = self._power_geometry()
-        return radius > 0 and math.hypot(float(x) - cx, float(y) - cy) \
-            <= radius
+        return io24_retro_rack.toggle_contains(cx, cy, radius, x, y)
 
     def _spec(self, field):
         return next((spec for spec in self._specs()
@@ -3807,14 +5375,76 @@ class AlternateEqRack(ChannelBound, Canvas):
         spec = self._spec(field)
         if spec is None:
             return
-        self.win._alternate_eq_set(
-            self.channel, field,
-            alternate_eq_control_value(spec, fraction))
-        self.queue_draw()
+        value = self._preview_drag_value(field, fraction)
+        if value is not None:
+            self.win._alternate_eq_set(self.channel, field, value)
 
     def _apply_drag_value(self, change):
-        field, fraction = change
-        self._set_fraction(field, fraction)
+        field, value = change
+        self.win._alternate_eq_set(self.channel, field, value)
+
+    def _preview_drag_value(self, field, fraction):
+        """Update the faceplate and response before the throttled USB write.
+
+        Pointer motion is visual state, so it must never wait behind the
+        control-plane write limiter.  Only the device transaction is
+        throttled; the knob, value caption, large graph, and chain miniature
+        all follow every motion event.
+        """
+        spec = self._spec(field)
+        view = self._view()
+        if spec is None or view is None:
+            return None
+        value = alternate_eq_control_value(spec, fraction)
+        targets_for = getattr(self.win, "_eq_write_targets", None)
+        targets = tuple(targets_for(self.channel)) \
+            if callable(targets_for) else (self.channel,)
+        generations = getattr(self.win, "_eq_write_generation", None)
+        if not isinstance(generations, dict):
+            generations = self.win._eq_write_generation = {1: 0, 2: 0}
+        controls = getattr(self.win, "w", {})
+        source_model = view["model"]
+        for target in targets:
+            target_view = self.win._alt_eq(target) \
+                if hasattr(self.win, "_alt_eq") else (
+                    view if target == self.channel else None)
+            if target_view is None or target_view.get("model") != source_model:
+                continue
+            previous_sections = target_view.get("sections")
+            target_view["eq"][field] = float(value)
+            try:
+                target_view["sections"] = \
+                    io24_alt_eq.design_changed_live_sections(
+                        target_view["eq"], field, previous_sections,
+                        target_view.get(
+                            "rate_hz", getattr(self.win, "_fs", 48000.0)))
+                target_view["sections_key"] = \
+                    io24_alt_eq.live_design_key(
+                        target_view["eq"], target_view.get(
+                            "rate_hz", getattr(self.win, "_fs", 48000.0)))
+            except (io24_alt_eq.AlternateEqUnavailable, ImportError,
+                    ValueError):
+                # An installation without the retained designer can still
+                # show the semantic fallback. Such a Host cannot complete the
+                # exact hardware write either, so there is no later exact
+                # response to snap to.
+                target_view["sections"] = None
+                target_view["sections_key"] = None
+            target_view["error"] = None
+            # Advance the generation so a worker completion for an earlier
+            # drag value cannot replace the curve just designed above.
+            generations[target] = int(generations.get(target, 0)) + 1
+            for key in ("curve", "alternate_eq_rack"):
+                widget = controls.get(target, {}).get(key)
+                if widget is not None and widget is not self:
+                    widget.queue_draw()
+        self.win.invalidate_curve()
+        self.queue_draw()
+        for target in targets:
+            chain = getattr(self.win, "racks", {}).get(target)
+            if chain is not None:
+                chain.queue_draw()
+        return value
 
     def _select(self, field):
         if field is None:
@@ -3843,15 +5473,19 @@ class AlternateEqRack(ChannelBound, Canvas):
         field = self._knob_at(x, y)
         if not self._select(field):
             return
-        if presses == 2:
+        if control_reset_requested(gesture, presses):
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
             view = self._view()
             if view is not None:
                 default = io24_alt_eq.default_eq(view["model"], on=True)
-                self.win._alternate_eq_set(
-                    self.channel, field, default[field])
+                self._set_fraction(
+                    field, alternate_eq_control_fraction(
+                        self._spec(field), default[field]))
 
     def _drag_begin(self, _gesture, x, y):
         self.drag_field = self._knob_at(x, y)
+        if control_held(_gesture):
+            self.drag_field = None
         if self.drag_field is not None:
             self._select(self.drag_field)
             self.drag_fraction = self._fraction(self.drag_field)
@@ -3859,14 +5493,17 @@ class AlternateEqRack(ChannelBound, Canvas):
     def _drag_update(self, _gesture, _dx, dy):
         if self.drag_field is not None:
             spec = self._spec(self.drag_field)
-            self._drag_throttle((
-                self.drag_field,
-                alternate_eq_drag_fraction(
-                    self.drag_fraction, dy,
-                    alternate_eq_drag_travel(spec or {}))))
+            fraction = alternate_eq_drag_fraction(
+                self.drag_fraction, dy,
+                alternate_eq_drag_travel(spec or {}))
+            value = self._preview_drag_value(self.drag_field, fraction)
+            if value is not None:
+                self._drag_throttle((self.drag_field, value))
 
     def _drag_end(self, *_args):
+        self._drag_throttle.flush_pending()
         self.drag_field = None
+        self.queue_draw()
 
     def _motion(self, _controller, x, y):
         power = self._power_at(x, y)
@@ -3938,14 +5575,9 @@ class AlternateEqRack(ChannelBound, Canvas):
         hovered = spec["field"] == self.hover_field
         selector = spec.get("style") == "selector"
         choices = spec.get("choices")
-        if selected or hovered:
-            glow(sn, lambda: dot(sn, cx, cy, radius * 1.02,
-                                 pal(ACCENT, .22 if active else .12)),
-                 radius=6.0)
-
         # Printed scale.  One engraved dot per position and one value per
         # mark, every value taken from the decoded UC range or switch list.
-        size = max(5.6, min(9.5, radius * .20))
+        size = alternate_eq_mark_label_size(model, spec, radius)
         if choices:
             positions = [index / max(1, len(choices) - 1)
                          for index in range(len(choices))]
@@ -3959,39 +5591,23 @@ class AlternateEqRack(ChannelBound, Canvas):
                 angle = alternate_eq_knob_angle(spec, position)
                 dot(sn, cx + dot_distance * math.cos(angle),
                     cy + dot_distance * math.sin(angle),
-                    max(1.1, radius * .045), rgba(.93, .94, .92, .92))
+                    max(1.1, radius * .045), rgba(*io24_retro_rack.ink(model), .65))
+        display_marks = alternate_eq_display_scale_marks(model, spec)
         for index, (mx, my, text) in enumerate(
-                alternate_eq_mark_points(spec, cx, cy, radius)):
+                alternate_eq_mark_points(
+                    spec, cx, cy, radius, marks=display_marks)):
             lit = current is not None and index == current
             centred_faceplate_label(
                 self, sn, text, mx, my - size * .62,
-                pal(ACCENT, .98) if lit and active else
-                rgba(.93, .93, .89, .96 if lit else .84),
+                rgba(.72, .20, .025, 1) if lit and active else
+                rgba(*io24_retro_rack.ink(model), .96 if lit else .84),
                 size, Pango.Weight.BOLD if lit else Pango.Weight.MEDIUM)
 
-        # Body.  Passive: black knurled skirt under a brushed silver cap, or a
-        # black chicken-head for the stepped selectors.  Vintage: a ticked
-        # black skirt under the band's coloured cap.
         body = radius * (.78 if selector else .96)
-        dot(sn, cx + body * .05, cy + body * .09, body * 1.04,
-            rgba(0, 0, 0, .50))
-        dot(sn, cx, cy, body, rgba(.030, .032, .034, 1))
-        ridges = 16 if selector else 24
-        for index in range(ridges):
-            angle = math.tau * index / ridges
-            polyline(sn, [
-                (cx + body * .86 * math.cos(angle),
-                 cy + body * .86 * math.sin(angle)),
-                (cx + body * .99 * math.cos(angle),
-                 cy + body * .99 * math.sin(angle)),
-            ], rgba(.20, .21, .22, .80), max(.6, body * .030))
-        radial_dot(sn, cx, cy, body * .84, (
-            (0.0, (.20, .21, .22, 1.0)),
-            (.60, (.075, .080, .085, 1.0)),
-            (1.0, (.025, .027, .030, 1.0)),
-        ))
         angle = alternate_eq_knob_angle(spec, fraction)
-        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        accent = io24_retro_rack.ORANGE
+        append_machined_knob(self, sn, cx, cy, body, angle, accent,
+                             active, selected or hovered)
         if model == "vintage":
             for position in positions:
                 tick = alternate_eq_knob_angle(spec, position)
@@ -4000,57 +5616,7 @@ class AlternateEqRack(ChannelBound, Canvas):
                      cy + body * 1.02 * math.sin(tick)),
                     (cx + body * 1.13 * math.cos(tick),
                      cy + body * 1.13 * math.sin(tick)),
-                ], rgba(.90, .90, .86, .82), max(.8, radius * .035))
-        if selector:
-            # Chicken-head pointer: a tapered black bar across the body.
-            half = body * .22
-            tip = body * 1.02
-            tail = body * .62
-            fill_poly(sn, [
-                (cx + tip * cos_a - half * .45 * sin_a,
-                 cy + tip * sin_a + half * .45 * cos_a),
-                (cx + tip * cos_a + half * .45 * sin_a,
-                 cy + tip * sin_a - half * .45 * cos_a),
-                (cx - tail * cos_a + half * sin_a,
-                 cy - tail * sin_a - half * cos_a),
-                (cx - tail * cos_a - half * sin_a,
-                 cy - tail * sin_a + half * cos_a),
-            ], rgba(.10, .105, .11, 1))
-            polyline(sn, [(cx + body * .05 * cos_a, cy + body * .05 * sin_a),
-                          (cx + body * .96 * cos_a, cy + body * .96 * sin_a)],
-                     rgba(.97, .97, .95, .96), max(1.4, body * .085))
-        else:
-            if model == "passive":
-                tone = (.62, .64, .64)
-            else:
-                tone = spec.get("tone", (.60, .62, .62))
-            cap = body * (.60 if model == "passive" else .70)
-            light = tuple(min(1.0, part * 1.30 + .10) for part in tone)
-            dark = tuple(part * .38 for part in tone)
-            dot(sn, cx, cy, cap * 1.05, rgba(0, 0, 0, .55))
-            radial_dot(sn, cx, cy, cap, (
-                (0.0, (*light, 1.0)),
-                (.55, (*tone, 1.0)),
-                (1.0, (*dark, 1.0)),
-            ))
-            dot(sn, cx - cap * .18, cy - cap * .24, cap * .40,
-                rgba(1, 1, 1, .10))
-            if model == "passive":
-                # The reference's white bar runs across the black skirt.
-                polyline(sn, [
-                    (cx + cap * 1.02 * cos_a, cy + cap * 1.02 * sin_a),
-                    (cx + body * .96 * cos_a, cy + body * .96 * sin_a),
-                ], rgba(.98, .98, .96, .98), max(1.6, body * .10))
-                polyline(sn, [
-                    (cx + cap * .20 * cos_a, cy + cap * .20 * sin_a),
-                    (cx + cap * .98 * cos_a, cy + cap * .98 * sin_a),
-                ], rgba(1, 1, 1, .45), max(.8, body * .035))
-            else:
-                polyline(sn, [
-                    (cx + cap * .08 * cos_a, cy + cap * .08 * sin_a),
-                    (cx + cap * .90 * cos_a, cy + cap * .90 * sin_a),
-                ], rgba(.99, .99, .97, .97), max(1.5, body * .075))
-
+                ], rgba(*io24_retro_rack.ink(model), .60), max(.8, radius * .035))
         # Control name.  Passive prints it above the scale, Vintage below.
         label_size = max(6.0, min(10.0, radius * .22))
         if model == "passive" and selector:
@@ -4058,7 +5624,7 @@ class AlternateEqRack(ChannelBound, Canvas):
         else:
             label_y = alternate_eq_control_label_y(model, cy, radius)
         centred_faceplate_label(
-            self, sn, spec["label"], cx, label_y, rgba(.95, .95, .92, .95),
+            self, sn, spec["label"], cx, label_y, rgba(*io24_retro_rack.ink(model), .96),
             label_size, Pango.Weight.BOLD)
         # A continuous amount has no printed stop for every value, so its
         # exact setting is captioned while the knob is in use.  Stepped
@@ -4067,7 +5633,7 @@ class AlternateEqRack(ChannelBound, Canvas):
             centred_faceplate_label(
                 self, sn, alternate_eq_control_text(spec, value), cx,
                 alternate_eq_control_value_y(model, cy, radius),
-                pal(ACCENT, .98), max(6.0, size), Pango.Weight.BOLD)
+                rgba(.72, .20, .025, 1), max(6.0, size), Pango.Weight.BOLD)
 
     def _draw_graph(self, sn, x, y, w, h, active, model,
                     draw_static=True, draw_bezel=True, draw_labels=True):
@@ -4077,6 +5643,14 @@ class AlternateEqRack(ChannelBound, Canvas):
         bezel_x = max(12.0, min(22.0, h * .16))
         bezel_y = max(11.0, min(18.0, h * .13))
         db_range = 18.0 if model == "passive" else 12.0
+        art = ALTERNATE_EQ_REFERENCE_ART[model]
+        plot_x, plot_y, plot_w, plot_h = art["plot"]
+        scale_x, scale_y = w / plot_w, h / plot_h
+        db_strip, hz_strip = art["graph_label_clear_regions"]
+        db_label_x = x + (db_strip[0] + db_strip[2] / 2 - plot_x) * scale_x
+        hz_label_y = y + (hz_strip[1] + hz_strip[3] / 2 - plot_y) * scale_y
+        label_pixels = max(8.0, 14.0 * scale_x)
+        label_colour = rgba(*io24_retro_rack.CREAM, .90)
         if draw_bezel:
             rounded_box(sn, x - bezel_x, y - bezel_y,
                         w + bezel_x * 2, h + bezel_y * 2, 13,
@@ -4095,15 +5669,11 @@ class AlternateEqRack(ChannelBound, Canvas):
             for db in alternate_eq_graph_levels(model):
                 gy = y + h / 2 - db / db_range * (h / 2)
                 polyline(sn, [(x, gy), (x + w, gy)],
-                         rgba(.30, .55, .64, .30 if db == 0 else .16), 1.0)
+                         rgba(*io24_retro_rack.ORANGE, .18 if db == 0 else .065), 1.0)
                 if draw_labels:
-                    # The vector fallback engraves the dB scale into the left
-                    # bezel; production underlays retain the source labels.
-                    centred_faceplate_label(
-                        self, sn, "%+d" % db, x - bezel_x / 2,
-                        max(y - 4, min(y + h - 7, gy - 4)),
-                        rgba(.55, .72, .78, .62), 5.2,
-                        Pango.Weight.NORMAL)
+                    faceplate_heading(
+                        self, sn, "%+d" % db if db else "0",
+                        db_label_x, gy, label_colour, label_pixels, 0)
         frequencies = ((20, "20"), (50, "50"), (100, "100"),
                        (200, "200"), (500, "500"), (1000, "1k"),
                        (2000, "2k"), (5000, "5k"), (10000, "10k"),
@@ -4113,16 +5683,14 @@ class AlternateEqRack(ChannelBound, Canvas):
                 gx = x + math.log10(frequency / 20.0) / math.log10(
                     24000 / 20.0) * w
                 polyline(sn, [(gx, y), (gx, y + h)],
-                         rgba(.30, .55, .64, .16), 1.0)
+                         rgba(*io24_retro_rack.ORANGE, .065), 1.0)
             if draw_labels:
                 for frequency, text in frequencies:
                     gx = x + math.log10(frequency / 20.0) / math.log10(
                         24000 / 20.0) * w
-                    label_x = max(x + 10, min(x + w - 10, gx))
-                    centred_faceplate_label(
-                        self, sn, text, label_x, y + h - 12,
-                        rgba(.55, .72, .78, .60), 5.6,
-                        Pango.Weight.NORMAL)
+                    faceplate_heading(
+                        self, sn, text, gx, hz_label_y,
+                        label_colour, label_pixels, 0)
         if active:
             points = [(x + px, y + py) for px, py in
                       self.win.curve_points(
@@ -4139,12 +5707,11 @@ class AlternateEqRack(ChannelBound, Canvas):
                     fs=getattr(self.win, "_fs", 48000.0), enabled=True)
                 py = y + h / 2 - db / db_range * (h / 2)
                 points.append((x + px, max(y + 1, min(y + h - 1, py))))
-        colour = pal(chan_col(self.channel), 1.0 if active else .38)
+        colour = rgba(1.0, .86, .60, 1.0 if active else .38)
         if active:
-            fill_poly(sn, points + [(x + w, y + h / 2),
-                                    (x, y + h / 2)],
-                      pal(chan_col(self.channel), .12))
-            glow(sn, lambda: polyline(sn, points, colour, 2.1), radius=6.0)
+            response_mesh(self, sn, points, y + h / 2, (x, y, w, h),
+                          io24_retro_rack.ORANGE, mesh_depth=True)
+            glow(sn, lambda: polyline(sn, points, colour, 1.8), radius=3.0)
         else:
             polyline(sn, points, colour, 1.4)
 
@@ -4153,22 +5720,9 @@ class AlternateEqRack(ChannelBound, Canvas):
         if view is None:
             return
         calibration = eq_reference_calibration_mode()
-        bay = (((.125, .143, .154, 1), (.074, .087, .097, 1),
-                (.038, .047, .054, 1)) if view["model"] == "vintage" else
-               ((.060, .092, .111, 1), (.029, .050, .064, 1),
-                (.014, .027, .035, 1)))
-        rounded_vgrad(sn, 0, 0, w, h, 7, (
-            (0.0, bay[0]), (.50, bay[1]), (1.0, bay[2])),
-            rgba(.16, .20, .22, 1))
-        x, y, rack_w, rack_h = alternate_eq_rack_bounds(
-            view["model"], w, h)
-        shadow_blur = max(6.0, min(12.0, rack_h * .045))
-        shadow_offset = max(3.0, min(7.0, rack_h * .026))
-        sn.push_blur(shadow_blur)
-        rounded_box(sn, x + 3, y + shadow_offset,
-                    max(1.0, rack_w - 6), rack_h, 5,
-                    rgba(0, 0, 0, .68))
-        sn.pop()
+        box(sn, 0, 0, w, h, pal(GROUND))
+        x, y, rack_w, rack_h = alternate_eq_rack_bounds(view["model"], w, h)
+        x, y = _rack_pixel(self, x), _rack_pixel(self, y)
         art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
         panel = (x, y, rack_w, rack_h)
         if calibration in ("backdrop", "underlay") and \
@@ -4202,172 +5756,374 @@ class AlternateEqRack(ChannelBound, Canvas):
                 sn, art["calibration_nodes_filename"], panel)
 
     def _paint_rack(self, sn, w, h, view):
-        """Paint one reference-proportioned rack in local coordinates."""
-        passive = view["model"] == "passive"
-        edge = (.16, .42, .55) if passive else (.25, .31, .34)
-        plate_stops = ((0.0, (.225, .380, .480, 1)),
-                       (.48, (.190, .340, .440, 1)),
-                       (1.0, (.165, .295, .385, 1))) if passive else (
-                           (0.0, (.225, .255, .285, 1)),
-                           (.46, (.190, .220, .245, 1)),
-                           (1.0, (.145, .175, .200, 1)))
-        inset = max(3.0, h * .025)
-        rounded_vgrad(sn, 3, inset, w - 6, h - inset * 2, 7,
-                      plate_stops, rgba(*edge, 1))
-        # Fine deterministic brushing gives the plate material without making
-        # it noisy or introducing a bitmap dependency.
-        for row in range(int(inset + 3), max(4, int(h - inset - 2)), 3):
-            alpha = .018 + .008 * (1.0 + math.sin(row * .37))
-            polyline(sn, [(4, row), (w - 4, row)],
-                     rgba(.72, .83, .86, alpha), .5)
-        # Dense, deterministic micro-grain breaks up banding and approximates
-        # the finely mottled/brushed finish of the photographed hardware.
-        for index in range(520):
-            sx = 12 + ((index * 83) % max(19, int(w - 32)))
-            sy = inset + 6 + ((index * 47) % max(9, int(h - inset * 2 - 12)))
-            length = 1 + (index * 11) % 11
-            rise = ((index * 7) % 3) - 1
-            bright = index % 5 != 0
-            grain = rgba(.90, .95, .96, .046) if bright else \
-                rgba(.015, .025, .030, .090)
-            polyline(sn, [(sx, sy),
-                          (min(w - 8, sx + length), sy + rise)],
-                     grain, .45)
-        polyline(sn, [(8, inset + 2), (w - 8, inset + 2)],
-                 rgba(1, 1, 1, .18), 1.0)
-        polyline(sn, [(8, h - inset - 2), (w - 8, h - inset - 2)],
-                 rgba(0, 0, 0, .45), 1.0)
-        # Rack ears, paired horizontal mounting slots and screws.  Both
-        # approved references use two rack slots per ear, not a centre handle.
-        ear = max(24.0, w * .036)
-        for left in (True, False):
-            ex = 3 if left else w - 3 - ear
-            ear_stops = ((0.0, (.205, .360, .455, 1)),
-                         (.50, (.175, .320, .415, 1)),
-                         (1.0, (.140, .265, .350, 1))) if passive else (
-                             (0.0, (.185, .215, .235, 1)),
-                             (.50, (.140, .168, .185, 1)),
-                             (1.0, (.095, .120, .138, 1)))
-            rounded_vgrad(sn, ex, inset, ear, h - inset * 2, 5,
-                          ear_stops, rgba(*edge, .9))
-            slot_height = max(8.0, ear * .28)
-            slot_rows = (.036, .918)
-            for slot_y in (h * row for row in slot_rows):
-                rounded_box(sn, ex + ear * .17, slot_y, ear * .66,
-                            slot_height, slot_height * .48,
-                            rgba(.004, .008, .011, 1),
-                            rgba(.48, .55, .57, .70))
-                rounded_box(sn, ex + ear * .23, slot_y + 2,
-                            ear * .54, max(4.0, slot_height - 4),
-                            max(2.0, slot_height * .32),
-                            rgba(.018, .027, .031, 1))
-        screw_rows = (.079, .921)
-        for sx, sy in ((ear + 13, h * screw_rows[0]),
-                       (w - ear - 13, h * screw_rows[0]),
-                       (ear + 13, h * screw_rows[1]),
-                       (w - ear - 13, h * screw_rows[1])):
-            dot(sn, sx + 1, sy + 2, 8, rgba(0, 0, 0, .50))
-            dot(sn, sx, sy, 7, rgba(.045, .055, .058, 1))
-            dot(sn, sx - .5, sy - .7, 4.5, rgba(.30, .34, .35, 1))
-            polyline(sn, [(sx - 3, sy), (sx + 3, sy)],
-                     rgba(.02, .02, .02, .9), 1.2)
-            polyline(sn, [(sx, sy - 3), (sx, sy + 3)],
-                     rgba(.02, .02, .02, .75), 1.0)
-
+        """Porcelain enamel, amplifier controls and a recessed response volume."""
+        model = view["model"]
+        passive = model == "passive"
+        art = ALTERNATE_EQ_REFERENCE_ART[model]
         active = self.win.eq_enabled(self.channel)
-        geometry = ALTERNATE_EQ_REFERENCE_GEOMETRY[view["model"]]
-        gx, gy, gw, gh = geometry["graph"]
-        graph = (gx * w, gy * h, gw * w, gh * h)
-        heading_y = h * (.079 if passive else .082)
+        screen = io24_eq_reference.scaled_rect(art["screen"], w, h, model)
+        append_retro_chassis(self, sn, (0, 0, w, h), model, screen)
+        scale = w / art["rack_crop"][2]
+        colour = io24_retro_rack.ink(model)
         if passive:
-            title = "P A S S I V E   P R O G R A M   E Q"
-            groups = ((.177, "L O W", INK), (.793, "H I G H", INK))
-            # The Passive reference joins its three headings with long,
-            # engraved rules on one common baseline.
-            for start, end in ((.083, .149), (.205, .392),
-                               (.607, .762), (.824, .924)):
-                polyline(sn, [(start * w, heading_y),
-                              (end * w, heading_y)],
-                         pal(INK, .58), 1.0)
+            headings = ("PASSIVE PROGRAM EQ", "LOW", "HIGH")
         else:
-            title = "V I N T A G E   E Q"
-            groups = ((.125, "L O W", (.67, .35, .35)),
-                      (.275, "L O W - M I D", (.72, .56, .27)),
-                      (.760, "H I - M I D", (.55, .65, .43)),
-                      (.900, "H I G H", (.40, .57, .73)))
+            headings = ("VINTAGE EQ", "LOW", "LOW-MID", "HI-MID", "HIGH")
             for divider in (.200, .350, .696, .855):
-                polyline(sn, [(divider * w, h * .075),
-                              (divider * w, h * .865)],
-                         pal(INK, .38), 1.0)
-            for start, end in ((.389, .426), (.577, .614)):
-                polyline(sn, [(start * w, heading_y),
-                              (end * w, heading_y)],
-                         rgba(.88, .86, .78, .56), 1.0)
-        title_y = heading_y - h * (.023 if passive else .033)
-        centred_faceplate_label(
-            self, sn, title, w / 2, title_y,
-            rgba(.88, .86, .78, .90), max(7.0, min(11.0, w / 85)),
-            Pango.Weight.MEDIUM)
-        for gx, group, group_colour in groups:
-            centred_faceplate_label(
-                self, sn, group, gx * w, geometry["group_y"] * h,
-                pal(group_colour, .86), max(6.5, min(9.0, w / 100)))
-        # The value-free production underlay retains the source reference's
-        # metal, ears, screws, separators, typography and bezel pixel for
-        # pixel. Only parameter-bearing regions were removed by the asset
-        # generator; the live controls below remain protocol-authoritative.
-        # Passive already has the common 2U source aspect. Vintage's retained
-        # bitmap is the shorter original; stretching it would oval the bezel
-        # and typography. Its measured 2U recomposition therefore uses this
-        # vector plate while retaining the same control/source landmarks.
-        try:
-            faceplate = alternate_eq_faceplate_texture(view["model"]) \
-                if passive else None
-        except (FileNotFoundError, GLib.Error):
-            faceplate = None
-        if faceplate is not None:
-            sn.append_texture(faceplate, Graphene.Rect().init(0, 0, w, h))
-
-        art = ALTERNATE_EQ_REFERENCE_ART[view["model"]]
-        graph = io24_eq_reference.scaled_rect(
-            art["plot"], w, h, view["model"])
-        self._draw_graph(sn, *graph, active, view["model"],
-                         draw_static=True, draw_bezel=faceplate is None,
-                         draw_labels=faceplate is None)
-        if not passive and faceplate is None:
-            gx, gy, gw, gh = graph
-            for sx, sy in ((gx - 5, gy - 5), (gx + gw + 5, gy - 5),
-                           (gx - 5, gy + gh + 5),
-                           (gx + gw + 5, gy + gh + 5)):
-                dot(sn, sx, sy, 4.1, rgba(.025, .030, .032, 1))
-                dot(sn, sx - .4, sy - .6, 2.5, rgba(.30, .33, .34, 1))
-                polyline(sn, [(sx - 1.8, sy), (sx + 1.8, sy)],
-                         rgba(.02, .02, .02, .9), .8)
+                polyline(sn, [(divider * w, h * .13),
+                              (divider * w, h * .80)], rgba(*colour, .14), .7)
+        for index, (text, region) in enumerate(zip(
+                headings, art["heading_clear_regions"])):
+            hx, hy, hw, hh = io24_eq_reference.scaled_rect(region, w, h, model)
+            faceplate_heading(
+                self, sn, text, hx + hw / 2, hy + hh / 2,
+                rgba(*colour, .96), (26 if index == 0 else 23) * scale,
+                (6.0 if index == 0 else 3.0) * scale)
+        graph = io24_eq_reference.scaled_rect(art["plot"], w, h, model)
+        self._draw_graph(sn, *graph, active, model,
+                         draw_static=True, draw_bezel=False)
         eq = view["eq"]
         for field, (cx, cy, radius, spec) in self._local_layout(w, h).items():
-            self._draw_knob(
-                sn, cx, cy, radius, spec, eq[field], active, view["model"])
-        # The lamp is the model's independent, clickable EQ power control.
-        _crop_x, _crop_y, crop_w, crop_h = art["rack_crop"]
-        lamp_x, lamp_y, source_lamp_radius = art["lamp"]
-        lx, ly = lamp_x / crop_w * w, lamp_y / crop_h * h
-        lamp_radius = source_lamp_radius * min(w / crop_w, h / crop_h)
-        if self.hover_power or self.selected_field == self.POWER_FIELD:
-            glow(sn, lambda: dot(
-                sn, lx, ly, lamp_radius * 1.15,
-                pal(ACCENT, .30 if self.selected_field == self.POWER_FIELD
-                    else .20)), radius=7.0)
-        dot(sn, lx + 1, ly + 2, lamp_radius * 1.05, rgba(0, 0, 0, .52))
-        dot(sn, lx, ly, lamp_radius, rgba(.020, .025, .024, 1))
-        dot(sn, lx, ly, lamp_radius * .72, rgba(.28, .24, .13, .9))
-        lamp = AMBER if active else GRID
-        if active:
-            glow(sn, lambda: dot(
-                sn, lx, ly, lamp_radius * .51, pal(lamp)), radius=8.0)
-            dot(sn, lx - lamp_radius * .15, ly - lamp_radius * .17,
-                lamp_radius * .21, rgba(1, 1, .82, .9))
+            self._draw_knob(sn, cx, cy, radius, spec, eq[field], active, model)
+        lx, ly, radius = self._power_geometry(w, h)
+        append_retro_toggle(self, sn, lx, ly, radius, active,
+                            self.hover_power or self.selected_field == self.POWER_FIELD)
+        centred_faceplate_label(
+            self, sn, "POWER", lx - radius * 1.8, ly + radius * 2.05 + 3.0,
+            rgba(*colour, .90), max(5.8, 12 * scale), Pango.Weight.BOLD)
+
+
+class DynamicsKnob(Gtk.Scale):
+    """Accessible native range sharing the original parameter's adjustment.
+
+    The rack draws its face; this widget supplies focus, AT value semantics,
+    keyboard editing, and a drag target at the exact painted coordinates.
+    """
+
+    def __init__(self, rack, spec, source):
+        self.rack, self.spec, self.source = rack, spec, source
+        if spec.unit == "choice":
+            adjustment = Gtk.Adjustment(value=source.get_selected(), lower=0,
+                                        upper=4, step_increment=1, page_increment=1)
         else:
-            dot(sn, lx, ly, lamp_radius * .45, pal(lamp, .35))
+            adjustment = source.get_adjustment()
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL,
+                         adjustment=adjustment, draw_value=False)
+        self.set_focusable(True)
+        self.set_cursor_from_name("ns-resize")
+        self.update_property([Gtk.AccessibleProperty.LABEL],
+                             [spec.title.title()])
+        self.set_tooltip_text(spec.title.title() +
+                              " · drag up/down or scroll · Shift for fine control · Ctrl-click or double-click to reset")
+        if spec.unit == "choice":
+            self.connect("value-changed", lambda s: source.set_selected(
+                int(round(s.get_value()))))
+        self.connect("value-changed", self._changed)
+        self.connect("notify::has-focus", lambda *_: rack.queue_draw())
+        drag = Gtk.GestureDrag.new()
+        drag.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        drag.connect("drag-begin", self._begin)
+        drag.connect("drag-update", self._drag)
+        self.add_controller(drag)
+        click = Gtk.GestureClick.new()
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click.connect("pressed", self._press)
+        self.add_controller(click)
+        # Claiming a drag must still let the click recognizer count a double
+        # click. Group both recognizers so they share the captured sequence.
+        drag.group(click)
+        scroll = Gtk.EventControllerScroll.new(
+            Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        scroll.connect("scroll", self._scroll)
+        self.add_controller(scroll)
+        keys = Gtk.EventControllerKey.new()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        hover = Gtk.EventControllerMotion.new()
+        hover.connect("enter", lambda *_: self._hover(True))
+        hover.connect("leave", lambda *_: self._hover(False))
+        self.add_controller(hover)
+        self._changed(self)
+
+    def do_measure(self, orientation, for_size):
+        return 1, 1, -1, -1
+
+    def do_snapshot(self, snapshot):
+        pass                         # all visible parts live on the faceplate
+
+    def _changed(self, *_):
+        self.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                             [self.spec.text(self.get_value())])
+        self.rack.queue_draw()
+
+    def _hover(self, active):
+        self.rack.hovered = self.spec.key if active else None
+        self.rack.queue_draw()
+
+    def _begin(self, gesture, x, y):
+        self.grab_focus()
+        self.drag_start = self.spec.fraction(self.get_value())
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _drag(self, gesture, dx, dy):
+        if control_held(gesture):
+            return
+        fine = bool(gesture.get_current_event_state() & Gdk.ModifierType.SHIFT_MASK)
+        self.set_value(self.spec.value(self.drag_start - dy / (1800 if fine else 180)))
+
+    def _press(self, gesture, presses, x, y):
+        if control_reset_requested(gesture, presses):
+            self.set_value(self.spec.default)
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _step(self, direction, fine=False, large=False):
+        if self.spec.unit == "choice":
+            self.set_value(round(self.get_value()) + direction)
+        else:
+            step = .001 if fine else (.1 if large else .01)
+            self.set_value(self.spec.value(
+                self.spec.fraction(self.get_value()) + direction * step))
+
+    def _scroll(self, controller, dx, dy):
+        # Leave ordinary page scrolling alone until the knob has focus.
+        if not self.has_focus():
+            return False
+        fine = bool(controller.get_current_event_state() & Gdk.ModifierType.SHIFT_MASK)
+        self._step(-dy, fine)
+        return True
+
+    def _key(self, controller, keyval, keycode, state):
+        fine = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        if keyval in (Gdk.KEY_Up, Gdk.KEY_Right, Gdk.KEY_Page_Up):
+            self._step(1, fine, keyval == Gdk.KEY_Page_Up)
+        elif keyval in (Gdk.KEY_Down, Gdk.KEY_Left, Gdk.KEY_Page_Down):
+            self._step(-1, fine, keyval == Gdk.KEY_Page_Down)
+        elif keyval in (Gdk.KEY_Home, Gdk.KEY_End):
+            self.set_value(self.spec.low if keyval == Gdk.KEY_Home else self.spec.high)
+        else:
+            return False
+        return True
+
+
+class DynamicsButton(Gtk.Button):
+    def do_measure(self, orientation, for_size):
+        return 1, 1, -1, -1
+
+    def do_snapshot(self, snapshot):
+        pass
+
+
+class DynamicsRack(Gtk.Fixed):
+    """Silver Gate/Compressor panel bound to the existing settings, not a copy."""
+
+    def __init__(self, win, channel, kind, band=0):
+        super().__init__()
+        # FixedLayout measures only its children. This panel instead measures
+        # the complete rack bay and allocates its controls in that coordinate
+        # system; Gtk.Fixed still owns/disposes the child widgets normally.
+        self.set_layout_manager(None)
+        self.win, self.channel, self.kind = win, channel, kind
+        self.band = band
+        self.power_key = "gate_on" if kind == "gate" else "comp_on"
+        self.W = dict(win.w[channel])
+        if kind == "comp":
+            self.W.update({"x%d" % i: win.mbc_ctl[channel]["x%d" % i]
+                           for i in range(3)})
+            win.mbc_status[channel].connect("notify::subtitle",
+                                            lambda *_: self.queue_draw())
+        elif kind == "band":
+            mapping = {
+                "cth": "s_thr", "rat": "s_ratio", "catk": "s_attack",
+                "crel": "s_release", "mk": "s_gain", "knee": "s_knee",
+                "auto": "s_auto", "tpeak": "t_peak", "tgain": "t_gain",
+                "climit": "t_limit", "finput": "f_input", "foutput": "f_output",
+                "fatk": "f_attack", "frel": "f_release", "fratio": "f_ratio",
+                "model": "type", "ckey": "keyf", "keyon": "keyon",
+                "cklisten": "listen",
+            }
+            self.W.update({key: win.mbc_ctl[channel][(band, cid)]
+                           for key, cid in mapping.items()})
+        self.targets, self.rects = {}, {}
+        self.history = deque(maxlen=150)
+        self.hovered = None
+        self.online = False
+        self.set_hexpand(True)
+        specs = (io24_dynamics_rack.GATE if kind == "gate" else
+                 tuple({s.key: s for group in (
+                     io24_dynamics_rack.parameters(kind, m, band)
+                     for m in range(3 if kind == "band" else 4))
+                        for s in group}.values()))
+        for spec in specs:
+            knob = DynamicsKnob(self, spec, self.W[spec.key])
+            self.targets[spec.key] = knob
+            knob.set_parent(self)
+        buttons = ({"power": "Gate power", "gate_mode": "Gate mode",
+                    "expander": "Expander mode", "gklisten": "Gate key listen"}
+                   if kind == "gate" else
+                   {"power": "Compressor power", "knee": "Soft knee",
+                    "auto": "Auto mode", "climit": "Limit mode",
+                    "cklisten": "Compressor key listen",
+                    **{"model_" + str(i): name.title() + " compressor"
+                       for i, name in enumerate(COMP_MODELS[:3] if kind == "band"
+                                                else COMP_MODELS)}})
+        if kind == "band":
+            buttons.pop("power")
+            buttons.update({"keyon": "Band key filter",
+                            **{"band_" + str(i): "Edit " + name.lower() + " band"
+                               for i, name in enumerate(io24_dynamics_rack.BAND_NAMES)}})
+        for key, title in buttons.items():
+            button = DynamicsButton()
+            button.set_tooltip_text(title)
+            button.set_cursor_from_name("pointer")
+            button.update_property([Gtk.AccessibleProperty.LABEL], [title])
+            button.connect("clicked", lambda _, k=key: self.activate_control(k))
+            button.connect("notify::has-focus", lambda *_: self.queue_draw())
+            self.targets[key] = button
+            button.set_parent(self)
+        watched = (("gate_on", "gexp", "gklisten") if kind == "gate" else
+                   ("comp_on", "model", "knee", "auto", "climit", "cklisten", "fratio"))
+        if kind == "band":
+            watched += ("keyon",)
+        for key in watched:
+            signal = "notify::selected" if key in ("model", "fratio") else "notify::active"
+            self.W[key].connect(signal, lambda *_: self.refresh())
+        self.connect("unmap", self._unmapped)
+        self.refresh()
+
+    @property
+    def model(self):
+        return 0 if self.kind == "gate" else int(self.W["model"].get_selected())
+
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            return 560, FAT_CHANNEL_WIDTH, -1, -1
+        height = standard_eq_canvas_height(for_size if for_size > 0 else FAT_CHANNEL_WIDTH)
+        if self.kind == "band" or (self.kind == "comp" and self.model == MULTIBAND_MODEL):
+            # Keep the EQ-sized metal face; adjoining bays need less shadow room.
+            height -= int(ALTERNATE_EQ_RACK_SHADOW_ROOM) - 4
+        return height, height, -1, -1
+
+    def do_size_allocate(self, width, height, baseline):
+        rx, ry, rw, rh = standard_eq_rack_bounds(width, height)
+        scale = rw / io24_dynamics_rack.WIDTH
+        for key, (x, y, w, h) in self.rects.items():
+            widget = self.targets[key]
+            transform = Gsk.Transform.new().translate(
+                Graphene.Point().init(rx + x * scale, ry + y * scale))
+            widget.allocate(max(1, round(w * scale)), max(1, round(h * scale)),
+                            -1, transform)
+
+    def activate_control(self, key):
+        if key.startswith("band_"):
+            stack = self.win.w[self.channel]["mbc_rack"]
+            stack.set_visible_child_name(key[-1])
+            stack.get_visible_child().targets[key].grab_focus()
+        elif key.startswith("model_"):
+            self.W["model"].set_selected(int(key[-1]))
+        elif key in ("gate_mode", "expander"):
+            self.W["gexp"].set_active(key == "expander")
+        else:
+            row = self.W[self.power_key if key == "power" else key]
+            row.set_active(not row.get_active())
+
+    def refresh(self):
+        layout = io24_dynamics_rack.controls(self.kind, self.model)
+        changed = layout != self.rects
+        self.rects = layout
+        for key, target in self.targets.items():
+            target.set_visible(key in layout)
+            if isinstance(target, DynamicsButton):
+                if key.startswith("band_"):
+                    active = self.band == int(key[-1])
+                elif key.startswith("model_"):
+                    active = self.model == int(key[-1])
+                elif key in ("gate_mode", "expander"):
+                    active = self.W["gexp"].get_active() == (key == "expander")
+                else:
+                    active = self.W[self.power_key if key == "power" else key].get_active()
+                target.update_state([Gtk.AccessibleState.PRESSED],
+                                    [int(Gtk.AccessibleTristate.TRUE if active else Gtk.AccessibleTristate.FALSE)])
+        if "fratio" in self.targets:
+            self.targets["fratio"].set_value(self.W["fratio"].get_selected())
+        if changed:
+            self.history.clear()        # never attribute an old model's GR to a new one
+            self.queue_resize()
+        self.queue_draw()
+
+    def _unmapped(self, *_):
+        self.history.clear()
+        self.online = False
+
+    def tick(self, snap):
+        if self.kind == "band" or not self.get_mapped():
+            return
+        self.online = bool(snap.get("alive"))
+        if self.online:
+            reduction = snap.get("gr", {}).get(self.channel, {}).get(self.kind, 0.0)
+            if not self.W[self.power_key].get_active() or self.model == MULTIBAND_MODEL:
+                reduction = 0.0
+            self.history.append((snap["in"][self.channel - 1], min(0.0, reduction)))
+        else:
+            self.history.clear()
+        self.queue_draw()
+
+    def do_snapshot(self, snapshot):
+        width, height = self.get_width(), self.get_height()
+        if width <= 0 or height <= 0:
+            return
+        values = {spec.key: (self.W[spec.key].get_selected() if spec.unit == "choice"
+                            else self.W[spec.key].get_value())
+                  for spec in io24_dynamics_rack.parameters(self.kind, self.model, self.band)}
+        states = {key: self.W[key].get_active() for key in (
+            ("gexp", "gklisten") if self.kind == "gate" else
+            ("knee", "auto", "climit", "cklisten"))}
+        states["power"] = self.W[self.power_key].get_active()
+        focused = next((k for k, v in self.targets.items() if v.has_focus()), None)
+        fs = getattr(self.win, "_fs", 48000)
+        details = {"sample_rate": fs}
+        transfer = (-24, 4, 0)
+        if self.kind == "band":
+            common = io24_mbc.compressor_controls(
+                self.win._mbc_band_state(self.channel, self.band), sample_rate=fs)
+            details["common"] = common
+            transfer = (common["Threshold level (dB)"],
+                        1 / max(1e-6, 1 - common["Slope"]),
+                        20 * math.log10(max(1e-9, common["Makeup gain (linear)"])))
+            states.update(band=self.band, keyon=self.W["keyon"].get_active())
+        elif self.kind == "comp":
+            if self.model == MULTIBAND_MODEL:
+                details["status"] = self.win.mbc_status[self.channel].get_subtitle()
+            else:
+                model, kwargs = self.win._compressor_kwargs(self.channel)
+                blob = (io24_dsp.cpxt_comp, io24_dsp.cpxt_tube,
+                        io24_dsp.cpxt_fet)[model](0, fs=fs, **kwargs)
+                _attack, _release, slope, knee, threshold, makeup = struct.unpack_from(
+                    "<6f", blob, 0x20)
+                transfer = (threshold, 1 / max(1e-6, 1 - slope),
+                            20 * math.log10(max(1e-9, makeup)))
+                details["knee"] = knee
+        # A memory texture avoids the separately packaged gi-cairo bridge.
+        # Render at the monitor scale so metal engraving stays crisp on HiDPI.
+        import cairo
+        scale = self.get_scale_factor()
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width * scale, height * scale)
+        cr = cairo.Context(surface)
+        cr.scale(scale, scale)
+        io24_dynamics_rack.paint(cr, width, height, self.kind, self.model,
+                                values, states, self.history, self.online,
+                                transfer, focused, self.hovered, details)
+        surface.flush()
+        texture = Gdk.MemoryTexture.new(
+            width * scale, height * scale,
+            (Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED if sys.byteorder == "little"
+             else Gdk.MemoryFormat.A8R8G8B8_PREMULTIPLIED),
+            GLib.Bytes.new(surface.get_data()), surface.get_stride())
+        snapshot.append_texture(texture, Graphene.Rect().init(0, 0, width, height))
 
 
 class CompCurve(ChannelBound, Canvas):
@@ -4730,7 +6486,7 @@ class Rack(ChannelBound, Canvas):
                 mag = 20 * math.log10(max(r / math.sqrt(1 + r * r), 1e-3))
                 pts.append((x + i, y + h - max(0.0, min(1.0, (mag + 24) / 24.0)) * h))
             polyline(sn, pts, acc, 1.8)
-            t = "bypassed" if hz <= 25 else "%.0f Hz" % hz
+            t = "%.0f Hz" % hz if on else "bypassed"
             label(self, sn, t, x + w - len(t) * 5.2, y - 1,
                   pal(INK, 0.75 if on else 0.4), 8)
 
@@ -4739,7 +6495,7 @@ class Rack(ChannelBound, Canvas):
         n = len(self.order)
         uw = w / n
         gr = self.win.ctl.snap["gr"].get(self.channel, {})
-        state = {"HPF": self.win.hpf_hz(self.channel) > 25,
+        state = {"HPF": self.win.hpf_enabled(self.channel),
                  "GATE": self.win.dyn_for(self.channel)["gate"],
                  "COMP": self.win.dyn_for(self.channel)["comp"],
                  "EQ": (self.win._alt_eq(self.channel)["on"]
@@ -5013,6 +6769,16 @@ class Throttle:
         self.fn(self.latest)
         return False
 
+    def flush_pending(self):
+        """Send a queued trailing value now, without duplicating a leading one."""
+        if not self.pending:
+            return False
+        GLib.source_remove(self.pending)
+        self.pending = 0
+        self.last = time.monotonic()
+        self.fn(self.latest)
+        return True
+
 
 class Live:
     GRACE = 0.35                                 # seconds after a touch
@@ -5088,8 +6854,19 @@ def editable_db(scale, width_chars=5):
     return lbl
 
 
+def control_reset_requested(gesture, presses):
+    """Ctrl-click and double-click share the control's nominal default."""
+    return presses == 2 or control_held(gesture)
+
+
+def control_held(gesture):
+    return bool(gesture is not None and
+                getattr(gesture, "get_current_event_state", lambda: 0)()
+                & Gdk.ModifierType.CONTROL_MASK)
+
+
 def reset_on_double_click(scale, default, label_fn=None):
-    """Double-click a fader to return it to its designed default.
+    """Ctrl-click or double-click a fader to return it to its designed default.
 
     Lives here rather than inside _srow because five faders are built directly
     — preamp gain, bus master, the routing sends, the output delay — and those
@@ -5105,13 +6882,13 @@ def reset_on_double_click(scale, default, label_fn=None):
     g.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
 
     def hit(gesture, n_press, x, y):
-        if n_press == 2:
+        if control_reset_requested(gesture, n_press):
             scale.set_value(default)
             gesture.set_state(Gtk.EventSequenceState.CLAIMED)
     g.connect("pressed", hit)
     scale.add_controller(g)
     try:
-        scale.set_tooltip_text("Double-click to reset to %s"
+        scale.set_tooltip_text("Ctrl-click or double-click to reset to %s"
                                % (label_fn(default) if label_fn else default))
     except Exception:
         pass
@@ -5144,9 +6921,10 @@ def mixer_fader_bank(spacing, homogeneous=False):
 
 
 class Win(Adw.ApplicationWindow):
-    def __init__(self, app, ctl):
+    def __init__(self, app, ctl, default_width=1040, default_height=800):
         super().__init__(application=app, title="Revelator io24",
-                         default_width=1040, default_height=800)
+                         default_width=default_width,
+                         default_height=default_height)
         # Ties the window to org.io24.Mixer.desktop, so the shell shows the
         # installed icon and groups the window under that entry rather than
         # inventing a second generic one.
@@ -5214,6 +6992,9 @@ class Win(Adw.ApplicationWindow):
         # quiesced before the requested clock is allowed to move.
         self._audio_clock_restore_deferred = False
         self._audio_clock_restore_inflight = False
+        self._session_save_id = None
+        self._session_restore_mute = True
+        self._host_presentation_seen = None
         # Every coefficient this Host computes — biquads, gate/comp/limiter
         # time constants, reverb, the rate-dependent Voice FX filters — is a
         # function of the device clock. Nothing used to pass one, so all of it
@@ -5289,6 +7070,7 @@ class Win(Adw.ApplicationWindow):
         # Full Host setups remain the explicit named save/load path.
         tv.set_content(self.toasts)
         self.set_content(tv)
+        self._host_persistence_root = tv
         # The spectrum is the only part of this app that opens an audio stream,
         # and sustained capture alongside control traffic is what has twice put
         # the device into its bootloader (PROTOCOL.md 12G/12I). So it runs only
@@ -5302,16 +7084,134 @@ class Win(Adw.ApplicationWindow):
         GLib.timeout_add(33, self._tick)                 # 30 fps
         GLib.timeout_add(2000, self._spectrum_watchdog)
         GLib.timeout_add(50, self._fx_anim)             # 20 fps, page-gated
+        GLib.timeout_add(33, self._reverb_anim)         # 30 fps, page-gated
         GLib.timeout_add(700, self._watch_attach)
         GLib.timeout_add(2000, self._bus_source_watchdog)
         GLib.timeout_add(2000, self._insert_watchdog)
         GLib.idle_add(self._restore_audio_clock)
+        # This is a safety net for changes made by a future control that has
+        # not yet been wired below.  Normal edits checkpoint through the
+        # debounced watcher immediately after they settle.
         GLib.timeout_add(5000, self._autosave_session)
+        GLib.timeout_add(500, self._watch_host_presentation)
         GLib.idle_add(self._sync_mix_widgets)           # show cache/unknown honestly
         self._page_changed(stack, None)                  # set the initial state
+        self._restore_host_presentation(load_last_session())
+        self._session_restore_mute = False
+        self._watch_host_controls()
 
     # Pages whose drawing actually uses the spectrum backdrop.
     SPECTRUM_PAGES = ("ch",)
+
+    def _host_presentation_state(self):
+        """Capture the local context that is not represented by DSP shadow."""
+        state = {
+            "page": self.stack.get_visible_child_name(),
+            "channel": self._current_channel(),
+            "bands": {str(ch): int(index) for ch, index in
+                      getattr(self, "cur_band_by_ch", {}).items()
+                      if ch in (1, 2) and 0 <= int(index) < 4},
+        }
+        width = int(self.get_width() or 0)
+        height = int(self.get_height() or 0)
+        window = {}
+        if width >= 320:
+            window["width"] = width
+        if height >= 320:
+            window["height"] = height
+        maximized = getattr(self, "is_maximized", None)
+        if callable(maximized):
+            window["maximized"] = bool(maximized())
+        if window:
+            state["window"] = window
+        return host_presentation({"host_presentation": state})
+
+    def _restore_host_presentation(self, session):
+        """Restore local page/selection/window context without touching DSP."""
+        state = host_presentation(session)
+        window = state.get("window", {})
+        width, height = window.get("width"), window.get("height")
+        if width and height:
+            self.set_default_size(width, height)
+        if window.get("maximized"):
+            self.maximize()
+        for channel, index in state.get("bands", {}).items():
+            self.cur_band_by_ch[int(channel)] = index
+        channel = state.get("channel")
+        chan_stack = getattr(self, "chan_stack", None)
+        if channel and chan_stack is not None:
+            chan_stack.set_visible_child_name(str(channel))
+        page = state.get("page")
+        if page:
+            self.stack.set_visible_child_name(page)
+        self._host_presentation_seen = self._host_presentation_state()
+
+    def _session_state_changed(self, *_args):
+        """Debounce any Host control change into one atomic session update."""
+        if getattr(self, "_session_restore_mute", False):
+            return
+        self._schedule_session_save()
+
+    def _schedule_session_save(self):
+        if getattr(self, "_session_save_id", None) is not None:
+            return
+        self._session_save_id = GLib.timeout_add(
+            HOST_SESSION_DEBOUNCE_MS, self._flush_scheduled_session_save)
+
+    def _flush_scheduled_session_save(self):
+        self._session_save_id = None
+        self._save_last_session()
+        return False
+
+    def _watch_host_presentation(self):
+        """Catch resize/maximize changes, which do not emit control signals."""
+        if getattr(self, "_session_restore_mute", False):
+            return True
+        current = self._host_presentation_state()
+        previous = getattr(self, "_host_presentation_seen", None)
+        self._host_presentation_seen = current
+        if previous is not None and current != previous:
+            self._schedule_session_save()
+        return True
+
+    def _watch_host_controls(self):
+        """Make every existing Host control participate in one save policy.
+
+        The concrete callbacks still own DSP writes.  These passive listeners
+        only checkpoint the already-updated local state, so a new switch or
+        fader cannot accidentally become a save-on-exit-only setting.
+        """
+        root = getattr(self, "_host_persistence_root", None)
+        pending, seen = [root], set()
+        signals = ("value-changed", "toggled", "notify::active",
+                   "notify::selected", "notify::visible-child-name")
+        while pending:
+            widget = pending.pop()
+            if widget is None or id(widget) in seen:
+                continue
+            seen.add(id(widget))
+            for signal in signals:
+                try:
+                    widget.connect(signal, self._session_state_changed)
+                except (TypeError, RuntimeError):
+                    pass
+            child = (widget.get_first_child()
+                     if hasattr(widget, "get_first_child") else None)
+            while child is not None:
+                pending.append(child)
+                child = child.get_next_sibling()
+        # Also cover controls before their rack overlay has been attached.
+        # Once parented, the tree walk finds them and `seen` prevents duplicate
+        # checkpoint listeners.
+        for controls in getattr(self, "w", {}).values():
+            for key, signal in (("lim_on", "notify::active"),
+                                ("lth", "value-changed"),
+                                ("lrel", "value-changed")):
+                widget = controls.get(key)
+                if widget is None or id(widget) in seen:
+                    continue
+                widget.connect(signal, self._session_state_changed)
+                seen.add(id(widget))
 
     def _watch_attach(self):
         """Track hotplug and report only connection-state transitions."""
@@ -5337,10 +7237,18 @@ class Win(Adw.ApplicationWindow):
         animation running behind a hidden page is pure battery drain."""
         if self.stack.get_visible_child_name() != "fx":
             return True
-        for name in ("fx_visual", "rev_visual"):
-            v = getattr(self, name, None)
-            if v is not None:
-                v.tick()
+        v = getattr(self, "fx_visual", None)
+        if v is not None:
+            v.tick()
+        return True
+
+    def _reverb_anim(self):
+        """Advance the acoustic mesh at 30 fps only while it can be seen."""
+        if self.stack.get_visible_child_name() != "fx":
+            return True
+        v = getattr(self, "rev_visual", None)
+        if v is not None:
+            v.tick()
         return True
 
     def _page_changed(self, stack, _p):
@@ -5560,8 +7468,9 @@ class Win(Adw.ApplicationWindow):
     def toggle_module(self, ch, mod):
         """Click a rack unit to switch that module in or out."""
         if mod == "HPF":
-            cur = self.hpf_by_ch.get(ch, 24.0)
-            self.set_hpf(ch, 24.0 if cur > 25 else 120.0)
+            live = getattr(self, "hpf_live", {}).get(ch)
+            if live is not None:
+                live.w.set_active(not live.w.get_active())
             return
         if mod == "EQ":
             self._set_eq_enabled(ch, not self.eq_enabled(ch))
@@ -5578,6 +7487,12 @@ class Win(Adw.ApplicationWindow):
 
     def hpf_hz(self, ch):
         return self.hpf_by_ch.get(ch, 24.0)
+
+    def hpf_enabled(self, ch):
+        live = getattr(self, "hpf_live", {}).get(ch)
+        if live is not None:
+            return bool(live.w.get_active())
+        return self.hpf_hz(ch) > 24.02
 
     def set_order(self, ch, eq_first):
         for c in ((1, 2) if self.link_both else (ch,)):
@@ -5678,7 +7593,7 @@ class Win(Adw.ApplicationWindow):
                 self.mute_live = getattr(self, "mute_live", {})
                 self.mute_live[ch] = self.live[-1]
             elif param == "hpf":
-                t.set_tooltip_text("80 Hz input filter")
+                t.set_tooltip_text("Channel high-pass filter power")
                 self.hpf_live = getattr(self, "hpf_live", {})
                 self.hpf_live[ch] = self.live[-1]
             box.append(t)
@@ -5864,6 +7779,8 @@ class Win(Adw.ApplicationWindow):
         racks into one.
         """
         self.w = {1: {}, 2: {}}
+        self.limiter_racks = {}
+        self.hpf_racks = {}
         self.columns = {}
         self.col_titles = {}
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -6135,6 +8052,22 @@ class Win(Adw.ApplicationWindow):
         """Push one crossover move to every graph that carries it."""
         if self._mbc_mute:
             return
+        # Slider ranges overlap. Keep the edited split strictly between its
+        # neighbours before it reaches either the graph or a saved snapshot.
+        # Linked channels may retain different neighbouring splits, so respect
+        # both sets of bounds without moving another knob behind the user.
+        index = int(cid[1:])
+        targets = self._mbc_targets(ch)
+        lower = max((self.mbc_ctl[c]["x%d" % (index - 1)].get_value() + 1
+                     for c in targets), default=40) if index else 40
+        upper = min((self.mbc_ctl[c]["x%d" % (index + 1)].get_value() - 1
+                     for c in targets), default=12000) if index < 2 else 12000
+        value = max(lower, min(upper, value))
+        prior, self._mbc_mute = self._mbc_mute, True
+        try:
+            self.mbc_ctl[ch][cid].set_value(value)
+        finally:
+            self._mbc_mute = prior
         self._mbc_mirror(ch, cid)
         self._mbc_push(ch, keys, value)
 
@@ -6519,6 +8452,24 @@ class Win(Adw.ApplicationWindow):
         W = self.w[ch]
 
         e = Adw.PreferencesGroup(title="Equaliser")
+        selector = Gtk.Box(spacing=8, margin_start=68, margin_end=68,
+                           valign=Gtk.Align.CENTER)
+        selector.add_css_class("eq-model-rack")
+        title = Gtk.Label(label="EQ MODEL", margin_start=12, margin_end=12)
+        selector.append(title)
+        W["eq_model_buttons"] = []
+        for index, name in enumerate(("Standard", "Passive", "Vintage")):
+            button = Gtk.ToggleButton(label=name, hexpand=True)
+            button.connect("clicked", lambda _b, i=index, c=ch:
+                           self.select_eq_model(c, self.EQ_MODELS[i]))
+            selector.append(button)
+            W["eq_model_buttons"].append(button)
+        selector_row = Adw.PreferencesRow()
+        selector_plate = Gtk.Overlay(margin_bottom=4)
+        selector_plate.set_child(EqModelSelectorPlate())
+        selector_plate.add_overlay(selector)
+        selector_row.set_child(selector_plate)
+        e.add(selector_row)
         W["curve"] = EQCurve(self, ch)
         # PreferencesGroup lays out PreferencesRows as full-width list rows.
         # Adding a bare custom widget was accepted but allocated it no height,
@@ -6538,10 +8489,11 @@ class Win(Adw.ApplicationWindow):
             model=Gtk.StringList.new(["Standard", "Passive", "Vintage"]))
         W["eq_model"].connect(
             "notify::selected", self._eq_model_changed, ch)
-        # State-only selector: the signal-chain EQ module's right-click menu
-        # is the single visible model picker. Keeping this unparented preserves
-        # the existing adoption/signal path without duplicating UI below the
-        # rack or changing any saved-state semantics.
+        # Hidden state conduit: visible model buttons share this adoption path.
+        W["eq_model"].connect("notify::selected", lambda row, _p:
+                             [button.set_active(i == row.get_selected())
+                              for i, button in enumerate(W["eq_model_buttons"])])
+        W["eq_model_buttons"][0].set_active(True)
         W["eq_on"] = Adw.SwitchRow(title="EQ")
         W["eq_on"].connect("notify::active", self._eq_power_changed, ch)
         e.add(W["eq_on"])
@@ -6702,9 +8654,14 @@ class Win(Adw.ApplicationWindow):
                           lambda *_a, c=ch: self._dyn_push("gate", c))
         gt.add(W["gexp"])
 
-        d = Adw.PreferencesGroup(title="Compressor")
-        W["comp_curve"] = CompCurve(self, ch)
-        d.add(W["comp_curve"])
+        gate_controls = gt
+        gate_controls.set_visible(False)
+        gt = Adw.PreferencesGroup()
+        W["gate_rack"] = DynamicsRack(self, ch, "gate")
+        gt.add(W["gate_rack"])
+        gt.add(gate_controls)
+
+        d = Adw.PreferencesGroup()
         W["comp_on"] = Adw.SwitchRow(title="Compressor")
         W["comp_on"].connect("notify::active", self._dyn_toggle, "comp", ch)
         d.add(W["comp_on"])
@@ -6802,43 +8759,36 @@ class Win(Adw.ApplicationWindow):
                               lambda *_a, c=ch: self._dyn_push("comp", c))
         d.add(W["cklisten"])
 
-        lm = Adw.PreferencesGroup(title="Limiter")
-        W["lim_on"] = Adw.SwitchRow(title="Limiter")
-        W["lim_on"].connect("notify::active", self._dyn_toggle, "lim", ch)
-        lm.add(W["lim_on"])
-        r, W["lth"] = self._srow("Limiter threshold", -40, 0, 0.01, -28.0,
-                                 lambda v: "%.2f dB" % v,
-                                 lambda v, c=ch: self._dyn_push("lim", c))
-        lm.add(r)
-        # The device has always taken a release coefficient and the driver has
-        # always computed it exactly; the page simply never offered the
-        # control, so every limiter write in this Host's history used the 0.4 s
-        # default. UC keeps no release field in its preset record, so this is
-        # live Host state and rides the snapshot shadow, not the slot body.
-        r, W["lrel"] = self._srow("Limiter release", 0.05, 1.5, 0.01, 0.4,
-                                  lambda v: "%.0f ms" % (v * 1000.0),
-                                  lambda v, c=ch: self._dyn_push("lim", c))
-        lm.add(r)
+        # Keep the canonical controls/adjustments for hydration and linked
+        # edits. The rack provides their visible, accessible interaction layer.
+        for name in ("comp_on", "model", "ckey_row", "cklisten"):
+            W[name].set_visible(False)
+        d.remove(W["comp_param_stack"])
+        rack_stack = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        W["comp_curve"] = DynamicsRack(self, ch, "comp")
+        rack_stack.append(W["comp_curve"])
+        W["mbc_rack"] = Gtk.Stack()
+        W["mbc_rack"].set_vhomogeneous(False)
+        for band in range(4):
+            W["mbc_rack"].add_named(DynamicsRack(self, ch, "band", band), str(band))
+        W["mbc_rack"].set_visible_child_name("0")
+        W["mbc_rack"].set_visible(False)
+        rack_stack.append(W["mbc_rack"])
+        d.add(rack_stack)
+        missing = self._insert_missing()
+        W["mbc_notice"] = Gtk.Label(label=missing or "", wrap=True, xalign=0)
+        W["mbc_notice"].set_visible(False)
+        d.add(W["mbc_notice"])
+        W["comp_param_stack"].set_visible(False)
+        d.add(W["comp_param_stack"])
+
+        lm = self._limiter_group(ch)
 
         # The digital HPF gets its own section: it is its own rack unit and is
         # separate from the fixed 80 Hz preamp switch on the mixer strip.
         # Sharing a group with the limiter meant clicking either one landed you
         # in a page about the other.
-        hp = Adw.PreferencesGroup(title="HPF")
-        W["hpf_mode"] = Adw.ComboRow(
-            title="HPF",
-            model=Gtk.StringList.new(
-                ["Off", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
-        W["hpf_mode"].set_selected(0)
-        W["hpf_mode"].connect(
-            "notify::selected", self._hpf_mode_changed, ch)
-        hp.add(W["hpf_mode"])
-        r, W["hpf"] = self._srow(
-            "Exact cutoff", 24, 1000, 0.5, 24,
-            lambda v: ("bypassed" if v <= 25 else "%.0f Hz" % v),
-            lambda v, c=ch: self.set_hpf(c, v))
-        W["hpf"].set_sensitive(False)
-        hp.add(r)
+        hp = self._hpf_group(ch)
 
         # One section visible at a time, selected by the rack above. Stacking
         # every group defeated the rack: if all four are on screen already,
@@ -6860,6 +8810,85 @@ class Win(Adw.ApplicationWindow):
         page.append(stack)
         W["bands"][0].set_active(True)
         return page
+
+    def _limiter_group(self, ch):
+        """Build the limiter's existing controls and one visible rack view."""
+        W = self.w[ch]
+        lm = Adw.PreferencesGroup(title="Limiter")
+        W["lim_on"] = Adw.SwitchRow(title="Limiter")
+        W["lim_on"].connect("notify::active", self._dyn_toggle, "lim", ch)
+        threshold_row, W["lth"] = self._srow(
+            "Limiter threshold", -40, 0, 0.01, -28.0,
+            lambda v: "%.2f dB" % v,
+            lambda v, c=ch: self._dyn_push("lim", c))
+        # The device has always taken a release coefficient and the driver has
+        # always computed it exactly; the page simply never offered the
+        # control, so every limiter write in this Host's history used the 0.4 s
+        # default. UC keeps no release field in its preset record, so this is
+        # live Host state and rides the snapshot shadow, not the slot body.
+        release_row, W["lrel"] = self._srow(
+            "Limiter release", 0.05, 1.5, 0.01, 0.4,
+            lambda v: "%.0f ms" % (v * 1000.0),
+            lambda v, c=ch: self._dyn_push("lim", c))
+
+        # Keep the native controls mapped in a transparent overlay for their
+        # supported accessibility roles/actions and existing signal paths.
+        W["_limiter_rows"] = [W["lim_on"], threshold_row, release_row]
+        bindings = {
+            "threshold": {
+                "widget": W["lth"],
+                "format": lambda value: "%.2f dB" % value,
+            },
+            "release": {
+                "widget": W["lrel"],
+                "format": lambda value: "%.0f ms" % (value * 1000.0),
+            },
+            "power": {"widget": W["lim_on"]},
+        }
+        rack = ReferenceRack(
+            self, "limiter", bindings,
+            lambda sn, rect, state, active, c=ch:
+            draw_limiter_display(self, c, sn, rect, state, active))
+        if not hasattr(self, "limiter_racks"):
+            self.limiter_racks = {}
+        self.limiter_racks[ch] = rack
+        lm.add(rack.with_native_controls(W["_limiter_rows"]))
+        return lm
+
+    def _hpf_group(self, ch):
+        """Build the HPF's existing controls into one futuristic rack view."""
+        W = self.w[ch]
+        hp = Adw.PreferencesGroup(title="HPF")
+        W["hpf_mode"] = Adw.ComboRow(
+            title="HPF",
+            model=Gtk.StringList.new(
+                ["24 Hz", "40 Hz", "80 Hz", "160 Hz", "Advanced"]))
+        W["hpf_mode"].set_selected(0)
+        W["hpf_mode"].connect(
+            "notify::selected", self._hpf_mode_changed, ch)
+        cutoff_row, W["hpf"] = self._srow(
+            "Exact cutoff", 24, 1000, 0.5, 24,
+            lambda v: "%.0f Hz" % v,
+            lambda v, c=ch: self.set_hpf(c, v))
+        W["hpf"].set_sensitive(False)
+        W["_hpf_rows"] = [W["hpf_mode"], cutoff_row]
+
+        bindings = {
+            "cutoff": {
+                "widget": W["hpf"],
+                "format": lambda value: "%d Hz" % round(value),
+            },
+            "power": {
+                "widget": self.hpf_live[ch].w,
+            },
+        }
+        rack = ReferenceRack(
+            self, "hpf", bindings,
+            lambda sn, rect, state, active, c=ch:
+            draw_hpf_display(self, c, sn, rect, state, active))
+        self.hpf_racks[ch] = rack
+        hp.add(rack.with_native_controls(W["_hpf_rows"]))
+        return hp
 
 
     def _rebuild_chains(self):
@@ -6893,10 +8922,9 @@ class Win(Adw.ApplicationWindow):
         page = wide_preferences_page()
         self.fx_scroll_controller = keep_page_wheel_scrolling(page)
 
-        g = Adw.PreferencesGroup(
-            title="Shared reverb",)
-        self.rev_visual = ReverbVisual(self._reverb_live_params)
-        g.add(self.rev_visual)
+        rack_group = Adw.PreferencesGroup(title="Shared reverb")
+        g = Adw.PreferencesGroup()
+        reverb_rows = []
 
         self.rev_on = Adw.SwitchRow(
             title="On")
@@ -6904,22 +8932,22 @@ class Win(Adw.ApplicationWindow):
             "notify::active",
             lambda *_a: (self._push_reverb(establish_path=True),
                          self._repaint_reverb()))
-        g.add(self.rev_on)
+        reverb_rows.append(self.rev_on)
 
         r, self.s_rsize = self._srow("Room size", 0, 1, 0.005, 0.5,
                                      lambda v: "%.0f %%" % (v * 100),
                                      self._reverb_size_changed)
-        g.add(r)
+        reverb_rows.append(r)
         r, self.s_rpre = self._srow("Pre-delay", 0.0001, 0.25, 0.0005, 0.02,
                                     lambda v: "%.0f ms" % (v * 1000),
                                     lambda v: (self._push_reverb(),
                                               self._repaint_reverb()))
-        g.add(r)
+        reverb_rows.append(r)
         r, self.s_rhp = self._srow("Input high-pass", 0, 500, 1, 200,
                                    lambda v: ("off" if v < 1 else "%.0f Hz" % v),
                                    lambda v: (self._push_reverb(),
                                               self._repaint_reverb()))
-        g.add(r)
+        reverb_rows.append(r)
         # 100 %, as every Universal Control scene of the user's keeps it: the
         # FX return is a send return, so a dry share doubles the input that
         # is already in the bus. The return level sets how much reverb.
@@ -6927,7 +8955,7 @@ class Win(Adw.ApplicationWindow):
                                     lambda v: "%.0f %%" % (v * 100),
                                     lambda v: (self._push_reverb(),
                                               self._repaint_reverb()))
-        g.add(r)
+        reverb_rows.append(r)
 
         # The Host can slowly drift the real Room size parameter around its
         # displayed centre. Unlike the retired Character presets, this adds an
@@ -6936,14 +8964,22 @@ class Win(Adw.ApplicationWindow):
             title="Size movement",
             subtitle="Slow ± drift around the displayed Room size")
         self.rev_mod.connect("notify::active", self._reverb_mod_toggled)
-        g.add(self.rev_mod)
+        reverb_rows.append(self.rev_mod)
         r, self.s_rmoddep = self._srow(
             "Movement depth", 0.0, 0.30, 0.005, 0.08,
             lambda v: ("off" if v < 0.005 else "±%.0f %%" % (v * 100)),
             lambda v: None)
-        g.add(r)
+        reverb_rows.append(r)
 
-        page.add(g)          # added ONCE — adding it twice raised a GTK critical
+        # The rack is the visible control surface. Construct it only after its
+        # backing widgets exist; those widgets retain signal/value behavior but
+        # stay unparented so duplicate parameter rows do not appear below it.
+        self.rev_visual = ReverbRack(self)
+        rack_group.add(self.rev_visual)
+        for row in reverb_rows:
+            g.add(row)
+
+        page.add(rack_group)
 
         sg = Adw.PreferencesGroup(
             title="Shared effects returns",)
@@ -8034,6 +10070,7 @@ class Win(Adw.ApplicationWindow):
             # The graph is semantic and immediate. Exact UC coefficient work
             # happens only on the control worker when a device write is due.
             view["sections"] = None
+            view["sections_key"] = None
             view["error"] = None
             view["rate_hz"] = float(getattr(self, "_fs", 48000.0))
             self._alt_eq_memory()[ch][view["model"]] = view
@@ -8043,6 +10080,8 @@ class Win(Adw.ApplicationWindow):
         W = getattr(self, "w", {}).get(ch)
         if not W:
             return
+        restore_scroll = deferred_parent_scroll_restore(
+            W.get("alternate_eq_rack_row") or W.get("curve_row"))
         model = "standard" if view is None else view["model"]
         prior_mute = getattr(self, "_adopt_mute", False)
         self._adopt_mute = True
@@ -8092,6 +10131,11 @@ class Win(Adw.ApplicationWindow):
             alternate_rack.queue_draw()
         for rack in getattr(self, "racks", {}).values():
             rack.queue_draw()
+        if restore_scroll is not None:
+            # Restore once against the current allocation and once after GTK's
+            # deferred ensure-visible pass has completed.
+            restore_scroll()
+            GLib.idle_add(restore_scroll)
 
     @staticmethod
     def _alt_eq_text(view):
@@ -8110,11 +10154,18 @@ class Win(Adw.ApplicationWindow):
         except Exception as error:
             view["error"] = str(error)
             view["sections"] = None
+            view["sections_key"] = None
             self.say("%s EQ was not sent: %s" %
                      (view["model"].title(), error))
             return False
-        view.update(eq=eq, on=bool(eq["eqallon"]), sections=None,
-                    rate_hz=float(self._fs), error=None)
+        rate_hz = float(self._fs)
+        key = io24_alt_eq.live_design_key(eq, rate_hz)
+        retained_sections = view.get("sections") \
+            if view.get("sections_key") == key else None
+        view.update(eq=eq, on=bool(eq["eqallon"]),
+                    sections=retained_sections,
+                    sections_key=key if retained_sections else None,
+                    rate_hz=rate_hz, error=None)
         self._alt_eq_memory()[ch][view["model"]] = view
         generations = getattr(self, "_eq_write_generation", None)
         if not isinstance(generations, dict):
@@ -8171,11 +10222,15 @@ class Win(Adw.ApplicationWindow):
             return False
         if error:
             view["sections"] = None
+            view["sections_key"] = None
             view["error"] = str(error)
             self.say("%s EQ could not be applied: %s" %
                      (model.title(), error))
         else:
             view["sections"] = None if not sections else tuple(sections)
+            view["sections_key"] = None if not sections else \
+                io24_alt_eq.live_design_key(
+                    view["eq"], view.get("rate_hz", self._fs))
             view["error"] = None
         self._alt_eq_memory()[ch][model] = view
         self.invalidate_curve()
@@ -8248,6 +10303,8 @@ class Win(Adw.ApplicationWindow):
             finally:
                 self._adopt_mute = prior_mute
         self._apply_eq_model(ch, model)
+        for index, button in enumerate(getattr(self, "w", {}).get(ch, {}).get("eq_model_buttons", ())):
+            button.set_active(self.EQ_MODELS[index] == model)
 
     def _eq_model_changed(self, row, _param, ch):
         if getattr(self, "_adopt_mute", False):
@@ -10040,7 +12097,7 @@ class Win(Adw.ApplicationWindow):
         reset_format = ((lambda position: fmt(sc.value_from_position(position)))
                         if isinstance(sc, _SkewValue) else fmt)
         reset_on_double_click(widget, reset_value, reset_format)
-        row.set_tooltip_text("Double-click to reset to %s" % fmt(val))
+        row.set_tooltip_text("Ctrl-click or double-click to reset to %s" % fmt(val))
 
         row.add_suffix(widget); row.add_suffix(lbl)
         return row, sc
@@ -10351,13 +12408,16 @@ class Win(Adw.ApplicationWindow):
         W = self.w[ch]
         model = max(0, min(MULTIBAND_MODEL, W["model"].get_selected()))
         W["comp_param_stack"].set_visible_child_name(COMP_MODELS[model])
-        # the key filter and listen rows belong to the unit's compressors
+        # Both racks share the canonical controls kept in this hidden stack.
+        W["comp_param_stack"].set_visible(False)
+        W["mbc_rack"].set_visible(model == MULTIBAND_MODEL)
+        if "mbc_notice" in W:
+            W["mbc_notice"].set_visible(
+                model == MULTIBAND_MODEL and bool(W["mbc_notice"].get_label()))
         for name in ("ckey_row", "cklisten"):
             if name in W:
-                W[name].set_visible(model != MULTIBAND_MODEL)
-        # The single transfer curve has no truthful meaning for four parallel
-        # bands; the rack miniature above represents all four instead.
-        W["comp_curve"].set_visible(model != MULTIBAND_MODEL)
+                W[name].set_visible(False)
+        W["comp_curve"].set_visible(True)
         W["comp_curve"].queue_draw()
         if not self._adopt_mute:
             self._dyn_push("comp", ch)
@@ -10857,6 +12917,9 @@ class Win(Adw.ApplicationWindow):
         try:
             state = {"version": 1,
                      "host_features": self._host_features_state()}
+            presentation = getattr(self, "_host_presentation_state", None)
+            if callable(presentation):
+                state["host_presentation"] = presentation()
             clock_state = getattr(self, "_audio_clock_state", None)
             if callable(clock_state):
                 state["audio_clock"] = clock_state()
@@ -10872,13 +12935,33 @@ class Win(Adw.ApplicationWindow):
             tmp = target + ".tmp"
             with open(tmp, "w") as stream:
                 stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(tmp, target)
+            # ``replace`` makes readers see either the prior complete file or
+            # this complete file; sync the containing directory as well when
+            # the platform permits it, so a power loss does not strand the new
+            # name after a successful edit.
+            try:
+                directory = os.open(os.path.dirname(os.path.abspath(target)),
+                                    os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
+            except OSError:
+                pass
         except OSError:
             return False
         self._last_session_text = text
         return True
 
     def _autosave_session(self):
+        # Keep the resize/maximize snapshot current even on compositors that
+        # do not surface a usable GTK geometry notification.
+        presentation = getattr(self, "_host_presentation_state", None)
+        if callable(presentation):
+            self._host_presentation_seen = presentation()
         self._save_last_session()
         return True
 
@@ -11108,8 +13191,8 @@ class Win(Adw.ApplicationWindow):
         self._preset_sync = True
         self._phones_source_mute = True
         try:
-            # The input-strip high-pass toggle is an Appl control, distinct
-            # from the Fat Channel's continuously variable low cut.
+            # The input-strip toggle is the HPF enable; the rack knob owns the
+            # same channel filter's separate ``filt`` cutoff coefficients.
             for ch, on in state["hpf_toggle"].items():
                 live = getattr(self, "hpf_live", {}).get(ch)
                 if live is not None:
@@ -11354,8 +13437,13 @@ class Win(Adw.ApplicationWindow):
             if self._half:                    # 15 fps is plenty for these
                 for r in self.racks.values():
                     r.queue_draw()
+                for rack in getattr(self, "limiter_racks", {}).values():
+                    rack.queue_draw()
+                for rack in getattr(self, "hpf_racks", {}).values():
+                    rack.queue_draw()
                 for c in self.w:
-                    self.w[c]["comp_curve"].queue_draw()
+                    self.w[c]["comp_curve"].tick(s)
+                    self.w[c]["gate_rack"].tick(s)
                     self.w[c]["curve"].queue_draw()
 
         # Following the hardware is cheap and must happen on both pages — but
@@ -11435,6 +13523,36 @@ class Win(Adw.ApplicationWindow):
 # lays out rather than re-skinning widgets wholesale, because a hand-rolled
 # theme breaks on the next Adwaita release and this has to keep working.
 CSS = """
+.eq-model-rack {
+  padding: 0; border: none; background: transparent; box-shadow: none;
+  color: #252b25;
+}
+.eq-model-rack > label { font-size: 11px; font-weight: bold; letter-spacing: 1px; }
+/* Recessed metal sockets and raised, bevelled selector caps. */
+.eq-model-rack button.toggle {
+  min-height: 28px; padding: 3px 12px; border-radius: 4px;
+  background: linear-gradient(180deg, #535950 0%, #343a33 48%, #262c26 100%);
+  color: #f5f1df; border: 1px solid #171c17;
+  font-size: 11px; font-weight: bold; letter-spacing: .6px;
+  text-shadow: 0 1px #101510;
+  box-shadow: inset 0 1px #8b9284, inset 1px 0 rgba(255,255,255,.15),
+              inset 0 -2px #171c17, 0 2px 1px rgba(0,0,0,.45);
+}
+.eq-model-rack button.toggle:hover {
+  background: linear-gradient(180deg, #646b5e, #343c32);
+}
+.eq-model-rack button.toggle:checked {
+  background: linear-gradient(180deg, #ffae64 0%, #ff782b 45%, #e95213 100%);
+  color: #29180b; border-color: #86340f; text-shadow: 0 1px rgba(255,255,255,.3);
+  box-shadow: inset 0 1px #ffd5a5, inset 1px 0 rgba(255,255,255,.3),
+              inset 0 -2px #ac350c, 0 2px 1px rgba(0,0,0,.4);
+}
+.eq-model-rack button.toggle:active {
+  box-shadow: inset 0 2px 3px rgba(0,0,0,.5), inset 0 -1px rgba(255,255,255,.2);
+}
+.eq-model-rack button.toggle:focus-visible { outline: 2px solid #ff641c; outline-offset: 2px; }
+
+
 :root, window.background {
   --io24-accent: #3dd6de;
   --io24-ground: #080b12;

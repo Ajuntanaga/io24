@@ -39,7 +39,7 @@ FRAME_INSET = 6
 GASKET_INSET = 20
 GLASS_INSET = 26
 PLOT_INSET = (16, 12)
-KNOB_Y = 350
+KNOB_Y = 326
 KNOB_X = (232, 482, 1690, 1940)
 KNOB_RADIUS = 88
 HEADING_Y = 158
@@ -147,7 +147,7 @@ def text_width(ctx, text, spacing):
 
 
 def label(ctx, text, cx, cy, size, colour, bold=True, spacing=0.0,
-          align="center", engraved=True):
+          align="center", engraved=True, visible=True):
     """Print faceplate text vertically centred on its cap height."""
     font(ctx, size, bold)
     cap = ctx.text_extents("H").height
@@ -164,9 +164,10 @@ def label(ctx, text, cx, cy, size, colour, bold=True, spacing=0.0,
             ctx.show_text(character)
             pen += ctx.text_extents(character).x_advance + spacing
 
-    if engraved:
-        run(0.0, 1.4, (0.0, 0.0, 0.0, 0.55 * colour[3]))
-    run(0.0, 0.0, colour)
+    if visible:
+        if engraved:
+            run(0.0, 1.4, (0.0, 0.0, 0.0, 0.55 * colour[3]))
+        run(0.0, 0.0, colour)
     return x, width
 
 
@@ -260,7 +261,7 @@ def draw_rack_shadow(ctx):
     paint_layer(ctx, blurred(shadow, 16))
 
 
-def brushed_texture(ctx, x, y, w, h, rng, streaks):
+def brushed_texture(ctx, x, y, w, h, rng, streaks, strength=1.0):
     """Fine horizontal brushing: long faint streaks over short dense grain."""
     ctx.save()
     rounded(ctx, x, y, w, h, 6)
@@ -270,7 +271,7 @@ def brushed_texture(ctx, x, y, w, h, rng, streaks):
         sx = x + rng.random() * w
         length = 14 + rng.random() ** 2 * 380
         bright = rng.random() < 0.55
-        alpha = 0.012 + rng.random() * 0.035
+        alpha = (0.012 + rng.random() * 0.035) * strength
         colour = (0.82, 0.88, 0.95, alpha) if bright else \
             (0.0, 0.01, 0.02, alpha * 1.4)
         line(ctx, [(sx, sy), (sx + length, sy + rng.uniform(-.3, .3))],
@@ -278,16 +279,22 @@ def brushed_texture(ctx, x, y, w, h, rng, streaks):
     ctx.restore()
 
 
-def draw_plate(ctx, rng):
+def draw_plate(ctx, rng, production=False):
     x, y, w, h = RACK
     # Plate body: deep navy graphite with a real vertical fall-off.
     rounded(ctx, x, y, w, h, 8)
-    ctx.set_source(vgradient(y, y + h, (
+    stops = (
+        (0.0, (0.31, 0.37, 0.44, 1)),
+        (0.05, (0.205, 0.265, 0.34, 1)),
+        (0.45, (0.135, 0.185, 0.26, 1)),
+        (0.88, (0.085, 0.12, 0.18, 1)),
+        (1.0, (0.045, 0.066, 0.10, 1))) if production else (
         (0.0, (0.200, 0.238, 0.296, 1)),
         (0.05, (0.160, 0.194, 0.246, 1)),
         (0.45, (0.118, 0.146, 0.190, 1)),
         (0.88, (0.080, 0.100, 0.134, 1)),
-        (1.0, (0.060, 0.075, 0.102, 1)))))
+        (1.0, (0.060, 0.075, 0.102, 1)))
+    ctx.set_source(vgradient(y, y + h, stops))
     ctx.fill()
     # A broad, cool sheen across the upper third reads as anodized metal.
     sheen = cairo.RadialGradient(WIDTH * 0.5, y - 260, 80,
@@ -297,7 +304,8 @@ def draw_plate(ctx, rng):
     rounded(ctx, x, y, w, h, 8)
     ctx.set_source(sheen)
     ctx.fill()
-    brushed_texture(ctx, x, y, w, h, rng, 5200)
+    brushed_texture(ctx, x, y, w, h, rng, 5200,
+                    strength=1.8 if production else 1.0)
 
     # Rack ears are separate folded pieces, one shade darker.
     for ex in (x, x + w - EAR):
@@ -370,11 +378,33 @@ def draw_screw(ctx, sx, sy):
              (0.85, 0.88, 0.92, 0.18), 0.8)
 
 
-def draw_heading(ctx, selected=SELECTED):
+def draw_band_symbol(ctx, index, cx, cy, selected=False):
+    """Engrave one compact response-shape symbol instead of a word label."""
+    if index == 0:                       # low shelf
+        points = ((-25, -7), (-12, -7), (-7, -6), (0, 0),
+                  (7, 7), (25, 7))
+    elif index == 1:                     # low-mid bell
+        points = ((-25, 7), (-15, 7), (-9, 5), (-4, -5),
+                  (1, -7), (6, -4), (11, 5), (17, 7), (25, 7))
+    elif index == 2:                     # high-mid bell
+        points = ((-25, 7), (-17, 7), (-11, 5), (-6, -4),
+                  (-1, -7), (4, -5), (9, 5), (15, 7), (25, 7))
+    else:                                # high shelf
+        points = ((-25, 7), (-7, 7), (0, 0), (7, -7),
+                  (12, -7), (25, -7))
+    colour = (0.92, 0.94, 0.92, 0.96 if selected else 0.76)
+    line(ctx, [(cx + x, cy + y) for x, y in points], colour,
+         3.0 if selected else 2.2, cairo.LINE_CAP_ROUND)
+    # A centre datum makes each mark read as an EQ response icon rather than
+    # decorative trim, while keeping the faceplate free of four long labels.
+    circle(ctx, cx, cy, 2.2 if selected else 1.7, colour)
+
+
+def draw_heading(ctx, selected=SELECTED, draw_title=True):
     x, _y, _w, _h = SCREEN_CUT
     title_x, title_w = label(
         ctx, "STANDARD  EQ", WIDTH / 2.0, HEADING_Y, 29,
-        (0.90, 0.92, 0.90, 0.94), spacing=9.5)
+        (0.90, 0.92, 0.90, 0.94), spacing=9.5, visible=draw_title)
     right = SCREEN_CUT[0] + SCREEN_CUT[2]
     for start, end in ((x + 40, title_x - 30),
                        (title_x + title_w + 30, right - 40)):
@@ -382,12 +412,9 @@ def draw_heading(ctx, selected=SELECTED):
              (0.0, 0.0, 0.0, 0.55), 1.6, cairo.LINE_CAP_BUTT)
         line(ctx, [(start, HEADING_Y + 1.4), (end, HEADING_Y + 1.4)],
              (0.78, 0.85, 0.92, 0.26), 1.0, cairo.LINE_CAP_BUTT)
-    for index, (cx, band) in enumerate(zip(KNOB_X, BANDS)):
-        tone = band["tone"]
-        is_selected = index == selected
-        label(ctx, band["name"], cx, HEADING_Y, 23,
-              (tone[0], tone[1], tone[2], 0.98 if is_selected else 0.80),
-              spacing=4.0)
+    for index, cx in enumerate(KNOB_X):
+        draw_band_symbol(ctx, index, cx, HEADING_Y,
+                         selected is not None and index == selected)
 
 
 def draw_screen(ctx, rng, dynamic=True):
@@ -659,6 +686,11 @@ def draw_knob(ctx, index, band, rng, dynamic=True):
             layer.stroke()
         paint_layer(ctx, blurred(ring, 12), 0.55)
 
+    # Production keeps scales and tracks on the faceplate, but knob bodies are
+    # independent transparent assets so their material can match every model.
+    if not dynamic:
+        return
+
     # Cast and contact shadows.
     def shadow(layer):
         circle(layer, cx + 7, cy + 14, R * 0.99, (0, 0, 0, 0.85))
@@ -814,9 +846,6 @@ def draw_knob(ctx, index, band, rng, dynamic=True):
 
     paint_layer(ctx, blurred(specular, 7), 0.8)
 
-    if not dynamic:
-        return
-
     # Readout: the knob's own gain first, its band's frequency and state below.
     label(ctx, "%+.1f dB" % band["gain"], cx, cy + R + 30, 21,
           (0.94, 0.95, 0.92, 0.97 if selected else 0.90), spacing=0.8)
@@ -872,7 +901,7 @@ def render(output, faceplate=False):
     ctx = cairo.Context(surface)
     draw_background(ctx)
     draw_rack_shadow(ctx)
-    draw_plate(ctx, rng)
+    draw_plate(ctx, rng, production=faceplate)
     surface.flush()
     stride = surface.get_stride()
     data = np.frombuffer(surface.get_data(), dtype=np.uint8).reshape(
@@ -888,7 +917,8 @@ def render(output, faceplate=False):
     ctx = cairo.Context(surface)
     for sx, sy in SCREWS:
         draw_screw(ctx, sx, sy)
-    draw_heading(ctx, selected=None if faceplate else SELECTED)
+    draw_heading(ctx, selected=None if faceplate else SELECTED,
+                 draw_title=not faceplate)
     draw_screen(ctx, rng, dynamic=not faceplate)
     for index, band in enumerate(BANDS):
         draw_knob(ctx, index, band, rng, dynamic=not faceplate)

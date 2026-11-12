@@ -11,8 +11,9 @@ landmark. The Host, asset renderer, hit testing, and pixel-diff tooling all use
 that same geometry.
 
 Normal rendering uses the procedural chassis in `io24_retro_rack.py`: deep black
-for Standard and porcelain white for Passive and Vintage. Recessed glass, black
-rack ears, mounting hardware and orange enamel accents follow the measured
+for Standard and porcelain white for Passive and Vintage. Passive and Vintage
+have matching powder-coated white rack ears; Standard keeps black ears. Recessed
+glass, mounting hardware and orange enamel accents follow the measured
 geometry. GTK renders lettering at the actual display resolution and draws
 control values from the decoded UC fields.
 
@@ -63,7 +64,8 @@ the original illustrative bitmap.
 ## Production finishes
 
 HPF, Passive and Vintage use porcelain white; Standard and Limiter use deep
-black. Fine powdercoat and machining, black rack ears, contact shadows and chrome
+black. Fine powdercoat and machining, matching white ears on Passive and
+Vintage, black ears on HPF, Standard and Limiter, contact shadows and chrome
 hardware give the units depth. Orange is the shared display and enamel accent.
 Knob underlighting is absent. Native live headings and scales stay separate from
 the cached textures so resizing does not resample their lettering.

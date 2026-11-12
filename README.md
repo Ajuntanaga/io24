@@ -84,7 +84,7 @@ day:
 | Device reverb | shared block-202 reverb, measured working with both inputs feeding it |
 | Voice FX | Transformer, Detuner, Vocoder, Ring Modulator, Filters, and Delay in the exact UC XML control order. Each model retains its settings, while turning one **On** turns the other five off, matching UC's single active rack. All six are verified on Input 1; models 1–5 are verified on Input 2. Above 48 kHz, Delay automatically moves to the safe Host insert instead of selecting the unaccepted high-rate firmware model. |
 | Host effects | four-band multiband compressor and the safe high-rate Voice FX Delay fallback |
-| Presets | channel presets, full Host setup files, automatic recovery, exact front-panel block writes, and the UC Device Presets library flow |
+| Presets | channel presets, full Host setup files, automatic recovery, unverified front-panel block sends, and the UC Device Presets library flow |
 | Scenes | import and export using Universal Control's `.scene` vocabulary, with validation and rollback reporting |
 | Device settings | 44.1/48/88.2/96 kHz, buffer size, output delay, preset-button mode, Channel Mute Sync, and component names stored by the Host |
 | Metering | both inputs, Main, Mix A, Mix B, and gain reduction |
@@ -92,7 +92,7 @@ day:
 The GTK app keeps both channel strips visible and puts all EQ operation on the
 rack faceplates. Standard EQ has draggable response nodes, four Gain knobs,
 four dedicated Q knobs, per-band power and shape controls, and one global
-power lamp. Passive and Vintage use their exact recovered parameter sets in
+power switch. Passive and Vintage use their exact recovered parameter sets in
 the same-size rack bay. The app can open before the interface is connected and
 attaches when the device appears.
 
@@ -247,9 +247,10 @@ or standalone Voice FX proof. **Load** replays the retained record through the
 normal Fat Channel and Voice FX setters, which matches UC's RestorePreset
 behavior.
 
-The chosen front-panel block must be inactive while it is replaced. The Host
-will ask you to choose the other block if that destination is currently
-playing. A library entry is not silently assigned to a front-panel button;
+Either front-panel block can be replaced after confirmation. The chooser
+marks the currently selected block **Playing**; that label does not prevent
+replacement or verify its stored sound. A library entry is not silently
+assigned to a front-panel button;
 these remain two different storage collections.
 
 Fat Channel state has been confirmed audible without the Host after device
@@ -334,9 +335,10 @@ them.
   the decoded semantic controls and exact device design kept off the UI thread.
 - The compressor knee interpretation remains inferred.
 
-These limits are tracked in [PROTOCOL.md](PROTOCOL.md). That file preserves old
-experiments as historical evidence, so the newest dated result controls when an
-older section disagrees.
+The investigation is recorded in [PROTOCOL.md](PROTOCOL.md), including
+experiments and conclusions later superseded. Use this README and the
+[manual](GUIDE.md) for current application behavior; dated protocol entries
+describe the evidence available at the time.
 
 ## Project layout
 
@@ -414,6 +416,8 @@ That protection covers sample-rate changes made through the Host. Another
 program can ask PipeWire or ALSA to change the clock without going through the
 Host's preflight. Turn Voice FX Delay off before making a direct external clock
 change, then let the Host observe the new rate before turning it back on.
+
+## Firmware research status
 
 The DFU interface reports `Upload Unsupported`, and the attempted DFU readback
 stalled, so we have no recovery image acquired through that route. No custom

@@ -6,7 +6,11 @@ Reverse-engineering notes and a working Linux implementation.
 
 This file preserves the investigation, including negative experiments and
 conclusions later disproved. The dated material before §1 is reverse
-chronological: the newest dated result controls. Within the older notebook,
+chronological. For current application behavior, start with the
+[README](README.md) and [manual](GUIDE.md); for the firmware investigation
+stopping point, see [firmware status](README.md#firmware-research-status).
+Proposed next steps in dated entries are historical, not instructions to run
+against a connected device. Within the older notebook,
 labels such as “controlling” describe what was known on that date, not the
 current implementation.
 
@@ -16,7 +20,8 @@ labels for the retained research workspace, not files required to run the
 Host. Android implementation and release records live separately in
 [`Ajuntanaga/io24-android`](https://github.com/Ajuntanaga/io24-android).
 
-The current boundaries are the 2026-09-23 shared-reverb section below, the
+The September implementation boundaries are recorded in the
+2026-09-23 shared-reverb section below, the
 2026-09-22 controller-parity section, the
 2026-09-21 Delay safety section, the
 2026-09-20 Voice FX, preset, and mixer sections, the 2026-09-19 scene section,

@@ -61,7 +61,7 @@ inputs follow the louder one, and an ordinary move waits until both non-silent
 inputs are between phrases. This works only while the Host is open, and the
 Host remembers which inputs had it on.
 
-Double-click any fader or knob to return it to its default.
+Ctrl-click or double-click a parameter fader or knob to return it to its default.
 
 ---
 
@@ -91,7 +91,8 @@ page simply never offered the control, so every limiter write before this used
 the 0.4 s default. UC keeps no release field in its preset record, so release
 is live Host state. It rides a full Host setup, not a device slot body.
 
-**Passive and Vintage EQ:** choose the model in **EQ model**. Each model has its
+**Passive and Vintage EQ:** choose Standard, Passive or Vintage using the
+buttons in the **EQ model** selector rack above the EQ controls. Each model has its
 own editable UC controls and its own global **EQ** power state. Passive exposes
 Low Boost/Atten and their 20/30/60/100 Hz switch, High Boost and bandwidth with
 3/4/5/8/10/12/16 kHz selection, and High Atten with 5/10/20 kHz selection.
@@ -101,8 +102,8 @@ models have no per-band power switches in UC's component model.
 
 Both models use their own interactive rack face rather than a generic slider
 list. Drag a knob vertically, scroll over it, or focus the panel and use left
-and right to choose a knob and up and down to change it. Click the rack lamp to
-switch that EQ on or off. The inset display responds immediately from the
+and right to choose a knob and up and down to change it. Click the rack power
+toggle to switch that EQ on or off. The inset display responds immediately from the
 model's semantic controls while exact device coefficient work runs off the UI
 thread. Original design references are kept in
 [`docs/design`](docs/design/README.md); their fixed faceplates preserve the
@@ -117,11 +118,12 @@ the matching file at `~/.cache/io24/re/dspusbdevice.dll`, or point
 presets retain the selected model and all of its semantic controls independently
 for each input.
 
-**High-pass filters**: the Mixer strip's **HPF** is the unit's
-fixed preamp switch. The Fat Channel's digital HPF is separate: choose Off,
-40 Hz, 80 Hz, or 160 Hz, or select Advanced and set an exact 24 Hz–1 kHz
-cutoff. The rack shows the Host's last intended digital value. That DSP value
-is write-only, so the Host cannot claim it is device readback.
+**High-pass filter**: the Mixer strip's **HPF** switch and the Fat Channel
+HPF rack control the same channel filter. The switch enables or bypasses it;
+the rack knob sets its cutoff from 24 Hz to 1 kHz. Turning the knob to its
+minimum does not switch the filter off, and toggling power retains the chosen
+cutoff. The cutoff is write-only, so the rack shows the Host's last intended
+value, not a value read back from the device.
 
 **Gate**: the key filter tunes what the gate listens to; key listen monitors that
 side-chain so you can hear what is triggering it.
@@ -140,13 +142,12 @@ Three models, and they do not share a parameter set:
 | FET | an 1176. There is **no threshold**; Input drives a fixed one and auto-makeup compensates |
 
 > The FET model can get **very loud**. Its auto-makeup is a steep function of
-> drive: roughly unity at the default, but up to **+53 dB** with the threshold
-> slider at minimum. That is faithful to the model, and Universal Control
-> behaves the same way. Bring monitors down before exploring it.
+> drive. High **Input** settings can produce substantial gain even while the
+> compressor reduces peaks. Bring monitors down before exploring it.
 
 **Multiband** is the fourth compressor **Model**, next to Standard, Tube and
-FET. The unit's firmware has no multiband, crossover or FFT vocabulary at all,
-so this one runs on the computer, and choosing it switches the unit's own
+FET. No supported device-side multiband route has been established. This
+processor runs on the computer, and choosing it switches the unit's own
 compressor off: Multiband replaces it. It cannot sit inside the unit's chain,
 so it comes straight after it. The io24 sends each input to the computer after
 the whole Fat Channel, limiter included (its manual: it records "just as you
@@ -173,9 +174,10 @@ character does not discard the other two models' settings. Then:
   Main, Mix A and Mix B wherever it was, and turns USB playback 1-2 on there
   if it was off. The input's fader keeps its position and comes back when
   Multiband is off. USB playback 1-2 also carries the computer's own audio, so
-  that one fader sets both. The Host now confirms this playback return is
-  audible before rerouting the input. If the io24 PipeWire sink was muted, it
-  is opened only while the insert runs and its prior mute is restored after
+  that one fader sets both. The Host checks that this playback return is
+  available, unmuted and at nonzero volume before rerouting the input. This
+  checks routing state; it cannot confirm what you hear. If the io24 PipeWire
+  sink was muted, it is opened only while the insert runs and its prior mute is restored after
   the direct input feed is back. Its volume is never changed. A zero-volume or
   unresponsive return is rejected with the direct feed left in place.
 - **Buffer.** Monitoring now goes to the computer and back, so while Multiband
@@ -471,8 +473,10 @@ changes PipeWire or ALSA directly, it can bypass that ordering. Turn Delay off
 before an external clock change and wait for the Host to show the new observed
 rate before enabling it again.
 
-**Buffer** is PipeWire's quantum. Latency is quantum ÷ rate, so smaller is
-tighter but works the CPU harder and risks dropouts.
+**Buffer** is PipeWire's quantum in frames. Quantum ÷ sample rate gives one
+processing period, not total round-trip latency. Capture, playback, converters
+and processing add delay. A smaller quantum reduces buffering delay but gives
+the CPU less time to finish each period and can cause dropouts.
 
 **Output delay** holds one output back so it lines up with a delayed remote
 signal, such as a co-host on a call or a stream's video path. 0–500 ms in 2 ms steps.
@@ -604,8 +608,9 @@ VoiceFX proof.
 Known Device Presets appear under **User Presets**. **Load** performs UC's
 RestorePreset behavior by replaying the retained record through the normal Fat
 Channel and VoiceFX setters; it does not move a front-panel selector. Historical
-front-panel `Stat` receipts remain visible as legacy Host-assisted records, but
-the disproved writer is no longer offered as a normal action. Your own presets
+front-panel `Stat` receipts remain visible as Host-assisted records. A new
+block send is likewise unverified: successful transport does not establish that
+the stored sound will be recalled without the Host. Your own presets
 also have **Delete**, which removes them from this computer only.
 
 ### Scenes
@@ -644,9 +649,11 @@ errors; the device itself has no transaction primitive.
 
 ### Factory presets
 
-The originals from Universal Control, decoded from the installer and applied
-through this driver. Standard, Passive and Vintage EQ records all load through
-their own exact model routes. Any remaining module the io24 does not implement
+Factory data is optional and is not included in this repository or its Python
+package. When locally recovered Universal Control preset data is available,
+the Host applies it through this driver; otherwise the factory catalog is
+unavailable and user presets still work. Standard, Passive and Vintage EQ
+records load through their own exact model routes. Any remaining module the io24 does not implement
 is skipped rather than silently dropped; a preset that cannot be applied says
 why and is not partially presented as successful.
 
